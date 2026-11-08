@@ -1,0 +1,21 @@
+{
+  "app": { "name": "GayanShop POS" },
+  "actions": {
+    "ok": "හරි",
+    "cancel": "අවලංගු කරන්න",
+    "save": "සුරකින්න",
+    "continue": "ඉදිරියට",
+    "back": "ආපසු",
+    "retry": "නැවත උත්සාහ කරන්න",
+    "close": "වසන්න"
+  },
+  "language": { "label": "භාෂාව", "en": "English", "si": "සිංහල" },
+  "theme": { "label": "තේමාව", "light": "ආලෝක", "dark": "අඳුරු" },
+  "table": {
+    "empty": "තවම පෙන්වීමට කිසිවක් නැත",
+    "loading": "පූරණය වෙමින්…",
+    "rowCount_one": "පේළි {{count}}",
+    "rowCount_other": "පේළි {{count}}"
+  },
+  "nav": { "till": "ටිල්", "backOffice": "පසු කාර්යාලය" }
+}

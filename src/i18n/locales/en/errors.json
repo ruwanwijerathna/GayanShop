@@ -1,0 +1,31 @@
+{
+  "NOT_INITIALIZED": "This counter has not been set up yet.",
+  "ALREADY_INITIALIZED": "This counter is already set up.",
+  "NOT_LOGGED_IN": "Please log in.",
+  "SESSION_LOCKED": "Locked after inactivity. Please log in again.",
+  "FORBIDDEN": "You don't have permission to do this.",
+  "APPROVAL_REQUIRED": "A supervisor needs to approve this.",
+  "INVALID_APPROVAL": "That approval has expired or was already used.",
+  "INVALID_PIN": "Incorrect PIN. {{attempts_left}} attempts left.",
+  "ACCOUNT_LOCKED": "Too many wrong PINs. Try again after {{until}}.",
+  "NOT_FOUND": "Not found.",
+  "DATABASE": "The database reported a problem. Your last action was not saved.",
+  "INTERNAL": "Something went wrong. Your last action was not saved.",
+  "VALIDATION": {
+    "_": "Please check what you entered.",
+    "PIN_NOT_DIGITS": "The PIN must contain digits only.",
+    "PIN_TOO_SHORT": "The PIN is too short.",
+    "PIN_TOO_LONG": "The PIN can have at most 8 digits.",
+    "STAFF_INACTIVE": "This staff member is disabled.",
+    "SELF_APPROVAL": "A different staff member must approve.",
+    "DEVICE_CODE_INVALID": "Use a counter code from T01 to T09.",
+    "STORE_NAME_INVALID": "Enter the store name (up to 80 characters).",
+    "OWNER_NAME_INVALID": "Enter the owner's name (up to 60 characters).",
+    "LANGUAGE_INVALID": "Choose English or Sinhala."
+  },
+  "INVARIANT": {
+    "_": "This change isn't allowed.",
+    "LAST_OWNER": "At least one active Owner must remain.",
+    "BAD_CALENDAR_SETTINGS": "The store's time settings are invalid."
+  }
+}

@@ -249,7 +249,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `cargo test --manifest-path src-tauri/Cargo.toml --test first_run`
     - `pnpm verify`
 
-- [ ] **0.8 Frontend foundation and design system**
+- [x] **0.8 Frontend foundation and design system**: done 2026-11-08
   - **Deliverables:**
     - Tailwind v4 `@theme` tokens from doc §1.9 (light and dark).
     - Fonts bundled: Inter, Noto Sans Sinhala, JetBrains Mono.

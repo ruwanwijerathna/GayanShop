@@ -1,0 +1,21 @@
+{
+  "app": { "name": "GayanShop POS" },
+  "actions": {
+    "ok": "OK",
+    "cancel": "Cancel",
+    "save": "Save",
+    "continue": "Continue",
+    "back": "Back",
+    "retry": "Retry",
+    "close": "Close"
+  },
+  "language": { "label": "Language", "en": "English", "si": "සිංහල" },
+  "theme": { "label": "Theme", "light": "Light", "dark": "Dark" },
+  "table": {
+    "empty": "Nothing to show yet",
+    "loading": "Loading…",
+    "rowCount_one": "{{count}} row",
+    "rowCount_other": "{{count}} rows"
+  },
+  "nav": { "till": "Till", "backOffice": "Back office" }
+}

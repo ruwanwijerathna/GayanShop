@@ -236,7 +236,7 @@ It's never derived from UTC at query time. Otherwise terminals, and the cloud, w
   - Raster (bitmap) Sinhala printing stays in the Phase 5 backlog.
 - **Quality gates:**
   - A CI script fails the build when a key exists in `en` but not `si`, or vice versa.
-  - `i18next` `saveMissing` logs missing keys in dev.
+  - A key missing at runtime falls back to English (`fallbackLng: "en"`). Rust error codes without a specific translation fall back to their kind's generic message (`errors.<KIND>._`), via `translateError` in `src/i18n`.
   - The till screens are fully translated before the pilot.
 
 ### 1.9 UI/UX design system: counter-grade, high-contrast, dual-input

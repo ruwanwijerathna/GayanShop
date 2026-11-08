@@ -1,9 +1,16 @@
-// Application shell. Real screens (first-run wizard, login, till) arrive in Blocks 0.8–0.9.
+import { useState } from "react";
+import { PosLayout } from "@/app/layouts/PosLayout";
+import { TopBar } from "@/app/layouts/TopBar";
+import { useApplyTheme, type Theme } from "@/components/common/ThemeToggle";
+
+/** Application shell. The first-run wizard, login and till screens are routed here from Block 0.9. */
 function App() {
+  const [theme, setTheme] = useState<Theme>("light");
+  useApplyTheme(theme);
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background text-foreground">
-      <h1 className="text-3xl font-semibold">GayanShop</h1>
-    </main>
+    <PosLayout topBar={<TopBar storeName={null} deviceCode={null} theme={theme} onThemeChange={setTheme} />}>
+      <div className="flex-1" />
+    </PosLayout>
   );
 }
 
