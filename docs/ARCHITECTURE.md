@@ -2873,7 +2873,7 @@ cargo add --dev proptest
 
 This section is the result of attacking the design with real-world retail failure modes. Each finding says **what can go wrong**, **what the design now does**, and **which named test proves it**.
 
-Nothing here has run inside the app yet; Phase 0 is on hold. The exception is the §4.3 schema: its triggers and invariants were exercised in a scratch harness against SQLite 3.50.4, and those checks pass. The app bundles an older SQLite (libsqlite3-sys 0.30), so Block 0.3 must re-run the same assertions there.
+The §4.3 schema's triggers and invariants were first exercised in a scratch harness against SQLite 3.50.4. **Block 0.3 re-proved them against the app's bundled SQLite 3.46.0** (libsqlite3-sys 0.30.1): `tests/migration_invariants.rs` has 19 scenarios and `tests/fts.rs` has 2, all passing. The FTS5 trigram tokenizer is confirmed available. Other rows in this section remain targets until their named blocks run.
 
 ### 13.1 Concurrency and drift: three offline counters selling the last units of one layer
 

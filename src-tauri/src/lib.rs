@@ -14,7 +14,10 @@
 )]
 #![deny(clippy::float_arithmetic)]
 
+pub mod clock;
+pub mod db;
 pub mod domain;
+pub mod error;
 
 /// Builds and runs the Tauri application. Errors are returned to `main`, never panicked.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

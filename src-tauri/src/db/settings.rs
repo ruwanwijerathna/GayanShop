@@ -20,10 +20,8 @@ pub mod keys {
 }
 
 pub async fn device_get<T: DeserializeOwned>(pool: &SqlitePool, key: &str) -> AppResult<Option<T>> {
-    let raw: Option<String> = sqlx::query_scalar("SELECT value FROM device_settings WHERE key = ?1")
-        .bind(key)
-        .fetch_optional(pool)
-        .await?;
+    let raw: Option<String> =
+        sqlx::query_scalar("SELECT value FROM device_settings WHERE key = ?1").bind(key).fetch_optional(pool).await?;
     Ok(match raw {
         Some(s) => Some(serde_json::from_str(&s)?),
         None => None,
@@ -40,10 +38,11 @@ pub async fn device_set<T: Serialize>(conn: &mut SqliteConnection, key: &str, va
 }
 
 pub async fn store_get<T: DeserializeOwned>(pool: &SqlitePool, key: &str) -> AppResult<Option<T>> {
-    let raw: Option<String> = sqlx::query_scalar("SELECT value FROM store_settings WHERE key = ?1 AND deleted_at IS NULL")
-        .bind(key)
-        .fetch_optional(pool)
-        .await?;
+    let raw: Option<String> =
+        sqlx::query_scalar("SELECT value FROM store_settings WHERE key = ?1 AND deleted_at IS NULL")
+            .bind(key)
+            .fetch_optional(pool)
+            .await?;
     Ok(match raw {
         Some(s) => Some(serde_json::from_str(&s)?),
         None => None,

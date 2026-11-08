@@ -189,7 +189,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `cargo test --manifest-path src-tauri/Cargo.toml --lib domain::`
     - `pnpm verify`
 
-- [ ] **0.3 Database layer and schema invariants**
+- [x] **0.3 Database layer and schema invariants**: done 2026-11-08 (bundled SQLite 3.46.0)
   - **Deliverables:**
     - `db/mod.rs`: pool, PRAGMAs (WAL, **`synchronous=FULL`**, FK, cache, mmap), single-writer `Db::write()`, migrator, pre-migration `VACUUM INTO` backup.
     - `db/outbox.rs`.
