@@ -126,3 +126,30 @@ pub async fn rejects_sale(pool: &SqlitePool, sale: &Sale<'_>, needle: &str) {
     let refs: Vec<&str> = stmts.iter().map(String::as_str).collect();
     rejects(pool, &refs, needle).await;
 }
+
+/// A store set up through the real first-run path (roles, Owner, system batches, settings).
+pub async fn store(t: &TestDb) -> gayanshop_lib::setup::SetupResult {
+    use gayanshop_lib::auth::pin::PinHasher;
+    use gayanshop_lib::clock::ManualClock;
+    use gayanshop_lib::setup::{SetupInput, first_run};
+    let at = chrono::DateTime::parse_from_rfc3339(NOW).unwrap().with_timezone(&chrono::Utc);
+    let input = SetupInput {
+        store_name: "GayanShop".into(),
+        owner_name: "Gayan".into(),
+        owner_pin: "246810".into(),
+        device_code: "T01".into(),
+        ui_language: "en".into(),
+    };
+    first_run(&t.db, &PinHasher::fast_for_tests(), &ManualClock::new(at), &input).await.unwrap()
+}
+
+/// Write context for `store()` at an ISO time (business date = its Colombo date; tests stay after 04:00).
+pub fn ctx_at(s: &gayanshop_lib::setup::SetupResult, now: &str) -> gayanshop_lib::db::repo::WriteCtx {
+    gayanshop_lib::db::repo::WriteCtx {
+        store_id: s.store_id.clone(),
+        device_id: s.device_id.clone(),
+        device_code: s.device_code.clone(),
+        now: now.into(),
+        business_date: now[..10].into(),
+    }
+}

@@ -1,0 +1,53 @@
+{
+  "title": "Batches",
+  "new": "New batch",
+  "quickPurchase": "Quick purchase",
+  "empty": "No batches yet",
+  "select": "Choose a batch to see its items.",
+  "openingStock": "Opening stock",
+  "status": {
+    "draft": "Draft",
+    "received": "Received",
+    "closed": "Closed"
+  },
+  "fields": {
+    "name": "Batch name",
+    "supplier": "Supplier (optional)",
+    "supplierRef": "Supplier invoice no. (optional)",
+    "totalCost": "Invoice total (Rs, optional)",
+    "extraCosts": "Transport and other costs (Rs)",
+    "totalCostHint": "Leave empty to use the sum of the item costs.",
+    "product": "Product",
+    "qty": "Quantity",
+    "unitCost": "Cost per unit (Rs)",
+    "note": "Note (optional)"
+  },
+  "detail": {
+    "code": "Code",
+    "supplier": "Supplier",
+    "units": "Units",
+    "itemsCost": "Items cost",
+    "landed": "Paid (invoice + extra)",
+    "variance": "Difference vs items",
+    "receivedAt": "Received",
+    "onHand": "On hand",
+    "sold": "Sold",
+    "noItems": "No items yet. Search for a product to add it.",
+    "addItem": "Add to batch",
+    "removeItem": "Remove {{name}}",
+    "receive": "Receive stock",
+    "receiving": "Receiving…",
+    "receiveConfirm": "Receive {{units}} units? Costs lock and the stock becomes sellable. This can't be edited afterwards.",
+    "confirmReceive": "Yes, receive",
+    "draftHint": "Stock arrives only when you receive the batch."
+  },
+  "picker": {
+    "search": "Search product by name, SKU or barcode",
+    "label": "Find a product",
+    "noResults": "No matching product",
+    "selected": "Selected: {{name}}",
+    "change": "Change product"
+  },
+  "moneyInvalid": "Enter an amount such as 450 or 450.50.",
+  "qtyInvalid": "Enter a whole number of units, 1 or more."
+}

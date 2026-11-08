@@ -54,9 +54,42 @@ export const commands = {
 	searchProducts: (query: string, limit: number) => typedError<ProductSummary_Serialize[], AppError>(__TAURI_INVOKE("search_products", { query, limit })),
 	/**  Scanner lookup: barcode first, then in-store SKU. `None` = unknown code. */
 	lookupProductCode: (code: string) => typedError<ProductSummary_Serialize | null, AppError>(__TAURI_INVOKE("lookup_product_code", { code })),
+	listBatches: () => typedError<Batch_Serialize[], AppError>(__TAURI_INVOKE("list_batches")),
+	getBatch: (id: string) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("get_batch", { id })),
+	createBatch: (input: BatchInput_Deserialize) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("create_batch", { input })),
+	updateBatch: (id: string, input: BatchInput_Deserialize) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("update_batch", { id, input })),
+	setBatchItem: (batchId: string, input: BatchItemInput_Deserialize) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("set_batch_item", { batchId, input })),
+	removeBatchItem: (batchId: string, itemId: string) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("remove_batch_item", { batchId, itemId })),
+	/**  Receive a draft: costs lock and stock arrives (one transaction). */
+	receiveBatch: (id: string) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("receive_batch", { id })),
+	/**  Buy and receive one item in one step. */
+	adHocPurchase: (input: AdHocPurchase_Deserialize) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("ad_hoc_purchase", { input })),
+	/**  A product's cost layers in FIFO order, with stock on hand per layer. */
+	productLayers: (productId: string) => typedError<LayerStock_Serialize[], AppError>(__TAURI_INVOKE("product_layers", { productId })),
 };
 
 /* Types */
+/**  A one-item purchase received immediately ("bought 12 umbrellas at the market"). */
+export type AdHocPurchase = AdHocPurchase_Serialize | AdHocPurchase_Deserialize;
+
+/**  A one-item purchase received immediately ("bought 12 umbrellas at the market"). */
+export type AdHocPurchase_Deserialize = {
+	product_id: string,
+	qty: number,
+	unit_cost: number,
+	supplier_name?: string | null,
+	note?: string | null,
+};
+
+/**  A one-item purchase received immediately ("bought 12 umbrellas at the market"). */
+export type AdHocPurchase_Serialize = {
+	product_id: string,
+	qty: number,
+	unit_cost: number,
+	supplier_name: string | null,
+	note: string | null,
+};
+
 export type AppError = { kind: "NOT_INITIALIZED" } | { kind: "ALREADY_INITIALIZED" } | { kind: "NOT_LOGGED_IN" } | { kind: "SESSION_LOCKED" } | { kind: "FORBIDDEN"; perm: Perm } | { kind: "APPROVAL_REQUIRED"; perm: Perm } | { kind: "INVALID_APPROVAL" } | { kind: "INVALID_PIN"; attempts_left: number } | { kind: "ACCOUNT_LOCKED"; until: string } | 
 /**  Bad input. `code` is a stable SCREAMING_SNAKE identifier, e.g. `PIN_TOO_SHORT`. */
 { kind: "VALIDATION"; code: string; detail: string } | 
@@ -155,6 +188,138 @@ export type Authorization_Serialize = {
 	approved_by: string | null,
 };
 
+export type Batch = Batch_Serialize | Batch_Deserialize;
+
+export type BatchDetail = BatchDetail_Serialize | BatchDetail_Deserialize;
+
+export type BatchDetail_Deserialize = {
+	batch: Batch_Deserialize,
+	items: BatchItem_Deserialize[],
+};
+
+export type BatchDetail_Serialize = {
+	batch: Batch_Serialize,
+	items: BatchItem_Serialize[],
+};
+
+export type BatchInput = BatchInput_Serialize | BatchInput_Deserialize;
+
+export type BatchInput_Deserialize = {
+	name: string,
+	supplier_name?: string | null,
+	supplier_ref?: string | null,
+	/**  ISO date-time of the purchase; `None` = now. */
+	purchased_at?: string | null,
+	/**  Invoice total. 0 with no extra costs ⇒ the batch costs exactly Σ(unit cost × qty). */
+	total_cost: number,
+	extra_costs: number,
+	notes?: string | null,
+};
+
+export type BatchInput_Serialize = {
+	name: string,
+	supplier_name: string | null,
+	supplier_ref: string | null,
+	/**  ISO date-time of the purchase; `None` = now. */
+	purchased_at: string | null,
+	/**  Invoice total. 0 with no extra costs ⇒ the batch costs exactly Σ(unit cost × qty). */
+	total_cost: number,
+	extra_costs: number,
+	notes: string | null,
+};
+
+export type BatchItem = BatchItem_Serialize | BatchItem_Deserialize;
+
+export type BatchItemInput = BatchItemInput_Serialize | BatchItemInput_Deserialize;
+
+export type BatchItemInput_Deserialize = {
+	product_id: string,
+	qty: number,
+	unit_cost: number,
+	/**  `None` = the product's current price. */
+	retail_price?: number | null,
+};
+
+export type BatchItemInput_Serialize = {
+	product_id: string,
+	qty: number,
+	unit_cost: number,
+	/**  `None` = the product's current price. */
+	retail_price: number | null,
+};
+
+export type BatchItem_Deserialize = {
+	id: string,
+	product_id: string,
+	product_name: string,
+	product_sku?: string | null,
+	qty_received: number,
+	/**  While a draft: the typed (manual) cost; once received: the locked layer cost. */
+	unit_cost: number,
+	retail_price_at_intake: number,
+	added_after_receipt: boolean,
+	on_hand: number,
+	sold_qty: number,
+};
+
+export type BatchItem_Serialize = {
+	id: string,
+	product_id: string,
+	product_name: string,
+	product_sku: string | null,
+	qty_received: number,
+	/**  While a draft: the typed (manual) cost; once received: the locked layer cost. */
+	unit_cost: number,
+	retail_price_at_intake: number,
+	added_after_receipt: boolean,
+	on_hand: number,
+	sold_qty: number,
+};
+
+export type BatchStatus = "draft" | "received" | "closed";
+
+export type Batch_Deserialize = {
+	id: string,
+	code: string,
+	name: string,
+	supplier_name?: string | null,
+	supplier_ref?: string | null,
+	purchased_at: string,
+	received_at?: string | null,
+	total_cost: number,
+	extra_costs: number,
+	allocation_variance: number,
+	status: BatchStatus,
+	is_system: boolean,
+	notes?: string | null,
+	item_count: number,
+	total_units: number,
+	/**  Σ unit_cost × qty over the layers (manual costs while still a draft). */
+	items_cost: number,
+	version: number,
+};
+
+export type Batch_Serialize = {
+	id: string,
+	code: string,
+	name: string,
+	supplier_name: string | null,
+	supplier_ref: string | null,
+	purchased_at: string,
+	received_at: string | null,
+	total_cost: number,
+	extra_costs: number,
+	allocation_variance: number,
+	status: BatchStatus,
+	is_system: boolean,
+	notes: string | null,
+	item_count: number,
+	total_units: number,
+	/**  Σ unit_cost × qty over the layers (manual costs while still a draft). */
+	items_cost: number,
+	version: number,
+};
+
 export type Category = Category_Serialize | Category_Deserialize;
 
 export type CategoryInput = CategoryInput_Serialize | CategoryInput_Deserialize;
@@ -226,6 +391,33 @@ export type IntegrityReport = {
 	unreversed_voids: number,
 	/**  `sync_ctx.applying` left at 1 outside a pull transaction. */
 	stale_sync_flag: boolean,
+};
+
+/**  One layer of a product's stock, for the product and batch screens. */
+export type LayerStock = LayerStock_Serialize | LayerStock_Deserialize;
+
+/**  One layer of a product's stock, for the product and batch screens. */
+export type LayerStock_Deserialize = {
+	batch_item_id: string,
+	batch_id: string,
+	batch_code: string,
+	received_at?: string | null,
+	unit_cost: number,
+	received_qty: number,
+	on_hand: number,
+	sold_qty: number,
+};
+
+/**  One layer of a product's stock, for the product and batch screens. */
+export type LayerStock_Serialize = {
+	batch_item_id: string,
+	batch_id: string,
+	batch_code: string,
+	received_at: string | null,
+	unit_cost: number,
+	received_qty: number,
+	on_hand: number,
+	sold_qty: number,
 };
 
 export type LoginStaff = {

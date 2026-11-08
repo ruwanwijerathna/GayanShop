@@ -528,6 +528,11 @@ batches (header)  1 ──── n  batch_items (cost layers)  1 ──── n 
 - **Ad-hoc purchase of one item:** a one-line batch.
 - **Positive count correction** (found 3 extra): the stock goes into the product's **newest** layer at that layer's cost. If the product has no layer, it goes into the system batch `ADJUSTMENTS` at the product's `default_cost`.
 
+**Phase 1 implementation notes (Block 1.2).**
+- Batch codes are `B-{business year}-{device digit}{seq:03}`, e.g. `B-2026-1045` from T01, so counters never collide offline.
+- If a manual-cost batch is received with no invoice total and no extra costs (opening stock, quick purchases), `total_cost` is set to Σ(unit_cost × qty) and the variance is 0. With an invoice total, `allocation_variance = landed − Σ(unit_cost × qty)`, which can be negative in manual mode.
+- A tracked product sold before it has any layer gets one in `ADJUSTMENTS` at its `default_cost` (`added_after_receipt = 1`, `qty_received = 0`), created inside the checkout transaction. The sale is never blocked, and the layer shows as oversold until stock is received.
+
 **Layer selection at checkout (FIFO, offline-safe).** For each tracked line of qty *n*:
 1. Take layers of that product ordered by `batches.received_at, batch_items.id`.
 2. Consume from the **oldest layer with positive local `on_hand`**, splitting across layers if needed.

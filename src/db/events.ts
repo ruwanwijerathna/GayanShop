@@ -13,6 +13,9 @@ const TABLE_KEYS: Record<string, readonly string[]> = {
   products: ["catalog"],
   categories: ["catalog"],
   audit_logs: ["audit"],
+  batches: ["batches"],
+  batch_items: ["batches"],
+  stock_movements: ["batches"],
 };
 
 export function keysForTables(tables: string[]): (readonly string[])[] {

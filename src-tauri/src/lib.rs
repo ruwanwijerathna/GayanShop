@@ -64,6 +64,15 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::products::delete_product,
         commands::products::search_products,
         commands::products::lookup_product_code,
+        commands::batches::list_batches,
+        commands::batches::get_batch,
+        commands::batches::create_batch,
+        commands::batches::update_batch,
+        commands::batches::set_batch_item,
+        commands::batches::remove_batch_item,
+        commands::batches::receive_batch,
+        commands::batches::ad_hoc_purchase,
+        commands::batches::product_layers,
     ])
 }
 
@@ -135,6 +144,15 @@ mod tests {
             "deleteProduct",
             "searchProducts",
             "lookupProductCode",
+            "listBatches",
+            "getBatch",
+            "createBatch",
+            "updateBatch",
+            "setBatchItem",
+            "removeBatchItem",
+            "receiveBatch",
+            "adHocPurchase",
+            "productLayers",
         ] {
             assert!(ts.contains(&format!("{cmd}:")), "command {cmd} missing from bindings");
         }

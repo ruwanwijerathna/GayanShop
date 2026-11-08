@@ -2,6 +2,9 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   commands,
+  type AdHocPurchase,
+  type BatchInput,
+  type BatchItemInput,
   type CategoryInput,
   type Perm,
   type ProductInput,
@@ -21,6 +24,8 @@ export const queryKeys = {
   categories: ["catalog", "categories"] as const,
   products: ["catalog", "products"] as const,
   productSearch: (query: string) => ["catalog", "search", query] as const,
+  batches: ["batches", "list"] as const,
+  batch: (id: string) => ["batches", "detail", id] as const,
 };
 
 /** Polled so the shell notices an idle auto-lock done by Rust (doc §3.5). */
@@ -163,4 +168,53 @@ export function useSaveCategory() {
 
 export function useDeleteCategory() {
   return useCatalogMutation((id: string) => unwrap(commands.deleteCategory(id)));
+}
+
+// ───────── batches (BATCH_MANAGE) ─────────
+
+export function useBatches() {
+  return useQuery({ queryKey: queryKeys.batches, queryFn: () => unwrap(commands.listBatches()) });
+}
+
+export function useBatch(id: string | null) {
+  return useQuery({
+    queryKey: queryKeys.batch(id ?? ""),
+    queryFn: () => unwrap(commands.getBatch(id ?? "")),
+    enabled: id !== null,
+  });
+}
+
+function useBatchMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["batches"] });
+      await qc.invalidateQueries({ queryKey: ["catalog"] });
+    },
+  });
+}
+
+export function useCreateBatch() {
+  return useBatchMutation((input: BatchInput) => unwrap(commands.createBatch(input)));
+}
+
+export function useSetBatchItem() {
+  return useBatchMutation(({ batchId, input }: { batchId: string; input: BatchItemInput }) =>
+    unwrap(commands.setBatchItem(batchId, input)),
+  );
+}
+
+export function useRemoveBatchItem() {
+  return useBatchMutation(({ batchId, itemId }: { batchId: string; itemId: string }) =>
+    unwrap(commands.removeBatchItem(batchId, itemId)),
+  );
+}
+
+export function useReceiveBatch() {
+  return useBatchMutation((id: string) => unwrap(commands.receiveBatch(id)));
+}
+
+export function useAdHocPurchase() {
+  return useBatchMutation((input: AdHocPurchase) => unwrap(commands.adHocPurchase(input)));
 }

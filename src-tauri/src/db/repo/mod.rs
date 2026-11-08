@@ -1,8 +1,10 @@
 //! Repositories: SQL for one aggregate each. Writes run inside the caller's `Db::write()` transaction
 //! and enqueue their own outbox rows; commands add the RBAC guard, audit and `db://changed`.
 
+pub mod batches;
 pub mod categories;
 pub mod products;
+pub mod stock;
 
 /// Where and when a catalog write happens (row metadata, audit context, in-store code generation).
 #[derive(Debug, Clone)]

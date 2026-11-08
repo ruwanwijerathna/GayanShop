@@ -1,5 +1,5 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { History, Lock, Package, Store } from "lucide-react";
+import { Boxes, History, Lock, Package, Store } from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Can } from "@/components/auth/Can";
@@ -71,6 +71,12 @@ export function AppShell() {
             <Package aria-hidden className="size-5 shrink-0" />
             <span className="hidden xl:inline">{t("nav.products")}</span>
           </Link>
+          <Can perm="BATCH_MANAGE">
+            <Link to="/batches" className={NAV_LINK} aria-label={t("nav.batches")}>
+              <Boxes aria-hidden className="size-5 shrink-0" />
+              <span className="hidden xl:inline">{t("nav.batches")}</span>
+            </Link>
+          </Can>
           <Can perm="AUDIT_VIEW">
             <Link to="/audit" className={NAV_LINK} aria-label={t("nav.audit")}>
               <History aria-hidden className="size-5 shrink-0" />

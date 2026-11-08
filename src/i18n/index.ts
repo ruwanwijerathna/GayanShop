@@ -5,11 +5,13 @@ import type { AppError } from "@/db/bindings";
 import { errorKey } from "@/db/client";
 import enApp from "./locales/en/app.json";
 import enAuth from "./locales/en/auth.json";
+import enBatches from "./locales/en/batches.json";
 import enCommon from "./locales/en/common.json";
 import enErrors from "./locales/en/errors.json";
 import enProducts from "./locales/en/products.json";
 import siApp from "./locales/si/app.json";
 import siAuth from "./locales/si/auth.json";
+import siBatches from "./locales/si/batches.json";
 import siCommon from "./locales/si/common.json";
 import siErrors from "./locales/si/errors.json";
 import siProducts from "./locales/si/products.json";
@@ -17,11 +19,25 @@ import siProducts from "./locales/si/products.json";
 export const LANGUAGES = ["en", "si"] as const;
 export type UiLanguage = (typeof LANGUAGES)[number];
 
-export const NAMESPACES = ["common", "errors", "auth", "app", "products"] as const;
+export const NAMESPACES = ["common", "errors", "auth", "app", "products", "batches"] as const;
 
 export const resources = {
-  en: { common: enCommon, errors: enErrors, auth: enAuth, app: enApp, products: enProducts },
-  si: { common: siCommon, errors: siErrors, auth: siAuth, app: siApp, products: siProducts },
+  en: {
+    common: enCommon,
+    errors: enErrors,
+    auth: enAuth,
+    app: enApp,
+    products: enProducts,
+    batches: enBatches,
+  },
+  si: {
+    common: siCommon,
+    errors: siErrors,
+    auth: siAuth,
+    app: siApp,
+    products: siProducts,
+    batches: siBatches,
+  },
 } as const;
 
 export function isUiLanguage(value: string): value is UiLanguage {
