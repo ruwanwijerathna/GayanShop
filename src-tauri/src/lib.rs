@@ -15,6 +15,7 @@
 #![deny(clippy::float_arithmetic)]
 
 pub mod audit;
+pub mod auth;
 pub mod clock;
 pub mod commands;
 pub mod db;

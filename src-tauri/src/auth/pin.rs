@@ -1,12 +1,14 @@
-//! Staff PIN hashing (argon2id) and validation.
+//! Staff PIN hashing (argon2id) and validation (ARCHITECTURE §3.5).
 
-use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng};
+use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::{Algorithm, Argon2, Params, Version};
+use rand_core::OsRng;
 
 use crate::error::{AppError, AppResult};
 
 pub const MAX_FAILED_ATTEMPTS: u32 = 5;
 pub const LOCKOUT_MINUTES: i64 = 5;
+pub const MAX_PIN_LEN: usize = 8;
 
 #[derive(Clone)]
 pub struct PinHasher {
@@ -16,12 +18,12 @@ pub struct PinHasher {
 impl PinHasher {
     /// ~100 ms on counter hardware: 19 MiB, 2 passes (OWASP argon2id baseline).
     pub fn production() -> Self {
-        Self { params: Params::new(19 * 1024, 2, 1, None).expect("valid argon2 params") }
+        Self { params: Params::new(19 * 1024, 2, 1, None).unwrap_or_default() }
     }
 
     /// Deliberately weak parameters so tests stay fast. Never use outside tests.
     pub fn fast_for_tests() -> Self {
-        Self { params: Params::new(256, 1, 1, None).expect("valid argon2 params") }
+        Self { params: Params::new(256, 1, 1, None).unwrap_or_default() }
     }
 
     fn argon(&self) -> Argon2<'static> {
@@ -38,18 +40,21 @@ impl PinHasher {
 
     /// Verifies with the parameters embedded in the stored PHC string.
     pub fn verify(&self, pin: &str, stored: &str) -> bool {
-        match PasswordHash::new(stored) {
-            Ok(parsed) => Argon2::default().verify_password(pin.as_bytes(), &parsed).is_ok(),
-            Err(_) => false,
-        }
+        PasswordHash::new(stored).is_ok_and(|parsed| Argon2::default().verify_password(pin.as_bytes(), &parsed).is_ok())
     }
 }
 
-/// PINs are 4–8 digits; Manager/Owner roles need at least 6.
+/// PINs are digits only, `min_len`–8 long (min 4; Manager/Owner roles need 6).
 pub fn validate_pin(pin: &str, min_len: usize) -> AppResult<()> {
-    let ok_chars = pin.chars().all(|c| c.is_ascii_digit());
-    if !ok_chars || pin.len() < min_len.max(4) || pin.len() > 8 {
-        return Err(AppError::validation(format!("PIN must be {}–8 digits", min_len.max(4))));
+    let min_len = min_len.max(4);
+    if !pin.chars().all(|c| c.is_ascii_digit()) || pin.is_empty() {
+        return Err(AppError::validation("PIN_NOT_DIGITS", "PIN must contain digits only"));
+    }
+    if pin.len() < min_len {
+        return Err(AppError::validation("PIN_TOO_SHORT", format!("PIN needs at least {min_len} digits")));
+    }
+    if pin.len() > MAX_PIN_LEN {
+        return Err(AppError::validation("PIN_TOO_LONG", format!("PIN allows at most {MAX_PIN_LEN} digits")));
     }
     Ok(())
 }
@@ -66,16 +71,22 @@ mod tests {
         assert!(h.verify("123456", &stored));
         assert!(!h.verify("123457", &stored));
         assert!(!h.verify("123456", "garbage"));
-        // salts differ
-        assert_ne!(stored, h.hash("123456").unwrap());
+        assert_ne!(stored, h.hash("123456").unwrap(), "salts differ");
+    }
+
+    #[test]
+    fn production_params_are_the_owasp_baseline() {
+        let stored = PinHasher::production().hash("2468").unwrap();
+        assert!(stored.contains("m=19456,t=2,p=1"), "{stored}");
     }
 
     #[test]
     fn pin_rules() {
         assert!(validate_pin("1234", 4).is_ok());
-        assert!(validate_pin("123", 4).is_err());
-        assert!(validate_pin("12345", 6).is_err());
-        assert!(validate_pin("123456789", 4).is_err());
-        assert!(validate_pin("12a4", 4).is_err());
+        assert_eq!(validate_pin("123", 4).unwrap_err().i18n_key(), "errors.VALIDATION.PIN_TOO_SHORT");
+        assert_eq!(validate_pin("12345", 6).unwrap_err().i18n_key(), "errors.VALIDATION.PIN_TOO_SHORT");
+        assert_eq!(validate_pin("123456789", 4).unwrap_err().i18n_key(), "errors.VALIDATION.PIN_TOO_LONG");
+        assert_eq!(validate_pin("12a4", 4).unwrap_err().i18n_key(), "errors.VALIDATION.PIN_NOT_DIGITS");
+        assert_eq!(validate_pin("", 4).unwrap_err().i18n_key(), "errors.VALIDATION.PIN_NOT_DIGITS");
     }
 }

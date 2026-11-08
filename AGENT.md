@@ -231,7 +231,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `cargo test --manifest-path src-tauri/Cargo.toml --test audit_chain`
     - `pnpm verify`
 
-- [ ] **0.6 Auth and RBAC core**
+- [x] **0.6 Auth and RBAC core**: done 2026-11-08
   - **Deliverables:**
     - `auth/{pin,session,approvals,guard}.rs`: argon2id (fast params in tests only), 5-strike / 5-minute lockout, idle auto-lock, single-use 60 s approval tokens bound to (perm, target, requester), `require()` returning `Forbidden` vs `ApprovalRequired`, the owner invariant.
     - `tests/rbac.rs`, using `ManualClock`.

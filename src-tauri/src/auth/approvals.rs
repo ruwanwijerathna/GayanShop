@@ -1,8 +1,8 @@
-//! Supervisor approval tokens (step-up auth, ARCHITECTURE §3.5): in memory only,
-//! single-use, short-lived, and bound to (permission, target, requester).
+//! Supervisor approval tokens (step-up auth, ARCHITECTURE §3.5): in memory only, single-use,
+//! short-lived, and bound to (permission, target, requester).
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use chrono::{DateTime, Duration, Utc};
 
@@ -24,10 +24,22 @@ struct Approval {
 pub struct ApprovalStore(Mutex<HashMap<String, Approval>>);
 
 impl ApprovalStore {
-    pub fn issue(&self, perm: Perm, target_ref: &str, requester_id: &str, approver_id: &str, now: DateTime<Utc>) -> (String, DateTime<Utc>) {
+    fn map(&self) -> MutexGuard<'_, HashMap<String, Approval>> {
+        // Approvals are plain data; a poisoned map is still consistent, so recover it.
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    pub fn issue(
+        &self,
+        perm: Perm,
+        target_ref: &str,
+        requester_id: &str,
+        approver_id: &str,
+        now: DateTime<Utc>,
+    ) -> (String, DateTime<Utc>) {
         let id = new_id();
         let expires_at = now + Duration::seconds(APPROVAL_TTL_SECONDS);
-        let mut map = self.0.lock().expect("approvals lock");
+        let mut map = self.map();
         map.retain(|_, a| a.expires_at > now);
         map.insert(
             id.clone(),
@@ -42,10 +54,17 @@ impl ApprovalStore {
         (id, expires_at)
     }
 
-    /// Consume a token. Returns the approver's staff id if it matches and hasn't expired.
-    /// The token is removed whether or not it matches, so a guessed/misused id can't be retried.
-    pub fn consume(&self, id: &str, perm: Perm, target_ref: &str, requester_id: &str, now: DateTime<Utc>) -> Option<String> {
-        let approval = self.0.lock().expect("approvals lock").remove(id)?;
+    /// Consume a token. Returns the approver's staff id if it matches and hasn't expired. The token is
+    /// removed whether or not it matches, so a guessed or misused id can't be retried.
+    pub fn consume(
+        &self,
+        id: &str,
+        perm: Perm,
+        target_ref: &str,
+        requester_id: &str,
+        now: DateTime<Utc>,
+    ) -> Option<String> {
+        let approval = self.map().remove(id)?;
         let valid = approval.perm == perm
             && approval.target_ref == target_ref
             && approval.requester_id == requester_id
@@ -53,9 +72,9 @@ impl ApprovalStore {
         valid.then_some(approval.approver_id)
     }
 
-    /// Drop everything (e.g. on logout).
+    /// Drop everything (logout, lock).
     pub fn clear(&self) {
-        self.0.lock().expect("approvals lock").clear();
+        self.map().clear();
     }
 }
 
@@ -80,24 +99,32 @@ mod tests {
     fn expires_after_ttl() {
         let s = ApprovalStore::default();
         let (id, _) = s.issue(Perm::VOID_ORDER, "o", "c", "s", t0());
-        let late = t0() + Duration::seconds(APPROVAL_TTL_SECONDS);
-        assert_eq!(s.consume(&id, Perm::VOID_ORDER, "o", "c", late), None);
+        assert_eq!(s.consume(&id, Perm::VOID_ORDER, "o", "c", t0() + Duration::seconds(APPROVAL_TTL_SECONDS)), None);
         let (id, _) = s.issue(Perm::VOID_ORDER, "o", "c", "s", t0());
-        assert!(s.consume(&id, Perm::VOID_ORDER, "o", "c", late - Duration::seconds(1)).is_some());
+        assert!(
+            s.consume(&id, Perm::VOID_ORDER, "o", "c", t0() + Duration::seconds(APPROVAL_TTL_SECONDS - 1)).is_some()
+        );
     }
 
     #[test]
-    fn bound_to_perm_target_and_requester() {
+    fn bound_to_perm_target_and_requester_and_burned_on_misuse() {
         let s = ApprovalStore::default();
         for (perm, target, requester) in [
-            (Perm::EXCHANGE_LATE, "o", "c"),
+            (Perm::PRICE_OVERRIDE, "o", "c"),
             (Perm::VOID_ORDER, "other", "c"),
             (Perm::VOID_ORDER, "o", "someone-else"),
         ] {
             let (id, _) = s.issue(Perm::VOID_ORDER, "o", "c", "s", t0());
             assert_eq!(s.consume(&id, perm, target, requester, t0()), None);
-            // misuse burns the token
             assert_eq!(s.consume(&id, Perm::VOID_ORDER, "o", "c", t0()), None);
         }
+    }
+
+    #[test]
+    fn clear_drops_all() {
+        let s = ApprovalStore::default();
+        let (id, _) = s.issue(Perm::VOID_ORDER, "o", "c", "s", t0());
+        s.clear();
+        assert_eq!(s.consume(&id, Perm::VOID_ORDER, "o", "c", t0()), None);
     }
 }
