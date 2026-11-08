@@ -222,7 +222,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `pnpm typecheck`
     - `pnpm verify`
 
-- [ ] **0.5 Audit core**
+- [x] **0.5 Audit core**: done 2026-11-08
   - **Deliverables:**
     - `audit/{mod,chain}.rs`: `record()` inside the caller's transaction, `verify()`, canonical JSON (sorted keys, fixed field order).
     - `tests/audit_chain.rs`: a golden hash; a tamper test (drop the trigger in a test DB, edit a row, expect the break); the chain guard rejecting gaps and wrong `prev_hash`.

@@ -12,6 +12,7 @@ use crate::db::outbox;
 use crate::error::AppResult;
 use chain::{ChainFields, GENESIS_HASH, canonical_json, compute_hash};
 
+/// Every audited action (doc §3.6). Stored and synced as the SCREAMING_SNAKE code.
 #[allow(non_camel_case_types, clippy::upper_case_acronyms)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub enum AuditAction {
@@ -32,10 +33,11 @@ pub enum AuditAction {
     LINE_DISCOUNT,
     ORDER_DISCOUNT,
     VOID_ORDER,
-    EXCHANGE_ORDER,
-    EXCHANGE_LATE_APPROVED,
-    CREDIT_NOTE_ISSUE,
     REPRINT_RECEIPT,
+    CUSTOMER_CREATE,
+    CUSTOMER_UPDATE,
+    CUSTOMER_ERASE,
+    LABEL_PRINT,
     STOCK_ADJUSTMENT,
     STOCK_DAMAGE,
     STOCK_COUNT,
@@ -61,6 +63,7 @@ pub enum AuditAction {
     USER_DISABLE,
     USER_PIN_RESET,
     BACKUP_CREATE,
+    BACKUP_FAILED,
     BACKUP_RESTORE,
     DATA_EXPORT,
     SYNC_DEAD_OP_RESOLVE,
@@ -68,8 +71,11 @@ pub enum AuditAction {
 }
 
 impl AuditAction {
-    pub fn as_str(self) -> String {
-        serde_json::to_value(self).ok().and_then(|v| v.as_str().map(str::to_owned)).unwrap_or_default()
+    pub fn code(self) -> String {
+        match serde_json::to_value(self) {
+            Ok(Value::String(s)) => s,
+            _ => format!("{self:?}"),
+        }
     }
 }
 
@@ -90,20 +96,18 @@ pub struct AuditEntry<'a> {
     pub metadata: Value,
 }
 
-/// Append one audit row (and its outbox entry). Must be called inside the action's transaction;
-/// writes are serialised by `Db::write`, so reading the chain head here is race-free.
+/// Append one audit row and its outbox entry. Must be called inside the action's transaction (from
+/// `Db::write()`); writes are serialised, so reading the chain head here is race-free. The SQL chain guard
+/// re-checks the sequence and link.
 pub async fn record(conn: &mut SqliteConnection, ctx: &AuditCtx<'_>, e: AuditEntry<'_>) -> AppResult<String> {
     let head: Option<(i64, String)> =
         sqlx::query_as("SELECT device_seq, hash FROM audit_logs WHERE device_id = ?1 ORDER BY device_seq DESC LIMIT 1")
             .bind(ctx.device_id)
             .fetch_optional(&mut *conn)
             .await?;
-    let (seq, prev_hash) = match head {
-        Some((s, h)) => (s + 1, h),
-        None => (1, GENESIS_HASH.to_owned()),
-    };
+    let (seq, prev_hash) = head.map_or((1, GENESIS_HASH.to_owned()), |(s, h)| (s + 1, h));
     let id = new_id();
-    let action = e.action.as_str();
+    let action = e.action.code();
     let metadata = canonical_json(&e.metadata);
     let hash = compute_hash(
         &prev_hash,
@@ -151,6 +155,7 @@ pub async fn record(conn: &mut SqliteConnection, ctx: &AuditCtx<'_>, e: AuditEnt
 pub struct AuditLogRow {
     pub id: String,
     pub device_id: String,
+    #[specta(type = specta_typescript::Number)]
     pub device_seq: i64,
     pub staff_id: Option<String>,
     pub staff_name: Option<String>,
@@ -162,34 +167,69 @@ pub struct AuditLogRow {
     pub metadata: String,
     pub business_date: String,
     pub created_at: String,
-    pub hash: String,
 }
 
-pub async fn list(pool: &SqlitePool, limit: i64) -> AppResult<Vec<AuditLogRow>> {
-    Ok(sqlx::query_as(
+/// Keyset page cursor: rows strictly older than `(created_at, id)`.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct AuditCursor {
+    pub created_at: String,
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Type)]
+pub struct AuditPage {
+    pub rows: Vec<AuditLogRow>,
+    pub next_cursor: Option<AuditCursor>,
+}
+
+/// Newest-first keyset paging over `ix_audit_keyset` (ARCHITECTURE §1.4).
+pub async fn page(pool: &SqlitePool, cursor: Option<&AuditCursor>, limit: u32) -> AppResult<AuditPage> {
+    let limit = i64::from(limit.clamp(1, 500));
+    let after_ts = cursor.map(|c| c.created_at.as_str());
+    let after_id = cursor.map(|c| c.id.as_str());
+    let rows: Vec<AuditLogRow> = sqlx::query_as(
         "SELECT a.id, a.device_id, a.device_seq, a.staff_id, s.display_name AS staff_name, a.approved_by,
                 ap.display_name AS approver_name, a.action, a.entity_type, a.entity_id, a.metadata,
-                a.business_date, a.created_at, a.hash
+                a.business_date, a.created_at
          FROM audit_logs a
          LEFT JOIN staff s ON s.id = a.staff_id
          LEFT JOIN staff ap ON ap.id = a.approved_by
-         ORDER BY a.created_at DESC, a.device_seq DESC
-         LIMIT ?1",
+         WHERE ?1 IS NULL OR (a.created_at, a.id) < (?1, ?2)
+         ORDER BY a.created_at DESC, a.id DESC
+         LIMIT ?3",
     )
-    .bind(limit.clamp(1, 1000))
+    .bind(after_ts)
+    .bind(after_id)
+    .bind(limit)
     .fetch_all(pool)
-    .await?)
+    .await?;
+    let next_cursor = if i64::try_from(rows.len()).unwrap_or(i64::MAX) == limit {
+        rows.last().map(|r| AuditCursor { created_at: r.created_at.clone(), id: r.id.clone() })
+    } else {
+        None
+    };
+    Ok(AuditPage { rows, next_cursor })
 }
 
 #[derive(Debug, Clone, Serialize, Type, PartialEq, Eq)]
 pub struct ChainBreak {
+    #[specta(type = specta_typescript::Number)]
     pub device_seq: i64,
-    pub reason: String,
+    pub reason: ChainBreakReason,
 }
 
-#[derive(Debug, Clone, Serialize, Type)]
+#[derive(Debug, Clone, Copy, Serialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ChainBreakReason {
+    SequenceGap,
+    PrevHashMismatch,
+    ContentMismatch,
+}
+
+#[derive(Debug, Clone, Serialize, Type, PartialEq, Eq)]
 pub struct ChainReport {
     pub device_id: String,
+    #[specta(type = specta_typescript::Number)]
     pub rows_checked: i64,
     pub ok: bool,
     pub first_break: Option<ChainBreak>,
@@ -213,51 +253,74 @@ struct ChainRow {
     created_at: String,
 }
 
-/// Re-verify every device's chain: gapless sequence, linked hashes, recomputed hashes.
+fn check_row(r: &ChainRow, expected_seq: i64, prev_hash: &str) -> Option<ChainBreakReason> {
+    if r.device_seq != expected_seq {
+        return Some(ChainBreakReason::SequenceGap);
+    }
+    if r.prev_hash != prev_hash {
+        return Some(ChainBreakReason::PrevHashMismatch);
+    }
+    let recomputed = compute_hash(
+        &r.prev_hash,
+        &ChainFields {
+            id: &r.id,
+            store_id: &r.store_id,
+            device_id: &r.device_id,
+            device_seq: r.device_seq,
+            staff_id: r.staff_id.as_deref(),
+            approved_by: r.approved_by.as_deref(),
+            action: &r.action,
+            entity_type: r.entity_type.as_deref(),
+            entity_id: r.entity_id.as_deref(),
+            metadata: &r.metadata,
+            business_date: &r.business_date,
+            created_at: &r.created_at,
+        },
+    );
+    (recomputed != r.hash).then_some(ChainBreakReason::ContentMismatch)
+}
+
+/// Re-verify every device's chain: gapless sequence from 1, linked hashes, recomputed hashes.
 pub async fn verify(pool: &SqlitePool) -> AppResult<Vec<ChainReport>> {
-    let rows: Vec<ChainRow> = sqlx::query_as("SELECT * FROM audit_logs ORDER BY device_id, device_seq").fetch_all(pool).await?;
+    let rows: Vec<ChainRow> =
+        sqlx::query_as("SELECT * FROM audit_logs ORDER BY device_id, device_seq").fetch_all(pool).await?;
     let mut reports: Vec<ChainReport> = Vec::new();
+    let mut current: Option<ChainReport> = None;
     let mut prev_hash = String::new();
     for r in &rows {
-        if reports.last().map(|x| x.device_id != r.device_id).unwrap_or(true) {
-            reports.push(ChainReport { device_id: r.device_id.clone(), rows_checked: 0, ok: true, first_break: None });
+        if current.as_ref().is_none_or(|c| c.device_id != r.device_id) {
+            if let Some(done) = current.take() {
+                reports.push(done);
+            }
+            current =
+                Some(ChainReport { device_id: r.device_id.clone(), rows_checked: 0, ok: true, first_break: None });
             prev_hash = GENESIS_HASH.to_owned();
         }
-        let rep = reports.last_mut().expect("report exists");
-        rep.rows_checked += 1;
-        if !rep.ok {
-            continue;
+        if let Some(rep) = current.as_mut() {
+            rep.rows_checked += 1;
+            if rep.ok
+                && let Some(reason) = check_row(r, rep.rows_checked, &prev_hash)
+            {
+                rep.ok = false;
+                rep.first_break = Some(ChainBreak { device_seq: r.device_seq, reason });
+            }
         }
-        let expected_seq = rep.rows_checked;
-        let reason = if r.device_seq != expected_seq {
-            Some(format!("sequence gap: expected {expected_seq}, found {}", r.device_seq))
-        } else if r.prev_hash != prev_hash {
-            Some("prev_hash does not match the previous row".to_owned())
-        } else {
-            let recomputed = compute_hash(
-                &r.prev_hash,
-                &ChainFields {
-                    id: &r.id,
-                    store_id: &r.store_id,
-                    device_id: &r.device_id,
-                    device_seq: r.device_seq,
-                    staff_id: r.staff_id.as_deref(),
-                    approved_by: r.approved_by.as_deref(),
-                    action: &r.action,
-                    entity_type: r.entity_type.as_deref(),
-                    entity_id: r.entity_id.as_deref(),
-                    metadata: &r.metadata,
-                    business_date: &r.business_date,
-                    created_at: &r.created_at,
-                },
-            );
-            (recomputed != r.hash).then(|| "row content does not match its hash (edited?)".to_owned())
-        };
-        if let Some(reason) = reason {
-            rep.ok = false;
-            rep.first_break = Some(ChainBreak { device_seq: r.device_seq, reason });
-        }
-        prev_hash = r.hash.clone();
+        prev_hash.clone_from(&r.hash);
+    }
+    if let Some(done) = current {
+        reports.push(done);
     }
     Ok(reports)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn action_codes_are_screaming_snake() {
+        assert_eq!(AuditAction::STORE_INITIALIZED.code(), "STORE_INITIALIZED");
+        assert_eq!(AuditAction::VOID_ORDER.code(), "VOID_ORDER");
+        assert_eq!(AuditAction::BACKUP_FAILED.code(), "BACKUP_FAILED");
+    }
 }
