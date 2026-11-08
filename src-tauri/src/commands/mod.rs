@@ -10,6 +10,7 @@ pub mod audit;
 pub mod auth;
 pub mod batches;
 pub mod cash;
+pub mod checkout;
 pub mod prefs;
 pub mod products;
 pub mod setup;

@@ -61,7 +61,21 @@
     "REASON_REQUIRED": "Enter a reason (up to 120 characters).",
     "COUNT_INVALID": "Enter the counted cash.",
     "DENOMINATIONS_MISMATCH": "The notes and coins don't add up to the counted cash.",
-    "DENOMINATION_INVALID": "That note or coin count isn't valid."
+    "DENOMINATION_INVALID": "That note or coin count isn't valid.",
+    "CHECKOUT_TOKEN_INVALID": "This sale couldn't be identified. Start a new cart.",
+    "CART_EMPTY": "Add at least one item before taking payment.",
+    "LINE_INVALID": "One of the cart lines isn't valid.",
+    "LINE_DISCOUNT_INVALID": "An item discount can't be more than the line amount.",
+    "BILL_DISCOUNT_INVALID": "The bill discount can't be more than the bill.",
+    "PAYMENT_MISMATCH": "The payments must add up to the amount due exactly.",
+    "PAYMENT_NEGATIVE": "All sales are final: a payment can't be negative.",
+    "PAYMENT_INVALID": "Only cash can be tendered with change, and never less than the amount.",
+    "PRODUCT_UNAVAILABLE": "This product is no longer for sale.",
+    "QUICK_SALE_NAME_INVALID": "Type the quick-sale name in English letters (up to 80 characters).",
+    "TEXT_TOO_LONG": "That text is too long.",
+    "APPROVER_LIMIT_TOO_LOW": "The approver's limit doesn't cover this discount or price.",
+    "PHONE_INVALID": "Enter a Sri Lankan phone number, such as 077 123 4567.",
+    "CUSTOMER_NAME_INVALID": "The customer name can have at most 60 characters."
   },
   "INVARIANT": {
     "_": "This change isn't allowed.",

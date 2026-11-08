@@ -79,6 +79,7 @@ export const commands = {
 	listCashSessions: (limit: number) => typedError<CashSession_Serialize[], AppError>(__TAURI_INVOKE("list_cash_sessions", { limit })),
 	/**  Z-report of a closed session, or X-report of the open one. */
 	cashSessionReport: (sessionId: string) => typedError<ZReport_Serialize, AppError>(__TAURI_INVOKE("cash_session_report", { sessionId })),
+	checkoutOrder: (input: CheckoutInput_Deserialize) => typedError<CheckoutResult_Serialize, AppError>(__TAURI_INVOKE("checkout_order", { input })),
 };
 
 /* Types */
@@ -426,6 +427,86 @@ export type ChainReport_Serialize = {
 	first_break: ChainBreak | null,
 };
 
+export type CheckoutInput = CheckoutInput_Serialize | CheckoutInput_Deserialize;
+
+export type CheckoutInput_Deserialize = {
+	/**  Generated per cart by the UI; a retry with the same token returns the same order. */
+	checkout_token: string,
+	lines: CheckoutLine_Deserialize[],
+	bill_discount: number,
+	payments: PaymentLine_Deserialize[],
+	customer_phone?: string | null,
+	customer_name?: string | null,
+	note?: string | null,
+	/**  A supervisor's single-use approval bound to (perm, `checkout_token`, this cashier). */
+	approval_id?: string | null,
+};
+
+export type CheckoutInput_Serialize = {
+	/**  Generated per cart by the UI; a retry with the same token returns the same order. */
+	checkout_token: string,
+	lines: CheckoutLine_Serialize[],
+	bill_discount: number,
+	payments: PaymentLine_Serialize[],
+	customer_phone: string | null,
+	customer_name: string | null,
+	note: string | null,
+	/**  A supervisor's single-use approval bound to (perm, `checkout_token`, this cashier). */
+	approval_id: string | null,
+};
+
+export type CheckoutLine = CheckoutLine_Serialize | CheckoutLine_Deserialize;
+
+export type CheckoutLine_Deserialize = {
+	/**  A catalog product, or `None` for a quick-sale line (then `name` is required). */
+	product_id?: string | null,
+	/**  Quick-sale name as typed (ignored for catalog lines, which use the product's printable name). */
+	name?: string | null,
+	/**  Price per unit actually charged. Below the product's list price = a price override. */
+	unit_price: number,
+	qty: number,
+	line_discount: number,
+	/**  Quick-sale only: the cost per unit if the cashier knows it. */
+	unit_cost?: number | null,
+	override_reason?: string | null,
+};
+
+export type CheckoutLine_Serialize = {
+	/**  A catalog product, or `None` for a quick-sale line (then `name` is required). */
+	product_id: string | null,
+	/**  Quick-sale name as typed (ignored for catalog lines, which use the product's printable name). */
+	name: string | null,
+	/**  Price per unit actually charged. Below the product's list price = a price override. */
+	unit_price: number,
+	qty: number,
+	line_discount: number,
+	/**  Quick-sale only: the cost per unit if the cashier knows it. */
+	unit_cost: number | null,
+	override_reason: string | null,
+};
+
+export type CheckoutResult = CheckoutResult_Serialize | CheckoutResult_Deserialize;
+
+export type CheckoutResult_Deserialize = {
+	order_id: string,
+	receipt_no: string,
+	grand_total: number,
+	change_due: number,
+	customer_id?: string | null,
+	/**  True when this token had already been checked out: nothing new was written. */
+	replayed: boolean,
+};
+
+export type CheckoutResult_Serialize = {
+	order_id: string,
+	receipt_no: string,
+	grand_total: number,
+	change_due: number,
+	customer_id: string | null,
+	/**  True when this token had already been checked out: nothing new was written. */
+	replayed: boolean,
+};
+
 export type CloseInput = CloseInput_Serialize | CloseInput_Deserialize;
 
 export type CloseInput_Deserialize = {
@@ -534,6 +615,28 @@ export type LoginStaff = {
 export type OpenSessionInput = {
 	opening_float: number,
 };
+
+export type PaymentLine = PaymentLine_Serialize | PaymentLine_Deserialize;
+
+export type PaymentLine_Deserialize = {
+	method: PaymentMethod,
+	/**  Applied to the bill (never negative: all sales are final). */
+	amount: number,
+	/**  Cash handed over; change = tendered − amount. Cash only. */
+	tendered?: number | null,
+	reference?: string | null,
+};
+
+export type PaymentLine_Serialize = {
+	method: PaymentMethod,
+	/**  Applied to the bill (never negative: all sales are final). */
+	amount: number,
+	/**  Cash handed over; change = tendered − amount. Cash only. */
+	tendered: number | null,
+	reference: string | null,
+};
+
+export type PaymentMethod = "cash" | "card" | "bank_transfer" | "qr" | "other";
 
 export type PaymentTotal = {
 	method: string,

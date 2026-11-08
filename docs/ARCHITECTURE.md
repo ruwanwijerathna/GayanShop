@@ -2597,6 +2597,14 @@ Each phase ends with **exit criteria**. Don't start the next phase until they pa
   8. Delete the `held_carts` `__current__` row.
   9. Insert the `print_jobs` receipt row (plus a drawer kick for cash).
   10. Write **outbox rows** for everything.
+- **Block 1.4 implementation notes (`db/repo/checkout.rs`, `commands/checkout.rs`):**
+  - Rust prices and validates the whole cart before writing anything, and refuses what the seal would refuse with a translatable error. The SQL seal stays the second line of defence.
+  - One approval covers the order. The first attempt fails with `ApprovalRequired { perm }`, where perm is `PRICE_OVERRIDE` before `ORDER_DISCOUNT` before `LINE_DISCOUNT`. The UI gets an approval bound to (perm, `checkout_token`, cashier) and retries. The approver must be a different, active staff member whose own permissions and limits cover every line, otherwise `APPROVER_LIMIT_TOO_LOW`. The approver is stored on the order header and on each overridden or discounted line.
+  - Selling below `min_price` always needs someone else's approval, even when the seller holds `PRICE_OVERRIDE`.
+  - Audit: `PRICE_OVERRIDE` per overridden line and `LINE_DISCOUNT` / `ORDER_DISCOUNT` for approved discounts. A refused attempt writes nothing; the approval request itself is audited (`APPROVAL_GRANTED` / `APPROVAL_DENIED`).
+  - Untracked catalog lines cost `default_cost × qty` (cost unknown if 0). Quick-sale lines cost what the cashier typed, or unknown.
+  - Receipt and drawer-kick print jobs use the `receipt` printer profile. The outbox row for the order is written after the seal, so sync always ships the completed order.
+  - `tests/fixtures/pricing_cases.json` holds golden carts priced by Rust; the till's TypeScript preview (Block 1.9) is tested against it.
 - **Same-session void** (§3.3):
   - Whole order only, with a reason from the fixed list.
   - A cashier needs supervisor approval.

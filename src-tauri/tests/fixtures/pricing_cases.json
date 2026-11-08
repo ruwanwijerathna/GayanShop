@@ -1,0 +1,451 @@
+{
+  "cases": [
+    {
+      "expected": {
+        "discount_total": 0,
+        "grand_total": 45000,
+        "gross_sales": 45000,
+        "lines": [
+          {
+            "line_discount": 0,
+            "line_gross": 45000,
+            "line_net": 45000,
+            "line_total": 45000,
+            "order_discount_share": 0,
+            "tax_amount": 0
+          }
+        ],
+        "net_sales": 45000,
+        "tax_total": 0
+      },
+      "input": {
+        "bill_discount": 0,
+        "lines": [
+          {
+            "line_discount": 0,
+            "qty": 1,
+            "tax_rate_bp": 0,
+            "unit_price": 45000
+          }
+        ],
+        "tax_inclusive": true
+      },
+      "name": "single line"
+    },
+    {
+      "expected": {
+        "discount_total": 1000,
+        "grand_total": 36650,
+        "gross_sales": 37650,
+        "lines": [
+          {
+            "line_discount": 1000,
+            "line_gross": 37650,
+            "line_net": 36650,
+            "line_total": 36650,
+            "order_discount_share": 0,
+            "tax_amount": 0
+          }
+        ],
+        "net_sales": 36650,
+        "tax_total": 0
+      },
+      "input": {
+        "bill_discount": 0,
+        "lines": [
+          {
+            "line_discount": 1000,
+            "qty": 3,
+            "tax_rate_bp": 0,
+            "unit_price": 12550
+          }
+        ],
+        "tax_inclusive": true
+      },
+      "name": "qty and item discount"
+    },
+    {
+      "expected": {
+        "discount_total": 3000,
+        "grand_total": 57011,
+        "gross_sales": 60011,
+        "lines": [
+          {
+            "line_discount": 0,
+            "line_gross": 10001,
+            "line_net": 9501,
+            "line_total": 9501,
+            "order_discount_share": 500,
+            "tax_amount": 0
+          },
+          {
+            "line_discount": 0,
+            "line_gross": 20003,
+            "line_net": 19003,
+            "line_total": 19003,
+            "order_discount_share": 1000,
+            "tax_amount": 0
+          },
+          {
+            "line_discount": 0,
+            "line_gross": 30007,
+            "line_net": 28507,
+            "line_total": 28507,
+            "order_discount_share": 1500,
+            "tax_amount": 0
+          }
+        ],
+        "net_sales": 57011,
+        "tax_total": 0
+      },
+      "input": {
+        "bill_discount": 3000,
+        "lines": [
+          {
+            "line_discount": 0,
+            "qty": 1,
+            "tax_rate_bp": 0,
+            "unit_price": 10001
+          },
+          {
+            "line_discount": 0,
+            "qty": 1,
+            "tax_rate_bp": 0,
+            "unit_price": 20003
+          },
+          {
+            "line_discount": 0,
+            "qty": 1,
+            "tax_rate_bp": 0,
+            "unit_price": 30007
+          }
+        ],
+        "tax_inclusive": true
+      },
+      "name": "bill discount split by largest remainder"
+    },
+    {
+      "expected": {
+        "discount_total": 100,
+        "grand_total": 200,
+        "gross_sales": 300,
+        "lines": [
+          {
+            "line_discount": 0,
+            "line_gross": 100,
+            "line_net": 66,
+            "line_total": 66,
+            "order_discount_share": 34,
+            "tax_amount": 0
+          },
+          {
+            "line_discount": 0,
+            "line_gross": 100,
+            "line_net": 67,
+            "line_total": 67,
+            "order_discount_share": 33,
+            "tax_amount": 0
+          },
+          {
+            "line_discount": 0,
+            "line_gross": 100,
+            "line_net": 67,
+            "line_total": 67,
+            "order_discount_share": 33,
+            "tax_amount": 0
+          }
+        ],
+        "net_sales": 200,
+        "tax_total": 0
+      },
+      "input": {
+        "bill_discount": 100,
+        "lines": [
+          {
+            "line_discount": 0,
+            "qty": 1,
+            "tax_rate_bp": 0,
+            "unit_price": 100
+          },
+          {
+            "line_discount": 0,
+            "qty": 1,
+            "tax_rate_bp": 0,
+            "unit_price": 100
+          },
+          {
+            "line_discount": 0,
+            "qty": 1,
+            "tax_rate_bp": 0,
+            "unit_price": 100
+          }
+        ],
+        "tax_inclusive": true
+      },
+      "name": "tie goes to the lower line"
+    },
+    {
+      "expected": {
+        "discount_total": 14990,
+        "grand_total": 203010,
+        "gross_sales": 218000,
+        "lines": [
+          {
+            "line_discount": 9990,
+            "line_gross": 199800,
+            "line_net": 185247,
+            "line_total": 185247,
+            "order_discount_share": 4563,
+            "tax_amount": 0
+          },
+          {
+            "line_discount": 0,
+            "line_gross": 18200,
+            "line_net": 17763,
+            "line_total": 17763,
+            "order_discount_share": 437,
+            "tax_amount": 0
+          }
+        ],
+        "net_sales": 203010,
+        "tax_total": 0
+      },
+      "input": {
+        "bill_discount": 5000,
+        "lines": [
+          {
+            "line_discount": 9990,
+            "qty": 2,
+            "tax_rate_bp": 0,
+            "unit_price": 99900
+          },
+          {
+            "line_discount": 0,
+            "qty": 4,
+            "tax_rate_bp": 0,
+            "unit_price": 4550
+          }
+        ],
+        "tax_inclusive": true
+      },
+      "name": "item and bill discount together"
+    },
+    {
+      "expected": {
+        "discount_total": 0,
+        "grand_total": 1000,
+        "gross_sales": 1000,
+        "lines": [
+          {
+            "line_discount": 0,
+            "line_gross": 0,
+            "line_net": 0,
+            "line_total": 0,
+            "order_discount_share": 0,
+            "tax_amount": 0
+          },
+          {
+            "line_discount": 0,
+            "line_gross": 1000,
+            "line_net": 1000,
+            "line_total": 1000,
+            "order_discount_share": 0,
+            "tax_amount": 0
+          }
+        ],
+        "net_sales": 1000,
+        "tax_total": 0
+      },
+      "input": {
+        "bill_discount": 0,
+        "lines": [
+          {
+            "line_discount": 0,
+            "qty": 1,
+            "tax_rate_bp": 0,
+            "unit_price": 0
+          },
+          {
+            "line_discount": 0,
+            "qty": 1,
+            "tax_rate_bp": 0,
+            "unit_price": 1000
+          }
+        ],
+        "tax_inclusive": true
+      },
+      "name": "free item"
+    },
+    {
+      "expected": {
+        "discount_total": 5000,
+        "grand_total": 0,
+        "gross_sales": 5000,
+        "lines": [
+          {
+            "line_discount": 0,
+            "line_gross": 5000,
+            "line_net": 0,
+            "line_total": 0,
+            "order_discount_share": 5000,
+            "tax_amount": 0
+          }
+        ],
+        "net_sales": 0,
+        "tax_total": 0
+      },
+      "input": {
+        "bill_discount": 5000,
+        "lines": [
+          {
+            "line_discount": 0,
+            "qty": 2,
+            "tax_rate_bp": 0,
+            "unit_price": 2500
+          }
+        ],
+        "tax_inclusive": true
+      },
+      "name": "whole bill discounted"
+    },
+    {
+      "expected": {
+        "discount_total": 1500,
+        "grand_total": 25300,
+        "gross_sales": 26800,
+        "lines": [
+          {
+            "line_discount": 0,
+            "line_gross": 11800,
+            "line_net": 9619,
+            "line_total": 11351,
+            "order_discount_share": 449,
+            "tax_amount": 1732
+          },
+          {
+            "line_discount": 500,
+            "line_gross": 15000,
+            "line_net": 11821,
+            "line_total": 13949,
+            "order_discount_share": 551,
+            "tax_amount": 2128
+          }
+        ],
+        "net_sales": 21440,
+        "tax_total": 3860
+      },
+      "input": {
+        "bill_discount": 1000,
+        "lines": [
+          {
+            "line_discount": 0,
+            "qty": 1,
+            "tax_rate_bp": 1800,
+            "unit_price": 11800
+          },
+          {
+            "line_discount": 500,
+            "qty": 3,
+            "tax_rate_bp": 1800,
+            "unit_price": 5000
+          }
+        ],
+        "tax_inclusive": true
+      },
+      "name": "inclusive 18% tax"
+    },
+    {
+      "expected": {
+        "discount_total": 1500,
+        "grand_total": 27730,
+        "gross_sales": 25000,
+        "lines": [
+          {
+            "line_discount": 0,
+            "line_gross": 10000,
+            "line_net": 9592,
+            "line_total": 9592,
+            "order_discount_share": 408,
+            "tax_amount": 1727
+          },
+          {
+            "line_discount": 500,
+            "line_gross": 15000,
+            "line_net": 13908,
+            "line_total": 13908,
+            "order_discount_share": 592,
+            "tax_amount": 2503
+          }
+        ],
+        "net_sales": 23500,
+        "tax_total": 4230
+      },
+      "input": {
+        "bill_discount": 1000,
+        "lines": [
+          {
+            "line_discount": 0,
+            "qty": 1,
+            "tax_rate_bp": 1800,
+            "unit_price": 10000
+          },
+          {
+            "line_discount": 500,
+            "qty": 3,
+            "tax_rate_bp": 1800,
+            "unit_price": 5000
+          }
+        ],
+        "tax_inclusive": false
+      },
+      "name": "exclusive 18% tax"
+    },
+    {
+      "expected": {
+        "discount_total": 333,
+        "grand_total": 19667,
+        "gross_sales": 20000,
+        "lines": [
+          {
+            "line_discount": 0,
+            "line_gross": 10000,
+            "line_net": 9833,
+            "line_total": 9833,
+            "order_discount_share": 167,
+            "tax_amount": 0
+          },
+          {
+            "line_discount": 0,
+            "line_gross": 10000,
+            "line_net": 8551,
+            "line_total": 9834,
+            "order_discount_share": 166,
+            "tax_amount": 1283
+          }
+        ],
+        "net_sales": 18384,
+        "tax_total": 1283
+      },
+      "input": {
+        "bill_discount": 333,
+        "lines": [
+          {
+            "line_discount": 0,
+            "qty": 1,
+            "tax_rate_bp": 0,
+            "unit_price": 10000
+          },
+          {
+            "line_discount": 0,
+            "qty": 1,
+            "tax_rate_bp": 1500,
+            "unit_price": 10000
+          }
+        ],
+        "tax_inclusive": true
+      },
+      "name": "mixed rates inclusive"
+    }
+  ],
+  "generated_by": "src-tauri/tests/checkout_props.rs"
+}

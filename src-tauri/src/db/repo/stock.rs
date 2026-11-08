@@ -1,6 +1,8 @@
 //! The stock ledger (append-only `stock_movements`), FIFO layer selection for sales, and the rebuild of the
 //! derived `stock_levels` / `batch_item_stock` caches (doc §3.1, §4.3).
 
+use std::collections::HashMap;
+
 use serde::Serialize;
 use specta::Type;
 use sqlx::{FromRow, SqliteConnection};
@@ -184,12 +186,32 @@ pub async fn plan_sale(
     qty: i64,
     revenue_net: i64,
 ) -> AppResult<Vec<Slice>> {
+    plan_sale_within(conn, ctx, product_id, qty, revenue_net, &mut HashMap::new()).await
+}
+
+/// [`plan_sale`] for one line of a multi-line checkout: `planned` (layer → units) holds what earlier lines
+/// of the same checkout already took, since their slices aren't written yet. Updated with this line's slices.
+pub async fn plan_sale_within(
+    conn: &mut SqliteConnection,
+    ctx: &WriteCtx,
+    product_id: &str,
+    qty: i64,
+    revenue_net: i64,
+    planned: &mut HashMap<String, i64>,
+) -> AppResult<Vec<Slice>> {
     let mut found = layers(conn, product_id).await?;
     if found.is_empty() {
         ensure_adjustment_layer(conn, ctx, product_id).await?;
         found = layers(conn, product_id).await?;
     }
-    fifo::consume(&found, qty, revenue_net).map_err(fifo_err)
+    for layer in &mut found {
+        layer.on_hand -= planned.get(&layer.batch_item_id).copied().unwrap_or(0);
+    }
+    let slices = fifo::consume(&found, qty, revenue_net).map_err(fifo_err)?;
+    for s in &slices {
+        *planned.entry(s.batch_item_id.clone()).or_default() += s.qty;
+    }
+    Ok(slices)
 }
 
 /// Recompute `stock_levels` and `batch_item_stock` from the ledger (repair, restore, after a bootstrap). Must

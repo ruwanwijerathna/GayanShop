@@ -4,6 +4,8 @@
 pub mod batches;
 pub mod cash;
 pub mod categories;
+pub mod checkout;
+pub mod customers;
 pub mod print_jobs;
 pub mod products;
 pub mod stock;
