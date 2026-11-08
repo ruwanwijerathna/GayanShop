@@ -1,0 +1,2451 @@
+# GayanShop POS — Master Architecture Plan
+
+> Status: **v4, 2026-11-08. Phase 0 is ON HOLD at the owner's request.** v2 added:
+> - **Batches** (cost layers), replacing "lots"
+> - Full financial reporting
+> - Role-based access control (RBAC) with supervisor approvals
+> - A hash-chained audit trail
+> - Quick-sale history and promotion
+> - Cash sessions and Z-reports
+>
+> v3 locked in the owner's policies:
+> - **5% cashier discount limit**, for line and bill discounts, with bill discounts apportioned pro-rata (§3.7).
+> - LKR, Asia/Colombo, a 04:00 day cutoff, Monday week start, prices tax-inclusive at 0% tax.
+>
+> v4 (owner simplification + operational features):
+> - **All sales are final.** There are no refunds and no exchanges. The only correction is a **same-session void** with supervisor approval (§3.3). Exchanges and credit notes move to Phase 5.
+> - **Dual-language UI**, English and Sinhala (සිංහල), with receipts staying English-first (§1.8).
+> - **Label layouts:** 2-up 2″×1″ and 3-up 1″×1″ rolls on TSPL/ZPL printers (§7.4).
+> - **Optional customer phone at the till**, with purchase history and spend analytics (§3.8).
+> - **Manual "Backup Database Now"** to USB or any folder via `VACUUM INTO` (§3.9).
+> - **UI stack:** TanStack Table v8 + TanStack Virtual, shadcn/ui Charts (Recharts), and responsive touch layouts from 1024×768 to 1080p with 48 px targets (§1.4).
+>
+> This is the founding design document. Change it via PR when a decision changes. **The SQL in §4.3 is the target for `src-tauri/migrations/0001_init.sql`.** It hasn't been run yet, and Phase 0 must prove it with a migration and trigger test.
+>
+> ⚠️ **Files already on disk from the paused Phase 0 start are pre-v4 drafts.** They're kept at the owner's request. `src-tauri/migrations/0001_init.sql` and `src-tauri/src/domain/{exchange,permissions}.rs` still contain exchange and credit-note code. When Phase 0 resumes, regenerate the migration from §4.3 and drop or rework those modules first.
+
+---
+
+## 0. Executive summary
+
+| Concern | Decision |
+|---|---|
+| Desktop runtime | Tauri v2 (Rust core, WebView2 on Windows) |
+| UI | React 19 + TypeScript + Vite, Tailwind CSS v4, shadcn/ui. Lists use TanStack Table v8 + TanStack Virtual, charts use shadcn/ui Charts (Recharts), and i18n uses react-i18next (English and Sinhala). Touch layouts support 1024×768 → 1920×1080. |
+| Local DB | **SQLite (WAL mode), owned by Rust via `sqlx`**. The webview never touches SQL. |
+| Cloud DB | **Supabase (Postgres + Auth + RLS)** |
+| Sync | **A custom transactional outbox plus a Rust background sync worker.** Push is idempotent and pull uses a server sequence cursor. |
+| Conflict model | Orders, stock, cash and audit records are append-only (no conflicts). Master data uses last-write-wins per row. |
+| Inventory costing | **Batches made of cost layers (`batch_items`), consumed oldest-batch-first (FIFO) at checkout.** Every unit of stock has a known cost. |
+| Access control | Roles with permission bitmasks, plus per-user grant and deny overrides. Rust enforces it. Supervisor PIN approval uses single-use tokens. |
+| Accountability | `audit_logs` is append-only, hash-chained per device, and written in the same transaction as the action it records. |
+| Money | Integer minor units (`i64`, e.g. cents). Never floats. |
+| IDs | UUIDv7, generated on the device |
+| Hardware | Scanner: HID keyboard wedge, read in the frontend. Receipts: ESC/POS over raw spooler, network or serial, sent from Rust. The cash drawer sits on the printer's RJ11 port (`ESC p`). Labels: TSPL/ZPL sent raw from Rust, in **2-up 2″×1″** and **3-up 1″×1″** layouts. |
+| Terminals | 1 store with 2–3 counters, each with its own SQLite DB. Every terminal holds the **full store history** for store-wide reports and customer history at any counter. |
+| Sales policy | **All sales are final: no refunds, no exchanges.** The only correction is a **same-session void** (`VOID_ORDER`, supervisor approval) for an immediate cashier mistake, before the cash session closes. |
+| Customers | An optional phone number at checkout (numpad shortcut) links the sale to a customer profile, with purchase history and total spend in the back office. |
+| Backups | **Manual "Backup Database Now"** (Owner/Manager) to a USB drive or any folder, via `VACUUM INTO`, without pausing the till. Scheduled automatic backups follow in Phase 4. |
+
+The ideas the rest of the design depends on:
+
+1. **The local SQLite file is the source of truth for the till.** The cloud is a replica and aggregation point. A sale must never wait on the network.
+2. **Never sync a mutable quantity.** Stock is a ledger of movements. Two offline terminals each selling the last pair of shoes produce two `-1` rows, which merge correctly.
+3. **Batches are cost layers.** The same product can arrive in several batches at different costs. Each `(batch, product)` pair is a layer with its own allocated unit cost. Sales draw from layers, so "what did this batch cost, sell, earn and still hold?" is a simple aggregate.
+4. **History is immutable.** Order lines snapshot name, price, cost and tax. Corrections are new rows: voids (same session only) and stock adjustments. Nothing financial is ever edited in place.
+5. **Permissions are checked in Rust, and every sensitive action leaves an audit row in the same transaction.** The UI hides what you can't do, but Rust is what actually stops it.
+
+---
+
+## 1. Architectural blueprint
+
+### 1.1 Local database: SQLite in Rust (chosen) vs. the alternatives
+
+| Option | Verdict | Why |
+|---|---|---|
+| **SQLite via `sqlx` in Rust** | ✅ **Chosen** | It's a real file on disk with ACID transactions, and WAL survives power loss mid-sale. You can back it up with `VACUUM INTO`. It's queryable for reports. Migrations are versioned. Business rules, RBAC and audit live in one place (Rust), which is the only process that can write. |
+| `tauri-plugin-sql` (SQL from the webview) | ❌ | Puts raw SQL, business logic *and permission checks* in JS, which any XSS bug can reach. RBAC enforced in the webview is not RBAC. |
+| RxDB / IndexedDB / PouchDB | ❌ | Storage lives inside the WebView2 profile, so it's fragile. It's weak at relational reporting, and the document model fights ledgers. |
+| PowerSync / ElectricSQL | ⏸ Not now | Their client SDKs target JS-owned SQLite. Re-evaluate if we ever ship a web or mobile client. |
+
+**Why `sqlx` rather than `rusqlite`:** it's async-native (fits Tauri's tokio runtime), ships a migration runner (`sqlx::migrate!`) and offers optional compile-time-checked queries. `rusqlite` + `refinery` is an acceptable fallback.
+
+SQLite settings, applied on every connection:
+```sql
+PRAGMA journal_mode = WAL;
+PRAGMA synchronous = FULL;      -- not NORMAL: see the note below (power-loss durability)
+PRAGMA foreign_keys = ON;
+PRAGMA busy_timeout = 5000;
+PRAGMA cache_size = -65536;     -- 64 MiB page cache
+PRAGMA temp_store = MEMORY;
+PRAGMA mmap_size = 268435456;   -- 256 MiB memory-mapped reads
+-- on pool close / daily: PRAGMA optimize;   after bootstrap or bulk import: ANALYZE;
+```
+
+**Why `synchronous = FULL` (stress-test finding, §13.2).**
+- Under WAL, `NORMAL` survives an *application* crash. On a *power cut or OS crash*, though, it can lose the most recent committed transactions.
+- For a till that's unacceptable. The receipt is printed after the commit, so a lost commit means a customer holding a receipt for a sale that no longer exists.
+- `FULL` fsyncs the WAL on every commit. That costs roughly 1–5 ms per commit on an SSD, which is negligible at counter speed. The database is never corrupted in either mode; `FULL` is about not *losing* committed sales.
+- On startup, Rust runs `PRAGMA quick_check` in the background before enabling backups. A full `integrity_check` runs on every backup (§3.9).
+
+DB file location: `%APPDATA%\com.gayanshop.pos\pos.db` (Tauri `app_data_dir()`). Manual backups go to a folder the user picks (§3.9). Automatic backups (Phase 4) go to `...\backups\`.
+
+### 1.2 Cloud database: Supabase (chosen)
+
+| Option | Verdict | Why |
+|---|---|---|
+| **Supabase** | ✅ **Chosen** | Postgres handles cross-terminal reporting. It bundles Auth (device identities) and RLS for store isolation, and RLS can also make audit rows insert-only. RPC functions give us atomic, idempotent sync endpoints. There's a later path to an owner web dashboard. |
+| CouchDB | ❌ | Its document model and revision-tree conflicts are a poor fit for ledgers. You'd also run it yourself. |
+| Firebase / Firestore | ❌ | No SQL reporting, and the offline cache is JS-side. |
+| Self-hosted Postgres + API | ⏸ | Our protocol is plain HTTP + JSON, so this is a backend swap later, not a rewrite. |
+
+### 1.3 Sync design (summary; full protocol in §6)
+
+```
+┌──────────────── Desktop (per terminal, ×2–3) ───────────┐          ┌──────── Supabase ────────┐
+│ React UI ──invoke()──► Rust command                      │          │                          │
+│                          │ guard: RBAC / approval token  │          │                          │
+│                          │ single SQLite transaction:    │  HTTPS   │  rpc.sync_push(batch)    │
+│                          │  1. write business rows       │ ───────► │   advisory lock/store,   │
+│                          │  2. write audit_logs row      │          │   idempotent upserts,    │
+│                          │  3. append to sync_outbox     │          │   assigns server_seq     │
+│                          ▼                               │          │                          │
+│                     pos.db (WAL)                         │ ◄─────── │  rpc.sync_pull(cursor)   │
+│                          ▲                               │          │   rows where server_seq  │
+│      Sync worker (tokio task): reachability probe ─►     │          │   > cursor               │
+│      push outbox ─► pull changes ─► write sync_logs      │          │  RLS: store_id = jwt.sid │
+└──────────────────────────────────────────────────────────┘          └──────────────────────────┘
+```
+
+- **Connectivity detection:** don't trust `navigator.onLine`. The worker sends a health RPC every 15 s when idle, and runs immediately after any local write. Failures back off exponentially (5 s → 5 min max, with jitter). A `sync://status` event drives the UI's status pill (🟢 synced / 🟡 pending N / 🔴 offline).
+- **The business write, audit row and outbox entry go in one transaction.** It's impossible to record a sale, or an override, without it being audited and queued for sync.
+- **Never ship the Supabase `service_role` key in the binary.** Each terminal has its own device identity: a Supabase Auth user with `app_metadata.store_id` / `device_id`. Its refresh token is kept in the Windows Credential Manager (`keyring` crate). All tables are protected by RLS on `store_id`.
+- **Staff identities are not Supabase users.** Staff log in to a *terminal* with a PIN, verified locally (§3.5). The device identity is what authenticates to the cloud. The `staff_id` on each row records who did it.
+
+### 1.4 Frontend architecture
+
+**State model**
+- **Server-ish state** (products, batches, orders, customers, reports): TanStack Query, where each `queryFn` is a typed Tauri `invoke`. Rust emits `db://changed { tables: [...] }` after writes, including sync pulls, and the frontend invalidates the matching query keys.
+- **Session state** (logged-in staff, effective permissions, UI language): a `session://changed` event from Rust. The UI keeps a read-only mirror for hiding controls. **The mirror is never trusted for enforcement.**
+- **Ephemeral UI state** (cart, dialogs, scanner buffer): Zustand. The in-progress cart is written to `held_carts` under a reserved `__current__` row with a 500 ms debounce, so it survives a crash or power cut. "Hold sale" writes a named row.
+- **Forms:** react-hook-form + zod. **Routing:** TanStack Router. The POS screen is the default route and is keyboard-first.
+- **Everything is bundled and offline.** No CDN fonts, scripts or icons. The till must render identically with no internet.
+
+**Data tables: TanStack Table v8 + TanStack Virtual**
+
+Every back-office list is one shared `components/data-table/` built on `@tanstack/react-table` **v8**, the version the shadcn data-table pattern targets. v9 exists, so pin `^8` and revisit later. Rows render through `@tanstack/react-virtual`, which keeps scrolling at 60 fps whatever the row count. That covers Products, Orders, Batches, Batch items, Customers, Audit log, Quick-sale review and Stock movements.
+
+| List size | Strategy |
+|---|---|
+| Bounded (products ≤ ~50k, batches, staff) | Load once through TanStack Query, then filter, sort and virtualise client-side (`getFilteredRowModel` / `getSortedRowModel`). |
+| Unbounded (orders, audit log, stock movements, customer history) | **Server-side keyset pagination**: Rust commands take `{ cursor, limit ≤ 500, filters, sort }` and return `{ rows, next_cursor }`. The table uses `useInfiniteQuery` and fetches the next page when the virtualiser nears the end. `manualSorting` / `manualFiltering` are on, and sort keys map to indexed columns only. |
+
+- Fixed row heights: 48 px on touch layouts and 36 px in compact back-office density. That keeps virtualisation exact.
+- Column visibility and widths are saved per user in `device_settings`.
+
+**Analytics charts: shadcn/ui Chart (Recharts)**
+
+Charts use the official shadcn `chart` component (`ChartContainer`, `ChartTooltip`, `ChartLegend`) over Recharts. Pin the Recharts major that the shadcn chart component targets at scaffold time.
+
+| Chart | Type | Data source |
+|---|---|---|
+| Revenue vs expenses | Grouped bar, by day, week or month | `daily_sales_summary.sales_net` vs `expenses` (§5) |
+| Sales trend | Area, with an optional previous-period overlay | `daily_sales_summary` |
+| Payment methods | Donut | `daily_payment_summary` |
+| Customer spend (top N) | Horizontal bar | `customer_stats` (derived, §3.8) |
+| Batch sell-through | Bar | `batch_item_stock` |
+
+- Colours come from the shadcn CSS chart tokens (`--chart-1…5`), so light and dark themes both work.
+- Money axes use `formatMoney` (Latin digits, `Rs.` prefix) in both languages.
+- Charts only receive pre-aggregated rows from Rust, never raw orders.
+
+**Responsive, touch-first layout**
+
+| Target | Layout |
+|---|---|
+| **1024×768** (baseline POS touchscreen) | Till: cart on the left (~58%), with search, quick-keys and keypad on the right. The back office uses a collapsible icon sidebar and single-column forms. |
+| **1366×768** | Till as above with wider product names. The back office gets an expanded sidebar and two-column forms. |
+| **1920×1080** | Till gets an extra quick-keys panel. The back office gets dashboard grids up to 3 columns and side-by-side table and detail views. |
+
+- **Minimum 48×48 px touch target** for anything tappable on the till and in dialogs. Add a `size="pos"` variant to Button (`h-12 min-w-12`) and lists with 48 px rows. No hover-only interactions. Inputs, selects and the numeric keypad are 48 px tall.
+- Use Tailwind breakpoints (`lg` = 1024, `xl` = 1280, `2xl` = 1536, plus a custom `fhd` = 1920). The window minimum is 1024×768 (`tauri.conf.json` `minWidth` / `minHeight`).
+- **Every touch action has a keyboard shortcut**, shown as `<Kbd>` hints on the buttons:
+
+| Key | Action |
+|---|---|
+| F1 | Help / shortcut sheet |
+| F2 | Quick sale bar |
+| F3 | Product search |
+| **F4 or Numpad `/`** | **Customer phone** (§3.8) |
+| F6 | Line discount |
+| F7 | Bill discount |
+| F8 | Hold sale |
+| **F9 or Numpad `+`** | **Pay** (owner-specified) |
+| F10 | Void (opens the same-session list) |
+| F11 | Recall held sale |
+| Esc | Cancel or close |
+| Ctrl+L | Lock |
+| Ctrl+Shift+L | Toggle language |
+
+### 1.5 Type sharing (single source of truth)
+
+**Rust structs are the source of truth.** TS types are generated with **`tauri-specta` + `specta`**. Verify compatibility with your Tauri 2.x minor at scaffold time, and fall back to `ts-rs` plus a thin `invoke` wrapper if it lags.
+- The matching versions are `tauri-specta =2.0.0-rc.26`, `specta =2.0.0-rc.26` and `specta-typescript 0.0.13` (checked 2026-11-08). Release candidates need exact `=` pins.
+- `specta-typescript` 0.0.13 **refuses to export `i64`**, and it no longer has a global `BigIntExportBehavior` switch. Mark each IPC `i64` field with `#[specta(type = specta_typescript::Number)]`. That makes each precision decision explicit, and it's safe here because money is far below 2^53.
+- Generate `src/db/bindings.ts` from a `cargo test`, not only at app start, so CI can regenerate types without a GUI.
+- Permission bits are kept below 2^53 for the same reason (§3.5).
+
+The TypeScript in §4 is the **target shape** of the generated `bindings.ts`. The SQLite DDL lives in `src-tauri/migrations/` and the Postgres DDL in `supabase/migrations/`.
+
+### 1.6 Versions
+
+Checked on 2026-11-08 (npm). **Re-verify at scaffold time:** `@tauri-apps/cli` / `@tauri-apps/api` 2.12.x · `react` 19.x · `vite` 8.x · `tailwindcss` 4.x · `shadcn` CLI 4.x · `zod` 4.x · `@tanstack/react-query` 5.x · `zustand` 5.x · `i18next` 27.x · `react-i18next` 18.x · `@tanstack/react-table` **8.x** (latest is 9.x; v8 is pinned on purpose) · `@tanstack/react-virtual` 3.x · `recharts` (the major the shadcn chart component targets; latest is 3.x) · `@tauri-apps/plugin-dialog` 2.x · `@fontsource/noto-sans-sinhala` 5.x. Pin Rust crates with `cargo add`. The toolchain is installed (rustc and cargo 1.99.1, MSVC), but `%USERPROFILE%\.cargo\bin` isn't on the Git Bash PATH by default (§9).
+
+### 1.7 Business date
+
+Every financial and stock row stores a **`business_date`** (`YYYY-MM-DD`). The originating device computes it at write time from these store settings:
+- `store.timezone`, e.g. `Asia/Colombo`
+- `store.day_cutoff`, e.g. `04:00`. A sale at 01:30 belongs to the previous business day.
+
+It's never derived from UTC at query time. Otherwise terminals, and the cloud, would disagree about which day a late sale belongs to. All period reports filter on `business_date`.
+
+### 1.8 Internationalisation: English and Sinhala (සිංහල)
+
+- **Library:** `i18next` + `react-i18next`, with JSON dictionaries bundled at build time. There's no HTTP backend, so it works offline.
+  - Layout: `src/i18n/locales/{en,si}/{common,pos,products,batches,reports,staff,settings,errors}.json`, one namespace per feature.
+  - English (`en`) is the source and fallback language.
+- **Switching:**
+  - A language toggle (EN | සිං) sits in the top bar of the till and the back office, with shortcut Ctrl+Shift+L.
+  - The choice is saved **per staff member** in `staff.ui_language` and applied at login. Before login, the lock and login screens use the device default (`device_settings` `ui.default_language`, seeded `en`).
+  - Switching is instant, with no reload (`i18n.changeLanguage`).
+- **Fonts:** bundle **Noto Sans Sinhala** locally (`@fontsource/noto-sans-sinhala`) alongside the Latin UI font.
+  - Use `:lang(si)` rules for a slightly larger line-height and size, because Sinhala glyphs need more vertical room.
+  - Layouts must tolerate ~30% text expansion. Buttons wrap or truncate with a tooltip, never overflow.
+- **What gets translated:**
+
+  | Translated | Not translated |
+  |---|---|
+  | UI chrome, labels, buttons, validation messages, empty states, report and column titles | Data the user typed: product names, customer names, notes |
+  | Error messages: Rust returns stable error **codes** (`AppError.kind` plus fields) and the UI maps them to `errors.<KIND>` keys. Rust never produces display strings. | Audit `action` codes. They're stored as codes and shown translated through `audit.actions.<CODE>`. |
+- **Numbers, money and dates:**
+  - Money is always **Latin digits with `Rs.`** (e.g. `Rs. 1,250.00`) in both languages. This matches receipts, labels and cashier habit.
+  - Dates use `Intl.DateTimeFormat` with `si-LK` or `en-LK`, keeping the numeric `YYYY-MM-DD` form in tables.
+- **Receipts and labels stay English.** Generic ESC/POS and TSPL printers have no Sinhala code page, so receipt text, the footer and label text are English or Latin. This is an owner requirement.
+  - Product `name` must be printable: Rust warns at save time if it contains characters outside the printer code page.
+  - An optional `products.name_si` is shown on screens when the UI is in Sinhala, and is never printed.
+  - Raster (bitmap) Sinhala printing stays in the Phase 5 backlog.
+- **Quality gates:**
+  - A CI script fails the build when a key exists in `en` but not `si`, or vice versa.
+  - `i18next` `saveMissing` logs missing keys in dev.
+  - The till screens are fully translated before the pilot.
+
+---
+
+## 2. Folder structure
+
+```
+GayanShop/
+├── docs/
+│   ├── ARCHITECTURE.md              ← this file
+│   ├── adr/                         ← one markdown file per architectural decision
+│   └── hardware/                    ← tested printer models, ESC/POS quirks, label templates
+├── supabase/
+│   ├── config.toml
+│   ├── migrations/                  ← Postgres DDL, RLS policies, sync RPCs, audit chain verifier
+│   ├── functions/                   ← edge functions (device registration)
+│   └── tests/                       ← pgTAP: RLS, idempotency, owner invariant
+├── src/                             ← React frontend
+│   ├── main.tsx
+│   ├── app/
+│   │   ├── App.tsx
+│   │   ├── router.tsx               ← route guards read the session mirror (UX only)
+│   │   ├── providers.tsx            ← QueryClient, I18nextProvider, Theme, Toaster, ScannerProvider, SessionProvider
+│   │   └── layouts/
+│   │       ├── PosLayout.tsx        ← full-screen till (1024×768 baseline, 48 px targets)
+│   │       └── BackOfficeLayout.tsx ← sidebar: Products, Batches, Quick Sales, Customers, Reports, Staff, Audit, Settings
+│   ├── components/
+│   │   ├── ui/                      ← shadcn generated components (incl. chart.tsx)
+│   │   ├── common/                  ← Money, Kbd, EmptyState, ConfirmDialog, PeriodPicker, LanguageToggle
+│   │   ├── data-table/              ← DataTable (TanStack Table v8 + Virtual), column helpers, infinite loader
+│   │   ├── charts/                  ← RevenueExpenseBar, SalesTrendArea, PaymentDonut (shadcn Chart/Recharts)
+│   │   ├── auth/
+│   │   │   ├── Can.tsx              ← <Can perm="VOID_ORDER">…</Can> (hides only)
+│   │   │   └── ApprovalDialog.tsx   ← supervisor PIN prompt → approval token
+│   │   └── sync/SyncStatusPill.tsx
+│   ├── features/                    ← vertical slices
+│   │   ├── pos/
+│   │   │   ├── components/          ← Cart, CartLine, ProductSearch, QuickSaleBar, PaymentDialog,
+│   │   │   │                          NumericKeypad, HeldSalesSheet, NoSaleButton, CustomerPhoneField
+│   │   │   ├── hooks/               ← useCart, useCheckout, usePosHotkeys
+│   │   │   ├── store/cart.store.ts
+│   │   │   └── lib/
+│   │   │       ├── pricing.ts       ← preview totals (Rust is authoritative)
+│   │   │       └── parseQuickSale.ts← "3* Bucket 10L 450" parser, unit-tested
+│   │   ├── cash/                    ← open/close session, pay-in/out, Z-report
+│   │   ├── products/
+│   │   ├── batches/                 ← intake wizard, allocation, receive, batch P&L, close
+│   │   ├── quick-sales/             ← frequency review, promote/ignore
+│   │   ├── inventory/               ← adjustments, damage, counts, movement history, valuation
+│   │   ├── orders/                  ← history, reprint, same-session void
+│   │   ├── customers/               ← customer list, profile, purchase history, spend analytics
+│   │   ├── labels/                  ← label print queue, 2-up / 3-up template preview
+│   │   ├── expenses/
+│   │   ├── reports/                 ← period reports, P&L, payment breakdown, stock valuation, charts
+│   │   ├── staff/                   ← users, roles, permission matrix editor
+│   │   ├── audit/                   ← audit log viewer, chain verification
+│   │   ├── settings/                ← store, tax, timezone/cutoff, printers, label templates, device,
+│   │   │                              language default, Backup Database Now
+│   │   └── auth/                    ← PIN login, lock screen, first-run wizard, device registration
+│   ├── db/                          ← the ONLY place the UI talks to Rust
+│   │   ├── bindings.ts              ← GENERATED by tauri-specta. Never edit.
+│   │   ├── client.ts                ← error mapping (incl. APPROVAL_REQUIRED → ApprovalDialog)
+│   │   ├── query-keys.ts
+│   │   ├── events.ts
+│   │   └── hooks/
+│   ├── hardware/
+│   │   ├── scanner/{ScannerProvider.tsx, detectScan.ts}
+│   │   └── printers.ts
+│   ├── lib/{money.ts, phone.ts, permissions.ts, utils.ts}
+│   ├── i18n/
+│   │   ├── index.ts                 ← i18next init (bundled resources, fallback 'en')
+│   │   └── locales/{en,si}/         ← common, pos, products, batches, customers, reports, staff,
+│   │                                  settings, errors, audit .json (CI checks key parity)
+│   ├── styles/globals.css           ← tokens, chart colours, Noto Sans Sinhala @font-face, :lang(si) rules
+│   └── test/
+├── src-tauri/
+│   ├── Cargo.toml
+│   ├── tauri.conf.json
+│   ├── capabilities/default.json
+│   ├── migrations/                  ← 0001_init.sql, …
+│   └── src/
+│       ├── main.rs
+│       ├── lib.rs                   ← builder: plugins, state, commands, specta export
+│       ├── error.rs                 ← AppError incl. Forbidden{perm}, ApprovalRequired{perm}
+│       ├── state.rs                 ← AppState { db, device, session, approvals, sync, printers }
+│       ├── domain/                  ← pure logic, no IO, heavily unit-tested
+│       │   ├── money.rs
+│       │   ├── pricing.rs           ← authoritative totals
+│       │   ├── business_date.rs
+│       │   ├── allocation.rs        ← batch cost allocation (integer, largest-remainder)
+│       │   ├── fifo.rs              ← layer selection for sales (and exact reversal on void)
+│       │   ├── discount.rs          ← bill-discount apportionment + limit check
+│       │   ├── payments.rs          ← tender rules: no negative payments, change only from cash
+│       │   ├── phone.rs             ← Sri Lankan phone normalisation → E.164
+│       │   ├── quick_sale.rs        ← custom_key normalisation
+│       │   ├── permissions.rs       ← bitflags Permission, effective-permission calc
+│       │   └── receipt_no.rs
+│       ├── auth/
+│       │   ├── pin.rs               ← argon2id hash/verify, lockout
+│       │   ├── session.rs           ← current staff, idle auto-lock
+│       │   ├── approvals.rs         ← in-memory single-use approval tokens
+│       │   └── guard.rs             ← require(perm, approval) → Actor
+│       ├── audit/
+│       │   ├── writer.rs            ← audit::record(tx, actor, action, entity, meta)
+│       │   └── chain.rs             ← per-device SHA-256 hash chain + verify
+│       ├── db/
+│       │   ├── mod.rs               ← pool, PRAGMAs, migrate!
+│       │   ├── models.rs
+│       │   └── repo/                ← products, batches, stock, orders, cash, expenses, staff, customers,
+│       │                              quick_sales, settings, reports, rollups
+│       ├── commands/                ← #[tauri::command]: guard → tx → repo → audit → outbox → commit → emit
+│       │   ├── auth.rs  staff.rs  products.rs  batches.rs  inventory.rs  orders.rs  customers.rs
+│       │   ├── cash.rs  expenses.rs  quick_sales.rs  reports.rs  audit.rs  labels.rs
+│       │   ├── hardware.rs  sync.rs  backup.rs  system.rs
+│       ├── sync/{worker.rs, outbox.rs, push.rs, pull.rs, auth.rs, protocol.rs}
+│       ├── hardware/
+│       │   ├── printer/{mod.rs, transport_spooler.rs, transport_network.rs, transport_serial.rs}
+│       │   ├── escpos/              ← receipt builder, code pages, QR, cut, drawer kick
+│       │   ├── label/
+│       │   │   ├── layout.rs        ← template → positioned elements (mm), shared by preview + printers
+│       │   │   ├── templates.rs     ← built-ins: 2-up 2″×1″, 3-up 1″×1″
+│       │   │   ├── tspl.rs          ← TSPL emitter (multi-column rows)
+│       │   │   └── zpl.rs           ← ZPL emitter (multi-column rows)
+│       │   └── scanner_serial.rs
+│       └── backup.rs                ← VACUUM INTO snapshot, integrity check, manifest, (Phase 4) schedule
+├── tests/e2e/                       ← WebdriverIO + tauri-driver
+├── .github/workflows/
+├── components.json  package.json  tsconfig.json  vite.config.ts  README.md
+```
+
+**Rules that keep this layout scalable:**
+- `features/*` never imports from another feature. Shared code gets promoted to `components/`, `db/` or `lib/`.
+- **Every** mutating Rust command follows the same shape:
+  ```rust
+  let actor = guard::require(&state, Permission::VOID_ORDER, args.approval)?;   // RBAC
+  let mut tx = state.db.begin().await?;
+  repo::orders::void(&mut tx, &actor, &args).await?;                            // business rows + outbox
+  audit::record(&mut tx, &actor, Action::VoidOrder, Entity::Order(id), meta).await?; // audit + outbox
+  tx.commit().await?;
+  emit_changed(&app, &["orders", "stock_movements", "audit_logs"]);
+  ```
+- Only `db/` and `hardware/` call `invoke`.
+
+---
+
+## 3. Domain model
+
+### 3.1 Batches and cost layers
+
+A **batch** is one wholesale purchase, such as "Shoe batch – Pettah – 8 Nov". It has a supplier, purchase date, total cost and extra charges (transport, handling). A batch contains **batch items**: one row per product, holding qty received and the allocated unit cost. Each batch item is a **cost layer**.
+
+```
+batches (header)  1 ──── n  batch_items (cost layers)  1 ──── n  stock_movements (ledger)
+  landed_cost = total_cost + extra_costs     qty_received, unit_cost     qty_delta, unit_cost, revenue_net
+```
+
+**Lifecycle:** `draft → received → closed`
+
+| State | What you can do |
+|---|---|
+| `draft` | Add or edit items, quantities, retail prices and allocation freely. No stock exists yet. |
+| `received` | "Receive" runs **one transaction**: it computes the allocation, fixes `unit_cost` on every layer, and writes a `batch_intake` stock movement per layer. It also stores `allocation_variance` and audits `BATCH_RECEIVE`. **Costs are now locked.** |
+| `received` → `draft` (reopen) | Allowed only if **no unit of the batch has moved** except intake. It reverses the intake movements. Requires `BATCH_MANAGE` and is audited. |
+| Late item added to a `received` batch | Allowed (the owner forgot an item). It gets `added_after_receipt = 1` and **`unit_cost = 0`**, because the batch cost is already fully allocated to the other items. Its sales are effectively pure recovery or profit. |
+| `closed` | Allowed when every layer's `on_hand ≤ 0`, or the remaining stock has been written off. The batch becomes read-only for reports. Audited as `BATCH_CLOSE`. |
+
+**Allocation methods.** Everything is in integer cents. `landed = total_cost + extra_costs`.
+- `even_per_unit`: each unit has weight 1.
+- `by_retail_value`: weight = `retail_price_at_intake × qty`. Expensive items carry more cost.
+- `manual`: the owner types each unit cost. It's validated, and `allocation_variance` is shown live.
+
+`domain::allocation` works as follows:
+1. Compute each layer's exact share of `landed`.
+2. Round each layer's *total* share using the **largest-remainder method**, so Σ line totals = `landed` exactly.
+3. Set `unit_cost = floor(line_total / qty)`.
+4. The leftover sub-cent rounding goes into `batches.allocation_variance = landed − Σ(unit_cost × qty_received)`. It's always 0 ≤ v < Σqty cents.
+
+`allocation_variance` is reported as a separate line in the batch P&L. In the store P&L it's added to COGS on the batch's receive date. That keeps both reports reconciled to the cent with what the owner actually paid.
+
+**Every unit of tracked stock belongs to a layer.** This is what makes stock valuation exact. Three cases follow from it:
+- **Go-live:** a system batch `OPENING-STOCK` (`is_system = 1`) receives the existing shelf stock at entered costs.
+- **Ad-hoc purchase of one item:** a one-line batch.
+- **Positive count correction** (found 3 extra): the stock goes into the product's **newest** layer at that layer's cost. If the product has no layer, it goes into the system batch `ADJUSTMENTS` at the product's `default_cost`.
+
+**Layer selection at checkout (FIFO, offline-safe).** For each tracked line of qty *n*:
+1. Take layers of that product ordered by `batches.received_at, batch_items.id`.
+2. Consume from the **oldest layer with positive local `on_hand`**, splitting across layers if needed.
+3. If no layer has stock left (oversold), draw the rest from the **newest** layer, which goes negative.
+4. Each slice becomes one `stock_movements` row, carrying the layer's `unit_cost` and its share of the line's **`revenue_net`** (ex-tax, after discount, apportioned by qty, remainder on the last slice).
+
+Two terminals can both drain the same layer offline. After sync, that layer is negative. **This is allowed and reported** ("Oversold layers") and is never auto-rebalanced. Rebalancing would rewrite history.
+
+**Batch metrics.** These come from the derived `batch_item_stock` table, maintained by trigger:
+
+| Question | Metric |
+|---|---|
+| How much did this batch cost? | `landed_cost = total_cost + extra_costs` |
+| How much has sold so far? | `units_sold`, `revenue_net`, plus quick-sale lines tagged with the batch |
+| What did that stock cost? | `cogs = Σ sold layer cost` |
+| What's left? | `units_remaining`, `remaining_value_cost = Σ on_hand × unit_cost`, `remaining_value_retail = Σ on_hand × current price` |
+| Losses? | `written_off_qty`, `written_off_cost` (damage, negative counts) |
+| Net profit so far (realised) | `revenue_net − cogs − written_off_cost − allocation_variance` |
+| Payback (cash view) | `revenue_net − landed_cost`. It's negative until the batch has paid for itself. |
+| Projected profit if the rest sells at price | `payback + remaining_value_retail` |
+| Sell-through % | `units_sold / units_received` |
+
+### 3.2 Quick sale and promotion
+
+**Speed target: F2 → type → Enter.**
+- F2 focuses a single-line **Quick Sale bar** on the till.
+- The cashier types `Blue bucket 450`. A live preview shows `Blue bucket · Rs 450.00 × 1`.
+- Enter adds the line. That's two keys plus typing.
+
+`parseQuickSale` grammar:
+```
+[qty "*"] name price          e.g.  "3* Bucket 10L 450"  →  qty 3, "Bucket 10L", 450.00
+price  = trailing token matching ^\d+(\.\d{1,2})?$   ("10L" is not a price, so names with sizes are safe)
+```
+- If there's no valid trailing price, Enter is disabled and the preview says "price missing".
+- **Tab** expands to a detailed form with qty, **optional cost** and a note. **Quick sales are never auto-tagged to a batch** (owner decision). They stay untagged until a manager links them during review.
+- As the cashier types, suggestions appear: catalog products first, then recent quick-sale names with their last price. **Plain Enter always commits the typed quick sale.** Picking a suggestion needs ↓ then Enter, so speed never gets hijacked.
+- If the typed name matches a **promoted** key, the bar shows a hint: "Now a product: Blue Bucket 10L (scan or ↓ Enter)".
+
+**Stored on the line, at write time:**
+- `is_custom = 1` and `product_id = NULL`.
+- `name` as typed.
+- `custom_key`: normalised, meaning lowercase, trimmed, collapsed whitespace, price stripped, NFC. It's the grouping key, and it's stored because lines are immutable.
+- `batch_id`: always NULL at the till. Quick-sale lines are untagged, and promotion is forward-only, so it stays NULL.
+- `cost_total` and `cost_known`. Cost is unknown (0, `cost_known = 0`) unless the cashier entered one. **Unknown-cost revenue is reported separately**, so profit is never silently overstated.
+
+**Quick-sale review** (`QUICK_SALE_PROMOTE` permission) is a back-office table grouped by `custom_key`. It shows:
+- Times sold, units and revenue
+- Last, median and min/max price
+- First and last seen, and which terminals sold it
+- Status: `new` / `promoted` / `ignored`
+
+It's sorted by frequency. Two one-click actions:
+- **Promote to product** runs one transaction. It creates a `products` row (name = most frequent spelling, price = last price, cost entered by the manager). If a batch is chosen, it adds a layer to it, with a shelf count entered so stock starts correct. It writes a `quick_sale_links` row (`custom_key → product_id, batch_id`) and audits `QUICK_SALE_PROMOTE`.
+- **Ignore** writes a link with `action = 'ignored'`, which hides one-off noise.
+
+**Promotion is forward-only.** Past quick-sale lines keep their original attribution, and no historical batch P&L changes. The review screen can still show the key's pre-promotion history through the link. `quick_sale_links.id = UUIDv5(store_id, custom_key)`, so two managers promoting the same key on different terminals produce the *same* row, which merges by LWW.
+
+### 3.3 Sales are final: same-session void is the only correction
+
+**Store policy (owner, final for v1):**
+- **All sales are final.** There are no refunds and no exchanges, in cash or any other form.
+- The only correction is a **same-session void** (`VOID_ORDER`) for an immediate cashier mistake, such as a wrong item, price or quantity, a double scan, or a customer cancelling before leaving the counter. It's only allowed while the till's cash session is still open.
+- The receipt footer (`receipt.footer`, seeded at first run) prints exactly: *"All sales are final. No refunds or exchanges. Thank you, come again!"*
+- Exchanges and credit notes are **deferred to Phase 5** (§8). The schema keeps extension points for them (below), so adding them later needs no rewrite.
+
+**Void rules (enforced in Rust and checked again in SQL):**
+
+| Rule | Detail |
+|---|---|
+| Scope | Same device **and** same cash session, which must still be `open`. That implies the same business day. Once the session is closed (Z-report printed), the order can't be voided by anyone, including the Owner. |
+| Who | `VOID_ORDER` is held by Supervisor, Manager and Owner. A cashier's void attempt returns `ApprovalRequired { perm: VOID_ORDER }`. A supervisor enters their PIN, and the single-use approval token (§3.5) is bound to that order id. |
+| Reason | Required, from a fixed list: `WRONG_ITEM`, `WRONG_PRICE`, `WRONG_QTY`, `DUPLICATE_SCAN`, `CUSTOMER_CANCELLED`, `OTHER` (free text required). It's stored in `orders.void_reason` and the audit metadata. |
+| Whole order only | A void cancels the whole order. To fix one line, void and re-ring. That keeps the ledger simple and the Z-report honest. |
+| Mechanism | One transaction does all of the following. Order `status: completed → voided` (the only update the immutability trigger allows) sets `voided_at`, `voided_by` and `void_approved_by`. A `void` stock movement is appended for every original sale slice, exactly reversing it (same layer, same unit cost, negative revenue). The rollup trigger removes the order from that day's `daily_sales_summary` and `daily_payment_summary`. `VOID_ORDER` is audited (receipt no., amount, reason, approver), and everything goes to the outbox. |
+| Cash | A voided cash sale means the cashier hands back the cash just taken. `expected_cash` excludes voided orders, so the drawer still reconciles. The void kicks the drawer if the order had a cash payment, and prints a short **VOID slip** (receipt no., amount, reason, approver) for the cash-up. |
+| Time limit | **The end of the open cash session (owner-confirmed).** `void.max_minutes` stays `null`. |
+
+**Phase 5 extension points kept in v1:**
+- `orders.type` exists, constrained to `'sale'` for now.
+- Permission bits 6 and 7 are **reserved** for `EXCHANGE_PROCESS` / `EXCHANGE_LATE`.
+- Every line stores its pro-rata `order_discount_share` (§3.7), so a future exchange can value a returned item at what the customer actually paid.
+- The payment ledger shape (`order_payments` rows per tender) can later carry credit-note issue and redeem rows.
+
+### 3.4 Cash sessions (shifts) and Z-report
+
+Each device has at most **one open `cash_session`**. Sales, cash movements and drawer kicks require one.
+- **Open:** cashier, opening float.
+- **During:** cash sales, `pay_in` / `pay_out` (with a reason, e.g. "petty cash – tea"), and `no_sale` drawer kicks. Each is a `cash_movements` row, audited.
+- **Close:** the system computes `expected_cash = opening_float + Σ cash payments of completed (non-voided) orders, net of change + pay_ins − pay_outs`. Payments are never negative, because there are no refunds. The cashier counts the drawer (optionally by denomination), and the system stores `counted_cash` and `variance`, then prints the **Z-report**. **Closing the session ends the void window** for every order in it.
+  - Totals by payment method
+  - Sales count and value
+  - Voids (count, value, reasons, approvers), discounts and overrides
+  - Quick-sale totals
+  - Cash reconciliation
+
+A **daily store report** aggregates all devices for a business date. The Z-report is per device per session.
+
+### 3.5 Role-based access control
+
+**Model.**
+```
+effective(user) = (role.permissions | user.grant_mask) & ~user.deny_mask
+```
+- The `Owner` system role always has ALL bits, and they can't be edited.
+- Roles also carry limits: `max_discount_bp` and `max_override_bp`. Going above a limit triggers an approval request (`ApprovalRequired`) rather than a hard deny (`Forbidden`). Seeded limits:
+
+  | Role | `max_discount_bp` | `max_override_bp` |
+  |---|---|---|
+  | Cashier | **500 (5%, owner rule)** | 0 |
+  | Supervisor | 2000 | 2000 |
+  | Manager | 5000 | 5000 |
+  | Owner | 10000 | 10000 |
+
+  The discount check itself is defined in §3.7.
+- Enforcement is in **Rust** (`auth::guard::require`). The UI's `<Can>` only hides controls.
+
+**Permission bits.** They're stable: never renumber, only append. All are below 2^53.
+
+| Bit | Key | Cashier | Supervisor | Manager | Owner |
+|---|---|:-:|:-:|:-:|:-:|
+| 0 | `SALE_CREATE` | ✅ | ✅ | ✅ | ✅ |
+| 1 | `QUICK_SALE` | ✅ | ✅ | ✅ | ✅ |
+| 2 | `PRICE_OVERRIDE` | – | ✅ | ✅ | ✅ |
+| 3 | `LINE_DISCOUNT` (item-level) | ✅ (≤ 5%) | ✅ | ✅ | ✅ |
+| 4 | `ORDER_DISCOUNT` (full bill) | ✅ (≤ 5%) | ✅ | ✅ | ✅ |
+| 5 | `VOID_ORDER` (same session only; cashiers need supervisor approval) | – | ✅ | ✅ | ✅ |
+| 6 | *reserved* for `EXCHANGE_PROCESS` (Phase 5). Not seeded. | – | – | – | – |
+| 7 | *reserved* for `EXCHANGE_LATE` (Phase 5). Not seeded. | – | – | – | – |
+| 8 | `DRAWER_NO_SALE` | – | ✅ | ✅ | ✅ |
+| 9 | `CASH_PAY_IN_OUT` | – | ✅ | ✅ | ✅ |
+| 10 | `CASH_SESSION_MANAGE` (open/close own) | ✅ | ✅ | ✅ | ✅ |
+| 11 | `CASH_SESSION_FORCE_CLOSE` (others') | – | ✅ | ✅ | ✅ |
+| 12 | `REPRINT_RECEIPT` | ✅ | ✅ | ✅ | ✅ |
+| 13 | `STOCK_ADJUST` | – | – | ✅ | ✅ |
+| 14 | `STOCK_DAMAGE` | – | ✅ | ✅ | ✅ |
+| 15 | `BATCH_MANAGE` | – | – | ✅ | ✅ |
+| 16 | `PRODUCT_MANAGE` | – | – | ✅ | ✅ |
+| 17 | `QUICK_SALE_PROMOTE` | – | – | ✅ | ✅ |
+| 18 | `LABEL_PRINT` | – | ✅ | ✅ | ✅ |
+| 19 | `VIEW_COST` (cost and margin fields anywhere) | – | – | ✅ | ✅ |
+| 20 | `REPORT_SALES` (revenue, payments, Z) | – | ✅ | ✅ | ✅ |
+| 21 | `REPORT_FINANCIAL` (COGS, profit, valuation, batch P&L) | – | – | ✅ | ✅ |
+| 22 | `EXPENSE_MANAGE` | – | – | ✅ | ✅ |
+| 23 | `SETTINGS_MANAGE` | – | – | – | ✅ |
+| 24 | `USER_MANAGE` (staff, roles, permissions) | – | – | – | ✅ |
+| 25 | `AUDIT_VIEW` | – | – | ✅ | ✅ |
+| 26 | `SYNC_MANAGE` (dead ops, re-register device) | – | – | – | ✅ |
+| 27 | `BACKUP_RESTORE` | – | – | – | ✅ |
+| 28 | `DATA_EXPORT` | – | – | ✅ | ✅ |
+| 29 | `CUSTOMER_VIEW` (profiles, purchase history, spend analytics) | – | – | ✅ | ✅ |
+| 30 | `BACKUP_CREATE` ("Backup Database Now") | – | – | ✅ | ✅ |
+
+- At the till, a cashier only sees the customer's name and visit count after entering a phone number. Full history needs `CUSTOMER_VIEW`.
+- `BACKUP_RESTORE` stays Owner-only.
+- `CUSTOMER_VIEW`, `BACKUP_CREATE` and `BACKUP_RESTORE` are **not approvable**: a supervisor PIN can't lend them.
+
+The defaults above are seeded in Phase 0 and can be edited per store (except Owner). **The bit assignments are frozen once Phase 0 ships.** From then on, append only. The reserved bits 6 and 7 must not be reused for anything else.
+
+**Supervisor approval (step-up auth).**
+1. A command fails with `ApprovalRequired { perm, reason }`. For example, a cashier sets a price below list.
+2. The UI opens `ApprovalDialog`, and a supervisor enters their PIN.
+3. `request_approval(perm, target_ref, supervisor_id, pin)` verifies the PIN and checks that the supervisor holds `perm`. It returns an `approval_id`.
+4. The token is held **in memory only**. It's single-use, expires in 60 s, and is bound to `(perm, target_ref, requesting_staff, device)`.
+5. The original command is retried with `approval_id`. Rust consumes the token and records `approved_by` on the business row *and* in the audit log.
+
+**Identity and PINs.**
+- Staff PINs are 4–8 digits, hashed with **argon2id** (moderate parameters, ~100 ms).
+- 5 failures lock the account for 5 minutes on that device (`auth_attempts`, local), and the lockout is audited.
+- Login is required to use the till. Idle auto-lock is configurable (default 5 min), with fast user switching.
+- **Known trade-off:** PIN hashes sync to every terminal so offline login works. A 4–6-digit PIN can be brute-forced by anyone holding a DB copy, so PINs protect against *casual* misuse at the counter, not a stolen database.
+  - Mitigations: use 6+ digits for Manager and Owner, keep the DB file in the user profile, and plan optional Windows-account-bound DB encryption (SQLCipher) for Phase 4.
+- **Owner invariant:** there must always be at least one active staff member with the Owner role. Rust refuses any disable or demote that breaks this, and `sync_push` rejects merged changes that would break it (dead op, surfaced to the owner).
+
+### 3.6 Audit trail
+
+- `audit_logs` is **append-only**. Local triggers block `UPDATE` and `DELETE`, and cloud RLS allows `INSERT` and `SELECT` only.
+- Rows are written by `audit::record` **inside the action's transaction**, so an action without its audit row can't be committed.
+- Each row records:
+  - Timestamp, business date, `device_id`, `staff_id`, and `approved_by` when step-up auth was used
+  - `action`, `entity_type` and `entity_id`
+  - `metadata` JSON with before/after values, reason, amounts and the receipt number
+
+**Tamper evidence: a per-device hash chain.**
+```
+hash = SHA256( prev_hash ‖ canonical_json(id, store_id, device_id, device_seq, staff_id, approved_by,
+                                          action, entity_type, entity_id, metadata, business_date, created_at) )
+```
+- `device_seq` is a gapless per-device counter. The genesis `prev_hash` is 64 zeros.
+- The chain is **per device**, because terminals interleave offline and a global chain would fork.
+- The cloud verifies each device's chain on push and flags breaks. The Audit screen has a "Verify chain" button.
+- This detects edits to the local file once its rows have synced. It can't stop someone with file access from rewriting *unsynced* rows, which is one more reason to sync often.
+
+**Actions** (`AuditAction`):
+
+| Area | Actions |
+|---|---|
+| Authentication | `AUTH_LOGIN`, `AUTH_LOGOUT`, `AUTH_FAILED`, `AUTH_LOCKOUT`, `APPROVAL_GRANTED`, `APPROVAL_DENIED` |
+| Cash | `CASH_SESSION_OPEN`, `CASH_SESSION_CLOSE`, `CASH_SESSION_FORCE_CLOSE`, `DRAWER_KICK` (no-sale), `CASH_PAY_IN`, `CASH_PAY_OUT` |
+| Pricing and orders | `PRICE_OVERRIDE`, `LINE_DISCOUNT`, `ORDER_DISCOUNT` (above the cashier's limit, or any with approval), `VOID_ORDER`, `REPRINT_RECEIPT` |
+| Customers | `CUSTOMER_CREATE`, `CUSTOMER_UPDATE`, `CUSTOMER_ERASE` (personal data removed on request) |
+| Labels | `LABEL_PRINT` (template, product count, label count) |
+| Stock and batches | `STOCK_ADJUSTMENT`, `STOCK_DAMAGE`, `STOCK_COUNT`, `BATCH_CREATE`, `BATCH_RECEIVE`, `BATCH_REOPEN`, `BATCH_CLOSE`, `BATCH_LATE_ITEM` |
+| Catalog | `PRODUCT_CREATE`, `PRODUCT_UPDATE` (price/cost changes carry old → new), `PRODUCT_DELETE`, `BARCODE_CONFLICT_RESOLVE`, `QUICK_SALE_PROMOTE`, `QUICK_SALE_IGNORE` |
+| Expenses | `EXPENSE_CREATE`, `EXPENSE_UPDATE`, `EXPENSE_DELETE` |
+| Administration | `SETTINGS_CHANGE`, `ROLE_CREATE`, `ROLE_UPDATE`, `USER_CREATE`, `USER_UPDATE`, `USER_DISABLE`, `USER_PIN_RESET` |
+| System | `STORE_INITIALIZED`, `BACKUP_CREATE` (path, size, SHA-256), `BACKUP_FAILED`, `BACKUP_RESTORE`, `DATA_EXPORT`, `SYNC_DEAD_OP_RESOLVE`, `DEVICE_REGISTER` |
+
+Ordinary sales aren't duplicated into the audit log, because `orders` is already immutable and attributed. Overrides, discounts above the limit and voids *are* logged.
+
+### 3.7 Discounts (owner rule: cashier ≤ 5%, item and bill level)
+
+Prices are **tax-inclusive** (`tax.inclusive = true`). The tax rate is **0%** today (not VAT/SSCL registered). Pricing still *extracts* tax from inclusive totals, so registering later is purely a settings and rate change.
+
+For each line:
+```
+line_gross            = unit_price × qty                              (shelf price, tax-inclusive)
+line_discount         = item-level discount entered on that line      (needs LINE_DISCOUNT)
+order_discount_share  = that line's pro-rata share of the bill discount (needs ORDER_DISCOUNT)
+line_total            = line_gross − line_discount − order_discount_share   (what the customer pays, incl. tax)
+tax_amount            = inclusive ? round_half_up(line_total × rate_bp / (10000 + rate_bp))
+                                  : round_half_up(line_total × rate_bp / 10000)
+line_net              = inclusive ? line_total − tax_amount : line_total   (ex-tax revenue)
+```
+
+- **Bill-discount apportionment:** the bill discount `D` is split across the order's new-item lines in proportion to `line_gross − line_discount`.
+  - It uses the **largest-remainder method**, so `Σ order_discount_share = D` exactly.
+  - Ties go to the lower `line_no`.
+  - The share is stored on each line (`order_items.order_discount_share`). Batch margins use it, and the Phase 5 exchange design would use it to value returns at what the customer actually paid.
+- **The limit check** is run by Rust on every line at checkout: `(line_discount + order_discount_share) × 10000 ≤ max_discount_bp × line_gross`. It uses integer cross-multiplication with no rounding. So the **combined** item and bill discount on any line must not exceed the actor's limit (5% for a cashier).
+  - If any line fails, the result is `ApprovalRequired { perm: LINE_DISCOUNT | ORDER_DISCOUNT }`. A supervisor whose limit covers it approves once for the whole order.
+  - A discount entered without holding the permission at all also returns `ApprovalRequired`.
+- **Price overrides** (`unit_price < list_price`) are separate from discounts. They need `PRICE_OVERRIDE`, are limited by `max_override_bp`, and are never counted in the 5% check. Going below `min_price` always needs approval.
+- Header totals: `discount_total = Σ line_discount + bill discount`. All discount approvals and above-limit attempts are audited.
+
+### 3.8 Customer profiles (optional phone number at the till)
+
+**Goal:** capture a phone number in about two seconds when the customer offers one, never slow down a sale that doesn't, and give the back office purchase history and spend analytics.
+
+**At the till**
+- **F4 or Numpad `/`** focuses the `CustomerPhoneField` in the cart header. It's numeric-only and auto-formats as `07X XXX XXXX`.
+  - Enter confirms the number and returns focus to the scan field. Esc clears it.
+  - Leaving it empty is the default. **A customer is never required.**
+- After 9–10 digits, Rust looks the number up (`customer_lookup(phone)` is a local, indexed query, so it works offline):
+  - **Known:** the cart header shows the name, if one was stored, plus "Visit #N".
+  - **New:** the header shows "New customer", with an optional one-tap name field.
+- At checkout, `checkout_order` attaches the customer in the same transaction. It either links the existing row or **creates one**, then sets `orders.customer_id`. **The order stores no copy of the phone number**: it lives only on `customers`, so erasure never touches an immutable order.
+- The receipt prints the phone **masked** (`Customer: 07X XXX X123`), never in full.
+
+**Phone normalisation** (`domain::phone`, mirrored in `lib/phone.ts` for the preview):
+- Sri Lankan numbers are stored as **E.164**:
+  - `0771234567` → `+94771234567`
+  - `771234567`, `94771234567` and `+94 77 123 4567` → the same.
+  - Mobile (`07X`) and landline (`0XX`) numbers are both accepted, as 9 national digits after the leading 0.
+- Anything else is rejected with a validation error, so it never gets stored half-normalised.
+- Foreign numbers aren't supported in v1. Add them in Phase 5 if needed.
+
+**Offline-safe identity.** `customers.id = UUIDv5(store_id, phone_e164)`, the same trick as `quick_sale_links`. Two counters registering the same new number while offline create the *same* row id, which merges by LWW. They never collide on the unique phone index.
+
+**Back office** (`CUSTOMER_VIEW`, Manager and Owner):
+- A **customer list**: a virtualised DataTable with search by phone or name, and sorting by total spend, visits or last visit.
+- A **profile** showing name, phone, notes, first and last visit, visit count, total spend, average basket, and top products and categories.
+- **Purchase history**: an infinite-scroll list of orders with drill-down to the receipt.
+- **Analytics**:
+  - Top customers by spend for any period (§5 periods)
+  - New vs returning customers per week or month
+  - The share of sales with a customer attached
+- Figures come from the derived table `customer_stats` (completed orders only; voids excluded).
+  - It's trigger-maintained when an order is sealed or voided, and rebuildable with `rebuild_derived`.
+  - A view aggregating `orders` per customer wouldn't hold the <50 ms list budget once there are tens of thousands of orders (§13.4).
+  - Per-customer history uses the index `orders(customer_id, business_date)`.
+
+**Privacy.** Sri Lanka's Personal Data Protection Act, No. 9 of 2022, applies to customer phone numbers.
+- **Consent is verbal at the counter** (owner decision). The cashier asks, "Would you like to add your phone number?", and only types it if the customer agrees.
+  - The UI shows **no popup, notice dialog or confirmation step**. The field is simply optional, and Enter or Esc on an empty field moves on.
+  - Store only the phone number and an optional name and note.
+- **Erase on request** (`CUSTOMER_ERASE`, Owner and Manager). This clears the phone, name and notes on the `customers` row and sets `erased_at`. The row and its id remain, so past orders keep an anonymous `customer_id` and the store's totals stay correct. Orders are not modified.
+  - The UUIDv5 id is derived from the phone. If the same person returns later and gives their number, the lookup finds the erased row by id. In that case, Rust **re-activates the same id** with a fresh profile. Visit history before the erasure stays anonymous, because it's still linked by id. Tell the customer this is how erasure works.
+- Exporting customer data needs `DATA_EXPORT` and is audited.
+
+### 3.9 Manual database backup ("Backup Database Now")
+
+**Who and where:**
+- **Settings → Backup** shows a **"Backup Database Now"** button (`BACKUP_CREATE`: Owner and Manager).
+- The user picks a destination folder with the native folder picker (`tauri-plugin-dialog`), for example a plugged-in USB drive, an external disk or a secondary directory.
+- The last-used folder is remembered per device.
+
+**How (`commands::backup::backup_now(dest_dir)`):**
+1. **Pre-checks:**
+   - The folder exists and is writable.
+   - Free space is at least 1.2 × the current DB size, using `page_count × page_size`.
+   - The target file name doesn't exist yet: `GayanShop-{device_code}-{YYYYMMDD-HHmmss}.db`.
+2. **Snapshot:**
+   - Run `VACUUM INTO '<dest>/<name>.partial'` on a **pooled read connection**, not the writer lock.
+   - Under WAL, this reads a consistent snapshot while the till keeps selling. Writers aren't blocked, and the snapshot simply excludes commits made after it started.
+   - It produces a compact, defragmented copy containing every table, including the derived ones.
+   - It runs on a background task, and the UI shows a progress spinner with the elapsed time.
+3. **Verify:**
+   - Open the copy **read-only** and run `PRAGMA integrity_check` (it must return `ok`).
+   - Check that `_sqlx_migrations` holds the expected schema version.
+   - Compute the file's **SHA-256**.
+4. **Finalise:**
+   - Rename `.partial` to `.db`.
+   - Write a sidecar `…db.json` manifest containing app version, schema version, store and device ids, device code, created_at, row counts for key tables, size and SHA-256.
+5. **Record:**
+   - Audit `BACKUP_CREATE` with path, size and hash.
+   - Store `backup.last_manual_at` and `backup.last_manual_path` in `device_settings`. The Settings screen shows "Last backup: 2 hours ago (E:\)".
+6. **Failure** (USB pulled, disk full, integrity failure): delete the `.partial` file, audit `BACKUP_FAILED` with a reason code, and show a translated error. **Sales are never affected.**
+
+**Rules:**
+- **Never copy the live `pos.db` / `-wal` / `-shm` files directly.** A raw file copy during WAL activity can produce a torn, unusable backup. Always use `VACUUM INTO`.
+- **The backup contains PIN hashes and customer phone numbers.** The dialog warns: "Keep this drive safe". Optional encryption of backups (SQLCipher / age) is a Phase 4 item.
+- **Restore** is a separate Owner-only flow (`BACKUP_RESTORE`), including the recovery steps in Phase 4. Before a restore, the app always takes a fresh backup of the current DB.
+- **Reminder:** if there's been no manual backup in 7 days and no cloud sync configured, the back-office header shows a gentle "Back up today" banner. Until Phase 3 cloud sync, a USB backup is the shop's only off-machine copy.
+
+---
+
+## 4. Schemas
+
+### 4.1 Conventions and table classes
+
+| Class | Tables | Required columns | Merge rule (§6.3) | Pull "own write" filter |
+|---|---|---|---|---|
+| **Mutable (LWW)** | `store_settings`, `roles`, `staff`, `categories`, `products`, `batches`, `batch_items`, `customers`, `expense_categories`, `expenses`, `quick_sale_links`, `cash_sessions` | `id`, `store_id`, `created_at`, `updated_at`, `updated_by_device`, `deleted_at`, `version` | Last-write-wins on the row, plus server-side invariants | `updated_by_device = me` |
+| **Insert-only** | `order_items`, `order_payments`, `stock_movements`, `cash_movements`, `audit_logs` | `id`, `store_id`, `device_id`, `created_at` | Same `id` ⇒ no-op | `device_id = me` |
+| **Insert-only + void** | `orders` | Insert-only columns **plus** `updated_at`, `updated_by_device`, `version` (the void transition is the only update) | Insert; status `completed → voided` only | `updated_by_device = me` |
+| **Local-only** | `device_settings`, `receipt_counters`, `held_carts`, `auth_attempts`, `sync_outbox`, `sync_state`, `sync_logs` | — | Not synced | — |
+| **Derived** (rebuildable, not synced) | `products_fts`, `stock_levels`, `batch_item_stock`, `daily_sales_summary`, `daily_payment_summary` | — | Maintained by triggers on local *and* pulled inserts | — |
+
+- **IDs:** UUIDv7 (TEXT locally, `uuid` in Postgres), except `quick_sale_links.id = UUIDv5(store_id, custom_key)`, `customers.id = UUIDv5(store_id, phone_e164)` and `store_settings.key`.
+- **Reserved system device ID:** `00000000-0000-0000-0000-000000000000`. Any row the *server* modifies (barcode-conflict resolution, invariant repair) is stamped with it, so the originating device pulls the change back instead of filtering it out as its own.
+- **Money:** `INTEGER` minor units (LKR cents; exponent 2 in `store_settings`). Every money column in v1 is ≥ 0, because there are no refunds or credit notes. Voids are a status, not negative rows. Reports simply `SUM` completed orders.
+- **Timestamps:** ISO-8601 UTC TEXT locally, `timestamptz` in the cloud. `business_date` is TEXT `YYYY-MM-DD` (§1.7).
+- **Push order** follows outbox `seq`. Parents are always enqueued before children in the same transaction: batch → batch_items → stock_movements, and order → items → payments → movements.
+
+### 4.2 TypeScript (target shape of generated bindings)
+
+```ts
+// ───────── shared ─────────
+export type UUID = string;            // UUIDv7 (UUIDv5 for quick_sale_links)
+export type ISODateTime = string;     // UTC
+export type BusinessDate = string;    // 'YYYY-MM-DD' in store timezone after day cutoff
+export type Money = number;           // integer minor units — NEVER a float amount
+export type Qty = number;             // integer units
+export type Bp = number;              // basis points: 1500 = 15.00%
+
+export interface SyncMeta {           // mutable (LWW) tables
+  id: UUID;
+  store_id: UUID;
+  created_at: ISODateTime;
+  updated_at: ISODateTime;
+  updated_by_device: UUID;
+  deleted_at: ISODateTime | null;
+  version: number;
+}
+export interface InsertOnlyMeta {     // append-only tables
+  id: UUID;
+  store_id: UUID;
+  device_id: UUID;                    // originating device
+  created_at: ISODateTime;
+}
+
+// ───────── settings ─────────
+export interface StoreSetting {       // synced, LWW per key
+  key: string;                        // 'store.name' | 'store.currency' | 'store.timezone' | 'store.day_cutoff'
+                                      // | 'store.week_start' | 'tax.inclusive' | 'receipt.header' | ...
+  store_id: UUID;
+  value: unknown;                     // JSON
+  created_at: ISODateTime;
+  updated_at: ISODateTime;
+  updated_by_device: UUID;
+  deleted_at: ISODateTime | null;
+  version: number;
+}
+// device_settings (local-only): device_id, device_code, store_id, printers, idle_lock_minutes, ...
+
+// ───────── RBAC ─────────
+export const Perm = {
+  SALE_CREATE: 2 ** 0, QUICK_SALE: 2 ** 1, PRICE_OVERRIDE: 2 ** 2, LINE_DISCOUNT: 2 ** 3,
+  ORDER_DISCOUNT: 2 ** 4, VOID_ORDER: 2 ** 5, /* 2 ** 6, 2 ** 7 reserved: Phase 5 exchanges */
+  DRAWER_NO_SALE: 2 ** 8, CASH_PAY_IN_OUT: 2 ** 9, CASH_SESSION_MANAGE: 2 ** 10,
+  CASH_SESSION_FORCE_CLOSE: 2 ** 11, REPRINT_RECEIPT: 2 ** 12, STOCK_ADJUST: 2 ** 13,
+  STOCK_DAMAGE: 2 ** 14, BATCH_MANAGE: 2 ** 15, PRODUCT_MANAGE: 2 ** 16, QUICK_SALE_PROMOTE: 2 ** 17,
+  LABEL_PRINT: 2 ** 18, VIEW_COST: 2 ** 19, REPORT_SALES: 2 ** 20, REPORT_FINANCIAL: 2 ** 21,
+  EXPENSE_MANAGE: 2 ** 22, SETTINGS_MANAGE: 2 ** 23, USER_MANAGE: 2 ** 24, AUDIT_VIEW: 2 ** 25,
+  SYNC_MANAGE: 2 ** 26, BACKUP_RESTORE: 2 ** 27, DATA_EXPORT: 2 ** 28,
+  CUSTOMER_VIEW: 2 ** 29, BACKUP_CREATE: 2 ** 30,
+} as const;                           // generated from Rust bitflags; use 2 ** n, never 1 << n (int32 overflow at 31)
+export type PermKey = keyof typeof Perm;
+export type PermMask = number;
+
+export interface Role extends SyncMeta {
+  name: string;                       // 'Cashier' | 'Supervisor' | 'Manager' | 'Owner' | custom
+  permissions: PermMask;
+  max_discount_bp: Bp;                // above this ⇒ approval required
+  max_override_bp: Bp;                // max price reduction below list without approval
+  is_system: boolean;                 // Owner role: permissions locked to ALL
+}
+
+export interface Staff extends SyncMeta {
+  display_name: string;
+  role_id: UUID;
+  pin_hash: string;                   // argon2id PHC string (never sent to the UI — Rust-only field)
+  grant_mask: PermMask;
+  deny_mask: PermMask;
+  max_discount_bp: Bp | null;         // per-user override of role limit
+  ui_language: UiLanguage;            // applied at login (§1.8)
+  is_active: boolean;
+}
+export type UiLanguage = 'en' | 'si';
+export interface SessionInfo {        // what the UI receives (no hash)
+  staff_id: UUID; display_name: string; role_name: string; ui_language: UiLanguage;
+  permissions: PermKey[];             // list, not a mask: the UI never does bit arithmetic
+  max_discount_bp: Bp; max_override_bp: Bp;
+  cash_session_id: UUID | null;
+}
+
+// ───────── catalog ─────────
+export interface Category extends SyncMeta {
+  name: string;
+  parent_id: UUID | null;
+}
+
+export type ProductKind = 'standard' | 'generic';   // generic = "Plasticware – any item Rs 250"
+
+export interface Product extends SyncMeta {
+  kind: ProductKind;
+  name: string;                       // printable (receipt/label code page) — English/Latin
+  name_si: string | null;             // optional Sinhala display name; screens only, never printed
+  sku: string | null;
+  barcode: string | null;             // EAN-13/UPC or in-store prefix "2"
+  category_id: UUID | null;
+  default_cost: Money;                // fallback cost for ADJUSTMENTS layers; real cost lives on batch_items
+  price: Money;
+  min_price: Money | null;            // floor; below it always requires approval
+  track_stock: boolean;
+  allow_negative_stock: boolean;      // default true — offline terminals must never block a sale
+  tax_rate_bp: Bp;
+  attributes: Record<string, string>; // { size: "42", colour: "black" } — `size` prints first on labels
+  is_active: boolean;
+  barcode_conflict: boolean;          // set by sync when another device registered the same barcode
+  stock_on_hand?: Qty;                // derived (stock_levels), not stored on the row
+}
+
+// ───────── batches (cost layers) ─────────
+export type BatchStatus = 'draft' | 'received' | 'closed';
+export type CostAllocation = 'manual' | 'even_per_unit' | 'by_retail_value';
+
+export interface Batch extends SyncMeta {
+  code: string;                       // "B-2026-045" (on labels & reports); system: OPENING-STOCK, ADJUSTMENTS
+  name: string;                       // "Shoe batch – Pettah – 8 Nov"
+  supplier_name: string | null;
+  supplier_ref: string | null;        // supplier invoice no.
+  purchased_at: ISODateTime;
+  received_at: ISODateTime | null;    // set on receive; drives FIFO order
+  received_business_date: BusinessDate | null;
+  total_cost: Money;
+  extra_costs: Money;                 // transport, handling — part of landed cost
+  allocation_method: CostAllocation;
+  allocation_variance: Money;         // landed − Σ(unit_cost × qty_received); fixed at receive
+  status: BatchStatus;
+  is_system: boolean;
+  received_by: UUID | null;           // staff_id
+  notes: string | null;
+}
+
+export interface BatchItem extends SyncMeta {
+  batch_id: UUID;
+  product_id: UUID;
+  qty_received: Qty;
+  unit_cost: Money;                   // allocated; locked once batch is received
+  retail_price_at_intake: Money;      // used by by_retail_value allocation + report
+  manual_unit_cost: Money | null;     // input for 'manual' allocation (draft only)
+  added_after_receipt: boolean;       // late item ⇒ unit_cost = 0
+  note: string | null;
+}
+
+export interface BatchItemStock {     // derived, local, trigger-maintained
+  batch_item_id: UUID;
+  batch_id: UUID;
+  product_id: UUID;
+  received_qty: Qty;
+  on_hand: Qty;
+  sold_qty: Qty;                      // net of voids
+  sold_revenue: Money;                // Σ revenue_net (ex tax)
+  sold_cost: Money;                   // COGS
+  written_off_qty: Qty;               // damage + negative counts − positive counts
+  written_off_cost: Money;
+}
+
+// ───────── stock ledger (append-only) ─────────
+export type StockReason =
+  | 'batch_intake' | 'batch_reopen'   // batch_reopen reverses intake
+  | 'sale' | 'void'                   // 'void' exactly reverses a sale slice (same session only)
+  | 'damage' | 'count_correction' | 'adjustment';
+
+export interface StockMovement extends InsertOnlyMeta {
+  product_id: UUID;
+  batch_item_id: UUID;                // every movement belongs to a cost layer
+  qty_delta: Qty;                     // + in, − out
+  reason: StockReason;
+  ref_type: 'order' | 'batch' | 'adjustment' | null;
+  ref_id: UUID | null;
+  order_item_id: UUID | null;         // sale/void slices → line (void reverses the same layers)
+  unit_cost: Money;                   // layer cost at the time
+  revenue_net: Money | null;          // sale/void slices only: ex-tax, after discounts; sign opposite to qty_delta
+  business_date: BusinessDate;
+  staff_id: UUID | null;
+  approved_by: UUID | null;
+  note: string | null;
+}
+
+// ───────── cash ─────────
+export type CashSessionStatus = 'open' | 'closed';
+
+export interface CashSession extends SyncMeta {
+  device_id: UUID;
+  business_date: BusinessDate;        // of opening
+  status: CashSessionStatus;
+  opened_by: UUID;
+  opened_at: ISODateTime;
+  opening_float: Money;
+  closed_by: UUID | null;
+  closed_at: ISODateTime | null;
+  expected_cash: Money | null;
+  counted_cash: Money | null;
+  variance: Money | null;             // counted − expected
+  denominations: Record<string, number> | null; // { "5000": 3, "1000": 12, ... }
+  close_note: string | null;
+}
+
+export type CashMovementType = 'pay_in' | 'pay_out' | 'no_sale';
+
+export interface CashMovement extends InsertOnlyMeta {
+  cash_session_id: UUID;
+  type: CashMovementType;
+  amount: Money;                      // 0 for no_sale; positive for pay_in/pay_out
+  reason: string;
+  staff_id: UUID;
+  approved_by: UUID | null;
+  business_date: BusinessDate;
+}
+
+// ───────── customers (optional, phone-keyed) ─────────
+export interface Customer extends SyncMeta {   // id = UUIDv5(store_id, phone_e164)
+  phone_e164: string | null;          // "+94771234567"; null after erasure
+  display_name: string | null;        // optional, typed at the till or in back office
+  note: string | null;
+  first_seen_at: ISODateTime;
+  erased_at: ISODateTime | null;      // personal data cleared on request (PDPA)
+}
+
+export interface CustomerLookup {     // what the till sees (no history without CUSTOMER_VIEW)
+  customer_id: UUID | null;           // null ⇒ new number, created at checkout
+  phone_e164: string;
+  display_name: string | null;
+  visit_count: number;
+}
+
+export interface CustomerStats {      // derived table customer_stats (trigger-maintained; completed orders only)
+  customer_id: UUID;
+  phone_e164: string | null;
+  display_name: string | null;
+  visit_count: number;
+  total_spend: Money;                 // Σ grand_total
+  total_net: Money;                   // Σ net_sales (ex tax)
+  avg_basket: Money;
+  first_visit_date: BusinessDate | null;
+  last_visit_date: BusinessDate | null;
+}
+
+// ───────── orders (all sales final; void is the only correction) ─────────
+export type OrderType = 'sale';                     // Phase 5 may add 'exchange'
+export type OrderStatus = 'completed' | 'voided';
+export type PaymentMethod = 'cash' | 'card' | 'bank_transfer' | 'qr' | 'other';
+export type VoidReason =
+  | 'WRONG_ITEM' | 'WRONG_PRICE' | 'WRONG_QTY' | 'DUPLICATE_SCAN' | 'CUSTOMER_CANCELLED' | 'OTHER';
+
+export interface Order extends InsertOnlyMeta {
+  updated_at: ISODateTime;            // void transition only
+  updated_by_device: UUID;
+  version: number;
+  cash_session_id: UUID;
+  receipt_no: string;                 // "T01-20261108-0042"
+  type: OrderType;
+  status: OrderStatus;
+  staff_id: UUID;
+  customer_id: UUID | null;           // optional; phone lives only on customers
+  gross_sales: Money;                 // Σ line_gross (shelf price, tax-incl. when tax.inclusive)
+  discount_total: Money;              // Σ line_discount + bill discount
+  net_sales: Money;                   // Σ line_net (ex tax)
+  tax_total: Money;
+  rounding: Money;
+  grand_total: Money;                 // Σ line_total + rounding (+ tax when exclusive)
+  approved_by: UUID | null;           // bill-discount / override approver
+  paid_total: Money;
+  change_due: Money;
+  cost_total: Money;                  // Σ line cost_total (COGS)
+  quick_sale_net: Money;              // portion of net_sales from custom lines
+  unknown_cost_net: Money;            // portion of net_sales with cost_known = false
+  item_count: number;
+  business_date: BusinessDate;
+  completed_at: ISODateTime;
+  voided_at: ISODateTime | null;
+  voided_by: UUID | null;
+  void_approved_by: UUID | null;      // supervisor who approved a cashier's void
+  void_reason: VoidReason | null;
+  void_note: string | null;           // required when void_reason = 'OTHER'
+  note: string | null;
+}
+
+export interface OrderItem extends InsertOnlyMeta {
+  order_id: UUID;
+  line_no: number;
+  product_id: UUID | null;            // NULL ⇒ quick sale
+  is_custom: boolean;
+  custom_key: string | null;          // normalised quick-sale name (grouping key)
+  batch_id: UUID | null;              // reserved; quick sales are never tagged at the till (owner rule)
+  name: string;                       // snapshot / typed name (printable on receipts)
+  barcode: string | null;
+  list_price: Money;                  // catalog price at time (= unit_price for custom)
+  unit_price: Money;                  // price charged (tax-inclusive when tax.inclusive)
+  qty: Qty;                           // > 0
+  line_gross: Money;                  // unit_price × qty
+  line_discount: Money;               // item-level discount
+  order_discount_share: Money;        // pro-rata share of bill discount (largest remainder)
+  tax_rate_bp: Bp;
+  tax_amount: Money;
+  line_total: Money;                  // line_gross − line_discount − order_discount_share (customer pays)
+  line_net: Money;                    // ex tax
+  cost_total: Money;                  // Σ slice costs (catalog) | entered cost × qty | 0
+  cost_known: boolean;
+  price_overridden: boolean;
+  override_reason: string | null;
+  approved_by: UUID | null;           // supervisor for override/discount
+}
+
+export interface OrderPayment extends InsertOnlyMeta {
+  order_id: UUID;
+  method: PaymentMethod;
+  amount: Money;                      // APPLIED amount, always ≥ 0 (no refunds)
+  tendered: Money | null;             // cash handed over (change = tendered − amount)
+  reference: string | null;           // card slip / transfer ref
+}
+
+// ───────── expenses ─────────
+export interface ExpenseCategory extends SyncMeta {
+  name: string;                       // Rent, Electricity, Wages, Transport (non-batch), Tea/Sundries…
+  is_active: boolean;
+}
+
+export interface Expense extends SyncMeta {
+  category_id: UUID;
+  amount: Money;
+  business_date: BusinessDate;        // expense date
+  payment_method: PaymentMethod;
+  paid_from_drawer: boolean;          // ⇒ also a cash_movements pay_out in the open session
+  cash_session_id: UUID | null;
+  payee: string | null;
+  note: string | null;
+  recorded_by: UUID;
+}
+
+// ───────── quick sale promotion ─────────
+export interface QuickSaleLink extends SyncMeta {   // id = UUIDv5(store_id, custom_key)
+  custom_key: string;
+  display_name: string;
+  action: 'promoted' | 'ignored';
+  product_id: UUID | null;
+  batch_id: UUID | null;
+  decided_by: UUID;
+  decided_at: ISODateTime;
+}
+
+export interface QuickSaleSummary {   // read model (view)
+  custom_key: string;
+  display_name: string;               // most frequent spelling
+  times_sold: number;
+  units_sold: Qty;
+  revenue_net: Money;
+  last_price: Money;
+  min_price: Money;
+  max_price: Money;
+  first_sold_at: ISODateTime;
+  last_sold_at: ISODateTime;
+  device_count: number;
+  status: 'new' | 'promoted' | 'ignored';
+  product_id: UUID | null;
+}
+
+// ───────── audit ─────────
+export type AuditAction =
+  | 'STORE_INITIALIZED'
+  | 'AUTH_LOGIN' | 'AUTH_LOGOUT' | 'AUTH_FAILED' | 'AUTH_LOCKOUT' | 'APPROVAL_GRANTED' | 'APPROVAL_DENIED'
+  | 'CASH_SESSION_OPEN' | 'CASH_SESSION_CLOSE' | 'CASH_SESSION_FORCE_CLOSE'
+  | 'DRAWER_KICK' | 'CASH_PAY_IN' | 'CASH_PAY_OUT'
+  | 'PRICE_OVERRIDE' | 'LINE_DISCOUNT' | 'ORDER_DISCOUNT'
+  | 'VOID_ORDER' | 'REPRINT_RECEIPT'
+  | 'CUSTOMER_CREATE' | 'CUSTOMER_UPDATE' | 'CUSTOMER_ERASE'
+  | 'LABEL_PRINT'
+  | 'STOCK_ADJUSTMENT' | 'STOCK_DAMAGE' | 'STOCK_COUNT'
+  | 'BATCH_CREATE' | 'BATCH_RECEIVE' | 'BATCH_REOPEN' | 'BATCH_CLOSE' | 'BATCH_LATE_ITEM'
+  | 'PRODUCT_CREATE' | 'PRODUCT_UPDATE' | 'PRODUCT_DELETE' | 'BARCODE_CONFLICT_RESOLVE'
+  | 'QUICK_SALE_PROMOTE' | 'QUICK_SALE_IGNORE'
+  | 'EXPENSE_CREATE' | 'EXPENSE_UPDATE' | 'EXPENSE_DELETE'
+  | 'SETTINGS_CHANGE' | 'ROLE_CREATE' | 'ROLE_UPDATE'
+  | 'USER_CREATE' | 'USER_UPDATE' | 'USER_DISABLE' | 'USER_PIN_RESET'
+  | 'BACKUP_CREATE' | 'BACKUP_FAILED' | 'BACKUP_RESTORE' | 'DATA_EXPORT' | 'SYNC_DEAD_OP_RESOLVE' | 'DEVICE_REGISTER';
+
+export interface AuditLog extends InsertOnlyMeta {
+  device_seq: number;                 // gapless per device
+  staff_id: UUID | null;              // null for system events
+  approved_by: UUID | null;
+  action: AuditAction;
+  entity_type: string | null;         // 'order' | 'product' | 'batch' | 'staff' | 'setting' | ...
+  entity_id: string | null;
+  metadata: Record<string, unknown>;  // { before, after, reason, amount, receipt_no, ... }
+  business_date: BusinessDate;
+  prev_hash: string;                  // hex SHA-256
+  hash: string;
+}
+
+// ───────── reporting read models ─────────
+export type ReportPeriod =
+  | { kind: 'day'; date: BusinessDate }
+  | { kind: 'week'; anyDate: BusinessDate }        // week_start from store settings
+  | { kind: 'month'; year: number; month: number }
+  | { kind: 'year'; year: number }
+  | { kind: 'all_time' }
+  | { kind: 'custom'; from: BusinessDate; to: BusinessDate };   // inclusive
+
+export interface FinancialSummary {
+  period: { from: BusinessDate | null; to: BusinessDate | null };
+  device_id: UUID | null;             // null = whole store
+  sales_count: number; void_count: number; void_value: Money;
+  gross_sales: Money; discounts: Money;
+  net_sales: Money;                                   // = Total Revenue (ex tax), completed orders only
+  tax_collected: Money;
+  customer_attached_bp: Bp;                           // share of sales with a customer phone
+  cogs: Money;                                        // incl. batch allocation variance
+  gross_profit: Money; gross_margin_bp: Bp;
+  stock_write_offs: Money;
+  operating_expenses: Money;
+  net_profit: Money;
+  quick_sale_net: Money; unknown_cost_net: Money;
+  payments: { method: PaymentMethod; amount: Money; count: number }[];
+}
+
+export interface StockValuation {
+  as_of: BusinessDate | 'now';
+  total_units: Qty;
+  value_at_cost: Money;
+  value_at_retail: Money;
+  by_batch: { batch_id: UUID; code: string; units: Qty; value_at_cost: Money; value_at_retail: Money }[];
+  by_category: { category_id: UUID | null; units: Qty; value_at_cost: Money; value_at_retail: Money }[];
+  negative_layers: number;            // oversold layers needing attention
+}
+
+export interface BatchReport {
+  batch_id: UUID; code: string; name: string; status: BatchStatus;
+  purchased_at: ISODateTime; received_at: ISODateTime | null;
+  landed_cost: Money; allocation_variance: Money;
+  units_received: Qty; units_sold: Qty; units_written_off: Qty; units_remaining: Qty;
+  revenue_net: Money;                 // stock sales + tagged quick sales
+  cogs: Money; written_off_cost: Money;
+  realised_profit: Money;             // revenue − cogs − write-offs − variance
+  payback: Money;                     // revenue − landed_cost
+  remaining_value_cost: Money; remaining_value_retail: Money;
+  projected_profit: Money;            // payback + remaining_value_retail
+  sell_through_bp: Bp;
+  items: (BatchItemStock & { name: string; unit_cost: Money; price: Money })[];
+}
+
+// ───────── labels (device-local templates; §7.4) ─────────
+export type LabelLanguage = 'tspl' | 'zpl';
+export type BarcodeSymbology = 'code128' | 'ean13';
+export type LabelElementKind = 'store_name' | 'product_name' | 'attributes' | 'price' | 'barcode';
+
+export interface LabelElement {       // positions in mm, relative to ONE label's top-left
+  kind: LabelElementKind;
+  x_mm: number; y_mm: number; w_mm: number; h_mm: number;
+  font_size: 1 | 2 | 3 | 4;           // printer built-in font scale step
+  bold?: boolean;
+  max_lines?: 1 | 2;                  // product_name wrapping
+  align?: 'left' | 'center' | 'right';
+}
+
+export interface LabelTemplate {
+  id: string;                         // 'two_up_2x1' | 'three_up_1x1' | custom
+  name: string;
+  columns: 2 | 3;                     // labels per row on the roll
+  label_w_mm: number; label_h_mm: number;     // 50.8×25.4 (2″×1″) or 25.4×25.4 (1″×1″)
+  col_gap_mm: number;                 // horizontal gap between labels in a row
+  row_gap_mm: number;                 // vertical gap (die-cut gap) between rows
+  left_margin_mm: number;             // liner edge → first label
+  dpi: 203 | 300;
+  language: LabelLanguage;
+  symbology: BarcodeSymbology | 'auto';       // auto: EAN-13 if a valid 13-digit code, else Code128
+  elements: LabelElement[];
+}
+
+export interface LabelJobItem { product_id: UUID; copies: number; }
+
+export interface LabelPreview {       // Rust-computed layout the UI renders as SVG (WYSIWYG)
+  rows: number;
+  roll_width_mm: number;
+  labels: { row: number; col: number; product_id: UUID; elements: (LabelElement & { text: string })[] }[];
+  warnings: string[];                 // e.g. "barcode module < 2 dots — use a shorter code or a 300 dpi printer"
+}
+
+// ───────── backup ─────────
+export interface BackupResult {
+  path: string;                       // E:\GayanShop-T01-20261108-153012.db
+  size_bytes: number;
+  sha256: string;
+  integrity_ok: boolean;
+  schema_version: number;
+  duration_ms: number;
+}
+
+// ───────── sync ─────────
+export type SyncOp = 'upsert' | 'delete';
+export type OutboxStatus = 'pending' | 'in_flight' | 'failed' | 'dead';
+
+export interface SyncOutboxEntry {    // local-only
+  seq: number;
+  op_id: UUID;                        // idempotency key
+  table_name: string;
+  row_id: string;                     // UUID, or key for store_settings
+  op: SyncOp;
+  payload: unknown;
+  status: OutboxStatus;
+  attempts: number;
+  last_error: string | null;
+  next_attempt_at: ISODateTime;
+  created_at: ISODateTime;
+}
+
+export type SyncDirection = 'push' | 'pull';
+export type SyncResult = 'success' | 'partial' | 'error';
+
+export interface SyncLog {            // local-only
+  id: UUID;
+  device_id: UUID;
+  direction: SyncDirection;
+  started_at: ISODateTime;
+  finished_at: ISODateTime | null;
+  result: SyncResult;
+  rows_sent: number;
+  rows_received: number;
+  rows_rejected: number;
+  cursor_before: number | null;
+  cursor_after: number | null;
+  error_code: string | null;          // 'NETWORK' | 'AUTH' | 'CONFLICT' | 'SERVER' | 'VALIDATION' | 'INVARIANT'
+  error_message: string | null;
+  details: unknown | null;
+}
+```
+
+### 4.3 SQLite DDL (`src-tauri/migrations/0001_init.sql`)
+
+```sql
+-- GayanShop POS — initial schema, v4 (all sales final; void-only corrections; customers; no exchanges/credit notes).
+-- Conventions: money = INTEGER minor units (LKR cents); ids = UUID TEXT; timestamps = ISO-8601 UTC TEXT;
+-- business_date = 'YYYY-MM-DD' in store timezone after day cutoff, computed by the writing device.
+
+-- ═════════ settings ═════════
+CREATE TABLE store_settings (                        -- synced, LWW per key
+  key TEXT PRIMARY KEY,
+  store_id TEXT NOT NULL,
+  value TEXT NOT NULL,                               -- JSON
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by_device TEXT NOT NULL,
+  deleted_at TEXT, version INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE device_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);   -- local-only (JSON values)
+
+-- ═════════ RBAC ═════════
+CREATE TABLE roles (
+  id TEXT PRIMARY KEY, store_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  permissions INTEGER NOT NULL DEFAULT 0,
+  max_discount_bp INTEGER NOT NULL DEFAULT 0 CHECK (max_discount_bp BETWEEN 0 AND 10000),
+  max_override_bp INTEGER NOT NULL DEFAULT 0 CHECK (max_override_bp BETWEEN 0 AND 10000),
+  is_system INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by_device TEXT NOT NULL,
+  deleted_at TEXT, version INTEGER NOT NULL DEFAULT 1
+);
+CREATE UNIQUE INDEX ux_roles_name ON roles(store_id, name) WHERE deleted_at IS NULL;
+
+CREATE TABLE staff (
+  id TEXT PRIMARY KEY, store_id TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  role_id TEXT NOT NULL REFERENCES roles(id),
+  pin_hash TEXT NOT NULL,
+  grant_mask INTEGER NOT NULL DEFAULT 0,
+  deny_mask INTEGER NOT NULL DEFAULT 0,
+  max_discount_bp INTEGER CHECK (max_discount_bp IS NULL OR max_discount_bp BETWEEN 0 AND 10000),
+  ui_language TEXT NOT NULL DEFAULT 'en' CHECK (ui_language IN ('en','si')),
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by_device TEXT NOT NULL,
+  deleted_at TEXT, version INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX ix_staff_role ON staff(role_id);
+
+CREATE TABLE auth_attempts (                         -- local-only lockout state
+  staff_id TEXT PRIMARY KEY,
+  failed_count INTEGER NOT NULL DEFAULT 0,
+  locked_until TEXT,
+  last_failed_at TEXT
+);
+
+-- ═════════ catalog ═════════
+CREATE TABLE categories (
+  id TEXT PRIMARY KEY, store_id TEXT NOT NULL,
+  name TEXT NOT NULL, parent_id TEXT REFERENCES categories(id),
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by_device TEXT NOT NULL,
+  deleted_at TEXT, version INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE products (
+  id TEXT PRIMARY KEY, store_id TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'standard' CHECK (kind IN ('standard','generic')),
+  name TEXT NOT NULL,                                -- printable on receipts/labels (Latin)
+  name_si TEXT,                                      -- optional Sinhala display name (screens only)
+  sku TEXT, barcode TEXT,
+  category_id TEXT REFERENCES categories(id),
+  default_cost INTEGER NOT NULL DEFAULT 0 CHECK (default_cost >= 0),
+  price INTEGER NOT NULL CHECK (price >= 0),
+  min_price INTEGER,
+  track_stock INTEGER NOT NULL DEFAULT 1,
+  allow_negative_stock INTEGER NOT NULL DEFAULT 1,
+  tax_rate_bp INTEGER NOT NULL DEFAULT 0,
+  attributes TEXT NOT NULL DEFAULT '{}',
+  is_active INTEGER NOT NULL DEFAULT 1,
+  barcode_conflict INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by_device TEXT NOT NULL,
+  deleted_at TEXT, version INTEGER NOT NULL DEFAULT 1
+);
+-- Uniqueness among live products only; sync conflict handling (§6.3) keeps both sides valid.
+CREATE UNIQUE INDEX ux_products_barcode ON products(store_id, barcode)
+  WHERE barcode IS NOT NULL AND deleted_at IS NULL AND is_active = 1;
+CREATE UNIQUE INDEX ux_products_sku ON products(store_id, sku)
+  WHERE sku IS NOT NULL AND deleted_at IS NULL;
+
+-- Standalone FTS keyed by id (NOT external-content on rowid: TEXT PK ⇒ VACUUM/restore may renumber rowids).
+CREATE VIRTUAL TABLE products_fts USING fts5(id UNINDEXED, name, name_si, sku, barcode, tokenize = 'unicode61');
+CREATE TRIGGER trg_products_fts_ins AFTER INSERT ON products BEGIN
+  INSERT INTO products_fts(id, name, name_si, sku, barcode) VALUES (NEW.id, NEW.name, NEW.name_si, NEW.sku, NEW.barcode);
+END;
+CREATE TRIGGER trg_products_fts_upd AFTER UPDATE OF name, name_si, sku, barcode ON products BEGIN
+  DELETE FROM products_fts WHERE id = OLD.id;
+  INSERT INTO products_fts(id, name, name_si, sku, barcode) VALUES (NEW.id, NEW.name, NEW.name_si, NEW.sku, NEW.barcode);
+END;
+CREATE TRIGGER trg_products_fts_del AFTER DELETE ON products BEGIN
+  DELETE FROM products_fts WHERE id = OLD.id;
+END;
+
+-- ═════════ batches (cost layers) ═════════
+CREATE TABLE batches (
+  id TEXT PRIMARY KEY, store_id TEXT NOT NULL,
+  code TEXT NOT NULL, name TEXT NOT NULL,
+  supplier_name TEXT, supplier_ref TEXT,
+  purchased_at TEXT NOT NULL,
+  received_at TEXT, received_business_date TEXT,
+  total_cost INTEGER NOT NULL DEFAULT 0 CHECK (total_cost >= 0),
+  extra_costs INTEGER NOT NULL DEFAULT 0 CHECK (extra_costs >= 0),
+  allocation_method TEXT NOT NULL CHECK (allocation_method IN ('manual','even_per_unit','by_retail_value')),
+  allocation_variance INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','received','closed')),
+  is_system INTEGER NOT NULL DEFAULT 0,
+  received_by TEXT REFERENCES staff(id),
+  notes TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by_device TEXT NOT NULL,
+  deleted_at TEXT, version INTEGER NOT NULL DEFAULT 1,
+  CHECK (status = 'draft' OR (received_at IS NOT NULL AND received_business_date IS NOT NULL))
+);
+CREATE UNIQUE INDEX ux_batches_code ON batches(store_id, code) WHERE deleted_at IS NULL;
+CREATE INDEX ix_batches_received ON batches(received_at);
+
+CREATE TABLE batch_items (
+  id TEXT PRIMARY KEY, store_id TEXT NOT NULL,
+  batch_id TEXT NOT NULL REFERENCES batches(id),
+  product_id TEXT NOT NULL REFERENCES products(id),
+  qty_received INTEGER NOT NULL CHECK (qty_received >= 0),
+  unit_cost INTEGER NOT NULL DEFAULT 0 CHECK (unit_cost >= 0),
+  retail_price_at_intake INTEGER NOT NULL DEFAULT 0,
+  manual_unit_cost INTEGER,
+  added_after_receipt INTEGER NOT NULL DEFAULT 0,
+  note TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by_device TEXT NOT NULL,
+  deleted_at TEXT, version INTEGER NOT NULL DEFAULT 1,
+  UNIQUE (batch_id, product_id)
+);
+CREATE INDEX ix_batch_items_product ON batch_items(product_id);
+-- Cost lock: unit_cost / qty_received may not change once the parent batch is received or closed.
+CREATE TRIGGER trg_batch_item_cost_lock BEFORE UPDATE OF unit_cost, qty_received ON batch_items
+WHEN (SELECT status FROM batches WHERE id = OLD.batch_id) <> 'draft'
+  AND (NEW.unit_cost <> OLD.unit_cost OR NEW.qty_received <> OLD.qty_received)
+BEGIN SELECT RAISE(ABORT, 'batch item cost/qty locked after receive'); END;
+
+-- ═════════ cash ═════════
+CREATE TABLE cash_sessions (
+  id TEXT PRIMARY KEY, store_id TEXT NOT NULL, device_id TEXT NOT NULL,
+  business_date TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','closed')),
+  opened_by TEXT NOT NULL REFERENCES staff(id), opened_at TEXT NOT NULL,
+  opening_float INTEGER NOT NULL DEFAULT 0 CHECK (opening_float >= 0),
+  closed_by TEXT REFERENCES staff(id), closed_at TEXT,
+  expected_cash INTEGER, counted_cash INTEGER, variance INTEGER,
+  denominations TEXT, close_note TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by_device TEXT NOT NULL,
+  deleted_at TEXT, version INTEGER NOT NULL DEFAULT 1
+);
+CREATE UNIQUE INDEX ux_one_open_session ON cash_sessions(device_id) WHERE status = 'open';
+
+CREATE TABLE cash_movements (
+  id TEXT PRIMARY KEY, store_id TEXT NOT NULL, device_id TEXT NOT NULL,
+  cash_session_id TEXT NOT NULL REFERENCES cash_sessions(id),
+  type TEXT NOT NULL CHECK (type IN ('pay_in','pay_out','no_sale')),
+  amount INTEGER NOT NULL CHECK (amount >= 0),
+  reason TEXT NOT NULL,
+  staff_id TEXT NOT NULL, approved_by TEXT,
+  business_date TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX ix_cashmov_session ON cash_movements(cash_session_id);
+CREATE TRIGGER trg_cashmov_no_update BEFORE UPDATE ON cash_movements
+BEGIN SELECT RAISE(ABORT, 'cash_movements are append-only'); END;
+CREATE TRIGGER trg_cashmov_no_delete BEFORE DELETE ON cash_movements
+BEGIN SELECT RAISE(ABORT, 'cash_movements are append-only'); END;
+
+-- ═════════ customers (optional; id = UUIDv5(store_id, phone_e164)) ═════════
+CREATE TABLE customers (
+  id TEXT PRIMARY KEY, store_id TEXT NOT NULL,
+  phone_e164 TEXT CHECK (phone_e164 IS NULL OR phone_e164 GLOB '+94[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'),
+  display_name TEXT, note TEXT,
+  first_seen_at TEXT NOT NULL,
+  erased_at TEXT,                                    -- PDPA erasure: phone/name/note cleared
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by_device TEXT NOT NULL,
+  deleted_at TEXT, version INTEGER NOT NULL DEFAULT 1,
+  CHECK (erased_at IS NULL OR (phone_e164 IS NULL AND display_name IS NULL AND note IS NULL))
+);
+CREATE UNIQUE INDEX ux_customers_phone ON customers(store_id, phone_e164)
+  WHERE phone_e164 IS NOT NULL AND deleted_at IS NULL;
+
+-- ═════════ orders (all sales final; same-session void is the only correction) ═════════
+CREATE TABLE orders (
+  id TEXT PRIMARY KEY, store_id TEXT NOT NULL, device_id TEXT NOT NULL,
+  cash_session_id TEXT NOT NULL REFERENCES cash_sessions(id),
+  receipt_no TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'sale' CHECK (type IN ('sale')),   -- Phase 5 may add 'exchange'
+  status TEXT NOT NULL CHECK (status IN ('completed','voided')),
+  staff_id TEXT NOT NULL,
+  approved_by TEXT,
+  customer_id TEXT REFERENCES customers(id),         -- optional; the phone lives only on customers
+  gross_sales INTEGER NOT NULL CHECK (gross_sales >= 0),
+  discount_total INTEGER NOT NULL DEFAULT 0,         -- Σ line_discount + bill discount
+  net_sales INTEGER NOT NULL CHECK (net_sales >= 0), -- Σ line_net (ex tax)
+  tax_total INTEGER NOT NULL DEFAULT 0,
+  rounding INTEGER NOT NULL DEFAULT 0,
+  grand_total INTEGER NOT NULL CHECK (grand_total >= 0),
+  paid_total INTEGER NOT NULL,
+  change_due INTEGER NOT NULL DEFAULT 0 CHECK (change_due >= 0),
+  cost_total INTEGER NOT NULL DEFAULT 0,
+  quick_sale_net INTEGER NOT NULL DEFAULT 0,
+  unknown_cost_net INTEGER NOT NULL DEFAULT 0,
+  item_count INTEGER NOT NULL,
+  business_date TEXT NOT NULL,
+  completed_at TEXT NOT NULL,
+  voided_at TEXT, voided_by TEXT, void_approved_by TEXT,
+  void_reason TEXT CHECK (void_reason IN ('WRONG_ITEM','WRONG_PRICE','WRONG_QTY','DUPLICATE_SCAN','CUSTOMER_CANCELLED','OTHER')),
+  void_note TEXT,
+  note TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by_device TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1,
+  CHECK ((status = 'voided') = (voided_at IS NOT NULL AND void_reason IS NOT NULL)),
+  CHECK (void_reason IS NOT 'OTHER' OR length(trim(coalesce(void_note, ''))) > 0)
+);
+CREATE UNIQUE INDEX ux_orders_receipt ON orders(store_id, receipt_no);
+CREATE INDEX ix_orders_bdate ON orders(business_date, device_id);
+CREATE INDEX ix_orders_session ON orders(cash_session_id);
+CREATE INDEX ix_orders_customer ON orders(customer_id, business_date) WHERE customer_id IS NOT NULL;
+CREATE TRIGGER trg_orders_immutable BEFORE UPDATE ON orders
+WHEN NOT (OLD.status = 'completed' AND NEW.status = 'voided'
+          AND NEW.net_sales = OLD.net_sales AND NEW.grand_total = OLD.grand_total
+          AND NEW.business_date = OLD.business_date AND NEW.device_id = OLD.device_id)
+BEGIN SELECT RAISE(ABORT, 'orders are immutable except completed→voided'); END;
+CREATE TRIGGER trg_orders_no_delete BEFORE DELETE ON orders
+BEGIN SELECT RAISE(ABORT, 'orders cannot be deleted'); END;
+
+CREATE TABLE order_items (
+  id TEXT PRIMARY KEY, store_id TEXT NOT NULL, device_id TEXT NOT NULL,
+  order_id TEXT NOT NULL REFERENCES orders(id),
+  line_no INTEGER NOT NULL,
+  product_id TEXT REFERENCES products(id),
+  is_custom INTEGER NOT NULL DEFAULT 0,
+  custom_key TEXT,
+  batch_id TEXT REFERENCES batches(id),
+  name TEXT NOT NULL, barcode TEXT,
+  list_price INTEGER NOT NULL, unit_price INTEGER NOT NULL CHECK (unit_price >= 0),
+  qty INTEGER NOT NULL CHECK (qty > 0),
+  line_gross INTEGER NOT NULL,                       -- unit_price × qty
+  line_discount INTEGER NOT NULL DEFAULT 0,
+  order_discount_share INTEGER NOT NULL DEFAULT 0,
+  tax_rate_bp INTEGER NOT NULL DEFAULT 0,
+  tax_amount INTEGER NOT NULL DEFAULT 0,
+  line_total INTEGER NOT NULL,                       -- what the customer pays (incl. tax)
+  line_net INTEGER NOT NULL,                         -- ex tax
+  cost_total INTEGER NOT NULL DEFAULT 0,
+  cost_known INTEGER NOT NULL DEFAULT 1,
+  price_overridden INTEGER NOT NULL DEFAULT 0, override_reason TEXT, approved_by TEXT,
+  created_at TEXT NOT NULL,
+  CHECK ((is_custom = 1 AND product_id IS NULL AND custom_key IS NOT NULL)
+      OR (is_custom = 0 AND product_id IS NOT NULL)),
+  CHECK (line_gross = unit_price * qty),
+  CHECK (line_total = line_gross - line_discount - order_discount_share),
+  CHECK (line_discount >= 0 AND order_discount_share >= 0 AND line_total >= 0),
+  UNIQUE (order_id, line_no)
+);
+CREATE INDEX ix_items_product ON order_items(product_id);
+CREATE INDEX ix_items_custom ON order_items(custom_key) WHERE is_custom = 1;
+CREATE INDEX ix_items_batch ON order_items(batch_id) WHERE batch_id IS NOT NULL;
+CREATE TRIGGER trg_items_no_update BEFORE UPDATE ON order_items
+BEGIN SELECT RAISE(ABORT, 'order_items are immutable'); END;
+CREATE TRIGGER trg_items_no_delete BEFORE DELETE ON order_items
+BEGIN SELECT RAISE(ABORT, 'order_items are immutable'); END;
+
+CREATE TABLE order_payments (
+  id TEXT PRIMARY KEY, store_id TEXT NOT NULL, device_id TEXT NOT NULL,
+  order_id TEXT NOT NULL REFERENCES orders(id),
+  method TEXT NOT NULL CHECK (method IN ('cash','card','bank_transfer','qr','other')),
+  amount INTEGER NOT NULL CHECK (amount >= 0),       -- all sales final: no negative (refund) payments
+  tendered INTEGER,
+  reference TEXT,
+  created_at TEXT NOT NULL,
+  CHECK (tendered IS NULL OR (method = 'cash' AND tendered >= amount))
+);
+CREATE INDEX ix_payments_order ON order_payments(order_id);
+CREATE TRIGGER trg_payments_no_update BEFORE UPDATE ON order_payments
+BEGIN SELECT RAISE(ABORT, 'order_payments are append-only'); END;
+CREATE TRIGGER trg_payments_no_delete BEFORE DELETE ON order_payments
+BEGIN SELECT RAISE(ABORT, 'order_payments are append-only'); END;
+
+-- ═════════ stock ledger (append-only) ═════════
+CREATE TABLE stock_movements (
+  id TEXT PRIMARY KEY, store_id TEXT NOT NULL, device_id TEXT NOT NULL,
+  product_id TEXT NOT NULL REFERENCES products(id),
+  batch_item_id TEXT NOT NULL REFERENCES batch_items(id),
+  qty_delta INTEGER NOT NULL CHECK (qty_delta <> 0),
+  reason TEXT NOT NULL CHECK (reason IN ('batch_intake','batch_reopen','sale','void',
+                                         'damage','count_correction','adjustment')),
+  ref_type TEXT, ref_id TEXT,
+  order_item_id TEXT REFERENCES order_items(id),
+  unit_cost INTEGER NOT NULL,
+  revenue_net INTEGER,
+  business_date TEXT NOT NULL,
+  staff_id TEXT, approved_by TEXT, note TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX ix_mov_product ON stock_movements(product_id);
+CREATE INDEX ix_mov_layer ON stock_movements(batch_item_id);
+CREATE INDEX ix_mov_date_reason ON stock_movements(business_date, reason);
+CREATE INDEX ix_mov_order_item ON stock_movements(order_item_id) WHERE order_item_id IS NOT NULL;
+CREATE TRIGGER trg_mov_no_update BEFORE UPDATE ON stock_movements
+BEGIN SELECT RAISE(ABORT, 'stock_movements are append-only'); END;
+CREATE TRIGGER trg_mov_no_delete BEFORE DELETE ON stock_movements
+BEGIN SELECT RAISE(ABORT, 'stock_movements are append-only'); END;
+
+-- Derived caches (rebuildable; not synced)
+CREATE TABLE stock_levels (product_id TEXT PRIMARY KEY, on_hand INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE batch_item_stock (
+  batch_item_id TEXT PRIMARY KEY, batch_id TEXT NOT NULL, product_id TEXT NOT NULL,
+  received_qty INTEGER NOT NULL DEFAULT 0, on_hand INTEGER NOT NULL DEFAULT 0,
+  sold_qty INTEGER NOT NULL DEFAULT 0, sold_revenue INTEGER NOT NULL DEFAULT 0, sold_cost INTEGER NOT NULL DEFAULT 0,
+  written_off_qty INTEGER NOT NULL DEFAULT 0, written_off_cost INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX ix_bis_batch ON batch_item_stock(batch_id);
+
+-- Sign convention: a sale slice has qty_delta −2 and revenue_net +900 ⇒ sold_qty +2, sold_revenue +900.
+-- void slices mirror it exactly (+qty, −revenue, same layer and cost).
+CREATE TRIGGER trg_mov_derive AFTER INSERT ON stock_movements BEGIN
+  INSERT INTO stock_levels(product_id, on_hand) VALUES (NEW.product_id, NEW.qty_delta)
+  ON CONFLICT(product_id) DO UPDATE SET on_hand = on_hand + excluded.on_hand;
+
+  INSERT INTO batch_item_stock(batch_item_id, batch_id, product_id)
+  SELECT NEW.batch_item_id, bi.batch_id, NEW.product_id FROM batch_items bi WHERE bi.id = NEW.batch_item_id
+  ON CONFLICT(batch_item_id) DO NOTHING;
+
+  UPDATE batch_item_stock SET
+    on_hand          = on_hand + NEW.qty_delta,
+    received_qty     = received_qty     + CASE WHEN NEW.reason IN ('batch_intake','batch_reopen') THEN NEW.qty_delta ELSE 0 END,
+    sold_qty         = sold_qty         + CASE WHEN NEW.reason IN ('sale','void') THEN -NEW.qty_delta ELSE 0 END,
+    sold_revenue     = sold_revenue     + CASE WHEN NEW.reason IN ('sale','void') THEN COALESCE(NEW.revenue_net, 0) ELSE 0 END,
+    sold_cost        = sold_cost        + CASE WHEN NEW.reason IN ('sale','void') THEN -NEW.qty_delta * NEW.unit_cost ELSE 0 END,
+    written_off_qty  = written_off_qty  + CASE WHEN NEW.reason IN ('damage','count_correction','adjustment') THEN -NEW.qty_delta ELSE 0 END,
+    written_off_cost = written_off_cost + CASE WHEN NEW.reason IN ('damage','count_correction','adjustment') THEN -NEW.qty_delta * NEW.unit_cost ELSE 0 END
+  WHERE batch_item_id = NEW.batch_item_id;
+END;
+
+-- ═════════ expenses ═════════
+CREATE TABLE expense_categories (
+  id TEXT PRIMARY KEY, store_id TEXT NOT NULL, name TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by_device TEXT NOT NULL,
+  deleted_at TEXT, version INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE expenses (
+  id TEXT PRIMARY KEY, store_id TEXT NOT NULL,
+  category_id TEXT NOT NULL REFERENCES expense_categories(id),
+  amount INTEGER NOT NULL CHECK (amount > 0),
+  business_date TEXT NOT NULL,
+  payment_method TEXT NOT NULL CHECK (payment_method IN ('cash','card','bank_transfer','qr','other')),
+  paid_from_drawer INTEGER NOT NULL DEFAULT 0,
+  cash_session_id TEXT REFERENCES cash_sessions(id),
+  payee TEXT, note TEXT,
+  recorded_by TEXT NOT NULL REFERENCES staff(id),
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by_device TEXT NOT NULL,
+  deleted_at TEXT, version INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX ix_expenses_bdate ON expenses(business_date) WHERE deleted_at IS NULL;
+
+-- ═════════ quick sale promotion ═════════
+CREATE TABLE quick_sale_links (
+  id TEXT PRIMARY KEY,                               -- UUIDv5(store_id, custom_key)
+  store_id TEXT NOT NULL,
+  custom_key TEXT NOT NULL, display_name TEXT NOT NULL,
+  action TEXT NOT NULL CHECK (action IN ('promoted','ignored')),
+  product_id TEXT REFERENCES products(id), batch_id TEXT REFERENCES batches(id),
+  decided_by TEXT NOT NULL, decided_at TEXT NOT NULL,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by_device TEXT NOT NULL,
+  deleted_at TEXT, version INTEGER NOT NULL DEFAULT 1,
+  CHECK (action = 'ignored' OR product_id IS NOT NULL)
+);
+CREATE UNIQUE INDEX ux_qsl_key ON quick_sale_links(store_id, custom_key) WHERE deleted_at IS NULL;
+
+CREATE VIEW v_quick_sale_summary AS
+SELECT oi.custom_key,
+       (SELECT x.name FROM order_items x WHERE x.custom_key = oi.custom_key AND x.is_custom = 1
+        GROUP BY x.name ORDER BY COUNT(*) DESC LIMIT 1)                AS display_name,
+       COUNT(*)                                                         AS times_sold,
+       SUM(oi.qty)                                                      AS units_sold,
+       SUM(oi.line_net)                                                 AS revenue_net,
+       (SELECT y.unit_price FROM order_items y WHERE y.custom_key = oi.custom_key AND y.is_custom = 1
+        ORDER BY y.created_at DESC LIMIT 1)                             AS last_price,
+       MIN(oi.unit_price) AS min_price, MAX(oi.unit_price) AS max_price,
+       MIN(oi.created_at) AS first_sold_at, MAX(oi.created_at) AS last_sold_at,
+       COUNT(DISTINCT oi.device_id)                                     AS device_count,
+       COALESCE(l.action, 'new')                                        AS status,
+       l.product_id
+FROM order_items oi
+JOIN orders o ON o.id = oi.order_id AND o.status = 'completed'
+LEFT JOIN quick_sale_links l ON l.custom_key = oi.custom_key AND l.deleted_at IS NULL
+WHERE oi.is_custom = 1 AND oi.qty > 0
+GROUP BY oi.custom_key;
+
+-- Customer analytics read model (completed orders only; voids excluded).
+CREATE VIEW v_customer_stats AS
+SELECT c.id AS customer_id, c.phone_e164, c.display_name,
+       COUNT(o.id)                          AS visit_count,
+       COALESCE(SUM(o.grand_total), 0)      AS total_spend,
+       COALESCE(SUM(o.net_sales), 0)        AS total_net,
+       CASE WHEN COUNT(o.id) > 0 THEN SUM(o.grand_total) / COUNT(o.id) ELSE 0 END AS avg_basket,
+       MIN(o.business_date)                 AS first_visit_date,
+       MAX(o.business_date)                 AS last_visit_date
+FROM customers c
+LEFT JOIN orders o ON o.customer_id = c.id AND o.status = 'completed'
+WHERE c.deleted_at IS NULL
+GROUP BY c.id;
+
+-- ═════════ audit (append-only, per-device hash chain) ═════════
+CREATE TABLE audit_logs (
+  id TEXT PRIMARY KEY, store_id TEXT NOT NULL, device_id TEXT NOT NULL,
+  device_seq INTEGER NOT NULL CHECK (device_seq >= 1),
+  staff_id TEXT, approved_by TEXT,
+  action TEXT NOT NULL,
+  entity_type TEXT, entity_id TEXT,
+  metadata TEXT NOT NULL DEFAULT '{}',
+  business_date TEXT NOT NULL,
+  prev_hash TEXT NOT NULL, hash TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (device_id, device_seq)
+);
+CREATE INDEX ix_audit_created ON audit_logs(created_at);
+CREATE INDEX ix_audit_entity ON audit_logs(entity_type, entity_id);
+CREATE INDEX ix_audit_action ON audit_logs(action, business_date);
+CREATE TRIGGER trg_audit_no_update BEFORE UPDATE ON audit_logs
+BEGIN SELECT RAISE(ABORT, 'audit_logs are append-only'); END;
+CREATE TRIGGER trg_audit_no_delete BEFORE DELETE ON audit_logs
+BEGIN SELECT RAISE(ABORT, 'audit_logs are append-only'); END;
+
+-- ═════════ reporting rollups (derived, per device per business day) ═════════
+CREATE TABLE daily_sales_summary (
+  business_date TEXT NOT NULL, device_id TEXT NOT NULL,
+  sales_count INTEGER NOT NULL DEFAULT 0, void_count INTEGER NOT NULL DEFAULT 0, void_value INTEGER NOT NULL DEFAULT 0,
+  gross_sales INTEGER NOT NULL DEFAULT 0, discounts INTEGER NOT NULL DEFAULT 0,
+  net_sales INTEGER NOT NULL DEFAULT 0,
+  tax_total INTEGER NOT NULL DEFAULT 0, cogs INTEGER NOT NULL DEFAULT 0,
+  quick_sale_net INTEGER NOT NULL DEFAULT 0, unknown_cost_net INTEGER NOT NULL DEFAULT 0,
+  customer_orders INTEGER NOT NULL DEFAULT 0,        -- completed orders with a customer attached
+  PRIMARY KEY (business_date, device_id)
+);
+CREATE TABLE daily_payment_summary (
+  business_date TEXT NOT NULL, device_id TEXT NOT NULL, method TEXT NOT NULL,
+  amount INTEGER NOT NULL DEFAULT 0, txn_count INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (business_date, device_id, method)
+);
+
+CREATE TRIGGER trg_rollup_order_insert AFTER INSERT ON orders WHEN NEW.status = 'completed' BEGIN
+  INSERT INTO daily_sales_summary(business_date, device_id) VALUES (NEW.business_date, NEW.device_id)
+  ON CONFLICT DO NOTHING;
+  UPDATE daily_sales_summary SET
+    sales_count      = sales_count    + 1,
+    gross_sales      = gross_sales    + NEW.gross_sales,
+    discounts        = discounts      + NEW.discount_total,
+    net_sales        = net_sales      + NEW.net_sales,
+    tax_total        = tax_total      + NEW.tax_total,
+    cogs             = cogs           + NEW.cost_total,
+    quick_sale_net   = quick_sale_net   + NEW.quick_sale_net,
+    unknown_cost_net = unknown_cost_net + NEW.unknown_cost_net,
+    customer_orders  = customer_orders  + (NEW.customer_id IS NOT NULL)
+  WHERE business_date = NEW.business_date AND device_id = NEW.device_id;
+END;
+-- A pulled order that arrives already voided is never counted, except in void_count.
+CREATE TRIGGER trg_rollup_order_insert_voided AFTER INSERT ON orders WHEN NEW.status = 'voided' BEGIN
+  INSERT INTO daily_sales_summary(business_date, device_id) VALUES (NEW.business_date, NEW.device_id)
+  ON CONFLICT DO NOTHING;
+  UPDATE daily_sales_summary SET void_count = void_count + 1, void_value = void_value + NEW.grand_total
+  WHERE business_date = NEW.business_date AND device_id = NEW.device_id;
+END;
+CREATE TRIGGER trg_rollup_order_void AFTER UPDATE OF status ON orders
+WHEN OLD.status = 'completed' AND NEW.status = 'voided' BEGIN
+  UPDATE daily_sales_summary SET
+    sales_count      = sales_count - 1,
+    void_count       = void_count + 1,
+    void_value       = void_value + NEW.grand_total,
+    gross_sales      = gross_sales - NEW.gross_sales,
+    discounts        = discounts   - NEW.discount_total,
+    net_sales        = net_sales   - NEW.net_sales,
+    tax_total        = tax_total   - NEW.tax_total,
+    cogs             = cogs        - NEW.cost_total,
+    quick_sale_net   = quick_sale_net   - NEW.quick_sale_net,
+    unknown_cost_net = unknown_cost_net - NEW.unknown_cost_net,
+    customer_orders  = customer_orders  - (NEW.customer_id IS NOT NULL)
+  WHERE business_date = NEW.business_date AND device_id = NEW.device_id;
+  UPDATE daily_payment_summary SET
+    amount    = amount    - (SELECT COALESCE(SUM(p.amount), 0) FROM order_payments p
+                             WHERE p.order_id = NEW.id AND p.method = daily_payment_summary.method),
+    txn_count = txn_count - (SELECT COUNT(*) FROM order_payments p
+                             WHERE p.order_id = NEW.id AND p.method = daily_payment_summary.method)
+  WHERE business_date = NEW.business_date AND device_id = NEW.device_id;
+END;
+CREATE TRIGGER trg_rollup_payment AFTER INSERT ON order_payments
+WHEN (SELECT status FROM orders WHERE id = NEW.order_id) = 'completed' BEGIN
+  INSERT INTO daily_payment_summary(business_date, device_id, method, amount, txn_count)
+  SELECT o.business_date, o.device_id, NEW.method, NEW.amount, 1
+  FROM orders o WHERE o.id = NEW.order_id
+  ON CONFLICT(business_date, device_id, method) DO UPDATE SET
+    amount = amount + excluded.amount, txn_count = txn_count + 1;
+END;
+-- Voids are same-session only (§3.3), so a void never rewrites a closed Z-report.
+
+-- ═════════ local-only plumbing ═════════
+CREATE TABLE receipt_counters (day TEXT PRIMARY KEY, last_seq INTEGER NOT NULL);
+CREATE TABLE held_carts (
+  id TEXT PRIMARY KEY, label TEXT, payload TEXT NOT NULL,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+
+CREATE TABLE sync_outbox (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  op_id TEXT NOT NULL UNIQUE,
+  table_name TEXT NOT NULL, row_id TEXT NOT NULL,
+  op TEXT NOT NULL CHECK (op IN ('upsert','delete')),
+  payload TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','in_flight','failed','dead')),
+  attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT,
+  next_attempt_at TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE INDEX ix_outbox_ready ON sync_outbox(status, next_attempt_at, seq);
+
+-- One global pull cursor (row table_name = '__global__'); server_seq is a single store-wide sequence.
+CREATE TABLE sync_state (table_name TEXT PRIMARY KEY, last_server_seq INTEGER NOT NULL DEFAULT 0, last_pulled_at TEXT);
+
+CREATE TABLE sync_logs (
+  id TEXT PRIMARY KEY, device_id TEXT NOT NULL,
+  direction TEXT NOT NULL CHECK (direction IN ('push','pull')),
+  started_at TEXT NOT NULL, finished_at TEXT,
+  result TEXT NOT NULL CHECK (result IN ('success','partial','error')),
+  rows_sent INTEGER NOT NULL DEFAULT 0, rows_received INTEGER NOT NULL DEFAULT 0, rows_rejected INTEGER NOT NULL DEFAULT 0,
+  cursor_before INTEGER, cursor_after INTEGER,
+  error_code TEXT, error_message TEXT, details TEXT
+);
+CREATE INDEX ix_sync_logs_started ON sync_logs(started_at);
+```
+
+**Parents are always present when a pulled child is applied.** This matters because the foreign keys and the derived triggers (`trg_rollup_payment` reads the order, and `trg_mov_derive` reads the batch item) depend on it. The pull protocol guarantees it with a parent closure (§6.2). Without that guarantee, a missing parent would abort the pull, or with relaxed foreign keys, silently drop rollup counts.
+
+**Seeds** (Phase 0, first-run wizard, one transaction):
+- The four system roles with the default masks and limits from §3.5 (Cashier `max_discount_bp = 500`).
+- The Owner staff member, with a PIN of at least 6 digits.
+- Expense categories: Rent, Electricity, Water, Wages, Transport (non-batch), Tea & sundries, Repairs, Other.
+- System batches `OPENING-STOCK` (draft until go-live) and `ADJUSTMENTS` (received, so it can take layers).
+- The owner-confirmed store settings from §11, including `store.name = GayanShop` and `receipt.footer`.
+- Device settings: `ui.default_language = en`, and the two built-in label templates (`two_up_2x1`, `three_up_1x1`).
+- Every seeded row goes to the outbox. One `STORE_INITIALIZED` audit row starts this device's hash chain. `STORE_INITIALIZED` is the first entry in `AuditAction`, and it's appended to the §3.6 System actions.
+
+### 4.4 Cloud (Postgres) deltas
+
+- Types become `uuid`, `timestamptz`, `bigint` money and masks, `jsonb`, `boolean` and `date` (business_date).
+- Every synced table gets `server_seq bigint NOT NULL` (one global sequence, set by a `BEFORE INSERT OR UPDATE` trigger) and `received_at timestamptz DEFAULT now()`. This cursor is only safe because `sync_push` serialises writers per store (§6.1).
+- `processed_ops(op_id uuid PRIMARY KEY, device_id uuid, processed_at timestamptz)` is the idempotency ledger.
+- `stores(id, name, …)` and `devices(id, store_id, code, name, last_seen_at, app_version, last_audit_seq, last_audit_hash)`.
+- RLS on every table: `store_id = (auth.jwt() -> 'app_metadata' ->> 'store_id')::uuid`.
+  - **`audit_logs`, `stock_movements`, `order_items`, `order_payments` and `cash_movements` get no UPDATE or DELETE policy.**
+  - On `orders`, UPDATE is allowed only for the void transition, enforced by a trigger.
+- `staff.pin_hash` is only readable by device identities, never by a future web dashboard role. `customers.phone_e164` is readable by device identities, and by dashboard roles only with an explicit customer-data grant.
+- The derived tables are cloud **views** (`stock_levels`, `batch_item_stock`, daily summaries), or materialised views for the dashboard. They're never mutable stored columns.
+
+---
+
+## 5. Reporting
+
+### 5.1 Metric glossary (single definitions; every report uses these)
+
+| Metric | Definition |
+|---|---|
+| **Gross sales** | Σ `line_gross` on completed orders, at shelf price (tax-inclusive while `tax.inclusive`) |
+| **Discounts** | Σ line discounts + bill discounts on completed orders |
+| **Voids** | Count and value of voided orders, by reason and approver. They're shown for control and **excluded** from every revenue figure. |
+| **Net sales = Total Revenue** | Σ `line_net` on completed orders. It's **ex tax** (with tax at 0%, ex-tax equals tax-inclusive). There are no refunds or returns to subtract. |
+| **Tax collected** | Σ `tax_amount` (0 while not registered) |
+| **COGS** | Σ sale-slice cost − Σ return-line cost (both restock and damaged returns reverse the original cost) + Σ `allocation_variance` of batches received in the period |
+| **Gross profit** | Net sales − COGS. Gross margin = GP / Net sales. |
+| **Stock write-offs** | Σ cost of `damage`, `count_correction` and `adjustment` movements. Net of found stock, so it can be negative. |
+| **Operating expenses** | Σ `expenses.amount` (not deleted). **Batch purchases are never expenses.** They're inventory, and become COGS when sold. Batch transport belongs in `extra_costs`, never in expenses, or it gets double-counted. |
+| **Net profit** | Gross profit − Stock write-offs − Operating expenses |
+| **Quick-sale revenue / unknown-cost revenue** | Shown beside the profit figures. Unknown-cost revenue has zero COGS, so it *inflates* gross profit, and the report says so. |
+| **Payment breakdown** | Σ `order_payments.amount` by method (cash, card, transfer, QR, other) on completed orders. Always ≥ 0. Shown as the donut chart. |
+| **Customer metrics** | The share of orders with a customer attached (`customer_orders / sales_count`), new vs returning customers, and top customers by `total_spend` (`customer_stats`). All on completed orders. |
+| **Stock valuation (at cost)** | Σ over layers of `max(on_hand, 0) × unit_cost`. Negative layers are listed separately. At retail: × the current product price. |
+
+### 5.2 Periods
+
+| Period | Definition |
+|---|---|
+| Day (store daily report) | One `business_date` |
+| Z-report | One cash session (§3.4) |
+| Week | 7 days starting on the store's `week_start` |
+| Month / Year | Calendar month / year on `business_date` |
+| All time | No date filter |
+| Custom | An inclusive `from..to` range |
+
+Every period supports a `device_id` filter ("Counter 2 only") and comparison with the previous equivalent period. Trend charts group days by `substr(business_date,1,7)` (month) or by week number.
+
+### 5.3 How reports stay fast
+
+- Sales and payment metrics come from `daily_sales_summary` and `daily_payment_summary`. A yearly report is ~365 × 3 rows, even at millions of order lines.
+- Write-offs come from `stock_movements` via `ix_mov_date_reason`. Expenses use `ix_expenses_bdate`. Batch metrics come from `batch_item_stock`.
+- Point-in-time stock valuation ("as of 31 Dec") sums the ledger, `WHERE business_date <= :d`, grouped by layer. It's slower but exact, and runs on demand.
+- **`rebuild_derived`** truncates and recomputes every derived table from the base tables. It runs after a restore, after a migration that touches derived logic, and from Settings → Maintenance.
+  - A CI test asserts that rollup totals equal a raw `SUM` over orders and payments for randomised data.
+
+The P&L query:
+```sql
+-- :from/:to inclusive business dates; :dev optional
+WITH s AS (
+  SELECT SUM(sales_count) sales_count, SUM(void_count) void_count, SUM(void_value) void_value,
+         SUM(gross_sales) gross_sales, SUM(discounts) discounts,
+         SUM(net_sales) net_sales, SUM(tax_total) tax, SUM(customer_orders) customer_orders,
+         SUM(cogs) cogs, SUM(quick_sale_net) qs, SUM(unknown_cost_net) unk
+  FROM daily_sales_summary
+  WHERE business_date BETWEEN :from AND :to AND (:dev IS NULL OR device_id = :dev)),
+v AS (SELECT COALESCE(SUM(allocation_variance),0) var FROM batches
+      WHERE received_business_date BETWEEN :from AND :to AND status <> 'draft' AND deleted_at IS NULL),
+w AS (SELECT COALESCE(SUM(-qty_delta * unit_cost),0) wo FROM stock_movements
+      WHERE business_date BETWEEN :from AND :to AND reason IN ('damage','count_correction','adjustment')),
+e AS (SELECT COALESCE(SUM(amount),0) opex FROM expenses
+      WHERE business_date BETWEEN :from AND :to AND deleted_at IS NULL)
+SELECT s.*,
+       s.cogs + v.var                                AS cogs_total,
+       s.net_sales - s.cogs - v.var                  AS gross_profit,
+       w.wo AS write_offs, e.opex,
+       s.net_sales - s.cogs - v.var - w.wo - e.opex  AS net_profit
+FROM s, v, w, e;
+-- Store-wide only for v/w/e (they aren't per-device). The device filter applies to sales metrics.
+```
+
+Batch report core (one batch):
+```sql
+SELECT b.total_cost + b.extra_costs                       AS landed_cost,
+       b.allocation_variance,
+       SUM(bis.received_qty) units_received, SUM(bis.sold_qty) units_sold,
+       SUM(bis.written_off_qty) units_written_off, SUM(bis.on_hand) units_remaining,
+       SUM(bis.sold_revenue)
+         + (SELECT COALESCE(SUM(oi.line_net),0) FROM order_items oi JOIN orders o ON o.id = oi.order_id
+            WHERE oi.batch_id = b.id AND oi.is_custom = 1 AND o.status = 'completed') AS revenue_net,
+       SUM(bis.sold_cost) cogs, SUM(bis.written_off_cost) written_off_cost,
+       SUM(MAX(bis.on_hand,0) * bi.unit_cost) remaining_value_cost,
+       SUM(MAX(bis.on_hand,0) * p.price)      remaining_value_retail
+FROM batches b
+JOIN batch_items bi ON bi.batch_id = b.id AND bi.deleted_at IS NULL
+JOIN products p ON p.id = bi.product_id
+LEFT JOIN batch_item_stock bis ON bis.batch_item_id = bi.id
+WHERE b.id = :batch_id
+GROUP BY b.id;
+-- Rust derives realised_profit, payback, projected_profit, sell_through from these columns.
+```
+
+**Report permissions:** `REPORT_SALES` shows revenue, payments and Z-reports. `REPORT_FINANCIAL` also shows COGS, profit, valuation and batch P&L. Cost columns anywhere require `VIEW_COST`. Exporting to CSV or PDF needs `DATA_EXPORT` and is audited.
+
+---
+
+## 6. Sync protocol (details)
+
+### 6.1 Push
+1. The worker selects up to 200 outbox rows where `status IN ('pending','failed') AND next_attempt_at <= now` and orders them by `seq`. It marks them `in_flight`.
+2. It calls `rpc/sync_push({ device_id, ops: [{op_id, table, op, row}] })`.
+3. The server processes the batch in **one Postgres transaction that first takes `pg_advisory_xact_lock(hashtext(store_id::text))`**. This serialises all writers of a store, so `server_seq` assignment order equals commit order.
+   - Without the lock, a puller could see seq 105 committed while 103 is still in flight, advance its cursor past 103, and never receive that row.
+   - At 2–3 counters, the lock costs milliseconds.
+   - Any other server-side writer, such as a future dashboard, must take the same lock. If writer volume ever grows, switch to a "safe watermark" pull.
+
+   For each op:
+   - If the `op_id` is already in `processed_ops`, return `ok`. This is a replay.
+   - Otherwise validate it: run the table's merge rule (§6.3) and the invariants (owner invariant, batch cost lock, order immutability, audit chain continuity). Then apply it, record the `op_id`, and return `ok` or `rejected{reason}`.
+4. The client deletes `ok` ops. A `rejected` op becomes `dead`, gets a `sync_logs` entry, and is surfaced in Settings → Sync (`SYNC_MANAGE`). A network or 5xx failure makes the op `failed` with `attempts+1` and a backoff.
+5. Parents go before children, by enqueue order within each transaction.
+
+### 6.2 Pull
+- `rpc/sync_pull({ cursor, limit, include_own: false })` uses **one global cursor**. `server_seq` is a single store-wide sequence, so per-table cursors would add nothing but ordering hazards. It returns rows across all tables with `server_seq > cursor`, ordered by `server_seq`, **excluding this device's own writes**, which it already has:
+  - Mutable tables and `orders`: `updated_by_device = me`.
+  - Insert-only tables: `device_id = me`.
+
+  Rows the server modified carry the SYSTEM device ID, so they always come back.
+- **Parent closure.** Ordering by `server_seq` alone can't guarantee parents arrive before children:
+  - A page limit can cut between a parent and its child.
+  - A mutable parent gets a *new* `server_seq` on every edit. A `batch_item` created at seq 100 and edited at seq 200 sorts after the movement at seq 150 that references it.
+
+  So the server adds to each page **every ancestor row with `server_seq > cursor`**, following the foreign keys: `order_items → orders/products/batches`, `stock_movements → batch_items → batches/products`, `order_payments → orders`, `orders → cash_sessions`, and so on. Those ancestors are applied again later at their own seq, which is harmless because applying is idempotent.
+- **Applying a page** is one transaction:
+  - It runs with `PRAGMA defer_foreign_keys = ON`, so order within the page doesn't matter.
+  - It applies tables in topological order, so the derived triggers find their parents.
+  - It advances the cursor to the page's max seq.
+- **Apply rules.** A generic upsert would trip the immutability triggers.
+  - Insert-only tables use `INSERT OR IGNORE`.
+  - `orders` uses `INSERT OR IGNORE`, then `UPDATE … SET status='voided', …` **only if** local is `completed` and remote is `voided`.
+  - Mutable tables use an upsert guarded by LWW (`WHERE excluded.updated_at > updated_at OR (= AND excluded.updated_by_device > updated_by_device)`).
+- Applying pulled rows **never** enqueues to the outbox (no echo loop) and **never** writes audit rows. Pulled audit rows are inserted as they are.
+- **Bootstrap** of a new or recovered terminal is the same pull with `cursor = 0`, repeated until it's caught up. It ends with `rebuild_derived` as cheap insurance.
+- **Every terminal pulls everything**, all history included. Store-wide reports and customer history at any counter depend on it. Bootstrapping a new terminal pulls the full dataset in pages, with a progress UI. At ~1,000 lines a day across three counters, that's roughly 1M rows over three years, which SQLite handles comfortably.
+
+### 6.3 Merge rules per table
+
+| Table | Rule |
+|---|---|
+| `order_items`, `order_payments`, `stock_movements`, `cash_movements`, `audit_logs` | **Insert-only.** Same `id` ⇒ no-op. Conflicts are impossible by construction. |
+| `orders` | Insert-only. The only update is `completed → voided`, which only the originating device can make (voids are same-session). |
+| `cash_sessions` | Only the originating device writes, except `CASH_SESSION_FORCE_CLOSE` from another terminal (audited). LWW. |
+| `products`, `categories`, `roles`, `staff`, `expenses`, `expense_categories`, `store_settings`, `quick_sale_links` | **Last-write-wins on the whole row** by `(updated_at, updated_by_device)`. |
+| `batches`, `batch_items` | LWW while `draft`. Once received, the server **rejects** any change to `unit_cost` or `qty_received` (dead op). Status moves forward only, except an audited reopen when there's been no movement. |
+| `staff` / `roles` owner invariant | A merged change that would leave no active Owner is rejected (`INVARIANT`) and surfaced to the owner. |
+| `audit_logs` chain | The server checks `prev_hash` against the device's `last_audit_hash`. A mismatch is still **accepted**, but flagged (`devices.chain_broken_at`) and shown on the Audit screen. Losing audit rows would be worse than storing a broken chain. |
+| Barcode collision (two devices registered the same barcode offline) | It's never a rejection, because a sale must never fail over this. **Server:** before upserting an active product, check for another live, active product with that barcode. If one exists, store the incoming row with `is_active=false`, `barcode_conflict=true`, `updated_at=now()` and `updated_by_device=SYSTEM`, and return `ok`. **Client pull:** before applying a pulled active product, deactivate any *other* local active product with that barcode in the same transaction (`barcode_conflict=1` plus an outbox upsert). The partial unique index can't fail the pull. The owner resolves it in "Barcode conflicts" (`BARCODE_CONFLICT_RESOLVE`). |
+| `quick_sale_links` | The deterministic ID means concurrent promotions of the same key converge on one row. If two managers created *different* products for it, the loser's product stays, and the review screen flags "duplicate product from promotion". |
+| Negative stock after merge | Allowed. Reported in "Oversold layers". The owner fixes it with a `count_correction` movement. |
+| `customers` | Deterministic id `UUIDv5(store_id, phone_e164)`, so two counters registering the same number offline converge on one row (LWW for name and note). An erasure (`erased_at` set) wins over any concurrent edit: the server and the pull both refuse to re-populate an erased row, except through an explicit re-activation by Rust. |
+
+### 6.4 Receipt numbers offline
+The format is `{device_code}-{YYYYMMDD}-{seq:04}`, e.g. `T01-20261108-0042`. The date is the business date. `device_code` (T01–T03) is assigned at first run or registration. `seq` comes from `receipt_counters` and is incremented inside the checkout transaction. Receipts print a QR code of the order `id` (for reprint and void lookup during the session), plus the `receipt.footer` policy text.
+
+---
+
+## 7. Hardware integration
+
+### 7.1 Barcode scanners
+- **Default: USB HID keyboard wedge.** `ScannerProvider` runs a global `keydown` buffer. If the inter-key gap is ≤ 30 ms, the code is ≥ 6 characters and it ends with `Enter`, it treats the input as a scan, calls `preventDefault` and dispatches `onScan(code)`. The scanner suffix must be configured to Enter.
+- On the till:
+  - A known barcode adds the item, and repeated scans increment qty.
+  - A scanned receipt QR opens that order. Reprint and void are offered only if the order's session is still open.
+  - An unknown barcode opens the Quick Sale bar, pre-filled with the barcode as a note, with a "Register product" shortcut for `PRODUCT_MANAGE`.
+- Serial (COM) scanners are supported through the optional `hardware/scanner_serial.rs`, which emits `scanner://scan`.
+
+### 7.2 Thermal receipt printers (ESC/POS, generic)
+The models aren't purchased yet, so everything targets **generic ESC/POS**, with per-printer profiles in `device_settings`:
+- Paper width: 58 mm (32 columns) or 80 mm (48 columns), configurable since fonts vary.
+- Code page (default PC437 / WPC1252), cut mode (full/partial/none) and feed lines before cut.
+- QR support (`GS ( k`), with a fallback to a Code128 receipt barcode.
+- Transport:
+  1. **Windows spooler, RAW datatype** (`OpenPrinterW` / `StartDocPrinterW("RAW")` / `WritePrinter` via the `windows` crate). Best for USB printers with a vendor or generic driver.
+  2. **Network**: TCP 9100.
+  3. **Serial**: COM port.
+
+A **"Print test page"** in Settings prints the column ruler, code page sample, QR and cut, then kicks the drawer. It qualifies a new printer in under a minute.
+
+Sinhala/Tamil text: most printers lack those code pages. Render such lines as a raster bitmap (`GS v 0`) in Phase 5. Receipts are English-first until then.
+
+### 7.3 Cash drawer (confirmed: RJ11 to the receipt printer)
+- Kick: `ESC p m t1 t2` → `1B 70 00 19 FA` (pin 2, 50 ms on, 500 ms off). Pin 5 (`m = 01`) is configurable for drawers wired that way.
+- **Automatic kick** happens after a completed order with a cash payment. It's covered by the order record, with no separate audit row. A **void** of a cash order also kicks (covered by its `VOID_ORDER` audit row), because the cashier hands back the cash just taken.
+- **No-sale kick** requires `DRAWER_NO_SALE` (or supervisor approval) and an open cash session. One transaction writes the `cash_movements` row (`no_sale`, with a reason) and audits `DRAWER_KICK`. The kick is sent after commit.
+- Pay-in and pay-out also kick, and are audited.
+- The drawer state sensor (`DLE EOT`) isn't relied on, because generic printers report it inconsistently.
+
+### 7.4 Barcode label printers: TSPL / ZPL, multi-column rolls
+
+**Printers and languages.**
+- `hardware/label` emits two printer languages from one layout engine, selected by the `LabelLanguage` enum:
+  - **TSPL**, the default (Xprinter, TSC and most generic thermal label printers)
+  - **ZPL** (Zebra and compatibles)
+- Both use the same transports as receipts (§7.2).
+- The printer profile in `device_settings` holds the language, DPI (203 or 300), darkness, speed, and the per-device calibration offsets `offset_x_mm` / `offset_y_mm`.
+
+**Two built-in roll layouts** (owner requirement):
+
+| Template id | Layout | Label size | Default gaps | Typical roll width | Use |
+|---|---|---|---|---|---|
+| `two_up_2x1` | **2 labels per row** | **2″ × 1″ = 50.8 × 25.4 mm** | **row (die-cut) gap 2.0 mm**, column gap 2.0 mm, left margin 1.5 mm, **203 dpi** | ≈ 106.6 mm (≈ 4.2″) | General merchandise: shoes, plasticware, clothing |
+| `three_up_1x1` | **3 labels per row** | **1″ × 1″ = 25.4 × 25.4 mm** | **row (die-cut) gap 2.0 mm**, column gap 2.0 mm, left margin 1.5 mm, **203 dpi** | ≈ 83.2 mm (≈ 3.3″) | Small items: jewellery, accessories |
+
+**The defaults are owner-confirmed: 203 dpi and the standard 2 mm gap.**
+- The row gap goes straight into TSPL `GAP 2 mm,0` and the ZPL label length.
+- The column gap and left margin vary between roll suppliers. They default to 2.0 mm and 1.5 mm, and are corrected per device in Settings → Labels.
+- An **alignment test** prints the outline of every cell, which makes calibration take a minute.
+
+**Printable elements** (each template positions these, in mm relative to one label's top-left corner):
+
+| Element | Source | Rules |
+|---|---|---|
+| Store name | `store_settings` `store.name` → **"GayanShop"** | Small, centred, single line |
+| Product name | `products.name` (Latin; `name_si` is never printed) | Up to 2 lines on both label sizes, with word wrap then ellipsis. Characters outside the printer's built-in font are replaced with `?`, and the preview warns. |
+| Attributes / size | `products.attributes`: `size` first, then the others, joined with ` · ` | One line, truncated with an ellipsis |
+| Selling price | `products.price` → **`Rs. 1,250`**, or `Rs. 1,250.50` when there are cents | Bold, the largest text on the label |
+| Barcode | `products.barcode`, else `products.sku` | Code128 or EAN-13 (rules below), with a human-readable line under the bars |
+
+**Reference layouts** (mm, before calibration offsets):
+
+```
+2" x 1" (50.8 x 25.4 mm)                       1" x 1" (25.4 x 25.4 mm)
++----------------------------------------+     +---------------------+
+|               GayanShop                |     |      GayanShop      |
+| Ladies Sandal Leather                  |     | Silver Ear Stud     |
+| Comfort Fit                            |     | Round 6mm           |
+| Size 38 · Black          Rs. 1,250     |     | Size 6mm            |
+| ||| || ||| | || ||| || | ||| || ||| || |     |     Rs. 450         |
+|          2000123456781                 |     | ||| || ||| | || ||  |
++----------------------------------------+     |       104523        |
+                                               +---------------------+
+
+2" x 1" element boxes (x, y, w, h in mm; f = built-in font step)
+  store_name    2.0  1.5  46.8  2.5   f1, centre
+  product_name  2.0  4.5  46.8  6.0   f2, bold, 2 lines
+  attributes    2.0 11.0  28.0  2.5   f1
+  price        30.0 10.5  18.8  4.0   f3, bold, right
+  barcode       3.0 15.0  44.8  8.5   bars 6.5 + text 2.0
+
+1" x 1" element boxes
+  store_name    1.0  1.0  23.4  2.0   f1, centre
+  product_name  1.0  3.5  23.4  5.0   f1, 2 lines
+  attributes    1.0  9.0  23.4  2.2   f1
+  price         1.0 11.5  23.4  3.5   f2, bold, centre
+  barcode       1.0 15.5  23.4  9.0   bars 7.0 + text 2.0
+```
+
+**Barcode symbology and size rules.** These are computed in `label/layout.rs`, never guessed:
+- The narrow bar (module) must be **≥ 2 printer dots**. At 203 dpi, 1 dot = 0.125 mm, which is below what most CCD scanners read reliably.
+- The **quiet zone is ≥ 10 modules** on each side.
+- `symbology: 'auto'`: **EAN-13** when the code is a valid 13-digit EAN/UPC, otherwise **Code128** (auto subset, so numeric runs use subset C).
+
+| Template | What fits at 203 dpi | Consequence |
+|---|---|---|
+| 2″×1″ (≈ 44.8 mm usable) | EAN-13 at a **3-dot** module (0.375 mm) is 113 modules ≈ 42.4 mm. Code128 for a 13-digit code at 2 dots ≈ 143 modules ≈ 35.8 mm. | Every code the shop uses fits. |
+| 1″×1″ (≈ 23.4 mm usable) | EAN-13 doesn't fit at any scannable size. Code128 at 2 dots fits **≤ 6 numeric digits** (68 + 20 quiet modules = 88 × 0.25 mm = 22.0 mm). | **3-up labels print the product's 6-digit in-store short code (`sku`) as Code128-C.** A 300 dpi printer allows up to 8 digits. |
+
+- **In-store codes, generated in Rust and unique offline:**
+  - Barcodes use the EAN-13 prefix `2` plus a store/device-unique number plus a check digit (for 2-up labels).
+  - SKUs are a 6-digit `{device_digit}{5-digit sequence}`, e.g. `104523` from T01. That gives each counter 100,000 codes, with no cross-counter collisions while offline.
+- **The scanner lookup** checks `barcode` first, then `sku`, so both kinds of label scan at the till.
+- If a product's code can't meet the rules on the chosen template, the preview shows a warning such as "barcode too long for 1″×1″; assign a short SKU". Printing is still allowed, but flagged.
+
+**How a multi-column job prints:**
+- `print_labels({ template_id, items: [{product_id, copies}] })` expands copies into cells. The cells fill rows left to right. A partial last row leaves the remaining cells blank, or optionally fills them with copies of the last item.
+- **TSPL**, per row:
+  - The setup is `SIZE {roll_width} mm,{label_h} mm` / `GAP {row_gap} mm,0` / `DIRECTION 1` / `REFERENCE 0,0`.
+  - Each row is `CLS`, then for each column `TEXT` / `BARCODE` (`"128"` or `"EAN13"`) at `x = left_margin + col × (label_w + col_gap) + offset_x`, then `PRINT 1`.
+  - Consecutive identical rows collapse into `PRINT n`.
+- **ZPL**, per row: `^XA ^PW{roll_width_dots} ^LL{label_h_dots} ^LH0,0`, then the fields per column via `^FO` / `^A0` / `^BY{module}` / `^BC` or `^BE`, then `^PQ{n}` for identical rows, then `^XZ`.
+- Layout is in **mm**, and the conversion to dots happens only at emit time: `dots = round(mm × dpi / 25.4)`. Both DPIs therefore share one template.
+- **WYSIWYG preview:** Rust returns the computed `LabelPreview` (rows, cells, positioned texts, warnings). The UI renders it as SVG at scale, from the same data the emitters use.
+- **Templates** are device-local JSON in `device_settings` (`label.templates`), because each counter's printer and roll can differ. The two built-ins can be edited but not deleted, and "Reset to default" restores them.
+- **Bulk flows:**
+  - Receive a batch → "Print labels". The copies default to `qty_received`, and the template choice is remembered per category.
+  - Product list → select rows → "Print labels".
+  - Each job is audited once as `LABEL_PRINT` (template, product count, label count) and requires `LABEL_PRINT`.
+
+### 7.5 Hardware abstraction
+```rust
+pub trait PrinterTransport: Send + Sync { fn send(&self, bytes: &[u8]) -> Result<(), AppError>; }
+pub enum PrinterKind { Receipt { width: PaperWidth, codepage: CodePage }, Label { lang: LabelLanguage, dpi: u16, offset_mm: (f32, f32) } }
+pub fn layout(t: &LabelTemplate, cells: &[LabelCell]) -> LabelPreview;              // one engine for preview + print
+pub fn emit(t: &LabelTemplate, p: &LabelPreview, lang: LabelLanguage, dpi: u16) -> Vec<u8>; // TSPL or ZPL bytes
+```
+- Print jobs run on a dedicated tokio task with a queue, so a jammed printer never freezes checkout.
+- **Checkout commits first, then prints.** A failed print shows "Reprint" (`REPRINT_RECEIPT`, audited) and never rolls back the sale.
+- Each of the 2–3 counters has its own printer and drawer profile in `device_settings` (not synced).
+
+---
+
+## 8. Phased execution plan
+
+Each phase ends with **exit criteria**. Don't start the next phase until they pass. RBAC guards and audit writes are built **from the start**, because retrofitting them across every command later is painful.
+
+### Phase 0: Foundations (≈ 1.5 weeks) — ⏸ ON HOLD (owner request)
+- Toolchain and scaffold (§9). Tailwind v4 and shadcn init. Tauri plugins: `single-instance`, `log`, `window-state`, `dialog`.
+- **Rust core:**
+  - `AppError` (including `Forbidden` / `ApprovalRequired`), as stable codes that the UI translates.
+  - `AppState`, and the sqlx pool with PRAGMAs.
+  - The **full `0001_init.sql` regenerated from §4.3 (v4)**.
+  - The tauri-specta export (per-field `specta_typescript::Number` for `i64`, §1.5).
+  - Writes go through one writer, a tokio `Mutex` around write transactions. That keeps the audit `device_seq` gapless and avoids SQLITE_BUSY.
+- **`domain`:** money, pricing and discount, payments (no negatives), business_date, allocation, fifo, phone, receipt_no and custom_key, each with unit and property tests.
+- **First-run wizard:**
+  - Creates the store, owner PIN, currency, timezone, day cutoff, week start and default UI language.
+  - Generates `store_id`, `device_id` and `device_code` and stores them in `device_settings`. Phase 3 registration **adopts** these IDs and must not reassign them.
+  - A second or third terminal instead gets the existing `store_id` and a unique `device_code` *before* it records any sale.
+  - Seeds roles, system batches, expense categories and label templates.
+- **RBAC core:** argon2id PINs, lockout, login and lock screen, `guard::require`, the approval tokens, and the `<Can>` / `ApprovalDialog` UI.
+- **Audit core:** `audit::record` with the per-device hash chain, the append-only triggers, and a minimal viewer.
+- **UI foundations:**
+  - i18n bootstrapped (`en` + `si` dictionaries, Noto Sans Sinhala bundled, a key-parity CI check, LanguageToggle).
+  - The shared `DataTable` (TanStack Table v8 + Virtual).
+  - The `size="pos"` 48 px variants.
+  - The `minWidth/minHeight` 1024×768 window.
+- Tooling: ESLint, Prettier, `clippy -D warnings`, vitest, cargo test, and CI on `windows-latest`.
+
+**Exit:**
+- The app launches at 1024×768 and 1920×1080, migrations run, and the wizard completes in both English and Sinhala.
+- PIN login works offline. A cashier calling a manager-only command gets `Forbidden`, and a supervisor approval token lets it through once.
+- Every test command writes its audit row in the same transaction, and the chain verifies.
+- CI is green, including the i18n key-parity check.
+
+### Phase 1: Offline MVP till (≈ 4 weeks)
+- Products: CRUD (with optional `name_si`), FTS search (English and Sinhala names), barcodes and in-store SKUs.
+- **Minimal batches:**
+  - Create a draft, add items, enter manual costs, and receive.
+  - `OPENING-STOCK` entry for go-live, and ad-hoc one-item batches.
+  - FIFO consumption at checkout.
+- **Cash sessions:** open with float, pay-in and pay-out, close with count and variance, and the **Z-report** print (including voids by reason and approver).
+- **POS screen**, touch- and keyboard-first and laid out for 1024×768 → 1080p:
+  - Scan or search → cart.
+  - Qty edit, price override and line and bill discounts (limits plus approvals, §3.7).
+  - **Quick Sale bar (F2 → type → Enter)** with the live parse preview.
+  - **Customer phone (F4 / Numpad `/`)**, optional, with known-customer lookup (§3.8).
+  - Payment: cash with change, card, transfer, QR, split.
+- **`checkout_order` is one transaction.** It writes:
+  - The order, items and payments (all ≥ 0).
+  - The customer link or creation.
+  - FIFO stock movements with `revenue_net`.
+  - The receipt counter.
+  - Audit rows for any override or above-limit discount.
+  - **Outbox rows** for everything.
+- **Same-session void** (§3.3):
+  - Whole order only, with a reason from the fixed list.
+  - A cashier needs supervisor approval.
+  - Exact stock reversal, a VOID slip, and a drawer kick for cash orders.
+  - Refused once the session is closed.
+- ESC/POS receipt with QR (spooler, network), the "All sales are final" footer, the masked customer phone, the automatic drawer kick, and an audited **no-sale kick**. Printer test page.
+- Hold and recall, and debounced crash recovery of the current cart.
+- **Manual "Backup Database Now"** (§3.9) to USB or a chosen folder, with an integrity check, manifest and audit. It ships in Phase 1 because, until Phase 3 sync, it's the only off-machine copy.
+- Staff management (create staff, assign role, reset PIN, set UI language) for the Owner.
+- The till's Sinhala translation is complete.
+
+**Exit:**
+- With the network unplugged, a cashier completes 50 mixed sales (scanned plus F2 quick sales, some with a customer phone) and the following all work:
+  - A quick sale takes F2, typing and Enter, with no mouse. A phone number takes F4, typing and Enter.
+  - A cashier's price override prompts for supervisor approval and is audited.
+  - A cashier's void prompts for supervisor approval, restores stock to the exact layers, and drops out of the Z-report totals. After the session closes, the same void is refused for every role.
+  - Any attempt to record a negative payment is rejected by Rust (and by the SQL `CHECK`).
+  - A 6% bill discount by a cashier prompts for approval. A 5% one is accepted, and its shares sum exactly to the bill discount.
+  - The Z-report's expected cash equals the counted cash in the test script.
+  - Every till screen works by touch only at 1024×768 (all targets ≥ 48 px) and by keyboard only, in both languages.
+- "Backup Database Now" to a USB stick completes while a second cashier keeps selling. The copy passes `integrity_check`. Pulling the stick mid-backup leaves no `.partial` file and logs `BACKUP_FAILED`.
+- Killing the process mid-checkout never leaves a partial order.
+- Rust totals match the UI preview in property tests.
+
+### Phase 2: Batches, labels, customers, expenses and reports (≈ 4 weeks)
+- **Batch intake wizard:** header (supplier, invoice ref, total cost, extra costs) → quick-entry grid (name, qty, retail price, attributes; create products inline) → allocation (even / by retail value / manual, with live variance) → receive → generate barcodes and SKUs → **print labels**.
+- **Labels (§7.4):**
+  - The `two_up_2x1` and `three_up_1x1` templates.
+  - TSPL and ZPL emitters, the WYSIWYG SVG preview, and the alignment test and calibration offsets.
+  - Barcode-fit warnings.
+  - Printing from batch receive and from product lists.
+- Batch lifecycle: reopen (when there's been no movement), late items, and close with a remaining-stock write-off.
+- **Batch report** (§3.1 metrics) with a per-item table: received date, unit cost, sold, remaining, revenue, profit.
+- **Stock:**
+  - Adjustments and damage, with approval where configured.
+  - Stock counts producing `count_correction` movements.
+  - Movement history per product and layer.
+  - Stock valuation: now, as of a date, by batch and by category.
+  - Oversold layers.
+- **Quick-sale review and promotion:** frequency table, promote (product + optional batch layer + shelf count) or ignore. The promoted-key hint appears on the till.
+- **Customers (§3.8):**
+  - List, profile, purchase history (infinite scroll) and spend analytics.
+  - Erasure on request.
+  - `CUSTOMER_VIEW`-gated.
+- **Expenses:** categories, entry (with drawer pay-out integration) and list.
+- **Reports suite:**
+  - Day, week, month, year, all-time and custom periods, with device filter and period comparison.
+  - The full §5.1 metrics.
+  - **Charts** (shadcn Chart / Recharts): revenue vs expense bars, sales trend area, payment method donut, top customers, batch sell-through.
+  - Sales by product, category and batch, and the quick-sale share.
+  - Voids by reason and approver.
+  - CSV export (`DATA_EXPORT`, audited).
+- **All back-office lists are on the shared virtualised DataTable**, with server-side keyset pagination for orders, audit and movements.
+- `rebuild_derived` maintenance command plus the rollup reconciliation test.
+
+**Exit:**
+- The owner enters a 30-SKU batch, allocates costs, receives it, and prints a full roll of 2-up labels and a row of 3-up labels in under 10 minutes. Every printed barcode scans back to the right product, including the 6-digit Code128 on 1″×1″.
+- After scripted sales, voids and damages, the batch report reconciles to the cent: landed cost = Σ allocated + variance, and realised profit matches a hand calculation.
+- The monthly P&L equals the sum of its daily reports. Rollups equal raw sums after `rebuild_derived`, and the charts match the tables.
+- Scrolling 100k orders and 50k products stays at 60 fps on the counter PC.
+- A frequent quick-sale item can be promoted in one click and is scannable afterwards. A customer's history and total spend match their receipts.
+
+### Phase 3: Cloud sync across 2–3 counters (≈ 3 weeks)
+- Supabase:
+  - Migrations, RLS (including the no-UPDATE/DELETE policies), `processed_ops` and `server_seq` triggers.
+  - `sync_push` with the advisory lock and invariants, and `sync_pull`.
+  - Audit chain verification.
+  - pgTAP tests.
+- Device registration: an owner signs in once, the edge function creates the device identity **adopting the existing IDs**, and the token goes into the keyring.
+- Rust sync worker:
+  - Reachability, backoff, push and pull.
+  - Barcode-conflict handling, and the deterministic customer ids.
+  - `sync_logs`, status pill, and Settings → Sync (pending, last success, dead ops, "Sync now").
+- Full-history bootstrap for a new counter, with progress.
+
+**Exit (chaos tests with three terminals):**
+- 200 offline sales per terminal, then reconnect: cloud and every terminal show identical daily totals, batch reports, stock valuation and customer stats.
+- Kill the network mid-push: no duplicates and no losses.
+- Two terminals selling the last unit of a layer: both sales are kept, the layer shows −1, and it's reported.
+- The same new phone number captured on T01 and T02 while offline: one customer after sync, with both orders in their history.
+- A void on T02 (in its open session) appears as voided on T01 and T03 after sync, and their store-wide reports exclude it.
+- A ±1-day clock skew on one terminal changes nothing, because business_date and server_seq don't depend on the clock.
+- Bootstrap with `limit = 7`, where batches and batch items were edited *after* their stock movements and orders were voided after their payments: no foreign key aborts, and the derived tables equal `rebuild_derived` output.
+- Concurrent owner demotions are rejected by the invariant.
+- Editing an audit row in a terminal's DB file is flagged by chain verification.
+
+### Phase 4: Production hardening (≈ 2 weeks)
+- **Automatic backups:**
+  - Hourly `VACUUM INTO` to `...\backups\`, keeping 48 hourly and 30 daily copies. This reuses the §3.9 engine.
+  - An optional automatic copy to a remembered USB folder when it's present.
+  - Optional backup encryption.
+  - The restore UI (`BACKUP_RESTORE`, audited) always backs up the current DB first, then runs `rebuild_derived` and rebuilds the FTS index after a restore.
+- **Restore recovery.** A backup is behind the server for this device's own writes, and the normal pull filters those out. So restore is a guarded flow, and **sales are blocked until it completes**:
+  1. **Online (normal case):** run a recovery pull with `include_own: true` from the backup's cursor. That re-imports this device's post-backup orders, movements and audit rows.
+  2. Reset `receipt_counters` to the device's max receipt sequence per business day, taken from local orders after the recovery pull.
+  3. Reset the audit chain head (`device_seq`, `prev_hash`) from the device's last audit row, cross-checked against `devices.last_audit_seq` / `last_audit_hash`.
+  4. Requeue any outbox rows in the backup that the server already acknowledged. They resolve as replays through `processed_ops`.
+  5. **Offline restore:** the device can't know what it lost, so it **retires its identity**. It gets a new `device_id` and `device_code` (e.g. T01 → T04), which avoids receipt-number, SKU-range and audit-sequence collisions, and the old device's data stays in the cloud. Once online, the new identity bootstraps normally.
+  6. Drill both paths in the restore test.
+- Auto-update via `tauri-plugin-updater` (signed). **Windows code signing**. The NSIS installer bundles the WebView2 bootstrapper.
+- Security:
+  - Capability least-privilege (including a scoped `dialog` permission), CSP, and no secrets in the bundle.
+  - RLS tested with a foreign store token.
+  - Optional SQLCipher DB encryption.
+  - Enforced PIN length for Manager and Owner.
+- Observability: rotating logs, a support bundle (logs + sync_logs + integrity check + chain verification), and optional crash reporting.
+- Performance budget:
+  - Scan to cart in under 100 ms.
+  - F2 quick sale to cart line in under 50 ms after Enter.
+  - Phone lookup in under 30 ms.
+  - Checkout to receipt in under 1.5 s.
+  - Search in under 50 ms with 50k products.
+  - Yearly report and charts in under 300 ms.
+  - A manual backup of a 500 MB DB in under 30 s to USB 3.
+
+**Exit:** a two-week pilot at 2–3 counters with zero data-loss incidents, a restore drill passed, an update shipped through the updater, and an audit chain that verifies for every device.
+
+### Phase 5: Later (future backlog)
+- **Exchanges and credit notes.** Deferred by the owner, and v1 sells everything as final. The design notes to pick up from:
+  - **Policy draft:**
+    - Exchange within N days (7 was proposed) with a receipt, with later exchanges needing supervisor approval.
+    - The customer pays any difference, and a credit note is issued for a negative balance, never cash.
+  - **Model:**
+    - One `type = 'exchange'` order with return lines (`qty < 0`, `return_of_item_id`, `return_disposition` restock/damaged) plus new-item lines.
+    - A return line is valued at what the customer paid: the original `line_total` after the item discount **and** the stored `order_discount_share`, with exact remainder handling on partial returns.
+  - **Credit notes:**
+    - An insert-only `credit_notes` header.
+    - The balance is derived from `order_payments` rows (issue negative, redeem positive) rather than a mutable column.
+    - Offline over-redemption is flagged, not blocked.
+    - It's a liability, not revenue, and kept out of expected cash.
+  - **Already in place:** `orders.type`, reserved permission bits 6 and 7, and the per-line discount shares.
+  - **To add:**
+    - `returns_net` in the rollups.
+    - A `return` stock reason.
+    - Migrations that widen the `CHECK`s on `orders.type`, `order_items.qty` and `order_payments.amount`.
+- An owner web dashboard (Supabase + React, read-only reports with an `audit_logs` viewer) and multi-store support.
+- Loyalty points and customer credit sales, foreign phone numbers, and supplier management.
+- Tamil UI. Raster (bitmap) Sinhala receipts and labels.
+- Promotions (multi-buy, batch clearance pricing).
+- Denomination-level cash management.
+
+---
+
+## 9. Setup guide (Phase 0 commands)
+
+Prerequisites (Windows), all present on the dev machine as of 2026-11-08:
+1. **Rust** 1.99.1 (MSVC). In Git Bash, run `export PATH="$HOME/.cargo/bin:$PATH"` first.
+2. **Visual Studio Build Tools** with the "Desktop development with C++" workload.
+3. WebView2 runtime.
+4. Node.js 24+ and pnpm 11+.
+
+**Gotchas found while scaffolding:**
+- `cargo search` hangs on this network, so let `cargo add` resolve versions.
+- `shadcn init` stalls on an interactive preset prompt even with `-y`. Write `components.json`, `src/lib/utils.ts` and the CSS tokens by hand, then use `shadcn add … -y`.
+- After `shadcn add`, check the generated imports. They came out as `from "cn"` instead of `@/lib/utils`.
+- Add the `@/*` alias to `tsconfig.json` *and* `vite.config.ts` before adding components.
+
+```powershell
+# create-tauri-app refuses/prompts on a non-empty dir (docs/ exists), so scaffold beside it and move in:
+cd "D:\Program Data\Project"
+pnpm create tauri-app@latest gayanshop-scaffold -m pnpm -t react-ts --identifier com.gayanshop.pos -y --tauri-version 2
+# move everything from gayanshop-scaffold\ into GayanShop\, rename package/crate, delete the scaffold folder
+cd GayanShop
+pnpm install
+
+# Tailwind v4 + shadcn (manual init — see gotchas above)
+pnpm add tailwindcss @tailwindcss/vite tw-animate-css clsx tailwind-merge class-variance-authority
+pnpm dlx shadcn@latest add button input label card badge alert table separator dialog select sonner chart -y
+
+# Frontend libs
+pnpm add @tanstack/react-query @tanstack/react-router zustand zod react-hook-form @hookform/resolvers lucide-react date-fns
+pnpm add @tanstack/react-table@^8 @tanstack/react-virtual recharts      # tables (v8 pinned) + charts
+pnpm add i18next react-i18next @fontsource/noto-sans-sinhala            # en / si UI, offline font
+pnpm add -D vitest @testing-library/react jsdom fast-check
+
+# Tauri plugins
+pnpm tauri add single-instance
+pnpm tauri add log
+pnpm tauri add window-state
+pnpm tauri add dialog           # folder picker for "Backup Database Now"
+pnpm tauri add updater          # Phase 4
+
+# Rust crates (in src-tauri/)
+cargo add sqlx --features "runtime-tokio sqlite migrate uuid chrono json"
+cargo add tokio --features full
+cargo add serde --features derive
+cargo add serde_json thiserror chrono chrono-tz bitflags sha2 hex
+cargo add uuid --features "v5 v7 serde"
+cargo add argon2 rand
+cargo add reqwest --features "json rustls-tls" --no-default-features
+cargo add keyring serialport
+cargo add specta@=2.0.0-rc.26 --features derive,function
+cargo add tauri-specta@=2.0.0-rc.26 --features derive,typescript
+cargo add specta-typescript@0.0.13
+cargo add unicode-normalization
+# Cargo.toml: [profile.dev.package.argon2] / blake2 / sha2 → opt-level = 3 (keeps PIN tests fast)
+cargo add windows --features "Win32_Graphics_Printing Win32_Foundation"
+cargo add --dev proptest
+```
+
+---
+
+## 10. Non-negotiables (for code review)
+
+1. No floats for money, anywhere: Rust, TS or SQL.
+2. No `UPDATE` of stock quantities. Stock changes only through `stock_movements`, and every movement references a cost layer (`batch_item_id`).
+3. Every mutating command follows guard → transaction (business rows + audit + outbox) → commit → emit.
+4. Orders, order items, payments, stock movements, cash movements and audit logs are never updated or deleted. The only exception is the order void transition. Corrections are new rows.
+5. Batch costs are locked once received.
+6. Permissions are enforced in Rust. UI checks are cosmetic.
+7. The webview never runs SQL, never sees `pin_hash`, and never holds a Supabase key beyond the device session.
+8. A sale never depends on the network, a printer, or the sync worker succeeding.
+9. Mutable synced tables have `id`, `store_id`, `updated_at`, `updated_by_device`, `deleted_at` and `version`. Insert-only tables have `id`, `store_id`, `device_id` and `created_at`. Every financial or stock row has a `business_date` computed at write time.
+10. A schema change means a migration locally **and** in `supabase/migrations/`, in the same PR, plus an update to `rebuild_derived` if derived logic changes.
+11. Permission bits are append-only. Never renumber, and never reuse the reserved bits 6 and 7.
+12. **No refunds, no negative payments.** The only correction is a same-session void. A closed session's orders are final for every role.
+13. No user-visible string is hard-coded in components or produced by Rust. Everything goes through i18n keys in both `en` and `si`.
+14. Anything tappable is ≥ 48 px on till screens and has a keyboard path.
+15. Never copy live `pos.db` / `-wal` files. Backups always use `VACUUM INTO` plus an integrity check.
+16. Customer phone numbers live only on `customers` and are never printed unmasked or logged in full.
+
+---
+
+## 11. Store configuration (owner-confirmed) and remaining open questions
+
+**Confirmed and seeded at first run** (`store_settings`):
+
+| Key | Value |
+|---|---|
+| `store.currency` / `store.currency_exponent` | `LKR` / `2` |
+| `store.timezone` | `Asia/Colombo` |
+| `store.day_cutoff` | `04:00` |
+| `store.week_start` | `monday` |
+| `tax.inclusive` / `tax.default_rate_bp` | `true` / `0` (not VAT/SSCL registered) |
+| `discount.cashier_max_bp` | `500`, which seeds the Cashier role's `max_discount_bp` |
+| `sales.policy` | `final` (no refunds, no exchanges) |
+| `void.max_minutes` | `null`, **fixed (owner-confirmed)**: a void is allowed only while the order's cash session is open. It requires a supervisor PIN (for cashiers) and a mandatory reason. |
+| `quick_sale.auto_tag_batch` | `false` (owner: never auto-tag) |
+| `store.name` | `GayanShop` (printed on labels and receipts) |
+| `receipt.footer` | **"All sales are final. No refunds or exchanges. Thank you, come again!"** (owner-confirmed, verbatim) |
+| `receipt.mask_customer_phone` | `true`: printed as `07X XXX X123` |
+| `customer.capture` | `optional`, with **verbal consent at the counter**. There's no popup, no notice dialog and no blocking step. Enter or Esc on an empty phone field skips it. |
+| `ui.default_language` (device) | `en`. Staff can switch to `si` (Sinhala), and the choice is saved per staff member. |
+| `label.templates` (device) | The `two_up_2x1` and `three_up_1x1` built-ins (§7.4). **Default 203 dpi, with a 2 mm row (die-cut) gap.** Column gap and left margin are roll-specific and set by calibration. |
+| `backup.reminder_days` | `7` |
+| Stores | 1 store with 2–3 counters for the next 12 months. Multi-store stays in the design, and delivery is in Phase 5. |
+
+**All §11 questions are answered (owner, 2026-11-08).** The only measurement left is physical: when the label rolls arrive, run the Settings → Labels alignment test to set the column gap and left margin (§7.4). That's calibration, not a design decision.
+
+## 12. Decisions (owner-confirmed 2026-11-08)
+
+| # | Decision | Alternative rejected | Why |
+|---|---|---|---|
+| 1 | **FIFO by batch receive date**; when oversold, the newest layer goes negative | Average costing; blocking the sale | FIFO matches how a discount store clears batches, and it makes batch P&L meaningful. A sale is never blocked offline. |
+| 2 | **Allocation rounding** goes into `allocation_variance` (< 1 cent per unit), recognised as COGS on the receive date | Pushing the remainder onto one item's unit cost | The remainder can't be spread exactly in integer cents, and this way both reports reconcile with what was paid. |
+| 3 | **Late items get cost 0**, and full re-allocation only happens via reopen when nothing has moved yet | Re-allocating after sales | Re-allocating would change the cost of sales already made, which rewrites history. |
+| 4 | **Quick-sale cost is optional**; unknown-cost revenue is reported separately | Requiring a cost; assuming a margin % | Requiring a cost breaks the speed target, and assuming a margin invents numbers. Showing it transparently is honest. |
+| 5 | **Promotion is forward-only**, with no retroactive batch attribution | Re-attributing past quick sales to the batch | Past lines are immutable, and historical P&L shouldn't move when a manager tidies up. |
+| 6 | **All sales final; the only correction is a same-session, whole-order void** (a cashier needs supervisor approval) | Refunds; 7-day exchanges with credit notes (v3); voiding past orders | Owner simplification (v4). Keeps closed Z-reports fixed and cash reconciliation true. Exchanges and credit notes move to Phase 5, and the schema keeps extension points. |
+| 6b | **Cashier discount ≤ 5%, combined per line (item + bill share)**, bill discounts apportioned pro-rata by largest remainder | Separate 5% caps for item and bill (which allows ~9.75% stacked) | Owner rule. Pro-rata shares keep batch margins exact, and future exchange values with them. |
+| 10 | **Dual-language UI (en/si), with receipts and labels in English** | Sinhala on receipts | Generic ESC/POS and TSPL printers have no Sinhala code page. Raster printing is Phase 5. |
+| 11 | **Customer phone optional, keyed by `UUIDv5(phone)`, never copied onto orders** | A mandatory customer; a phone snapshot on each order | Never slows a sale, merges cleanly offline, and makes PDPA erasure possible without touching immutable orders. |
+| 12 | **3-up 1″×1″ labels use a 6-digit Code128 SKU** | EAN-13 on 1″ labels | EAN-13 can't fit at a scannable module size on 1″ at 203 dpi. |
+| 13 | **Manual backup via `VACUUM INTO` on a read connection** | Copying `pos.db`; the SQLite backup API under the writer lock | A consistent snapshot without pausing the till. Raw copies of WAL databases can be torn. |
+| 14 | **TanStack Table v8 + Virtual, shadcn Charts (Recharts)** | TanStack Table v9 (newer); a heavier grid library | Owner choice. v8 is what the shadcn data-table pattern targets. Revisit v9 later. |
+| 7 | **The audit hash chain is per device**, and breaks are flagged, not rejected | A global chain; rejecting rows | A global chain forks under offline interleaving. Rejecting rows would lose evidence. |
+| 8 | **PIN hashes sync** to all counters | Online-only login | Offline login is mandatory. The risk is documented and mitigated (longer manager PINs, optional DB encryption). |
+| 9 | **Every terminal holds the full history** | Only the device's own orders | Store-wide reports and customer history at any counter, and the Phase 5 exchanges later. |
