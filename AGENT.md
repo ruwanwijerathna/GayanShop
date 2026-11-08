@@ -46,6 +46,7 @@ Every block must comply. Reviewers and gates enforce them.
   - Enforced at the crate root: `#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::todo, clippy::unimplemented, clippy::unreachable))]`.
   - These are allowed in `#[cfg(test)]` code only.
   - Lock poisoning is mapped to `AppError::Internal`, never `.expect()`.
+  - **The single sanctioned exception:** `#![allow(clippy::unreachable)]` in `src-tauri/src/commands/mod.rs`, because the `#[tauri::command]` expansion for async commands emits `unreachable!()`. Hand-written `unreachable!(` is still banned everywhere by `pnpm guard`.
 - **No floats for money:** `#![deny(clippy::float_arithmetic)]` at the crate root. The **only** `#[allow]` is the label layout module (`hardware::label::layout`, millimetre geometry), and it must never touch money.
 - **Type safety across IPC:** every command and DTO derives `specta::Type`, and `src/db/bindings.ts` is **generated** (tauri-specta) and never hand-edited. Every IPC `i64` field carries `#[specta(type = specta_typescript::Number)]`.
 - Use runtime `sqlx::query` / `query_as` with `FromRow`, **not** the `query!` macros (they need `DATABASE_URL` / offline data).
@@ -208,7 +209,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `cargo test --manifest-path src-tauri/Cargo.toml --test migration_invariants --test fts`
     - `pnpm verify`
 
-- [ ] **0.4 Errors, clock, state and typed IPC**
+- [x] **0.4 Errors, clock, state and typed IPC**: done 2026-11-08
   - **Deliverables:**
     - `error.rs`: `AppError` as stable codes (no display strings for the UI).
     - `clock.rs` (`Clock`, `SystemClock`, `ManualClock`; no `.expect`).

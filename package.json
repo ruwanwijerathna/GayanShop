@@ -17,7 +17,8 @@
     "rust:fmt": "cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check",
     "rust:clippy": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",
     "rust:test": "cargo test --manifest-path src-tauri/Cargo.toml",
-    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm i18n:check && pnpm guard && pnpm rust:fmt && pnpm rust:clippy && pnpm rust:test"
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm i18n:check && pnpm guard && pnpm rust:fmt && pnpm rust:clippy && pnpm rust:test && pnpm bindings:check",
+    "bindings:check": "cargo test --manifest-path src-tauri/Cargo.toml --lib export_bindings && git diff --exit-code -- src/db/bindings.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.5",

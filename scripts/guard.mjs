@@ -15,7 +15,7 @@ const RULES = [
     dir: "src-tauri/src",
     ext: /\.rs$/,
     skip: null,
-    bans: [/\btodo!\(/, /\bunimplemented!\(/, /\bdbg!\(/, /\bTODO\b/, /\bFIXME\b/],
+    bans: [/\btodo!\(/, /\bunimplemented!\(/, /\bunreachable!\(/, /\bdbg!\(/, /\bTODO\b/, /\bFIXME\b/],
   },
   { dir: "src-tauri/migrations", ext: /\.sql$/, skip: null, bans: [/\bTODO\b/, /\bFIXME\b/] },
 ];
