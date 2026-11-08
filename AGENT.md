@@ -181,7 +181,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `git status --porcelain` is empty after the commit
   - **Commit:** `chore(block-0.1): repo hygiene, git, lint/format tooling, v4 migration`
 
-- [ ] **0.2 Domain core (pure Rust, no IO)**
+- [x] **0.2 Domain core (pure Rust, no IO)**: done 2026-11-08
   - **Deliverables:**
     - `src-tauri/src/domain/`: `money`, `discount` (largest remainder plus limit check), `pricing` (inclusive/exclusive tax), `payments` (no negatives; change only from cash), `business_date` (Colombo, 04:00, Monday), `allocation`, `fifo`, `phone` (LK → E.164), `receipt_no` (+ 6-digit SKU generator), `quick_sale` (custom_key), `permissions` (frozen bits; 6/7 reserved; 29 `CUSTOMER_VIEW`, 30 `BACKUP_CREATE`).
     - Unit tests, plus `proptest` property tests: shares sum exactly, allocation variance bound, pricing identities.

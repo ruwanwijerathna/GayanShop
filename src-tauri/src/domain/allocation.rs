@@ -31,18 +31,31 @@ pub enum AllocationError {
     NegativeLanded,
     #[error("line {0}: quantity must not be negative")]
     NegativeQty(usize),
+    #[error("line {0}: retail price must not be negative")]
+    NegativeRetail(usize),
     #[error("line {0}: manual unit cost missing or negative")]
     BadManualCost(usize),
     #[error("nothing to allocate cost against (all quantities/weights are zero)")]
     NoWeight,
+    #[error("amount too large")]
+    Overflow,
 }
 
-pub fn allocate(landed: Money, method: CostAllocation, lines: &[AllocationLine]) -> Result<Allocation, AllocationError> {
+pub fn allocate(
+    landed: Money,
+    method: CostAllocation,
+    lines: &[AllocationLine],
+) -> Result<Allocation, AllocationError> {
     if landed < 0 {
         return Err(AllocationError::NegativeLanded);
     }
-    if let Some(i) = lines.iter().position(|l| l.qty < 0) {
-        return Err(AllocationError::NegativeQty(i));
+    for (i, l) in lines.iter().enumerate() {
+        if l.qty < 0 {
+            return Err(AllocationError::NegativeQty(i));
+        }
+        if l.retail_price < 0 {
+            return Err(AllocationError::NegativeRetail(i));
+        }
     }
     let unit_costs: Vec<Money> = match method {
         CostAllocation::Manual => lines
@@ -54,28 +67,30 @@ pub fn allocate(landed: Money, method: CostAllocation, lines: &[AllocationLine])
             })
             .collect::<Result<_, _>>()?,
         CostAllocation::EvenPerUnit | CostAllocation::ByRetailValue => {
-            let weights: Vec<Money> = lines
+            let weights = lines
                 .iter()
                 .map(|l| match method {
-                    CostAllocation::EvenPerUnit => l.qty,
-                    _ => l.qty * l.retail_price,
+                    CostAllocation::EvenPerUnit => Some(l.qty),
+                    _ => l.qty.checked_mul(l.retail_price),
                 })
-                .collect();
+                .collect::<Option<Vec<_>>>()
+                .ok_or(AllocationError::Overflow)?;
             let line_totals = apportion(landed, &weights).ok_or(AllocationError::NoWeight)?;
-            lines
-                .iter()
-                .zip(line_totals)
-                .map(|(l, total)| if l.qty == 0 { 0 } else { total / l.qty })
-                .collect()
+            lines.iter().zip(line_totals).map(|(l, total)| if l.qty == 0 { 0 } else { total / l.qty }).collect()
         }
     };
-    let allocated: Money = lines.iter().zip(&unit_costs).map(|(l, c)| l.qty * c).sum();
+    let allocated = lines
+        .iter()
+        .zip(&unit_costs)
+        .try_fold(0i64, |acc, (l, c)| l.qty.checked_mul(*c).and_then(|v| acc.checked_add(v)))
+        .ok_or(AllocationError::Overflow)?;
     Ok(Allocation { unit_costs, variance: landed - allocated })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     fn l(qty: i64, retail: Money) -> AllocationLine {
         AllocationLine { qty, retail_price: retail, manual_unit_cost: None }
@@ -83,33 +98,16 @@ mod tests {
 
     #[test]
     fn even_split_with_variance() {
-        // Rs 10.00 over 3 units ⇒ 333 each, 1 cent variance.
         let a = allocate(1_000, CostAllocation::EvenPerUnit, &[l(3, 0)]).unwrap();
-        assert_eq!(a.unit_costs, vec![333]);
-        assert_eq!(a.variance, 1);
+        assert_eq!((a.unit_costs, a.variance), (vec![333], 1));
     }
 
     #[test]
     fn by_retail_value_weights_expensive_items() {
         // Shoe batch: Rs 60,000 landed; 20 pairs @ Rs 4,500 retail, 10 pairs @ Rs 1,500 retail.
         let a = allocate(6_000_000, CostAllocation::ByRetailValue, &[l(20, 450_000), l(10, 150_000)]).unwrap();
-        // weights 9,000,000 : 1,500,000 ⇒ line totals 5,142,857 / 857,143
         assert_eq!(a.unit_costs, vec![257_142, 85_714]);
-        assert_eq!(a.variance, 6_000_000 - (20 * 257_142 + 10 * 85_714));
-        assert!(a.variance >= 0 && a.variance < 30);
-    }
-
-    #[test]
-    fn variance_bound_holds_for_many_inputs() {
-        for landed in [0, 1, 999, 1_000_001, 7_777_777] {
-            for lines in [vec![l(3, 100), l(7, 250)], vec![l(1, 1)], vec![l(13, 99), l(0, 5), l(2, 10_000)]] {
-                for m in [CostAllocation::EvenPerUnit, CostAllocation::ByRetailValue] {
-                    let a = allocate(landed, m, &lines).unwrap();
-                    let units: i64 = lines.iter().map(|x| x.qty).sum();
-                    assert!(a.variance >= 0 && a.variance < units.max(1), "{landed} {m:?} {lines:?} → {a:?}");
-                }
-            }
-        }
+        assert_eq!(a.variance, 20);
     }
 
     #[test]
@@ -124,7 +122,26 @@ mod tests {
     }
 
     #[test]
-    fn no_weight_is_an_error() {
+    fn errors() {
         assert_eq!(allocate(100, CostAllocation::ByRetailValue, &[l(3, 0)]), Err(AllocationError::NoWeight));
+        assert_eq!(allocate(-1, CostAllocation::EvenPerUnit, &[l(1, 1)]), Err(AllocationError::NegativeLanded));
+        assert_eq!(allocate(1, CostAllocation::EvenPerUnit, &[l(-1, 1)]), Err(AllocationError::NegativeQty(0)));
+        assert_eq!(allocate(1, CostAllocation::ByRetailValue, &[l(i64::MAX, 2)]), Err(AllocationError::Overflow));
+    }
+
+    proptest! {
+        #[test]
+        fn variance_is_bounded(landed in 0i64..100_000_000, raw in prop::collection::vec((0i64..500, 0i64..2_000_000), 1..20), by_value in any::<bool>()) {
+            let lines: Vec<AllocationLine> = raw.iter().map(|(q, r)| l(*q, *r)).collect();
+            let method = if by_value { CostAllocation::ByRetailValue } else { CostAllocation::EvenPerUnit };
+            match allocate(landed, method, &lines) {
+                Ok(a) => {
+                    let units: i64 = lines.iter().map(|x| x.qty).sum();
+                    prop_assert!(a.variance >= 0 && a.variance < units.max(1));
+                    prop_assert!(a.unit_costs.iter().all(|c| *c >= 0));
+                }
+                Err(e) => prop_assert_eq!(e, AllocationError::NoWeight),
+            }
+        }
     }
 }

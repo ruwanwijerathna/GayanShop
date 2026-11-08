@@ -1,7 +1,11 @@
-//! RBAC permission bits (ARCHITECTURE §3.5). Bit numbers are FROZEN: append only, never renumber.
+//! RBAC permission bits (ARCHITECTURE §3.5). Bit numbers are FROZEN once Phase 0 ships: append only,
+//! never renumber, never reuse the reserved bits 6 and 7 (Phase 5 exchanges).
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
+
+/// Bits that must never be assigned to anything except their reserved Phase 5 meaning.
+pub const RESERVED_BITS: [u32; 2] = [6, 7];
 
 macro_rules! permissions {
     ($( $bit:literal => $key:ident, approvable: $approvable:literal; )*) => {
@@ -18,12 +22,12 @@ macro_rules! permissions {
             }
 
             /// Whether a supervisor's PIN can authorise this for someone lacking it.
-            /// Administrative permissions are never delegable this way.
+            /// Administrative and data-access permissions are never delegable this way.
             pub const fn approvable(self) -> bool {
                 match self { $( Perm::$key => $approvable, )* }
             }
 
-            pub fn key(self) -> &'static str {
+            pub const fn key(self) -> &'static str {
                 match self { $( Perm::$key => stringify!($key), )* }
             }
         }
@@ -37,8 +41,7 @@ permissions! {
     3  => LINE_DISCOUNT,            approvable: true;
     4  => ORDER_DISCOUNT,           approvable: true;
     5  => VOID_ORDER,               approvable: true;
-    6  => EXCHANGE_PROCESS,         approvable: true;
-    7  => EXCHANGE_LATE,            approvable: true;
+    // 6, 7 reserved: EXCHANGE_PROCESS, EXCHANGE_LATE (Phase 5)
     8  => DRAWER_NO_SALE,           approvable: true;
     9  => CASH_PAY_IN_OUT,          approvable: true;
     10 => CASH_SESSION_MANAGE,      approvable: false;
@@ -60,6 +63,8 @@ permissions! {
     26 => SYNC_MANAGE,              approvable: false;
     27 => BACKUP_RESTORE,           approvable: false;
     28 => DATA_EXPORT,              approvable: false;
+    29 => CUSTOMER_VIEW,            approvable: false;
+    30 => BACKUP_CREATE,            approvable: false;
 }
 
 /// A set of permissions, stored as an INTEGER bitmask (all bits < 53, safe as a JS number).
@@ -85,7 +90,7 @@ impl PermMask {
         Perm::ALL.iter().copied().filter(|p| self.has(*p)).collect()
     }
 
-    /// Strip bits that don't correspond to a known permission (e.g. from a newer client).
+    /// Strip bits that don't correspond to a known permission (reserved or from a newer client).
     pub fn known(self) -> Self {
         PermMask(self.0 & Self::all().0)
     }
@@ -104,7 +109,6 @@ pub struct RoleSeed {
     pub perms: PermMask,
     pub max_discount_bp: i64,
     pub max_override_bp: i64,
-    pub is_system: bool,
     pub min_pin_len: usize,
 }
 
@@ -113,26 +117,65 @@ pub const OWNER_ROLE: &str = "Owner";
 /// Owner-confirmed default matrix (§3.5). Cashier discount limit = 5% (owner rule).
 pub fn default_roles() -> Vec<RoleSeed> {
     use Perm::*;
-    let cashier = vec![SALE_CREATE, QUICK_SALE, LINE_DISCOUNT, ORDER_DISCOUNT, EXCHANGE_PROCESS, CASH_SESSION_MANAGE, REPRINT_RECEIPT];
+    let cashier = vec![SALE_CREATE, QUICK_SALE, LINE_DISCOUNT, ORDER_DISCOUNT, CASH_SESSION_MANAGE, REPRINT_RECEIPT];
     let mut supervisor = cashier.clone();
     supervisor.extend([
-        PRICE_OVERRIDE, VOID_ORDER, EXCHANGE_LATE, DRAWER_NO_SALE, CASH_PAY_IN_OUT, CASH_SESSION_FORCE_CLOSE,
-        STOCK_DAMAGE, LABEL_PRINT, REPORT_SALES,
+        PRICE_OVERRIDE,
+        VOID_ORDER,
+        DRAWER_NO_SALE,
+        CASH_PAY_IN_OUT,
+        CASH_SESSION_FORCE_CLOSE,
+        STOCK_DAMAGE,
+        LABEL_PRINT,
+        REPORT_SALES,
     ]);
     let mut manager = supervisor.clone();
     manager.extend([
-        STOCK_ADJUST, BATCH_MANAGE, PRODUCT_MANAGE, QUICK_SALE_PROMOTE, VIEW_COST, REPORT_FINANCIAL, EXPENSE_MANAGE,
-        AUDIT_VIEW, DATA_EXPORT,
+        STOCK_ADJUST,
+        BATCH_MANAGE,
+        PRODUCT_MANAGE,
+        QUICK_SALE_PROMOTE,
+        VIEW_COST,
+        REPORT_FINANCIAL,
+        EXPENSE_MANAGE,
+        AUDIT_VIEW,
+        DATA_EXPORT,
+        CUSTOMER_VIEW,
+        BACKUP_CREATE,
     ]);
     vec![
-        RoleSeed { name: "Cashier", perms: PermMask::of(&cashier), max_discount_bp: 500, max_override_bp: 0, is_system: true, min_pin_len: 4 },
-        RoleSeed { name: "Supervisor", perms: PermMask::of(&supervisor), max_discount_bp: 2_000, max_override_bp: 2_000, is_system: true, min_pin_len: 4 },
-        RoleSeed { name: "Manager", perms: PermMask::of(&manager), max_discount_bp: 5_000, max_override_bp: 5_000, is_system: true, min_pin_len: 6 },
-        RoleSeed { name: OWNER_ROLE, perms: PermMask::all(), max_discount_bp: 10_000, max_override_bp: 10_000, is_system: true, min_pin_len: 6 },
+        RoleSeed {
+            name: "Cashier",
+            perms: PermMask::of(&cashier),
+            max_discount_bp: 500,
+            max_override_bp: 0,
+            min_pin_len: 4,
+        },
+        RoleSeed {
+            name: "Supervisor",
+            perms: PermMask::of(&supervisor),
+            max_discount_bp: 2_000,
+            max_override_bp: 2_000,
+            min_pin_len: 4,
+        },
+        RoleSeed {
+            name: "Manager",
+            perms: PermMask::of(&manager),
+            max_discount_bp: 5_000,
+            max_override_bp: 5_000,
+            min_pin_len: 6,
+        },
+        RoleSeed {
+            name: OWNER_ROLE,
+            perms: PermMask::all(),
+            max_discount_bp: 10_000,
+            max_override_bp: 10_000,
+            min_pin_len: 6,
+        },
     ]
 }
 
-/// Minimum PIN length for a role name (Manager/Owner need 6+).
+/// Minimum PIN length for a role name (Manager/Owner need 6+; custom roles 4).
 pub fn min_pin_len(role_name: &str) -> usize {
     default_roles().into_iter().find(|r| r.name == role_name).map(|r| r.min_pin_len).unwrap_or(4)
 }
@@ -140,16 +183,25 @@ pub fn min_pin_len(role_name: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
 
     #[test]
-    fn bits_are_frozen_and_safe_for_js() {
+    fn bits_are_frozen_unique_reserved_and_js_safe() {
         assert_eq!(Perm::SALE_CREATE.bit(), 0);
-        assert_eq!(Perm::EXCHANGE_PROCESS.bit(), 6);
-        assert_eq!(Perm::EXCHANGE_LATE.bit(), 7);
+        assert_eq!(Perm::VOID_ORDER.bit(), 5);
+        assert_eq!(Perm::DRAWER_NO_SALE.bit(), 8);
         assert_eq!(Perm::DATA_EXPORT.bit(), 28);
+        assert_eq!(Perm::CUSTOMER_VIEW.bit(), 29);
+        assert_eq!(Perm::BACKUP_CREATE.bit(), 30);
         let bits: Vec<u32> = Perm::ALL.iter().map(|p| p.bit()).collect();
-        assert_eq!(bits, (0..bits.len() as u32).collect::<Vec<_>>(), "bits must be dense and in order");
+        assert_eq!(bits.iter().collect::<HashSet<_>>().len(), bits.len(), "bits must be unique");
+        for reserved in RESERVED_BITS {
+            assert!(!bits.contains(&reserved), "bit {reserved} is reserved");
+        }
         assert!(PermMask::all().0 < (1i64 << 53));
+        // The SQL policy triggers hard-code these masks (§4.3): PRICE_OVERRIDE = 4, VOID_ORDER = 32.
+        assert_eq!(PermMask::of(&[Perm::PRICE_OVERRIDE]).0, 4);
+        assert_eq!(PermMask::of(&[Perm::VOID_ORDER]).0, 32);
     }
 
     #[test]
@@ -159,28 +211,36 @@ mod tests {
         let deny = PermMask::of(&[Perm::VOID_ORDER]);
         let e = effective(role, grant, deny, false);
         assert!(e.has(Perm::SALE_CREATE) && e.has(Perm::DRAWER_NO_SALE) && !e.has(Perm::VOID_ORDER));
-        // Owner cannot be reduced.
         assert_eq!(effective(PermMask::EMPTY, PermMask::EMPTY, PermMask::all(), true), PermMask::all());
-        // Unknown high bits are dropped.
-        assert_eq!(effective(PermMask(1 << 50), PermMask::EMPTY, PermMask::EMPTY, false), PermMask::EMPTY);
+        assert_eq!(effective(PermMask(1 << 6 | 1 << 50), PermMask::EMPTY, PermMask::EMPTY, false), PermMask::EMPTY);
     }
 
     #[test]
     fn default_matrix_matches_owner_rules() {
         let roles = default_roles();
-        let cashier = &roles[0];
-        assert_eq!(cashier.max_discount_bp, 500);
+        let [cashier, supervisor, manager, owner] = [&roles[0], &roles[1], &roles[2], &roles[3]];
+        assert_eq!((cashier.name, cashier.max_discount_bp), ("Cashier", 500));
         assert!(cashier.perms.has(Perm::LINE_DISCOUNT) && cashier.perms.has(Perm::ORDER_DISCOUNT));
-        assert!(cashier.perms.has(Perm::EXCHANGE_PROCESS));
-        assert!(!cashier.perms.has(Perm::EXCHANGE_LATE));
-        assert!(!cashier.perms.has(Perm::PRICE_OVERRIDE));
+        assert!(!cashier.perms.has(Perm::VOID_ORDER) && !cashier.perms.has(Perm::PRICE_OVERRIDE));
         assert!(!cashier.perms.has(Perm::DRAWER_NO_SALE));
-        let supervisor = &roles[1];
-        assert!(supervisor.perms.has(Perm::EXCHANGE_LATE) && supervisor.perms.has(Perm::VOID_ORDER));
-        assert!(!roles[2].perms.has(Perm::USER_MANAGE));
-        assert_eq!(roles[3].perms, PermMask::all());
-        // Admin powers can't be borrowed with a supervisor PIN.
-        assert!(!Perm::USER_MANAGE.approvable() && !Perm::SETTINGS_MANAGE.approvable());
-        assert!(Perm::EXCHANGE_LATE.approvable() && Perm::ORDER_DISCOUNT.approvable());
+        assert!(supervisor.perms.has(Perm::VOID_ORDER));
+        assert!(manager.perms.has(Perm::CUSTOMER_VIEW) && manager.perms.has(Perm::BACKUP_CREATE));
+        assert!(!manager.perms.has(Perm::USER_MANAGE) && !manager.perms.has(Perm::BACKUP_RESTORE));
+        assert_eq!(owner.perms, PermMask::all());
+        assert_eq!(
+            (min_pin_len("Owner"), min_pin_len("Manager"), min_pin_len("Cashier"), min_pin_len("Custom")),
+            (6, 6, 4, 4)
+        );
+        assert!(
+            !Perm::USER_MANAGE.approvable() && !Perm::CUSTOMER_VIEW.approvable() && !Perm::BACKUP_CREATE.approvable()
+        );
+        assert!(Perm::VOID_ORDER.approvable() && Perm::ORDER_DISCOUNT.approvable());
+    }
+
+    #[test]
+    fn mask_list_roundtrip() {
+        let m = PermMask::of(&[Perm::VOID_ORDER, Perm::AUDIT_VIEW]);
+        assert_eq!(m.list(), vec![Perm::VOID_ORDER, Perm::AUDIT_VIEW]);
+        assert_eq!(Perm::AUDIT_VIEW.key(), "AUDIT_VIEW");
     }
 }

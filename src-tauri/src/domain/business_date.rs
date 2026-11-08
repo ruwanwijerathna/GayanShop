@@ -15,11 +15,12 @@ impl StoreCalendar {
     pub fn colombo_default() -> Self {
         Self {
             timezone: chrono_tz::Asia::Colombo,
-            day_cutoff: NaiveTime::from_hms_opt(4, 0, 0).expect("valid time"),
+            day_cutoff: NaiveTime::from_hms_opt(4, 0, 0).unwrap_or(NaiveTime::MIN),
             week_start: Weekday::Mon,
         }
     }
 
+    /// Parse the `store.timezone`, `store.day_cutoff` ("HH:MM") and `store.week_start` settings.
     pub fn parse(timezone: &str, day_cutoff: &str, week_start: &str) -> Option<Self> {
         let timezone: Tz = timezone.parse().ok()?;
         let day_cutoff = NaiveTime::parse_from_str(day_cutoff, "%H:%M").ok()?;
@@ -35,17 +36,14 @@ impl StoreCalendar {
     /// The business date an instant belongs to.
     pub fn business_date(&self, at: DateTime<Utc>) -> NaiveDate {
         let local = at.with_timezone(&self.timezone);
-        if local.time() < self.day_cutoff {
-            local.date_naive() - Duration::days(1)
-        } else {
-            local.date_naive()
-        }
+        let date = local.date_naive();
+        if local.time() < self.day_cutoff { date.pred_opt().unwrap_or(date) } else { date }
     }
 
     /// Inclusive start/end business dates of the week containing `date`.
     pub fn week_of(&self, date: NaiveDate) -> (NaiveDate, NaiveDate) {
-        let offset = (7 + date.weekday().num_days_from_monday() as i64
-            - self.week_start.num_days_from_monday() as i64)
+        let offset = (7 + i64::from(date.weekday().num_days_from_monday())
+            - i64::from(self.week_start.num_days_from_monday()))
             % 7;
         let start = date - Duration::days(offset);
         (start, start + Duration::days(6))
@@ -82,8 +80,7 @@ mod tests {
     fn utc_instant_is_converted_to_colombo() {
         // 2026-11-08 20:00 UTC = 2026-11-09 01:30 +05:30 ⇒ still business day 8 Nov.
         let cal = StoreCalendar::colombo_default();
-        let at = Utc.with_ymd_and_hms(2026, 11, 8, 20, 0, 0).unwrap();
-        assert_eq!(format_date(cal.business_date(at)), "2026-11-08");
+        assert_eq!(format_date(cal.business_date(Utc.with_ymd_and_hms(2026, 11, 8, 20, 0, 0).unwrap())), "2026-11-08");
     }
 
     #[test]
@@ -91,13 +88,14 @@ mod tests {
         let cal = StoreCalendar::colombo_default();
         let (s, e) = cal.week_of(parse_date("2026-11-08").unwrap()); // a Sunday
         assert_eq!((format_date(s).as_str(), format_date(e).as_str()), ("2026-11-02", "2026-11-08"));
-        let (s, _) = cal.week_of(parse_date("2026-11-09").unwrap()); // Monday
-        assert_eq!(format_date(s), "2026-11-09");
+        assert_eq!(format_date(cal.week_of(parse_date("2026-11-09").unwrap()).0), "2026-11-09"); // Monday
     }
 
     #[test]
     fn parses_settings() {
         assert_eq!(StoreCalendar::parse("Asia/Colombo", "04:00", "monday"), Some(StoreCalendar::colombo_default()));
         assert!(StoreCalendar::parse("Mars/Base", "04:00", "monday").is_none());
+        assert!(StoreCalendar::parse("Asia/Colombo", "25:00", "monday").is_none());
+        assert!(StoreCalendar::parse("Asia/Colombo", "04:00", "someday").is_none());
     }
 }

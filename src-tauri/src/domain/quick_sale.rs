@@ -20,4 +20,9 @@ mod tests {
         // é composed vs decomposed
         assert_eq!(custom_key("Caf\u{e9}"), custom_key("Cafe\u{301}"));
     }
+
+    #[test]
+    fn keeps_sinhala_intact_and_collapses_whitespace() {
+        assert_eq!(custom_key("  නිල්  බාල්දිය "), "නිල් බාල්දිය");
+    }
 }
