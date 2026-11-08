@@ -1,0 +1,84 @@
+{
+  "title": "Cash drawer",
+  "noSession": "No cash session is open on this counter. Open one to start selling.",
+  "open": {
+    "title": "Open a session",
+    "float": "Opening float (Rs)",
+    "submit": "Open session"
+  },
+  "session": {
+    "title": "Session open",
+    "openedBy": "Opened by {{name}} at {{time}}",
+    "float": "Opening float",
+    "businessDate": "Business date"
+  },
+  "actions": {
+    "payIn": "Pay in",
+    "payOut": "Pay out",
+    "noSale": "No sale",
+    "close": "Close session"
+  },
+  "movement": {
+    "payInTitle": "Pay cash in",
+    "payOutTitle": "Pay cash out",
+    "amount": "Amount (Rs)",
+    "reason": "Reason",
+    "reasonHint": "For example: petty cash – tea",
+    "submit": "Record and open drawer"
+  },
+  "noSale": {
+    "title": "Open the drawer without a sale",
+    "reason": "Reason",
+    "submit": "Open drawer",
+    "done": "Drawer opened"
+  },
+  "close": {
+    "title": "Count the drawer and close",
+    "counted": "Counted cash (Rs)",
+    "byDenomination": "Count by note and coin",
+    "denomination": "Rs {{value}}",
+    "note": "Note (optional)",
+    "submit": "Close and print Z-report",
+    "confirm": "Closing ends voids for every sale in this session. Continue?",
+    "confirmYes": "Yes, close"
+  },
+  "z": {
+    "title": "Z-report",
+    "sales": "Sales",
+    "items": "Items sold",
+    "gross": "Gross sales",
+    "discounts": "Discounts",
+    "total": "Sales total",
+    "payments": "Payments",
+    "method": {
+      "cash": "Cash",
+      "card": "Card",
+      "bank_transfer": "Bank transfer",
+      "qr": "QR",
+      "other": "Other"
+    },
+    "change": "Change given",
+    "overrides": "Price overrides",
+    "quickSales": "Quick sales",
+    "voids": "Voids",
+    "approvedBy": "approved by {{name}}",
+    "reason": {
+      "WRONG_ITEM": "Wrong item",
+      "WRONG_PRICE": "Wrong price",
+      "WRONG_QTY": "Wrong quantity",
+      "DUPLICATE_SCAN": "Scanned twice",
+      "CUSTOMER_CANCELLED": "Customer cancelled",
+      "OTHER": "Other"
+    },
+    "payIns": "Pay-ins",
+    "payOuts": "Pay-outs",
+    "noSales": "No-sale openings",
+    "float": "Opening float",
+    "cashSales": "Cash sales",
+    "expected": "Expected cash",
+    "counted": "Counted cash",
+    "variance": "Variance",
+    "count": "{{count}} × {{amount}}"
+  },
+  "moneyInvalid": "Enter an amount such as 450 or 450.50."
+}

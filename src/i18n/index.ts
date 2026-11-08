@@ -6,12 +6,14 @@ import { errorKey } from "@/db/client";
 import enApp from "./locales/en/app.json";
 import enAuth from "./locales/en/auth.json";
 import enBatches from "./locales/en/batches.json";
+import enCash from "./locales/en/cash.json";
 import enCommon from "./locales/en/common.json";
 import enErrors from "./locales/en/errors.json";
 import enProducts from "./locales/en/products.json";
 import siApp from "./locales/si/app.json";
 import siAuth from "./locales/si/auth.json";
 import siBatches from "./locales/si/batches.json";
+import siCash from "./locales/si/cash.json";
 import siCommon from "./locales/si/common.json";
 import siErrors from "./locales/si/errors.json";
 import siProducts from "./locales/si/products.json";
@@ -19,7 +21,7 @@ import siProducts from "./locales/si/products.json";
 export const LANGUAGES = ["en", "si"] as const;
 export type UiLanguage = (typeof LANGUAGES)[number];
 
-export const NAMESPACES = ["common", "errors", "auth", "app", "products", "batches"] as const;
+export const NAMESPACES = ["common", "errors", "auth", "app", "products", "batches", "cash"] as const;
 
 export const resources = {
   en: {
@@ -29,6 +31,7 @@ export const resources = {
     app: enApp,
     products: enProducts,
     batches: enBatches,
+    cash: enCash,
   },
   si: {
     common: siCommon,
@@ -37,6 +40,7 @@ export const resources = {
     app: siApp,
     products: siProducts,
     batches: siBatches,
+    cash: siCash,
   },
 } as const;
 

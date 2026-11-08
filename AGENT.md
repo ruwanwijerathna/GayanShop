@@ -7,7 +7,7 @@
 >
 > Never change an architectural decision silently. Propose the doc change to the owner first.
 
-**Current state (2026-11-08): Phase 1 in progress on branch `feat/phase-1-mvp-till`.** Phase 0 is complete and approved. Blocks 1.1–1.2 are committed and green; the next block is 1.3. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
+**Current state (2026-11-08): Phase 1 in progress on branch `feat/phase-1-mvp-till`.** Phase 0 is complete and approved. Blocks 1.1–1.3 are committed and green; the next block is 1.4. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
 
 ---
 
@@ -307,7 +307,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `cargo test --manifest-path src-tauri/Cargo.toml --test stock_ledger`
     - `pnpm verify`
 
-- [ ] **1.3 Cash sessions and the Z-report**
+- [x] **1.3 Cash sessions and the Z-report**: done 2026-11-08
   - **Deliverables:**
     - Open and close sessions, count and variance, pay-in and pay-out, and the no-sale command (`DRAWER_NO_SALE`, audited).
     - The Z-report data model.

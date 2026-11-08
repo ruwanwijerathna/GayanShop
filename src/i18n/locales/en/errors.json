@@ -54,7 +54,14 @@
     "BATCH_ITEM_PRODUCT_INVALID": "That product no longer exists.",
     "PRODUCT_NOT_TRACKED": "This product doesn't track stock, so it can't be received into a batch.",
     "QTY_INVALID": "Enter a quantity of 1 or more.",
-    "AMOUNT_INVALID": "Enter a valid amount."
+    "AMOUNT_INVALID": "Enter a valid amount.",
+    "NO_OPEN_SESSION": "Open a cash session on this counter first.",
+    "SESSION_ALREADY_OPEN": "A cash session is already open on this counter.",
+    "FLOAT_INVALID": "Enter a valid opening float.",
+    "REASON_REQUIRED": "Enter a reason (up to 120 characters).",
+    "COUNT_INVALID": "Enter the counted cash.",
+    "DENOMINATIONS_MISMATCH": "The notes and coins don't add up to the counted cash.",
+    "DENOMINATION_INVALID": "That note or coin count isn't valid."
   },
   "INVARIANT": {
     "_": "This change isn't allowed.",

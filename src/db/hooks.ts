@@ -6,6 +6,8 @@ import {
   type BatchInput,
   type BatchItemInput,
   type CategoryInput,
+  type CloseInput,
+  type DrawerMovementInput,
   type Perm,
   type ProductInput,
   type SetupInput,
@@ -26,6 +28,7 @@ export const queryKeys = {
   productSearch: (query: string) => ["catalog", "search", query] as const,
   batches: ["batches", "list"] as const,
   batch: (id: string) => ["batches", "detail", id] as const,
+  cashSession: ["cash", "current"] as const,
 };
 
 /** Polled so the shell notices an idle auto-lock done by Rust (doc §3.5). */
@@ -217,4 +220,37 @@ export function useReceiveBatch() {
 
 export function useAdHocPurchase() {
   return useBatchMutation((input: AdHocPurchase) => unwrap(commands.adHocPurchase(input)));
+}
+
+// ───────── cash sessions ─────────
+
+export function useCurrentCashSession() {
+  return useQuery({ queryKey: queryKeys.cashSession, queryFn: () => unwrap(commands.currentCashSession()) });
+}
+
+function useCashMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: fn, onSuccess: () => qc.invalidateQueries({ queryKey: ["cash"] }) });
+}
+
+export function useOpenCashSession() {
+  return useCashMutation((openingFloat: number) =>
+    unwrap(commands.openCashSession({ opening_float: openingFloat })),
+  );
+}
+
+export function useDrawerMovement() {
+  return useCashMutation(({ input, approvalId }: { input: DrawerMovementInput; approvalId: string | null }) =>
+    unwrap(commands.cashDrawerMovement(input, approvalId)),
+  );
+}
+
+export function useNoSale() {
+  return useCashMutation(({ reason, approvalId }: { reason: string; approvalId: string | null }) =>
+    unwrap(commands.noSale(reason, approvalId)),
+  );
+}
+
+export function useCloseCashSession() {
+  return useCashMutation((input: CloseInput) => unwrap(commands.closeCashSession(input)));
 }

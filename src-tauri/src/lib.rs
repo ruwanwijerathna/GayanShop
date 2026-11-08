@@ -73,6 +73,13 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::batches::receive_batch,
         commands::batches::ad_hoc_purchase,
         commands::batches::product_layers,
+        commands::cash::current_cash_session,
+        commands::cash::open_cash_session,
+        commands::cash::cash_drawer_movement,
+        commands::cash::no_sale,
+        commands::cash::close_cash_session,
+        commands::cash::list_cash_sessions,
+        commands::cash::cash_session_report,
     ])
 }
 
@@ -153,6 +160,13 @@ mod tests {
             "receiveBatch",
             "adHocPurchase",
             "productLayers",
+            "currentCashSession",
+            "openCashSession",
+            "cashDrawerMovement",
+            "noSale",
+            "closeCashSession",
+            "listCashSessions",
+            "cashSessionReport",
         ] {
             assert!(ts.contains(&format!("{cmd}:")), "command {cmd} missing from bindings");
         }

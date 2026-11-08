@@ -1,6 +1,7 @@
 import { createHashHistory, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 import { AuditLogScreen } from "@/features/audit/AuditLogScreen";
 import { BatchesScreen } from "@/features/batches/BatchesScreen";
+import { CashScreen } from "@/features/cash/CashScreen";
 import { CounterStatus } from "@/features/home/CounterStatus";
 import { ProductsScreen } from "@/features/products/ProductsScreen";
 import { AppShell } from "./AppShell";
@@ -31,7 +32,19 @@ export const batchesRoute = createRoute({
   component: BatchesScreen,
 });
 
-export const routeTree = rootRoute.addChildren([homeRoute, productsRoute, batchesRoute, auditRoute]);
+export const cashRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/cash",
+  component: CashScreen,
+});
+
+export const routeTree = rootRoute.addChildren([
+  homeRoute,
+  cashRoute,
+  productsRoute,
+  batchesRoute,
+  auditRoute,
+]);
 
 export function createAppRouter() {
   return createRouter({ routeTree, history: createHashHistory() });

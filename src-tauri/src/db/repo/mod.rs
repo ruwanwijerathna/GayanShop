@@ -2,7 +2,9 @@
 //! and enqueue their own outbox rows; commands add the RBAC guard, audit and `db://changed`.
 
 pub mod batches;
+pub mod cash;
 pub mod categories;
+pub mod print_jobs;
 pub mod products;
 pub mod stock;
 

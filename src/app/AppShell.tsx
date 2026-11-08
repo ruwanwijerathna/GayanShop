@@ -1,5 +1,5 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { Boxes, History, Lock, Package, Store } from "lucide-react";
+import { Banknote, Boxes, History, Lock, Package, Store } from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Can } from "@/components/auth/Can";
@@ -66,6 +66,10 @@ export function AppShell() {
           <Link to="/" className={NAV_LINK} aria-label={t("nav.home")}>
             <Store aria-hidden className="size-5 shrink-0" />
             <span className="hidden xl:inline">{t("nav.home")}</span>
+          </Link>
+          <Link to="/cash" className={NAV_LINK} aria-label={t("nav.cash")}>
+            <Banknote aria-hidden className="size-5 shrink-0" />
+            <span className="hidden xl:inline">{t("nav.cash")}</span>
           </Link>
           <Link to="/products" className={NAV_LINK} aria-label={t("nav.products")}>
             <Package aria-hidden className="size-5 shrink-0" />
