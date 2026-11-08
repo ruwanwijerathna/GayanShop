@@ -15,6 +15,7 @@ pub mod prefs;
 pub mod products;
 pub mod setup;
 pub mod system;
+pub mod void;
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};

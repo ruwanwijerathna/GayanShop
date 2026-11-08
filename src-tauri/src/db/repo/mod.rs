@@ -9,6 +9,7 @@ pub mod customers;
 pub mod print_jobs;
 pub mod products;
 pub mod stock;
+pub mod void;
 
 /// Where and when a catalog write happens (row metadata, audit context, in-store code generation).
 #[derive(Debug, Clone)]

@@ -75,7 +75,12 @@
     "TEXT_TOO_LONG": "That text is too long.",
     "APPROVER_LIMIT_TOO_LOW": "The approver's limit doesn't cover this discount or price.",
     "PHONE_INVALID": "Enter a Sri Lankan phone number, such as 077 123 4567.",
-    "CUSTOMER_NAME_INVALID": "The customer name can have at most 60 characters."
+    "CUSTOMER_NAME_INVALID": "The customer name can have at most 60 characters.",
+    "VOID_NOTE_REQUIRED": "Explain the reason when you choose \"Other\".",
+    "ORDER_ALREADY_VOIDED": "This sale has already been voided.",
+    "VOID_OTHER_DEVICE": "A sale can only be voided on the counter that made it.",
+    "VOID_SESSION_CLOSED": "This sale's cash session is closed. All sales are final.",
+    "APPROVER_NOT_AUTHORISED": "The approver isn't allowed to do this."
   },
   "INVARIANT": {
     "_": "This change isn't allowed.",

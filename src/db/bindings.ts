@@ -80,6 +80,9 @@ export const commands = {
 	/**  Z-report of a closed session, or X-report of the open one. */
 	cashSessionReport: (sessionId: string) => typedError<ZReport_Serialize, AppError>(__TAURI_INVOKE("cash_session_report", { sessionId })),
 	checkoutOrder: (input: CheckoutInput_Deserialize) => typedError<CheckoutResult_Serialize, AppError>(__TAURI_INVOKE("checkout_order", { input })),
+	voidOrder: (input: VoidInput_Deserialize) => typedError<VoidResult, AppError>(__TAURI_INVOKE("void_order", { input })),
+	/**  The open session's orders on this counter (the void list). */
+	sessionOrders: () => typedError<SessionOrder[], AppError>(__TAURI_INVOKE("session_orders")),
 };
 
 /* Types */
@@ -772,6 +775,18 @@ export type SessionInfo = {
 	ui_language: string,
 };
 
+/**  An order of the counter's open session, for the till's void list (F10). */
+export type SessionOrder = {
+	order_id: string,
+	receipt_no: string,
+	/**  `completed` or `voided`. */
+	status: string,
+	grand_total: number,
+	item_count: number,
+	staff_name: string,
+	completed_at: string,
+};
+
 export type SetupInput = {
 	store_name: string,
 	owner_name: string,
@@ -792,6 +807,26 @@ export type SetupResult = {
 export type UiLanguage = "en" | "si";
 
 export type UiTheme = "light" | "dark";
+
+export type VoidInput = VoidInput_Serialize | VoidInput_Deserialize;
+
+export type VoidInput_Deserialize = {
+	order_id: string,
+	reason: VoidReason,
+	/**  Required for `OTHER`. */
+	note?: string | null,
+	/**  A supervisor's single-use approval bound to (VOID_ORDER, this order id, this cashier). */
+	approval_id?: string | null,
+};
+
+export type VoidInput_Serialize = {
+	order_id: string,
+	reason: VoidReason,
+	/**  Required for `OTHER`. */
+	note: string | null,
+	/**  A supervisor's single-use approval bound to (VOID_ORDER, this order id, this cashier). */
+	approval_id: string | null,
+};
 
 export type VoidLine = VoidLine_Serialize | VoidLine_Deserialize;
 
@@ -817,10 +852,20 @@ export type VoidLine_Serialize = {
 	voided_at: string,
 };
 
+export type VoidReason = "WRONG_ITEM" | "WRONG_PRICE" | "WRONG_QTY" | "DUPLICATE_SCAN" | "CUSTOMER_CANCELLED" | "OTHER";
+
 export type VoidReasonTotal = {
 	reason: string,
 	count: number,
 	value: number,
+};
+
+export type VoidResult = {
+	order_id: string,
+	receipt_no: string,
+	grand_total: number,
+	/**  Cash to hand back to the customer (the cash payments of the order, net of change). */
+	cash_returned: number,
 };
 
 /**  Everything the Z-report prints for one session (also the X-report while it is still open). */

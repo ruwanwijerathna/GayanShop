@@ -7,7 +7,7 @@
 >
 > Never change an architectural decision silently. Propose the doc change to the owner first.
 
-**Current state (2026-11-08): Phase 1 in progress on branch `feat/phase-1-mvp-till`.** Phase 0 is complete and approved. Blocks 1.1–1.4 are committed and green; the next block is 1.5. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
+**Current state (2026-11-08): Phase 1 in progress on branch `feat/phase-1-mvp-till`.** Phase 0 is complete and approved. Blocks 1.1–1.5 are committed and green; the next block is 1.6. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
 
 ---
 
@@ -327,7 +327,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `cargo test --manifest-path src-tauri/Cargo.toml --test checkout --test checkout_props --test crash_mid_checkout`
     - `pnpm verify`
 
-- [ ] **1.5 Void engine**
+- [x] **1.5 Void engine**: done 2026-11-08
   - **Deliverables:**
     - `void_order`: whole order only, same device and open session, the reason list (note required for `OTHER`), and supervisor approval for cashiers.
     - Exact slice reversal, rollup removal, and print jobs for the VOID slip and drawer kick.
