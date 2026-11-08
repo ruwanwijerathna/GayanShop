@@ -1,0 +1,48 @@
+# GayanShop POS — continuous integration (AGENT.md §5, Block 0.10).
+# Runs the same gate as local development (`pnpm verify`) plus a release build, on Windows (the target OS).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: verify (windows)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # bindings:check diffs against the committed src/db/bindings.ts
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Quality gate (lint, types, tests, i18n, contrast, guard, rustfmt, clippy, cargo test, bindings)
+        run: pnpm verify
+
+      - name: Release build (no installer)
+        run: pnpm tauri build --no-bundle

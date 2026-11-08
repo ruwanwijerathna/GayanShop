@@ -280,7 +280,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
       - A supervisor approval works once.
       - The chain verifies.
 
-- [ ] **0.10 Continuous integration**
+- [x] **0.10 Continuous integration**: done 2026-11-08 (workflow committed and local gate green; **CI pending remote**, since no GitHub remote is configured)
   - **Deliverables:** `.github/workflows/ci.yml` (`windows-latest`: pnpm + Rust cache, `pnpm verify`, `pnpm tauri build --no-bundle`).
   - **Gate:**
     - `pnpm verify` locally.
