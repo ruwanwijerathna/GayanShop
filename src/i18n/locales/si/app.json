@@ -1,0 +1,48 @@
+{
+  "nav": { "home": "කවුන්ටරය", "audit": "විගණන සටහන" },
+  "status": {
+    "title": "කවුන්ටරයේ තත්ත්වය",
+    "version": "යෙදුම් අනුවාදය",
+    "schema": "දත්ත ගබඩා සැකිල්ල",
+    "dataDir": "දත්ත ෆෝල්ඩරය",
+    "integrity": "දත්ත ගබඩාවේ සෞඛ්‍යය",
+    "healthy": "හොඳ තත්ත්වයේ",
+    "problems": "අවධානය අවශ්‍යයි"
+  },
+  "audit": {
+    "title": "විගණන සටහන",
+    "when": "වේලාව",
+    "action": "ක්‍රියාව",
+    "staff": "සේවකයා",
+    "approvedBy": "අනුමත කළේ",
+    "counter": "කවුන්ටරය",
+    "entity": "වාර්තාව",
+    "verify": "දාමය සත්‍යාපනය කරන්න",
+    "verifying": "සත්‍යාපනය කරමින්…",
+    "chainOk": "{{device}}: සටහන් {{rows}} — නිවැරදියි",
+    "chainBroken": "{{device}}: සටහන {{seq}} හි බිඳී ඇත ({{reason}})",
+    "reasons": {
+      "SEQUENCE_GAP": "සටහනක් අතුරුදහන්",
+      "PREV_HASH_MISMATCH": "සම්බන්ධතාව නොගැලපේ",
+      "CONTENT_MISMATCH": "සටහන වෙනස් කර ඇත"
+    },
+    "actions": {
+      "STORE_INITIALIZED": "වෙළඳසැල සකසන ලදී",
+      "AUTH_LOGIN": "පිවිසුණි",
+      "AUTH_LOGOUT": "ඉවත් විය",
+      "AUTH_FAILED": "වැරදි PIN",
+      "AUTH_LOCKOUT": "වැරදි PIN නිසා අගුළු දැමිණි",
+      "APPROVAL_GRANTED": "අනුමැතිය ලබා දුනි",
+      "APPROVAL_DENIED": "අනුමැතිය ප්‍රතික්ෂේප විය"
+    }
+  },
+  "permissions": {
+    "VOID_ORDER": "විකිණීමක් අවලංගු කිරීම",
+    "PRICE_OVERRIDE": "මිලක් වෙනස් කිරීම",
+    "LINE_DISCOUNT": "අයිතම වට්ටම",
+    "ORDER_DISCOUNT": "බිල්පත් වට්ටම",
+    "DRAWER_NO_SALE": "ලාච්චුව විවෘත කිරීම",
+    "OTHER": "සීමා කළ ක්‍රියාවක්"
+  },
+  "shortcuts": { "lock": "Ctrl+L", "language": "Ctrl+Shift+L" }
+}

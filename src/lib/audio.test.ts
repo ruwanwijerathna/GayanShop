@@ -30,6 +30,17 @@ describe("playCue", () => {
     expect(() => playCue("tick", create)).not.toThrow();
   });
 
+  it("tolerates engines where play() returns undefined or throws", () => {
+    expect(() =>
+      playCue("tick", () => ({ volume: 1, play: () => undefined as unknown as Promise<void> })),
+    ).not.toThrow();
+    expect(() =>
+      playCue("tick", () => {
+        throw new Error("no audio device");
+      }),
+    ).not.toThrow();
+  });
+
   it("has a cue for every till event", () => {
     expect(Object.keys(CUES).sort()).toEqual(["approval", "complete", "error", "tick", "warning"]);
   });

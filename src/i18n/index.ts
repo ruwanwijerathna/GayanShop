@@ -3,19 +3,23 @@ import i18next, { type i18n as I18n, type TFunction } from "i18next";
 import { initReactI18next } from "react-i18next";
 import type { AppError } from "@/db/bindings";
 import { errorKey } from "@/db/client";
+import enApp from "./locales/en/app.json";
+import enAuth from "./locales/en/auth.json";
 import enCommon from "./locales/en/common.json";
 import enErrors from "./locales/en/errors.json";
+import siApp from "./locales/si/app.json";
+import siAuth from "./locales/si/auth.json";
 import siCommon from "./locales/si/common.json";
 import siErrors from "./locales/si/errors.json";
 
 export const LANGUAGES = ["en", "si"] as const;
 export type UiLanguage = (typeof LANGUAGES)[number];
 
-export const NAMESPACES = ["common", "errors"] as const;
+export const NAMESPACES = ["common", "errors", "auth", "app"] as const;
 
 export const resources = {
-  en: { common: enCommon, errors: enErrors },
-  si: { common: siCommon, errors: siErrors },
+  en: { common: enCommon, errors: enErrors, auth: enAuth, app: enApp },
+  si: { common: siCommon, errors: siErrors, auth: siAuth, app: siApp },
 } as const;
 
 export function isUiLanguage(value: string): value is UiLanguage {

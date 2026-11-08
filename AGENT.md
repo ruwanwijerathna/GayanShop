@@ -265,7 +265,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `pnpm build`
     - `pnpm verify`
 
-- [ ] **0.9 Phase 0 screens and flows**
+- [x] **0.9 Phase 0 screens and flows**: done 2026-11-08 (manual GUI items in docs/qa/phase0-smoke.md pending owner)
   - **Deliverables:**
     - The first-run wizard (EN/SI), PIN login and lock screen, the session header, `ApprovalDialog`, the audit log viewer (DataTable, keyset paging) with "Verify chain", the language and theme toggles, and a window `minWidth/minHeight` of 1024×768.
     - Commands wired end to end.

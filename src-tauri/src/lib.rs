@@ -21,6 +21,7 @@ pub mod commands;
 pub mod db;
 pub mod domain;
 pub mod error;
+pub mod prefs;
 pub mod setup;
 pub mod state;
 
@@ -47,6 +48,11 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::auth::current_session,
         commands::auth::request_approval,
         commands::auth::authorize,
+        commands::audit::audit_page,
+        commands::audit::audit_verify,
+        commands::prefs::device_preferences,
+        commands::prefs::set_device_theme,
+        commands::prefs::set_ui_language,
     ])
 }
 
@@ -102,6 +108,11 @@ mod tests {
             "currentSession",
             "requestApproval",
             "authorize",
+            "auditPage",
+            "auditVerify",
+            "devicePreferences",
+            "setDeviceTheme",
+            "setUiLanguage",
         ] {
             assert!(ts.contains(&format!("{cmd}:")), "command {cmd} missing from bindings");
         }

@@ -6,6 +6,8 @@
 // by `pnpm guard` (AGENT.md §2), so this allow cannot hide our own code.
 #![allow(clippy::unreachable)]
 
+pub mod audit;
 pub mod auth;
+pub mod prefs;
 pub mod setup;
 pub mod system;

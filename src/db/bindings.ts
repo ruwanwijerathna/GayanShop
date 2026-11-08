@@ -27,6 +27,19 @@ export const commands = {
 	 *  privileged screen; each mutating command still runs the guard itself.
 	 */
 	authorize: (perm: Perm, targetRef: string, approvalId: string | null) => typedError<Authorization_Serialize, AppError>(__TAURI_INVOKE("authorize", { perm, targetRef, approvalId })),
+	/**  Newest-first keyset page of the audit trail. */
+	auditPage: (cursor: AuditCursor | null, limit: number) => typedError<AuditPage_Serialize, AppError>(__TAURI_INVOKE("audit_page", { cursor, limit })),
+	/**  Re-verify every device's hash chain. */
+	auditVerify: () => typedError<ChainReport_Serialize[], AppError>(__TAURI_INVOKE("audit_verify")),
+	/**  Device-level UI preferences (local to this counter). */
+	devicePreferences: () => typedError<DevicePreferences, AppError>(__TAURI_INVOKE("device_preferences")),
+	/**  Set this counter's theme (local-only; each counter's screen and lighting differ). */
+	setDeviceTheme: (theme: UiTheme) => typedError<null, AppError>(__TAURI_INVOKE("set_device_theme", { theme })),
+	/**
+	 *  Save the UI language. Logged in ⇒ the staff member's own preference (synced, applied at their next
+	 *  login on any counter); otherwise ⇒ this counter's default for the lock and login screens.
+	 */
+	setUiLanguage: (language: UiLanguage) => typedError<null, AppError>(__TAURI_INVOKE("set_ui_language", { language })),
 };
 
 /* Types */
@@ -64,6 +77,58 @@ export type ApprovalGrant = {
 	expires_at: string,
 };
 
+/**  Keyset page cursor: rows strictly older than `(created_at, id)`. */
+export type AuditCursor = {
+	created_at: string,
+	id: string,
+};
+
+export type AuditLogRow = AuditLogRow_Serialize | AuditLogRow_Deserialize;
+
+export type AuditLogRow_Deserialize = {
+	id: string,
+	device_id: string,
+	device_seq: number,
+	staff_id?: string | null,
+	staff_name?: string | null,
+	approved_by?: string | null,
+	approver_name?: string | null,
+	action: string,
+	entity_type?: string | null,
+	entity_id?: string | null,
+	metadata: string,
+	business_date: string,
+	created_at: string,
+};
+
+export type AuditLogRow_Serialize = {
+	id: string,
+	device_id: string,
+	device_seq: number,
+	staff_id: string | null,
+	staff_name: string | null,
+	approved_by: string | null,
+	approver_name: string | null,
+	action: string,
+	entity_type: string | null,
+	entity_id: string | null,
+	metadata: string,
+	business_date: string,
+	created_at: string,
+};
+
+export type AuditPage = AuditPage_Serialize | AuditPage_Deserialize;
+
+export type AuditPage_Deserialize = {
+	rows: AuditLogRow_Deserialize[],
+	next_cursor?: AuditCursor | null,
+};
+
+export type AuditPage_Serialize = {
+	rows: AuditLogRow_Serialize[],
+	next_cursor: AuditCursor | null,
+};
+
 export type Authorization = Authorization_Serialize | Authorization_Deserialize;
 
 export type Authorization_Deserialize = {
@@ -74,6 +139,35 @@ export type Authorization_Deserialize = {
 export type Authorization_Serialize = {
 	staff_id: string,
 	approved_by: string | null,
+};
+
+export type ChainBreak = {
+	device_seq: number,
+	reason: ChainBreakReason,
+};
+
+export type ChainBreakReason = "SEQUENCE_GAP" | "PREV_HASH_MISMATCH" | "CONTENT_MISMATCH";
+
+export type ChainReport = ChainReport_Serialize | ChainReport_Deserialize;
+
+export type ChainReport_Deserialize = {
+	device_id: string,
+	rows_checked: number,
+	ok: boolean,
+	first_break?: ChainBreak | null,
+};
+
+export type ChainReport_Serialize = {
+	device_id: string,
+	rows_checked: number,
+	ok: boolean,
+	first_break: ChainBreak | null,
+};
+
+export type DevicePreferences = {
+	/**  Language for the lock/login screens (before anyone logs in). */
+	default_language: UiLanguage,
+	theme: UiTheme,
 };
 
 export type IntegrityReport = {
@@ -123,6 +217,10 @@ export type SetupResult = {
 	device_code: string,
 	owner_staff_id: string,
 };
+
+export type UiLanguage = "en" | "si";
+
+export type UiTheme = "light" | "dark";
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

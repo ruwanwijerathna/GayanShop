@@ -1,16 +1,74 @@
-import { useState } from "react";
-import { PosLayout } from "@/app/layouts/PosLayout";
-import { TopBar } from "@/app/layouts/TopBar";
-import { useApplyTheme, type Theme } from "@/components/common/ThemeToggle";
+import { RouterProvider } from "@tanstack/react-router";
+import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { ExplicitLockContext } from "@/app/lock-context";
+import { createAppRouter } from "@/app/router";
+import { useSession } from "@/app/session";
+import { useApplyTheme } from "@/components/common/ThemeToggle";
+import { CommandError } from "@/db/client";
+import { useAppStatus, useDevicePrefs } from "@/db/hooks";
+import { FirstRunWizard } from "@/features/auth/FirstRunWizard";
+import { LoginScreen } from "@/features/auth/LoginScreen";
+import { isUiLanguage, translateError } from "@/i18n";
 
-/** Application shell. The first-run wizard, login and till screens are routed here from Block 0.9. */
+/** Routes the app: first-run wizard → login (PIN) → logged-in shell. Rust is the source of truth. */
 function App() {
-  const [theme, setTheme] = useState<Theme>("light");
-  useApplyTheme(theme);
+  const { t, i18n } = useTranslation();
+  const status = useAppStatus();
+  const prefs = useDevicePrefs();
+  const { setSession } = useSession();
+  const [router] = useState(createAppRouter);
+
+  const rustSession = status.data?.session ?? null;
+  const sessionKey = rustSession?.staff_id ?? null;
+
+  // A session that ends without an explicit lock/logout was ended by Rust's idle auto-lock (doc §3.5).
+  // Derived while rendering (React "adjust state when a value changes" pattern), not in an effect.
+  const [prevKey, setPrevKey] = useState<string | null>(sessionKey);
+  const [explicitLock, setExplicitLock] = useState(false);
+  const [wasLocked, setWasLocked] = useState(false);
+  if (sessionKey !== prevKey) {
+    setPrevKey(sessionKey);
+    setWasLocked(prevKey !== null && sessionKey === null && !explicitLock);
+    setExplicitLock(false);
+  }
+  const markExplicitLock = useCallback(() => setExplicitLock(true), []);
+
+  // Keep the read-only session mirror (used by <Can>) in step with Rust.
+  useEffect(() => setSession(rustSession), [rustSession, setSession]);
+
+  const language = rustSession?.ui_language ?? prefs.data?.default_language;
+  useEffect(() => {
+    if (language && isUiLanguage(language) && i18n.resolvedLanguage !== language)
+      void i18n.changeLanguage(language);
+  }, [language, i18n]);
+
+  useApplyTheme(prefs.data?.theme ?? "light");
+
+  if (status.error) {
+    const message =
+      status.error instanceof CommandError
+        ? translateError(i18n.t, status.error.error)
+        : t("errors:INTERNAL");
+    return (
+      <main role="alert" className="flex min-h-screen items-center justify-center bg-background p-6 text-lg">
+        {message}
+      </main>
+    );
+  }
+  if (!status.data) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
+        {t("table.loading")}
+      </main>
+    );
+  }
+  if (!status.data.initialized) return <FirstRunWizard />;
+  if (!rustSession) return <LoginScreen storeName={status.data.store_name ?? null} wasLocked={wasLocked} />;
   return (
-    <PosLayout topBar={<TopBar storeName={null} deviceCode={null} theme={theme} onThemeChange={setTheme} />}>
-      <div className="flex-1" />
-    </PosLayout>
+    <ExplicitLockContext.Provider value={markExplicitLock}>
+      <RouterProvider router={router} />
+    </ExplicitLockContext.Provider>
   );
 }
 

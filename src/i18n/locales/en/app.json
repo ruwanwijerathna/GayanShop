@@ -1,0 +1,48 @@
+{
+  "nav": { "home": "Counter", "audit": "Audit log" },
+  "status": {
+    "title": "Counter status",
+    "version": "App version",
+    "schema": "Database schema",
+    "dataDir": "Data folder",
+    "integrity": "Database health",
+    "healthy": "Healthy",
+    "problems": "Needs attention"
+  },
+  "audit": {
+    "title": "Audit log",
+    "when": "When",
+    "action": "Action",
+    "staff": "Staff",
+    "approvedBy": "Approved by",
+    "counter": "Counter",
+    "entity": "Record",
+    "verify": "Verify chain",
+    "verifying": "Verifying…",
+    "chainOk": "{{device}}: {{rows}} entries — intact",
+    "chainBroken": "{{device}}: broken at entry {{seq}} ({{reason}})",
+    "reasons": {
+      "SEQUENCE_GAP": "missing entry",
+      "PREV_HASH_MISMATCH": "link mismatch",
+      "CONTENT_MISMATCH": "entry was changed"
+    },
+    "actions": {
+      "STORE_INITIALIZED": "Store set up",
+      "AUTH_LOGIN": "Logged in",
+      "AUTH_LOGOUT": "Logged out",
+      "AUTH_FAILED": "Wrong PIN",
+      "AUTH_LOCKOUT": "Locked after wrong PINs",
+      "APPROVAL_GRANTED": "Approval granted",
+      "APPROVAL_DENIED": "Approval denied"
+    }
+  },
+  "permissions": {
+    "VOID_ORDER": "void a sale",
+    "PRICE_OVERRIDE": "change a price",
+    "LINE_DISCOUNT": "item discount",
+    "ORDER_DISCOUNT": "bill discount",
+    "DRAWER_NO_SALE": "open the drawer",
+    "OTHER": "a restricted action"
+  },
+  "shortcuts": { "lock": "Ctrl+L", "language": "Ctrl+Shift+L" }
+}

@@ -26,7 +26,12 @@ export function setAudioPrefs(next: { volume?: number; muted?: boolean }) {
 /** Fire-and-forget: audio must never block or fail a sale. */
 export function playCue(cue: Cue, create: (src: string) => Playable = (src) => new Audio(src)): void {
   if (prefs.muted) return;
-  const audio = create(CUES[cue]);
-  audio.volume = prefs.volume;
-  audio.play().catch(() => undefined);
+  try {
+    const audio = create(CUES[cue]);
+    audio.volume = prefs.volume;
+    // Some engines return undefined instead of a promise, or reject when playback is refused.
+    void Promise.resolve(audio.play()).catch(() => undefined);
+  } catch {
+    // Audio unavailable (no output device, unsupported engine): the cue is optional feedback.
+  }
 }
