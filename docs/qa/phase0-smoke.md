@@ -23,7 +23,8 @@ GUI-auto runs on 2026-11-08 used fresh data folders. The earlier folders were re
 | 1.1 | Release binary builds | Launch: `pnpm tauri build --no-bundle`, exit 0, 9.9 MB exe. Also reproduced from a **clean clone**: `pnpm install --frozen-lockfile`, `pnpm verify`, then `pnpm tauri build --no-bundle`, which are exactly the CI steps. All exit 0, and the clone's tree stayed clean. | ✅ 2026-11-08 |
 | 1.2 | Binary starts and stays running; creates `%APPDATA%\com.gayanshop.pos\pos.db` and applies the migration | Launch: process alive, window title "GayanShop POS". `pos.db` + `-wal` + `-shm` created; `_sqlx_migrations` = version 1 ok; 48 tables, 33 triggers; `journal_mode=wal`; `quick_check=ok` | ✅ 2026-11-08 |
 | 1.3a | Window opens at 1366×768 | GUI-auto (Win32 `GetClientRect`, DPI-aware): client area 1708×960 physical = **1366×768 logical** at 125 %. Maximize → 1536×802 logical (the full screen); restore → 1366×768 again. | ✅ 2026-11-08 |
-| 1.3b | Cannot be resized below 1024×768 by dragging the border | `tauri.conf.json` `minWidth: 1024`, `minHeight: 768`. Synthetic mouse drags did not reach the window from the agent's session, so this needs a person. **Manual — pending.** | ☐ |
+| 1.3b | Windows Snap cannot make it smaller than 1024×768 | GUI-auto: Win+← (left half = 768 logical wide on this screen) leaves the window at **1037×793 logical**. The OS applies the configured minimum. | ✅ 2026-11-08 |
+| 1.3c | Dragging the border cannot make it smaller than 1024×768 | Same minimum-size path as 1.3b. Injected mouse drags and Alt+Space keyboard resizes did not reach the window from the agent's session. **Manual — pending** (30-second check on the counter PC). | ☐ |
 | 1.4 | Layout correct at 1024×768 and 1920×1080, with no clipped controls | GUI-auto: CDP viewport emulation at both sizes on the wizard, login, counter-status and audit screens, in EN and SI. No horizontal page overflow, no control outside the viewport, and no button under 44 px. Screenshots reviewed. The audit table overflowed at 1024 px (950 px of columns in a ~895 px grid); fixed in `7d49fa3` and re-checked: grid 911/911 px. | ✅ 2026-11-08 |
 
 ## 2. First-run wizard (EN and SI)
@@ -75,4 +76,4 @@ GUI-auto runs on 2026-11-08 used fresh data folders. The earlier folders were re
 
 - Role names ("Owner", "Cashier") show in English in the Sinhala UI because they are seeded data, not translation keys. Decide in Phase 1 (staff management) whether system roles get translated labels.
 - With a single staff member, the login tile sits in the left column of the two-column grid rather than centered. This is cosmetic.
-- An external Win32 `SetWindowPos` call (not a user action) left the window with a 65535 px height. Maximize and restore by the user behave correctly. Re-check with Windows Snap (Win+←/→) on the counter PC; that is part of 1.3b.
+- An external Win32 `SetWindowPos` call (not a user action) left the window with a 65535 px height. Maximize and restore by the user behave correctly. Snap itself is verified (1.3b).
