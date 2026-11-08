@@ -39,6 +39,12 @@ export function createI18n(lng: UiLanguage = "en", extra?: Record<string, Record
     returnNull: false,
     initAsync: false, // resources are bundled: initialise synchronously
   });
+  // Keep <html lang> in step so screen readers and font shaping use the right language (WCAG 3.1.1).
+  const syncDocumentLang = (language: string) => {
+    if (typeof document !== "undefined") document.documentElement.lang = language;
+  };
+  syncDocumentLang(instance.language);
+  instance.on("languageChanged", syncDocumentLang);
   return instance;
 }
 

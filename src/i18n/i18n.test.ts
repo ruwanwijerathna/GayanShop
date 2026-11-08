@@ -9,6 +9,13 @@ describe("i18n", () => {
     expect(i18n.t("actions.cancel")).toBe("අවලංගු කරන්න");
   });
 
+  it("keeps <html lang> in step with the UI language", async () => {
+    const i18n = createI18n("si");
+    expect(document.documentElement.lang).toBe("si");
+    await i18n.changeLanguage("en");
+    expect(document.documentElement.lang).toBe("en");
+  });
+
   it("falls back to English for a key missing in Sinhala", () => {
     const i18n = createI18n("si", {
       si: { common: { only: "සිංහල" } },
