@@ -7,7 +7,7 @@
 >
 > Never change an architectural decision silently. Propose the doc change to the owner first.
 
-**Current state (2026-11-08): ✅ PHASE 0 COMPLETE.** Blocks 0.1–0.10 are committed and green. Two things are pending the owner: the manual GUI items in `docs/qa/phase0-smoke.md`, and the first CI run (it needs a GitHub remote). **Phase 1 is not started.** Begin Block 1.1 only when the owner explicitly says to.
+**Current state (2026-11-08): ✅ PHASE 0 COMPLETE.** Blocks 0.1–0.10 are committed and green. The GUI smoke checks were run against the real release app (`docs/qa/phase0-smoke.md`), and the CI steps were reproduced from a clean clone. Still pending the owner: drag-resize/Snap below 1024×768 (item 1.3b), and the first real CI run (it needs a GitHub remote). **Phase 1 is not started.** Begin Block 1.1 only when the owner explicitly says to.
 
 ---
 
