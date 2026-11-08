@@ -1,7 +1,14 @@
-# Tauri + React + Typescript
+# GayanShop POS
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+Offline-first desktop point of sale for GayanShop — Tauri v2 (Rust) + React 19 + TypeScript + Tailwind CSS v4 + shadcn/ui, with a local SQLite source of truth and (later) Supabase sync.
 
-## Recommended IDE Setup
+- **Architecture & policies:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- **Engineering rules, roadmap & verification gates:** [`AGENT.md`](AGENT.md)
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+```bash
+pnpm install
+pnpm tauri dev     # run the desktop app
+pnpm verify        # full quality gate (lint, types, tests, i18n, guard, rustfmt, clippy, cargo test)
+```
+
+On Windows Git Bash, put cargo on PATH first: `export PATH="$HOME/.cargo/bin:$PATH"`.

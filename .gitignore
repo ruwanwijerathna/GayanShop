@@ -22,3 +22,14 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# GayanShop POS (Block 0.1)
+*.db
+*.db-wal
+*.db-shm
+*.db.partial
+.env
+.env.*
+coverage
+backups
+src-tauri/gen

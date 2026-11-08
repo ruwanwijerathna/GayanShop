@@ -1,2 +1,5 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Normalise to LF in the repo AND the working copy, so Prettier/rustfmt checks are stable on Windows.
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.icns binary

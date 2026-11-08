@@ -166,7 +166,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
 
 ### Phase 0: Foundations (⏸ on hold until the owner says go)
 
-- [ ] **0.1 Repo hygiene, git and tooling baseline**
+- [x] **0.1 Repo hygiene, git and tooling baseline**: done 2026-11-08
   - **Deliverables:**
     - Extend `.gitignore` (§4). The repo already exists; don't re-init.
     - The ESLint flat config, Prettier, `rustfmt.toml`, and the crate-root lint attributes from §2 (in `src-tauri/src/lib.rs`).

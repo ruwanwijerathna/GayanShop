@@ -1,0 +1,8 @@
+dist
+coverage
+node_modules
+src-tauri
+docs
+*.md
+pnpm-lock.yaml
+src/db/bindings.ts

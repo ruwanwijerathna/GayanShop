@@ -2,5 +2,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    gayanshop_lib::run()
+    if let Err(err) = gayanshop_lib::run() {
+        eprintln!("GayanShop POS failed to start: {err}");
+        std::process::exit(1);
+    }
 }
