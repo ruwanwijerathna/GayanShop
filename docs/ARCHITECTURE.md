@@ -239,6 +239,113 @@ It's never derived from UTC at query time. Otherwise terminals, and the cloud, w
   - `i18next` `saveMissing` logs missing keys in dev.
   - The till screens are fully translated before the pilot.
 
+### 1.9 UI/UX design system: counter-grade, high-contrast, dual-input
+
+**Principles, in priority order:**
+1. **Legible under glare.** Fluorescent store lighting and screens at an angle wash out low-contrast UI.
+2. **Fast by hand and by keyboard.** Every action has both a ≥ 48 px touch path and a keyboard path.
+3. **Never block the next scan.**
+4. **Calm by default, loud only for problems.**
+
+Style: flat with clear borders, no decorative effects. Borders, not shadows, separate regions, because shadows vanish under glare. There are no gradients or glassmorphism, and icons are Lucide SVGs, never emoji.
+
+**Colour tokens** (Tailwind v4 `@theme` + shadcn CSS variables; components use tokens only, never raw hex):
+
+| Token | Light | Dark | Use |
+|---|---|---|---|
+| `--background` | white `#FFFFFF` | zinc-950 `#09090B` | App background |
+| `--foreground` | zinc-950 `#09090B` (19.9:1) | zinc-50 `#FAFAFA` (19.1:1) | Body text |
+| `--card` / `--popover` | white | zinc-900 `#18181B` | Panels, dialogs |
+| `--muted` | zinc-100 `#F4F4F5` | zinc-800 `#27272A` | Secondary surfaces, zebra rows |
+| `--muted-foreground` | zinc-600 `#52525B` (7.7:1) | zinc-400 `#A1A1AA` (7.8:1 on zinc-950) | Secondary text. Never lighter than this. |
+| `--border` | zinc-300 `#D4D4D8` (1.5:1) | zinc-700 `#3F3F46` (1.9:1) | **Decorative** dividers only (table rules, panel separators), which carry no meaning on their own |
+| `--input` | zinc-500 `#71717A` (4.8:1) | zinc-500 `#71717A` (4.1:1 on zinc-950, 3.7:1 on zinc-900) | **Boundaries of controls**: inputs, selects, outline buttons, checkboxes. These must meet ≥ 3:1 (WCAG 1.4.11). |
+| `--primary` (**emerald**) | emerald-700 `#047857`, white text (5.5:1) | emerald-500 `#10B981`, zinc-950 text (7.8:1) | **Pay / Complete**, success states, "Sale complete ✓" |
+| `--success-surface` | emerald-50 `#ECFDF5` + emerald-800 text | emerald-950 `#022C22` + emerald-300 text | Completed-transaction banner, row flash |
+| `--destructive` | red-700 `#B91C1C`, white text (6.5:1) | red-500 `#EF4444`, zinc-950 text (5.3:1) | Void, errors, unknown barcode |
+| `--warning` | amber-500 surface + zinc-950 text (9.3:1) | amber-400 + zinc-950 | Printer paper-out, oversold stock, backup reminder |
+| `--info` | sky-700 | sky-400 | Neutral notices, sync status |
+| `--ring` | emerald-600, **3 px**, offset 2 px (3.8:1 vs white) | emerald-400 (10.4:1 vs zinc-950) | Keyboard focus. Always visible, never removed. |
+| `--chart-1…5` | emerald-600, sky-600, amber-500, violet-600, zinc-500 | -400 variants | Charts (§1.4). Never colour-only: labels and patterns too. |
+
+- **Contrast rules:**
+  - Till text must reach **≥ 7:1**, which is WCAG AAA, chosen for glare.
+  - All other text must reach ≥ 4.5:1, and control boundaries and focus rings ≥ 3:1.
+  - **White text on emerald-600 (3.8:1) fails** for text, which is why primary buttons use emerald-700 in light mode. Emerald-600 is fine for the focus ring, a non-text indicator that only needs ≥ 3:1.
+  - All ratios here were computed with the WCAG 2.x relative-luminance formula.
+  - CI runs an automated contrast check over the token pairs (Block 0.8).
+- **Themes:** light (default for bright counters) and dark (evening shifts, and back office on request).
+  - Switching uses the `.dark` class on `<html>`.
+  - The choice is stored per device in `device_settings` (`ui.theme = light | dark | system`).
+  - Both themes are designed from tokens, not inverted.
+
+**Typography** (all bundled locally with `@fontsource`, offline):
+- **Inter** for the Latin UI, with `font-variant-numeric: tabular-nums` on **every** money, qty and code column, so digits align and totals don't jitter as they change.
+- **Noto Sans Sinhala** for `:lang(si)`, at line-height ≥ 1.6 (§1.8).
+- **JetBrains Mono** only for barcodes, SKUs and receipt numbers.
+- **Type scale** (rem from a 16 px base; nothing interactive below 14 px, no body text below 16 px):
+
+| Role | Size / weight | Where |
+|---|---|---|
+| Grand total | 40 px / 700, tabular | Till total panel |
+| Payment due and change | 32 px / 700 | Payment dialog |
+| Section titles | 20 px / 600 | Panels, dialogs |
+| Cart lines | 18 px / 500 (name), 18 px / 600 tabular (amount) | Till cart |
+| Body and inputs | 16 px / 400 | Everywhere |
+| Secondary and meta | 14 px / 400 | Timestamps, hints, `<Kbd>` |
+
+**Spacing, sizing and layout:**
+- 4 px grid: spacing steps 4, 8, 12, 16, 24 and 32. Radius is 8 px for controls and 12 px for panels.
+- **Touch targets ≥ 48 × 48 px**, with **≥ 8 px between adjacent targets** on all till screens and dialogs.
+- Button sizes: `pos` = 48 px (`h-12`), `pos-lg` = 64 px (`h-16`) for **Pay**, the keypad and payment methods, `default` = 40 px (mouse-only back-office forms).
+- Rows are 48 px, or 36 px in an opt-in compact density for mouse-driven back-office PCs.
+- **Till layout at 1024×768** (no scrolling of the primary regions):
+
+  ```
+  ┌──────────────────────────────── top bar 56px: store · counter T01 · staff · sync pill · EN|සිං · lock ──┐
+  │ scan/search field (F3) 56px · customer phone (F4) · quick-sale bar (F2)                                     │
+  ├──────────────────────────────────────────────┬────────────────────────────────────────────────────────────┤
+  │ CART (≈58%) — virtualised, 48px lines,       │ quick keys / search results (48px tiles)                      │
+  │ newest line at bottom, auto-scroll           │                                                              │
+  │                                              │ numeric keypad (64px keys)                                    │
+  ├──────────────────────────────────────────────┼────────────────────────────────────────────────────────────┤
+  │ items · discounts · TOTAL Rs 12,450.00 (40px)│ [Hold F8] [Discount F6/F7] [Void F10]   [  PAY  F9  ] 64px   │
+  └──────────────────────────────────────────────┴────────────────────────────────────────────────────────────┘
+  ```
+
+**Dual-mode input:**
+- **Keyboard-first:**
+  - The till has a single focus model: after any action, focus returns to the scan field.
+  - The full shortcut map is in §1.4: F1 help, **F2 quick sale, F3 search, F4 phone, F9 Pay**, F8 hold, F10 void, F11 recall, Esc cancel, Ctrl+L lock, Ctrl+Shift+L language, Numpad `+` pay, Numpad `/` phone.
+  - Every till button shows its key as a visible **`<Kbd>` badge** (e.g. `PAY [F9]`).
+  - In dialogs, Tab order is logical, Enter triggers the default action and Esc cancels. A focus trap is mandatory, and focus returns to where it was on close.
+- **Touch:**
+  - No hover-only affordances, no long-press-only actions, and no drag-required interactions.
+  - Pressed state appears within one frame (`active:` scale 0.98 plus a darker fill).
+- Shortcuts are suspended while a text field is focused, except for F-keys and Esc, and while a scanner burst is being captured (§7.1).
+
+**Micro-interactions and feedback (budgets verified in Block 1.12):**
+
+| Event | Visual (≤ 50 ms to first frame) | Audio (bundled WAV, Web Audio, volume in settings) |
+|---|---|---|
+| Item added (scan, quick key, quick sale) | The new or incremented line flashes emerald (150 ms background fade), the qty "bumps" (scale 1 → 1.08 → 1, 120 ms), and the cart auto-scrolls. Transitions animate only `transform`, `opacity` and `background-color`, never layout. | Short high "tick" (≈ 880 Hz, 40 ms) |
+| Unknown barcode | Scan field border and toast in `--destructive`, with no modal | Double low tone (≈ 220 Hz × 2, 80 ms each) |
+| Approval required | `ApprovalDialog` slides up (150 ms), with the PIN pad focused | Single mid tone |
+| Sale complete | An emerald "Sale complete ✓ · Change Rs 550.00" banner for 2 s, which doesn't block the next scan | Rising two-note chime |
+| Printer or system problem | A persistent amber banner with actions, until resolved | One-time warning tone |
+
+- **Optimistic but honest:**
+  - A cart line appears from the local product cache instantly. Lookup is a local indexed IPC call, budgeted under 10 ms.
+  - Totals shown on the till are previews. The receipt and the sealed order use Rust's authoritative totals (§3.7). If they ever differ, the payment dialog shows Rust's figures before taking money.
+- `prefers-reduced-motion` and the device setting "Reduce motion" turn off flashes and bumps (instant colour change instead), with audio unaffected. No animation on the till exceeds 200 ms.
+- **Accessibility:**
+  - `aria-live="polite"` announces cart changes and totals.
+  - Every icon button has an accessible label in both languages.
+  - Error text sits next to its field.
+  - Colour is never the only signal: icons and text accompany every status colour.
+
+**Data tables and charts:** TanStack Table v8 + Virtual, and shadcn Charts (§1.4). Rows have fixed heights (48 or 36 px), a sticky header, `tabular-nums` money columns aligned right, and a keyboard row cursor (↑/↓, Enter opens). The 60 fps target is verified by the Block 2.10 scroll benchmark.
+
 ---
 
 ## 2. Folder structure
@@ -469,12 +576,13 @@ price  = trailing token matching ^\d+(\.\d{1,2})?$   ("10L" is not a price, so n
 
 **Quick-sale review** (`QUICK_SALE_PROMOTE` permission) is a back-office table grouped by `custom_key`. It shows:
 - Times sold, units and revenue
-- Last, median and min/max price
-- First and last seen, and which terminals sold it
+- Last and min/max price
+- First and last seen
+- The list itself reads the derived `quick_sale_stats` table. Opening one key shows its median price and which counters sold it, computed on demand from `order_items` through `ix_items_custom`.
 - Status: `new` / `promoted` / `ignored`
 
 It's sorted by frequency. Two one-click actions:
-- **Promote to product** runs one transaction. It creates a `products` row (name = most frequent spelling, price = last price, cost entered by the manager). If a batch is chosen, it adds a layer to it, with a shelf count entered so stock starts correct. It writes a `quick_sale_links` row (`custom_key → product_id, batch_id`) and audits `QUICK_SALE_PROMOTE`.
+- **Promote to product** runs one transaction. It creates a `products` row (name = latest spelling, editable; price = last price, cost entered by the manager). If a batch is chosen, it adds a layer to it, with a shelf count entered so stock starts correct. It writes a `quick_sale_links` row (`custom_key → product_id, batch_id`) and audits `QUICK_SALE_PROMOTE`.
 - **Ignore** writes a link with `action = 'ignored'`, which hides one-off noise.
 
 **Promotion is forward-only.** Past quick-sale lines keep their original attribution, and no historical batch P&L changes. The review screen can still show the key's pre-promotion history through the link. `quick_sale_links.id = UUIDv5(store_id, custom_key)`, so two managers promoting the same key on different terminals produce the *same* row, which merges by LWW.
@@ -667,7 +775,7 @@ line_net              = inclusive ? line_total − tax_amount : line_total   (ex
 - After 9–10 digits, Rust looks the number up (`customer_lookup(phone)` is a local, indexed query, so it works offline):
   - **Known:** the cart header shows the name, if one was stored, plus "Visit #N".
   - **New:** the header shows "New customer", with an optional one-tap name field.
-- At checkout, `checkout_order` attaches the customer in the same transaction. It either links the existing row or **creates one**, then sets `orders.customer_id`. **The order stores no copy of the phone number**: it lives only on `customers`, so erasure never touches an immutable order.
+- At checkout, `checkout_order` attaches the customer in the same transaction. It first links the existing row or **creates one**, *before* inserting the order, then inserts the order with `customer_id` already set. `customer_id` is a foreign key, and it's frozen after insert by the order state machine. **The order stores no copy of the phone number**: it lives only on `customers`, so erasure never touches an immutable order.
 - The receipt prints the phone **masked** (`Customer: 07X XXX X123`), never in full.
 
 **Phone normalisation** (`domain::phone`, mirrored in `lib/phone.ts` for the preview):
@@ -747,8 +855,13 @@ line_net              = inclusive ? line_total − tax_amount : line_total   (ex
 | **Mutable (LWW)** | `store_settings`, `roles`, `staff`, `categories`, `products`, `batches`, `batch_items`, `customers`, `expense_categories`, `expenses`, `quick_sale_links`, `cash_sessions` | `id`, `store_id`, `created_at`, `updated_at`, `updated_by_device`, `deleted_at`, `version` | Last-write-wins on the row, plus server-side invariants | `updated_by_device = me` |
 | **Insert-only** | `order_items`, `order_payments`, `stock_movements`, `cash_movements`, `audit_logs` | `id`, `store_id`, `device_id`, `created_at` | Same `id` ⇒ no-op | `device_id = me` |
 | **Insert-only + void** | `orders` | Insert-only columns **plus** `updated_at`, `updated_by_device`, `version` (the void transition is the only update) | Insert; status `completed → voided` only | `updated_by_device = me` |
-| **Local-only** | `device_settings`, `receipt_counters`, `held_carts`, `auth_attempts`, `sync_outbox`, `sync_state`, `sync_logs` | — | Not synced | — |
-| **Derived** (rebuildable, not synced) | `products_fts`, `stock_levels`, `batch_item_stock`, `daily_sales_summary`, `daily_payment_summary` | — | Maintained by triggers on local *and* pulled inserts | — |
+| **Local-only** | `device_settings`, `sync_ctx`, `receipt_counters`, `sku_counters`, `held_carts`, `print_jobs`, `auth_attempts`, `sync_outbox`, `sync_state`, `sync_logs` | — | Not synced | — |
+| **Derived** (rebuildable, not synced) | `products_fts`, `products_fts_si`, `stock_levels`, `batch_item_stock`, `daily_sales_summary`, `daily_payment_summary`, `customer_stats`, `quick_sale_stats` | — | Maintained by triggers on local seals *and* pulled inserts | — |
+
+**Trigger classes (§13.5).**
+- **Structural** triggers are always on: append-only tables, the order state machine, cost locks, and no reopening of a cash session.
+- **Policy** triggers check local writes: seal totals, open session, permission bits and the audit chain. They're skipped while `sync_ctx.applying = 1`, which the pull sets inside its own page transaction (§6.2). Pulled rows were validated on their origin device and on the server, and parent closure can deliver them in an order those rules don't expect: for example, a closed session before another counter's void.
+- **Derived** triggers are always on.
 
 - **IDs:** UUIDv7 (TEXT locally, `uuid` in Postgres), except `quick_sale_links.id = UUIDv5(store_id, custom_key)`, `customers.id = UUIDv5(store_id, phone_e164)` and `store_settings.key`.
 - **Reserved system device ID:** `00000000-0000-0000-0000-000000000000`. Any row the *server* modifies (barcode-conflict resolution, invariant repair) is stamped with it, so the originating device pulls the change back instead of filtering it out as its own.
@@ -994,7 +1107,7 @@ export interface CustomerStats {      // derived table customer_stats (trigger-m
 
 // ───────── orders (all sales final; void is the only correction) ─────────
 export type OrderType = 'sale';                     // Phase 5 may add 'exchange'
-export type OrderStatus = 'completed' | 'voided';
+export type OrderStatus = 'completed' | 'voided';   // + 'pending' inside the checkout transaction only (never committed/visible)
 export type PaymentMethod = 'cash' | 'card' | 'bank_transfer' | 'qr' | 'other';
 export type VoidReason =
   | 'WRONG_ITEM' | 'WRONG_PRICE' | 'WRONG_QTY' | 'DUPLICATE_SCAN' | 'CUSTOMER_CANCELLED' | 'OTHER';
@@ -1005,7 +1118,9 @@ export interface Order extends InsertOnlyMeta {
   version: number;
   cash_session_id: UUID;
   receipt_no: string;                 // "T01-20261108-0042"
+  checkout_token: UUID;               // client-generated per cart; UNIQUE ⇒ double-tap / retry can't duplicate
   type: OrderType;
+  line_count: number;                 // number of order_items (verified at seal)
   status: OrderStatus;
   staff_id: UUID;
   customer_id: UUID | null;           // optional; phone lives only on customers
@@ -1021,12 +1136,12 @@ export interface Order extends InsertOnlyMeta {
   cost_total: Money;                  // Σ line cost_total (COGS)
   quick_sale_net: Money;              // portion of net_sales from custom lines
   unknown_cost_net: Money;            // portion of net_sales with cost_known = false
-  item_count: number;
+  item_count: number;                 // Σ qty
   business_date: BusinessDate;
   completed_at: ISODateTime;
   voided_at: ISODateTime | null;
   voided_by: UUID | null;
-  void_approved_by: UUID | null;      // supervisor who approved a cashier's void
+  void_approved_by: UUID | null;      // supervisor who approved a cashier's void (must differ from voided_by)
   void_reason: VoidReason | null;
   void_note: string | null;           // required when void_reason = 'OTHER'
   note: string | null;
@@ -1095,9 +1210,9 @@ export interface QuickSaleLink extends SyncMeta {   // id = UUIDv5(store_id, cus
   decided_at: ISODateTime;
 }
 
-export interface QuickSaleSummary {   // read model (view)
+export interface QuickSaleSummary {   // derived table quick_sale_stats ⋈ quick_sale_links
   custom_key: string;
-  display_name: string;               // most frequent spelling
+  display_name: string;               // latest spelling
   times_sold: number;
   units_sold: Qty;
   revenue_net: Money;
@@ -1106,7 +1221,6 @@ export interface QuickSaleSummary {   // read model (view)
   max_price: Money;
   first_sold_at: ISODateTime;
   last_sold_at: ISODateTime;
-  device_count: number;
   status: 'new' | 'promoted' | 'ignored';
   product_id: UUID | null;
 }
@@ -1283,9 +1397,27 @@ export interface SyncLog {            // local-only
 ### 4.3 SQLite DDL (`src-tauri/migrations/0001_init.sql`)
 
 ```sql
--- GayanShop POS — initial schema, v4 (all sales final; void-only corrections; customers; no exchanges/credit notes).
+-- GayanShop POS — initial schema, v4.1 (all sales final; void-only corrections; customers; stress-test hardened).
 -- Conventions: money = INTEGER minor units (LKR cents); ids = UUID TEXT; timestamps = ISO-8601 UTC TEXT;
 -- business_date = 'YYYY-MM-DD' in store timezone after day cutoff, computed by the writing device.
+--
+-- Trigger classes (§13.5):
+--   STRUCTURAL  – always on: append-only tables, order state machine, cost locks. Hold for every writer.
+--   POLICY      – business rules for LOCAL writes (seal totals, open session, permissions, audit chain).
+--                 Skipped while sync_ctx.applying = 1, because pulled rows were validated on their origin
+--                 device and on the server, and may legitimately arrive in an order these rules don't expect.
+--   DERIVED     – keep caches/rollups in step. Always on (local and pulled rows alike).
+-- SQL cannot verify a PIN: permission checks here are structural (the approver exists, is active and holds
+-- the bit). The PIN and approval-token checks happen in Rust (auth::guard).
+
+-- ═════════ sync apply flag (local-only; a regular table because non-TEMP triggers can't read TEMP tables) ═════════
+CREATE TABLE sync_ctx (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  applying INTEGER NOT NULL DEFAULT 0 CHECK (applying IN (0, 1))
+);
+INSERT INTO sync_ctx (id, applying) VALUES (1, 0);
+-- The pull sets applying = 1 at the start of its page transaction and back to 0 before COMMIT.
+-- Writes are serialised (single writer), so no local command can run while it is 1.
 
 -- ═════════ settings ═════════
 CREATE TABLE store_settings (                        -- synced, LWW per key
@@ -1325,6 +1457,17 @@ CREATE TABLE staff (
 );
 CREATE INDEX ix_staff_role ON staff(role_id);
 
+-- Effective permissions = (role | grant) & ~deny; the Owner system role holds every bit (2^53 − 1).
+-- Bits used by policy triggers: PRICE_OVERRIDE = 4 (bit 2), VOID_ORDER = 32 (bit 5).
+CREATE VIEW v_staff_effective AS
+SELECT s.id AS staff_id, s.is_active,
+       CASE WHEN r.is_system = 1 AND r.name = 'Owner' THEN 9007199254740991
+            ELSE ((r.permissions | s.grant_mask) & ~s.deny_mask) END AS perms,
+       COALESCE(s.max_discount_bp, r.max_discount_bp) AS max_discount_bp,
+       r.max_override_bp
+FROM staff s JOIN roles r ON r.id = s.role_id
+WHERE s.deleted_at IS NULL;
+
 CREATE TABLE auth_attempts (                         -- local-only lockout state
   staff_id TEXT PRIMARY KEY,
   failed_count INTEGER NOT NULL DEFAULT 0,
@@ -1345,7 +1488,7 @@ CREATE TABLE products (
   kind TEXT NOT NULL DEFAULT 'standard' CHECK (kind IN ('standard','generic')),
   name TEXT NOT NULL,                                -- printable on receipts/labels (Latin)
   name_si TEXT,                                      -- optional Sinhala display name (screens only)
-  sku TEXT, barcode TEXT,
+  sku TEXT, barcode TEXT,                            -- sku: 6-digit in-store code {device_digit}{5-digit seq}
   category_id TEXT REFERENCES categories(id),
   default_cost INTEGER NOT NULL DEFAULT 0 CHECK (default_cost >= 0),
   price INTEGER NOT NULL CHECK (price >= 0),
@@ -1365,17 +1508,25 @@ CREATE UNIQUE INDEX ux_products_barcode ON products(store_id, barcode)
 CREATE UNIQUE INDEX ux_products_sku ON products(store_id, sku)
   WHERE sku IS NOT NULL AND deleted_at IS NULL;
 
--- Standalone FTS keyed by id (NOT external-content on rowid: TEXT PK ⇒ VACUUM/restore may renumber rowids).
-CREATE VIRTUAL TABLE products_fts USING fts5(id UNINDEXED, name, name_si, sku, barcode, tokenize = 'unicode61');
+-- Type-ahead search. Standalone FTS tables keyed by id (NOT external-content on rowid: TEXT PK ⇒
+-- VACUUM/restore may renumber rowids). Latin fields: unicode61 + prefix indexes for "blu* buc*".
+-- Sinhala names: trigram tokenizer (substring match, script-agnostic) because unicode61's handling of
+-- Sinhala combining vowel signs is unverified — Block 1.1 tests real Sinhala names against both.
+CREATE VIRTUAL TABLE products_fts USING fts5(id UNINDEXED, name, sku, barcode, tokenize = 'unicode61', prefix = '2 3');
+CREATE VIRTUAL TABLE products_fts_si USING fts5(id UNINDEXED, name_si, tokenize = 'trigram');
 CREATE TRIGGER trg_products_fts_ins AFTER INSERT ON products BEGIN
-  INSERT INTO products_fts(id, name, name_si, sku, barcode) VALUES (NEW.id, NEW.name, NEW.name_si, NEW.sku, NEW.barcode);
+  INSERT INTO products_fts(id, name, sku, barcode) VALUES (NEW.id, NEW.name, NEW.sku, NEW.barcode);
+  INSERT INTO products_fts_si(id, name_si) SELECT NEW.id, NEW.name_si WHERE NEW.name_si IS NOT NULL;
 END;
 CREATE TRIGGER trg_products_fts_upd AFTER UPDATE OF name, name_si, sku, barcode ON products BEGIN
   DELETE FROM products_fts WHERE id = OLD.id;
-  INSERT INTO products_fts(id, name, name_si, sku, barcode) VALUES (NEW.id, NEW.name, NEW.name_si, NEW.sku, NEW.barcode);
+  DELETE FROM products_fts_si WHERE id = OLD.id;
+  INSERT INTO products_fts(id, name, sku, barcode) VALUES (NEW.id, NEW.name, NEW.sku, NEW.barcode);
+  INSERT INTO products_fts_si(id, name_si) SELECT NEW.id, NEW.name_si WHERE NEW.name_si IS NOT NULL;
 END;
 CREATE TRIGGER trg_products_fts_del AFTER DELETE ON products BEGIN
   DELETE FROM products_fts WHERE id = OLD.id;
+  DELETE FROM products_fts_si WHERE id = OLD.id;
 END;
 
 -- ═════════ batches (cost layers) ═════════
@@ -1415,7 +1566,7 @@ CREATE TABLE batch_items (
   UNIQUE (batch_id, product_id)
 );
 CREATE INDEX ix_batch_items_product ON batch_items(product_id);
--- Cost lock: unit_cost / qty_received may not change once the parent batch is received or closed.
+-- STRUCTURAL: unit_cost / qty_received may not change once the parent batch is received or closed.
 CREATE TRIGGER trg_batch_item_cost_lock BEFORE UPDATE OF unit_cost, qty_received ON batch_items
 WHEN (SELECT status FROM batches WHERE id = OLD.batch_id) <> 'draft'
   AND (NEW.unit_cost <> OLD.unit_cost OR NEW.qty_received <> OLD.qty_received)
@@ -1435,6 +1586,10 @@ CREATE TABLE cash_sessions (
   deleted_at TEXT, version INTEGER NOT NULL DEFAULT 1
 );
 CREATE UNIQUE INDEX ux_one_open_session ON cash_sessions(device_id) WHERE status = 'open';
+-- STRUCTURAL: a closed session never reopens (it would re-open the void window on a printed Z-report).
+CREATE TRIGGER trg_cash_session_no_reopen BEFORE UPDATE OF status ON cash_sessions
+WHEN OLD.status = 'closed' AND NEW.status <> 'closed'
+BEGIN SELECT RAISE(ABORT, 'a closed cash session cannot be reopened'); END;
 
 CREATE TABLE cash_movements (
   id TEXT PRIMARY KEY, store_id TEXT NOT NULL, device_id TEXT NOT NULL,
@@ -1466,50 +1621,76 @@ CREATE TABLE customers (
 CREATE UNIQUE INDEX ux_customers_phone ON customers(store_id, phone_e164)
   WHERE phone_e164 IS NOT NULL AND deleted_at IS NULL;
 
--- ═════════ orders (all sales final; same-session void is the only correction) ═════════
+-- ═════════ orders: pending → completed (seal) → voided (same session only) ═════════
+-- Local checkout inserts the order as 'pending', inserts lines/payments/stock slices, then SEALS it
+-- (UPDATE status = 'completed'). The seal trigger re-verifies every total in SQL. 'pending' exists only
+-- inside the checkout transaction: it is never committed, never synced, never shown.
 CREATE TABLE orders (
   id TEXT PRIMARY KEY, store_id TEXT NOT NULL, device_id TEXT NOT NULL,
   cash_session_id TEXT NOT NULL REFERENCES cash_sessions(id),
   receipt_no TEXT NOT NULL,
+  checkout_token TEXT NOT NULL,                      -- client-generated per cart; dedupes double-taps/retries
   type TEXT NOT NULL DEFAULT 'sale' CHECK (type IN ('sale')),   -- Phase 5 may add 'exchange'
-  status TEXT NOT NULL CHECK (status IN ('completed','voided')),
-  staff_id TEXT NOT NULL,
-  approved_by TEXT,
+  status TEXT NOT NULL CHECK (status IN ('pending','completed','voided')),
+  staff_id TEXT NOT NULL REFERENCES staff(id),
+  approved_by TEXT REFERENCES staff(id),             -- bill-discount / override approver
   customer_id TEXT REFERENCES customers(id),         -- optional; the phone lives only on customers
+  line_count INTEGER NOT NULL CHECK (line_count > 0),
+  item_count INTEGER NOT NULL CHECK (item_count > 0),-- Σ qty
   gross_sales INTEGER NOT NULL CHECK (gross_sales >= 0),
-  discount_total INTEGER NOT NULL DEFAULT 0,         -- Σ line_discount + bill discount
+  discount_total INTEGER NOT NULL DEFAULT 0 CHECK (discount_total >= 0),
   net_sales INTEGER NOT NULL CHECK (net_sales >= 0), -- Σ line_net (ex tax)
-  tax_total INTEGER NOT NULL DEFAULT 0,
+  tax_total INTEGER NOT NULL DEFAULT 0 CHECK (tax_total >= 0),
   rounding INTEGER NOT NULL DEFAULT 0,
   grand_total INTEGER NOT NULL CHECK (grand_total >= 0),
-  paid_total INTEGER NOT NULL,
+  paid_total INTEGER NOT NULL CHECK (paid_total >= 0),
   change_due INTEGER NOT NULL DEFAULT 0 CHECK (change_due >= 0),
   cost_total INTEGER NOT NULL DEFAULT 0,
   quick_sale_net INTEGER NOT NULL DEFAULT 0,
   unknown_cost_net INTEGER NOT NULL DEFAULT 0,
-  item_count INTEGER NOT NULL,
   business_date TEXT NOT NULL,
   completed_at TEXT NOT NULL,
-  voided_at TEXT, voided_by TEXT, void_approved_by TEXT,
+  voided_at TEXT, voided_by TEXT REFERENCES staff(id), void_approved_by TEXT REFERENCES staff(id),
   void_reason TEXT CHECK (void_reason IN ('WRONG_ITEM','WRONG_PRICE','WRONG_QTY','DUPLICATE_SCAN','CUSTOMER_CANCELLED','OTHER')),
   void_note TEXT,
   note TEXT,
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by_device TEXT NOT NULL,
   version INTEGER NOT NULL DEFAULT 1,
-  CHECK ((status = 'voided') = (voided_at IS NOT NULL AND void_reason IS NOT NULL)),
-  CHECK (void_reason IS NOT 'OTHER' OR length(trim(coalesce(void_note, ''))) > 0)
+  CHECK ((status = 'voided') = (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)),
+  CHECK (void_reason IS NOT 'OTHER' OR length(trim(coalesce(void_note, ''))) > 0),
+  CHECK (paid_total = grand_total)
 );
 CREATE UNIQUE INDEX ux_orders_receipt ON orders(store_id, receipt_no);
+CREATE UNIQUE INDEX ux_orders_checkout_token ON orders(checkout_token);
 CREATE INDEX ix_orders_bdate ON orders(business_date, device_id);
 CREATE INDEX ix_orders_session ON orders(cash_session_id);
+CREATE INDEX ix_orders_keyset ON orders(completed_at DESC, id DESC);           -- order history paging
 CREATE INDEX ix_orders_customer ON orders(customer_id, business_date) WHERE customer_id IS NOT NULL;
-CREATE TRIGGER trg_orders_immutable BEFORE UPDATE ON orders
-WHEN NOT (OLD.status = 'completed' AND NEW.status = 'voided'
-          AND NEW.net_sales = OLD.net_sales AND NEW.grand_total = OLD.grand_total
-          AND NEW.business_date = OLD.business_date AND NEW.device_id = OLD.device_id)
-BEGIN SELECT RAISE(ABORT, 'orders are immutable except completed→voided'); END;
+
+-- STRUCTURAL: the only legal transitions are pending→completed and completed→voided, and neither may
+-- change what was sold, to whom, by whom, for how much, or when.
+CREATE TRIGGER trg_orders_state_machine BEFORE UPDATE ON orders
+WHEN NOT (
+      ((OLD.status = 'pending' AND NEW.status = 'completed') OR (OLD.status = 'completed' AND NEW.status = 'voided'))
+  AND NEW.id = OLD.id AND NEW.device_id = OLD.device_id AND NEW.cash_session_id = OLD.cash_session_id
+  AND NEW.receipt_no = OLD.receipt_no AND NEW.checkout_token = OLD.checkout_token
+  AND NEW.staff_id = OLD.staff_id AND NEW.approved_by IS OLD.approved_by AND NEW.customer_id IS OLD.customer_id
+  AND NEW.line_count = OLD.line_count AND NEW.item_count = OLD.item_count
+  AND NEW.gross_sales = OLD.gross_sales AND NEW.discount_total = OLD.discount_total
+  AND NEW.net_sales = OLD.net_sales AND NEW.tax_total = OLD.tax_total AND NEW.rounding = OLD.rounding
+  AND NEW.grand_total = OLD.grand_total AND NEW.paid_total = OLD.paid_total AND NEW.change_due = OLD.change_due
+  AND NEW.cost_total = OLD.cost_total AND NEW.quick_sale_net = OLD.quick_sale_net
+  AND NEW.unknown_cost_net = OLD.unknown_cost_net
+  AND NEW.business_date = OLD.business_date AND NEW.completed_at = OLD.completed_at
+)
+BEGIN SELECT RAISE(ABORT, 'orders: illegal state transition or mutation of a sold order'); END;
 CREATE TRIGGER trg_orders_no_delete BEFORE DELETE ON orders
 BEGIN SELECT RAISE(ABORT, 'orders cannot be deleted'); END;
+
+-- POLICY: local orders are born 'pending' (completed/voided rows only arrive via sync).
+CREATE TRIGGER trg_orders_insert_pending BEFORE INSERT ON orders
+WHEN (SELECT applying FROM sync_ctx WHERE id = 1) = 0 AND NEW.status <> 'pending'
+BEGIN SELECT RAISE(ABORT, 'orders: local inserts must start as pending and be sealed'); END;
 
 CREATE TABLE order_items (
   id TEXT PRIMARY KEY, store_id TEXT NOT NULL, device_id TEXT NOT NULL,
@@ -1520,24 +1701,25 @@ CREATE TABLE order_items (
   custom_key TEXT,
   batch_id TEXT REFERENCES batches(id),
   name TEXT NOT NULL, barcode TEXT,
-  list_price INTEGER NOT NULL, unit_price INTEGER NOT NULL CHECK (unit_price >= 0),
+  list_price INTEGER NOT NULL CHECK (list_price >= 0), unit_price INTEGER NOT NULL CHECK (unit_price >= 0),
   qty INTEGER NOT NULL CHECK (qty > 0),
   line_gross INTEGER NOT NULL,                       -- unit_price × qty
   line_discount INTEGER NOT NULL DEFAULT 0,
   order_discount_share INTEGER NOT NULL DEFAULT 0,
   tax_rate_bp INTEGER NOT NULL DEFAULT 0,
   tax_amount INTEGER NOT NULL DEFAULT 0,
-  line_total INTEGER NOT NULL,                       -- what the customer pays (incl. tax)
+  line_total INTEGER NOT NULL,                       -- what the customer pays (incl. tax when inclusive)
   line_net INTEGER NOT NULL,                         -- ex tax
-  cost_total INTEGER NOT NULL DEFAULT 0,
+  cost_total INTEGER NOT NULL DEFAULT 0 CHECK (cost_total >= 0),
   cost_known INTEGER NOT NULL DEFAULT 1,
-  price_overridden INTEGER NOT NULL DEFAULT 0, override_reason TEXT, approved_by TEXT,
+  price_overridden INTEGER NOT NULL DEFAULT 0, override_reason TEXT, approved_by TEXT REFERENCES staff(id),
   created_at TEXT NOT NULL,
   CHECK ((is_custom = 1 AND product_id IS NULL AND custom_key IS NOT NULL)
       OR (is_custom = 0 AND product_id IS NOT NULL)),
   CHECK (line_gross = unit_price * qty),
   CHECK (line_total = line_gross - line_discount - order_discount_share),
-  CHECK (line_discount >= 0 AND order_discount_share >= 0 AND line_total >= 0),
+  CHECK (line_discount >= 0 AND order_discount_share >= 0 AND line_total >= 0 AND line_net >= 0),
+  CHECK (price_overridden = (unit_price < list_price)),
   UNIQUE (order_id, line_no)
 );
 CREATE INDEX ix_items_product ON order_items(product_id);
@@ -1547,6 +1729,11 @@ CREATE TRIGGER trg_items_no_update BEFORE UPDATE ON order_items
 BEGIN SELECT RAISE(ABORT, 'order_items are immutable'); END;
 CREATE TRIGGER trg_items_no_delete BEFORE DELETE ON order_items
 BEGIN SELECT RAISE(ABORT, 'order_items are immutable'); END;
+-- POLICY: lines can only be added to an order that is still pending (i.e. inside its own checkout).
+CREATE TRIGGER trg_items_only_into_pending BEFORE INSERT ON order_items
+WHEN (SELECT applying FROM sync_ctx WHERE id = 1) = 0
+ AND (SELECT status FROM orders WHERE id = NEW.order_id) IS NOT 'pending'
+BEGIN SELECT RAISE(ABORT, 'order_items: cannot add lines to a sealed order'); END;
 
 CREATE TABLE order_payments (
   id TEXT PRIMARY KEY, store_id TEXT NOT NULL, device_id TEXT NOT NULL,
@@ -1563,6 +1750,11 @@ CREATE TRIGGER trg_payments_no_update BEFORE UPDATE ON order_payments
 BEGIN SELECT RAISE(ABORT, 'order_payments are append-only'); END;
 CREATE TRIGGER trg_payments_no_delete BEFORE DELETE ON order_payments
 BEGIN SELECT RAISE(ABORT, 'order_payments are append-only'); END;
+-- POLICY: payments only into a pending order.
+CREATE TRIGGER trg_payments_only_into_pending BEFORE INSERT ON order_payments
+WHEN (SELECT applying FROM sync_ctx WHERE id = 1) = 0
+ AND (SELECT status FROM orders WHERE id = NEW.order_id) IS NOT 'pending'
+BEGIN SELECT RAISE(ABORT, 'order_payments: cannot add payments to a sealed order'); END;
 
 -- ═════════ stock ledger (append-only) ═════════
 CREATE TABLE stock_movements (
@@ -1574,11 +1766,14 @@ CREATE TABLE stock_movements (
                                          'damage','count_correction','adjustment')),
   ref_type TEXT, ref_id TEXT,
   order_item_id TEXT REFERENCES order_items(id),
-  unit_cost INTEGER NOT NULL,
+  unit_cost INTEGER NOT NULL CHECK (unit_cost >= 0),
   revenue_net INTEGER,
   business_date TEXT NOT NULL,
   staff_id TEXT, approved_by TEXT, note TEXT,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  CHECK ((reason IN ('sale','void')) = (order_item_id IS NOT NULL)),
+  CHECK (reason <> 'sale' OR (qty_delta < 0 AND revenue_net >= 0)),
+  CHECK (reason <> 'void' OR (qty_delta > 0 AND revenue_net <= 0))
 );
 CREATE INDEX ix_mov_product ON stock_movements(product_id);
 CREATE INDEX ix_mov_layer ON stock_movements(batch_item_id);
@@ -1588,6 +1783,88 @@ CREATE TRIGGER trg_mov_no_update BEFORE UPDATE ON stock_movements
 BEGIN SELECT RAISE(ABORT, 'stock_movements are append-only'); END;
 CREATE TRIGGER trg_mov_no_delete BEFORE DELETE ON stock_movements
 BEGIN SELECT RAISE(ABORT, 'stock_movements are append-only'); END;
+-- POLICY: sale slices only inside their pending checkout; void slices only for a voided order, and each
+-- must mirror an existing sale slice (same line, layer, cost) without reversing more than was sold.
+CREATE TRIGGER trg_mov_sale_void_guard BEFORE INSERT ON stock_movements
+WHEN (SELECT applying FROM sync_ctx WHERE id = 1) = 0 AND NEW.reason IN ('sale','void') BEGIN
+  SELECT RAISE(ABORT, 'stock: sale slices only inside a pending checkout')
+  WHERE NEW.reason = 'sale'
+    AND (SELECT o.status FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE oi.id = NEW.order_item_id) IS NOT 'pending';
+  SELECT RAISE(ABORT, 'stock: void slices only for a voided order')
+  WHERE NEW.reason = 'void'
+    AND (SELECT o.status FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE oi.id = NEW.order_item_id) IS NOT 'voided';
+  SELECT RAISE(ABORT, 'stock: void slice must mirror a sale slice and not exceed it')
+  WHERE NEW.reason = 'void'
+    AND (NOT EXISTS (SELECT 1 FROM stock_movements m WHERE m.order_item_id = NEW.order_item_id
+                       AND m.batch_item_id = NEW.batch_item_id AND m.unit_cost = NEW.unit_cost AND m.reason = 'sale')
+         OR COALESCE((SELECT SUM(qty_delta) FROM stock_movements m WHERE m.order_item_id = NEW.order_item_id
+                       AND m.batch_item_id = NEW.batch_item_id AND m.reason IN ('sale','void')), 0) + NEW.qty_delta > 0);
+END;
+
+-- ═════════ order seal / void policy (after stock_movements exists, which they read) ═════════
+-- POLICY: seal (pending → completed) re-verifies the whole checkout in SQL.
+CREATE TRIGGER trg_orders_seal_verify BEFORE UPDATE OF status ON orders
+WHEN (SELECT applying FROM sync_ctx WHERE id = 1) = 0 AND OLD.status = 'pending' AND NEW.status = 'completed' BEGIN
+  SELECT RAISE(ABORT, 'seal: cash session must be open on this device')
+  WHERE (SELECT status FROM cash_sessions WHERE id = NEW.cash_session_id AND device_id = NEW.device_id) IS NOT 'open';
+  SELECT RAISE(ABORT, 'seal: cashier must be an active staff member')
+  WHERE (SELECT is_active FROM v_staff_effective WHERE staff_id = NEW.staff_id) IS NOT 1;
+  SELECT RAISE(ABORT, 'seal: line_count / item_count mismatch')
+  WHERE NEW.line_count <> (SELECT COUNT(*) FROM order_items WHERE order_id = NEW.id)
+     OR NEW.item_count <> (SELECT COALESCE(SUM(qty), 0) FROM order_items WHERE order_id = NEW.id);
+  SELECT RAISE(ABORT, 'seal: header totals do not equal the sum of lines')
+  WHERE NEW.gross_sales      <> (SELECT COALESCE(SUM(line_gross), 0) FROM order_items WHERE order_id = NEW.id)
+     OR NEW.discount_total   <> (SELECT COALESCE(SUM(line_discount + order_discount_share), 0) FROM order_items WHERE order_id = NEW.id)
+     OR NEW.net_sales        <> (SELECT COALESCE(SUM(line_net), 0) FROM order_items WHERE order_id = NEW.id)
+     OR NEW.tax_total        <> (SELECT COALESCE(SUM(tax_amount), 0) FROM order_items WHERE order_id = NEW.id)
+     OR NEW.cost_total       <> (SELECT COALESCE(SUM(cost_total), 0) FROM order_items WHERE order_id = NEW.id)
+     OR NEW.quick_sale_net   <> (SELECT COALESCE(SUM(line_net), 0) FROM order_items WHERE order_id = NEW.id AND is_custom = 1)
+     OR NEW.unknown_cost_net <> (SELECT COALESCE(SUM(line_net), 0) FROM order_items WHERE order_id = NEW.id AND cost_known = 0);
+  -- inclusive pricing: Σ line_net = Σ line_total − tax ⇒ grand = Σ line_total + rounding;
+  -- exclusive pricing: Σ line_net = Σ line_total ⇒ grand = Σ line_total + tax + rounding.
+  SELECT RAISE(ABORT, 'seal: grand_total does not match lines + rounding (+ tax when exclusive)')
+  WHERE NEW.grand_total <> (SELECT COALESCE(SUM(line_total), 0) FROM order_items WHERE order_id = NEW.id) + NEW.rounding
+        + CASE WHEN (SELECT COALESCE(SUM(line_net), 0) FROM order_items WHERE order_id = NEW.id)
+                  = (SELECT COALESCE(SUM(line_total), 0) FROM order_items WHERE order_id = NEW.id)
+               THEN NEW.tax_total ELSE 0 END;
+  SELECT RAISE(ABORT, 'seal: payments must equal grand_total exactly; change only from cash tendered')
+  WHERE NEW.grand_total <> (SELECT COALESCE(SUM(amount), 0) FROM order_payments WHERE order_id = NEW.id)
+     OR NEW.change_due  <> (SELECT COALESCE(SUM(tendered - amount), 0) FROM order_payments WHERE order_id = NEW.id AND tendered IS NOT NULL);
+  SELECT RAISE(ABORT, 'seal: stock slices must cover each tracked line exactly (qty, revenue, cost)')
+  WHERE EXISTS (
+    SELECT 1 FROM order_items oi JOIN products p ON p.id = oi.product_id
+    WHERE oi.order_id = NEW.id AND p.track_stock = 1
+      AND (oi.qty       <> -(SELECT COALESCE(SUM(qty_delta), 0)             FROM stock_movements m WHERE m.order_item_id = oi.id AND m.reason = 'sale')
+        OR oi.line_net  <>  (SELECT COALESCE(SUM(revenue_net), 0)           FROM stock_movements m WHERE m.order_item_id = oi.id AND m.reason = 'sale')
+        OR oi.cost_total <> (SELECT COALESCE(SUM(-qty_delta * unit_cost), 0) FROM stock_movements m WHERE m.order_item_id = oi.id AND m.reason = 'sale')));
+  SELECT RAISE(ABORT, 'seal: price below list needs PRICE_OVERRIDE or an approver who holds it')
+  WHERE EXISTS (
+    SELECT 1 FROM order_items oi WHERE oi.order_id = NEW.id AND oi.price_overridden = 1
+      AND ((SELECT perms FROM v_staff_effective WHERE staff_id = NEW.staff_id) & 4) = 0
+      AND COALESCE((SELECT perms & 4 FROM v_staff_effective WHERE staff_id = oi.approved_by AND is_active = 1), 0) = 0);
+  SELECT RAISE(ABORT, 'seal: discount above the cashier limit needs an approver whose limit covers it')
+  WHERE EXISTS (
+    SELECT 1 FROM order_items oi WHERE oi.order_id = NEW.id
+      AND (oi.line_discount + oi.order_discount_share) * 10000
+          > (SELECT max_discount_bp FROM v_staff_effective WHERE staff_id = NEW.staff_id) * oi.line_gross
+      AND (oi.line_discount + oi.order_discount_share) * 10000
+          > COALESCE((SELECT max_discount_bp FROM v_staff_effective
+                      WHERE staff_id = COALESCE(oi.approved_by, NEW.approved_by) AND is_active = 1), -1) * oi.line_gross);
+END;
+
+-- POLICY: void (completed → voided) only on the originating device, while its session is still open,
+-- by someone holding VOID_ORDER, or approved by a different active staff member who holds it.
+CREATE TRIGGER trg_orders_void_verify BEFORE UPDATE OF status ON orders
+WHEN (SELECT applying FROM sync_ctx WHERE id = 1) = 0 AND OLD.status = 'completed' AND NEW.status = 'voided' BEGIN
+  SELECT RAISE(ABORT, 'void: only on the device that made the sale')
+  WHERE NEW.device_id IS NOT json_extract((SELECT value FROM device_settings WHERE key = 'device.id'), '$');
+  SELECT RAISE(ABORT, 'void: the order''s cash session is closed — sales are final')
+  WHERE (SELECT status FROM cash_sessions WHERE id = NEW.cash_session_id) IS NOT 'open';
+  SELECT RAISE(ABORT, 'void: requires VOID_ORDER or a supervisor approval')
+  WHERE COALESCE((SELECT perms & 32 FROM v_staff_effective WHERE staff_id = NEW.voided_by AND is_active = 1), 0) = 0
+    AND (NEW.void_approved_by IS NULL OR NEW.void_approved_by = NEW.voided_by
+         OR COALESCE((SELECT perms & 32 FROM v_staff_effective WHERE staff_id = NEW.void_approved_by AND is_active = 1), 0) = 0);
+END;
 
 -- Derived caches (rebuildable; not synced)
 CREATE TABLE stock_levels (product_id TEXT PRIMARY KEY, on_hand INTEGER NOT NULL DEFAULT 0);
@@ -1598,8 +1875,9 @@ CREATE TABLE batch_item_stock (
   written_off_qty INTEGER NOT NULL DEFAULT 0, written_off_cost INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX ix_bis_batch ON batch_item_stock(batch_id);
+CREATE INDEX ix_bis_negative ON batch_item_stock(product_id) WHERE on_hand < 0;   -- "Oversold layers"
 
--- Sign convention: a sale slice has qty_delta −2 and revenue_net +900 ⇒ sold_qty +2, sold_revenue +900.
+-- DERIVED. Sign convention: a sale slice has qty_delta −2 and revenue_net +900 ⇒ sold_qty +2, sold_revenue +900.
 -- void slices mirror it exactly (+qty, −revenue, same layer and cost).
 CREATE TRIGGER trg_mov_derive AFTER INSERT ON stock_movements BEGIN
   INSERT INTO stock_levels(product_id, on_hand) VALUES (NEW.product_id, NEW.qty_delta)
@@ -1656,40 +1934,6 @@ CREATE TABLE quick_sale_links (
 );
 CREATE UNIQUE INDEX ux_qsl_key ON quick_sale_links(store_id, custom_key) WHERE deleted_at IS NULL;
 
-CREATE VIEW v_quick_sale_summary AS
-SELECT oi.custom_key,
-       (SELECT x.name FROM order_items x WHERE x.custom_key = oi.custom_key AND x.is_custom = 1
-        GROUP BY x.name ORDER BY COUNT(*) DESC LIMIT 1)                AS display_name,
-       COUNT(*)                                                         AS times_sold,
-       SUM(oi.qty)                                                      AS units_sold,
-       SUM(oi.line_net)                                                 AS revenue_net,
-       (SELECT y.unit_price FROM order_items y WHERE y.custom_key = oi.custom_key AND y.is_custom = 1
-        ORDER BY y.created_at DESC LIMIT 1)                             AS last_price,
-       MIN(oi.unit_price) AS min_price, MAX(oi.unit_price) AS max_price,
-       MIN(oi.created_at) AS first_sold_at, MAX(oi.created_at) AS last_sold_at,
-       COUNT(DISTINCT oi.device_id)                                     AS device_count,
-       COALESCE(l.action, 'new')                                        AS status,
-       l.product_id
-FROM order_items oi
-JOIN orders o ON o.id = oi.order_id AND o.status = 'completed'
-LEFT JOIN quick_sale_links l ON l.custom_key = oi.custom_key AND l.deleted_at IS NULL
-WHERE oi.is_custom = 1 AND oi.qty > 0
-GROUP BY oi.custom_key;
-
--- Customer analytics read model (completed orders only; voids excluded).
-CREATE VIEW v_customer_stats AS
-SELECT c.id AS customer_id, c.phone_e164, c.display_name,
-       COUNT(o.id)                          AS visit_count,
-       COALESCE(SUM(o.grand_total), 0)      AS total_spend,
-       COALESCE(SUM(o.net_sales), 0)        AS total_net,
-       CASE WHEN COUNT(o.id) > 0 THEN SUM(o.grand_total) / COUNT(o.id) ELSE 0 END AS avg_basket,
-       MIN(o.business_date)                 AS first_visit_date,
-       MAX(o.business_date)                 AS last_visit_date
-FROM customers c
-LEFT JOIN orders o ON o.customer_id = c.id AND o.status = 'completed'
-WHERE c.deleted_at IS NULL
-GROUP BY c.id;
-
 -- ═════════ audit (append-only, per-device hash chain) ═════════
 CREATE TABLE audit_logs (
   id TEXT PRIMARY KEY, store_id TEXT NOT NULL, device_id TEXT NOT NULL,
@@ -1703,15 +1947,26 @@ CREATE TABLE audit_logs (
   created_at TEXT NOT NULL,
   UNIQUE (device_id, device_seq)
 );
-CREATE INDEX ix_audit_created ON audit_logs(created_at);
+CREATE INDEX ix_audit_keyset ON audit_logs(created_at DESC, id DESC);
 CREATE INDEX ix_audit_entity ON audit_logs(entity_type, entity_id);
 CREATE INDEX ix_audit_action ON audit_logs(action, business_date);
 CREATE TRIGGER trg_audit_no_update BEFORE UPDATE ON audit_logs
 BEGIN SELECT RAISE(ABORT, 'audit_logs are append-only'); END;
 CREATE TRIGGER trg_audit_no_delete BEFORE DELETE ON audit_logs
 BEGIN SELECT RAISE(ABORT, 'audit_logs are append-only'); END;
+-- POLICY: local audit rows must extend this device's chain (gapless seq, linked prev_hash).
+-- Pulled rows (other devices) are verified by audit::verify and the server instead.
+CREATE TRIGGER trg_audit_chain_guard BEFORE INSERT ON audit_logs
+WHEN (SELECT applying FROM sync_ctx WHERE id = 1) = 0 BEGIN
+  SELECT RAISE(ABORT, 'audit: device_seq must be the previous seq + 1')
+  WHERE NEW.device_seq <> COALESCE((SELECT MAX(device_seq) FROM audit_logs WHERE device_id = NEW.device_id), 0) + 1;
+  SELECT RAISE(ABORT, 'audit: prev_hash must equal the previous row''s hash')
+  WHERE NEW.prev_hash <> COALESCE((SELECT hash FROM audit_logs WHERE device_id = NEW.device_id
+                                   ORDER BY device_seq DESC LIMIT 1),
+                                  '0000000000000000000000000000000000000000000000000000000000000000');
+END;
 
--- ═════════ reporting rollups (derived, per device per business day) ═════════
+-- ═════════ derived read models: reporting rollups, customers, quick sales ═════════
 CREATE TABLE daily_sales_summary (
   business_date TEXT NOT NULL, device_id TEXT NOT NULL,
   sales_count INTEGER NOT NULL DEFAULT 0, void_count INTEGER NOT NULL DEFAULT 0, void_value INTEGER NOT NULL DEFAULT 0,
@@ -1727,43 +1982,127 @@ CREATE TABLE daily_payment_summary (
   amount INTEGER NOT NULL DEFAULT 0, txn_count INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (business_date, device_id, method)
 );
+CREATE TABLE customer_stats (
+  customer_id TEXT PRIMARY KEY,
+  visit_count INTEGER NOT NULL DEFAULT 0,
+  total_spend INTEGER NOT NULL DEFAULT 0,            -- Σ grand_total
+  total_net INTEGER NOT NULL DEFAULT 0,              -- Σ net_sales
+  first_visit_date TEXT, last_visit_date TEXT
+);
+CREATE INDEX ix_customer_stats_spend ON customer_stats(total_spend DESC);
+CREATE INDEX ix_customer_stats_last ON customer_stats(last_visit_date DESC);
+CREATE TABLE quick_sale_stats (
+  custom_key TEXT PRIMARY KEY,
+  display_name TEXT NOT NULL,                        -- latest spelling
+  times_sold INTEGER NOT NULL DEFAULT 0, units_sold INTEGER NOT NULL DEFAULT 0,
+  revenue_net INTEGER NOT NULL DEFAULT 0,
+  last_price INTEGER NOT NULL, min_price INTEGER NOT NULL, max_price INTEGER NOT NULL,
+  first_sold_at TEXT NOT NULL, last_sold_at TEXT NOT NULL
+);
+CREATE INDEX ix_qss_frequency ON quick_sale_stats(times_sold DESC);
 
-CREATE TRIGGER trg_rollup_order_insert AFTER INSERT ON orders WHEN NEW.status = 'completed' BEGIN
+-- Shared fragments, applied in the triggers below:
+--   (a) local SEAL (pending → completed): count the order, its payments (aggregated), its customer,
+--       and its quick-sale lines.
+--   (b) PULLED insert of an already-completed order: count the order + customer now; its payments and
+--       lines arrive afterwards (parents first) and are counted by their own insert triggers.
+--   (c) VOID: subtract the order and its payments; recompute the customer and quick-sale keys from base rows.
+
+CREATE TRIGGER trg_rollup_seal AFTER UPDATE OF status ON orders
+WHEN OLD.status = 'pending' AND NEW.status = 'completed' BEGIN
   INSERT INTO daily_sales_summary(business_date, device_id) VALUES (NEW.business_date, NEW.device_id)
   ON CONFLICT DO NOTHING;
   UPDATE daily_sales_summary SET
-    sales_count      = sales_count    + 1,
-    gross_sales      = gross_sales    + NEW.gross_sales,
-    discounts        = discounts      + NEW.discount_total,
-    net_sales        = net_sales      + NEW.net_sales,
-    tax_total        = tax_total      + NEW.tax_total,
-    cogs             = cogs           + NEW.cost_total,
-    quick_sale_net   = quick_sale_net   + NEW.quick_sale_net,
-    unknown_cost_net = unknown_cost_net + NEW.unknown_cost_net,
-    customer_orders  = customer_orders  + (NEW.customer_id IS NOT NULL)
+    sales_count = sales_count + 1, gross_sales = gross_sales + NEW.gross_sales,
+    discounts = discounts + NEW.discount_total, net_sales = net_sales + NEW.net_sales,
+    tax_total = tax_total + NEW.tax_total, cogs = cogs + NEW.cost_total,
+    quick_sale_net = quick_sale_net + NEW.quick_sale_net, unknown_cost_net = unknown_cost_net + NEW.unknown_cost_net,
+    customer_orders = customer_orders + (NEW.customer_id IS NOT NULL)
+  WHERE business_date = NEW.business_date AND device_id = NEW.device_id;
+  INSERT INTO daily_payment_summary(business_date, device_id, method, amount, txn_count)
+  SELECT NEW.business_date, NEW.device_id, p.method, SUM(p.amount), COUNT(*)
+  FROM order_payments p WHERE p.order_id = NEW.id GROUP BY p.method
+  ON CONFLICT(business_date, device_id, method) DO UPDATE SET
+    amount = amount + excluded.amount, txn_count = txn_count + excluded.txn_count;
+  INSERT INTO quick_sale_stats(custom_key, display_name, times_sold, units_sold, revenue_net,
+                               last_price, min_price, max_price, first_sold_at, last_sold_at)
+  SELECT oi.custom_key, oi.name, 1, oi.qty, oi.line_net, oi.unit_price, oi.unit_price, oi.unit_price, oi.created_at, oi.created_at
+  FROM order_items oi WHERE oi.order_id = NEW.id AND oi.is_custom = 1
+  ON CONFLICT(custom_key) DO UPDATE SET
+    times_sold = times_sold + 1, units_sold = units_sold + excluded.units_sold, revenue_net = revenue_net + excluded.revenue_net,
+    display_name = CASE WHEN excluded.last_sold_at >= last_sold_at THEN excluded.display_name ELSE display_name END,
+    last_price   = CASE WHEN excluded.last_sold_at >= last_sold_at THEN excluded.last_price ELSE last_price END,
+    min_price = MIN(min_price, excluded.min_price), max_price = MAX(max_price, excluded.max_price),
+    first_sold_at = MIN(first_sold_at, excluded.first_sold_at), last_sold_at = MAX(last_sold_at, excluded.last_sold_at);
+END;
+
+CREATE TRIGGER trg_rollup_insert_completed AFTER INSERT ON orders WHEN NEW.status = 'completed' BEGIN
+  INSERT INTO daily_sales_summary(business_date, device_id) VALUES (NEW.business_date, NEW.device_id)
+  ON CONFLICT DO NOTHING;
+  UPDATE daily_sales_summary SET
+    sales_count = sales_count + 1, gross_sales = gross_sales + NEW.gross_sales,
+    discounts = discounts + NEW.discount_total, net_sales = net_sales + NEW.net_sales,
+    tax_total = tax_total + NEW.tax_total, cogs = cogs + NEW.cost_total,
+    quick_sale_net = quick_sale_net + NEW.quick_sale_net, unknown_cost_net = unknown_cost_net + NEW.unknown_cost_net,
+    customer_orders = customer_orders + (NEW.customer_id IS NOT NULL)
   WHERE business_date = NEW.business_date AND device_id = NEW.device_id;
 END;
--- A pulled order that arrives already voided is never counted, except in void_count.
-CREATE TRIGGER trg_rollup_order_insert_voided AFTER INSERT ON orders WHEN NEW.status = 'voided' BEGIN
+-- A pulled order that arrives already voided is never counted, except in void_count / void_value.
+CREATE TRIGGER trg_rollup_insert_voided AFTER INSERT ON orders WHEN NEW.status = 'voided' BEGIN
   INSERT INTO daily_sales_summary(business_date, device_id) VALUES (NEW.business_date, NEW.device_id)
   ON CONFLICT DO NOTHING;
   UPDATE daily_sales_summary SET void_count = void_count + 1, void_value = void_value + NEW.grand_total
   WHERE business_date = NEW.business_date AND device_id = NEW.device_id;
 END;
-CREATE TRIGGER trg_rollup_order_void AFTER UPDATE OF status ON orders
+
+CREATE TRIGGER trg_customer_stats_add AFTER UPDATE OF status ON orders
+WHEN OLD.status = 'pending' AND NEW.status = 'completed' AND NEW.customer_id IS NOT NULL BEGIN
+  INSERT INTO customer_stats(customer_id, visit_count, total_spend, total_net, first_visit_date, last_visit_date)
+  VALUES (NEW.customer_id, 1, NEW.grand_total, NEW.net_sales, NEW.business_date, NEW.business_date)
+  ON CONFLICT(customer_id) DO UPDATE SET
+    visit_count = visit_count + 1, total_spend = total_spend + excluded.total_spend, total_net = total_net + excluded.total_net,
+    first_visit_date = MIN(COALESCE(first_visit_date, excluded.first_visit_date), excluded.first_visit_date),
+    last_visit_date  = MAX(COALESCE(last_visit_date,  excluded.last_visit_date),  excluded.last_visit_date);
+END;
+CREATE TRIGGER trg_customer_stats_add_pulled AFTER INSERT ON orders
+WHEN NEW.status = 'completed' AND NEW.customer_id IS NOT NULL BEGIN
+  INSERT INTO customer_stats(customer_id, visit_count, total_spend, total_net, first_visit_date, last_visit_date)
+  VALUES (NEW.customer_id, 1, NEW.grand_total, NEW.net_sales, NEW.business_date, NEW.business_date)
+  ON CONFLICT(customer_id) DO UPDATE SET
+    visit_count = visit_count + 1, total_spend = total_spend + excluded.total_spend, total_net = total_net + excluded.total_net,
+    first_visit_date = MIN(COALESCE(first_visit_date, excluded.first_visit_date), excluded.first_visit_date),
+    last_visit_date  = MAX(COALESCE(last_visit_date,  excluded.last_visit_date),  excluded.last_visit_date);
+END;
+
+-- Pulled children of an already-completed order (local children are counted at seal time instead).
+CREATE TRIGGER trg_rollup_payment_pulled AFTER INSERT ON order_payments
+WHEN (SELECT status FROM orders WHERE id = NEW.order_id) = 'completed' BEGIN
+  INSERT INTO daily_payment_summary(business_date, device_id, method, amount, txn_count)
+  SELECT o.business_date, o.device_id, NEW.method, NEW.amount, 1 FROM orders o WHERE o.id = NEW.order_id
+  ON CONFLICT(business_date, device_id, method) DO UPDATE SET
+    amount = amount + excluded.amount, txn_count = txn_count + 1;
+END;
+CREATE TRIGGER trg_qss_item_pulled AFTER INSERT ON order_items
+WHEN NEW.is_custom = 1 AND (SELECT status FROM orders WHERE id = NEW.order_id) = 'completed' BEGIN
+  INSERT INTO quick_sale_stats(custom_key, display_name, times_sold, units_sold, revenue_net,
+                               last_price, min_price, max_price, first_sold_at, last_sold_at)
+  VALUES (NEW.custom_key, NEW.name, 1, NEW.qty, NEW.line_net, NEW.unit_price, NEW.unit_price, NEW.unit_price, NEW.created_at, NEW.created_at)
+  ON CONFLICT(custom_key) DO UPDATE SET
+    times_sold = times_sold + 1, units_sold = units_sold + excluded.units_sold, revenue_net = revenue_net + excluded.revenue_net,
+    display_name = CASE WHEN excluded.last_sold_at >= last_sold_at THEN excluded.display_name ELSE display_name END,
+    last_price   = CASE WHEN excluded.last_sold_at >= last_sold_at THEN excluded.last_price ELSE last_price END,
+    min_price = MIN(min_price, excluded.min_price), max_price = MAX(max_price, excluded.max_price),
+    first_sold_at = MIN(first_sold_at, excluded.first_sold_at), last_sold_at = MAX(last_sold_at, excluded.last_sold_at);
+END;
+
+CREATE TRIGGER trg_rollup_void AFTER UPDATE OF status ON orders
 WHEN OLD.status = 'completed' AND NEW.status = 'voided' BEGIN
   UPDATE daily_sales_summary SET
-    sales_count      = sales_count - 1,
-    void_count       = void_count + 1,
-    void_value       = void_value + NEW.grand_total,
-    gross_sales      = gross_sales - NEW.gross_sales,
-    discounts        = discounts   - NEW.discount_total,
-    net_sales        = net_sales   - NEW.net_sales,
-    tax_total        = tax_total   - NEW.tax_total,
-    cogs             = cogs        - NEW.cost_total,
-    quick_sale_net   = quick_sale_net   - NEW.quick_sale_net,
-    unknown_cost_net = unknown_cost_net - NEW.unknown_cost_net,
-    customer_orders  = customer_orders  - (NEW.customer_id IS NOT NULL)
+    sales_count = sales_count - 1, void_count = void_count + 1, void_value = void_value + NEW.grand_total,
+    gross_sales = gross_sales - NEW.gross_sales, discounts = discounts - NEW.discount_total,
+    net_sales = net_sales - NEW.net_sales, tax_total = tax_total - NEW.tax_total, cogs = cogs - NEW.cost_total,
+    quick_sale_net = quick_sale_net - NEW.quick_sale_net, unknown_cost_net = unknown_cost_net - NEW.unknown_cost_net,
+    customer_orders = customer_orders - (NEW.customer_id IS NOT NULL)
   WHERE business_date = NEW.business_date AND device_id = NEW.device_id;
   UPDATE daily_payment_summary SET
     amount    = amount    - (SELECT COALESCE(SUM(p.amount), 0) FROM order_payments p
@@ -1771,23 +2110,66 @@ WHEN OLD.status = 'completed' AND NEW.status = 'voided' BEGIN
     txn_count = txn_count - (SELECT COUNT(*) FROM order_payments p
                              WHERE p.order_id = NEW.id AND p.method = daily_payment_summary.method)
   WHERE business_date = NEW.business_date AND device_id = NEW.device_id;
-END;
-CREATE TRIGGER trg_rollup_payment AFTER INSERT ON order_payments
-WHEN (SELECT status FROM orders WHERE id = NEW.order_id) = 'completed' BEGIN
-  INSERT INTO daily_payment_summary(business_date, device_id, method, amount, txn_count)
-  SELECT o.business_date, o.device_id, NEW.method, NEW.amount, 1
-  FROM orders o WHERE o.id = NEW.order_id
-  ON CONFLICT(business_date, device_id, method) DO UPDATE SET
-    amount = amount + excluded.amount, txn_count = txn_count + 1;
+  -- exact recompute for the affected customer (the voided order is already excluded: status = 'voided')
+  INSERT INTO customer_stats(customer_id, visit_count, total_spend, total_net, first_visit_date, last_visit_date)
+  SELECT c.cid, COUNT(o.id), COALESCE(SUM(o.grand_total), 0), COALESCE(SUM(o.net_sales), 0),
+         MIN(o.business_date), MAX(o.business_date)
+  FROM (SELECT NEW.customer_id AS cid) c
+  LEFT JOIN orders o ON o.customer_id = c.cid AND o.status = 'completed'
+  WHERE c.cid IS NOT NULL
+  GROUP BY c.cid
+  ON CONFLICT(customer_id) DO UPDATE SET
+    visit_count = excluded.visit_count, total_spend = excluded.total_spend, total_net = excluded.total_net,
+    first_visit_date = excluded.first_visit_date, last_visit_date = excluded.last_visit_date;
+  -- exact recompute for the affected quick-sale keys
+  DELETE FROM quick_sale_stats
+  WHERE custom_key IN (SELECT custom_key FROM order_items WHERE order_id = NEW.id AND is_custom = 1);
+  INSERT INTO quick_sale_stats(custom_key, display_name, times_sold, units_sold, revenue_net,
+                               last_price, min_price, max_price, first_sold_at, last_sold_at)
+  SELECT oi.custom_key,
+         (SELECT x.name FROM order_items x JOIN orders xo ON xo.id = x.order_id AND xo.status = 'completed'
+          WHERE x.custom_key = oi.custom_key AND x.is_custom = 1 ORDER BY x.created_at DESC LIMIT 1),
+         COUNT(*), SUM(oi.qty), SUM(oi.line_net),
+         (SELECT y.unit_price FROM order_items y JOIN orders yo ON yo.id = y.order_id AND yo.status = 'completed'
+          WHERE y.custom_key = oi.custom_key AND y.is_custom = 1 ORDER BY y.created_at DESC LIMIT 1),
+         MIN(oi.unit_price), MAX(oi.unit_price), MIN(oi.created_at), MAX(oi.created_at)
+  FROM order_items oi JOIN orders o ON o.id = oi.order_id AND o.status = 'completed'
+  WHERE oi.is_custom = 1
+    AND oi.custom_key IN (SELECT custom_key FROM order_items WHERE order_id = NEW.id AND is_custom = 1)
+  GROUP BY oi.custom_key;
 END;
 -- Voids are same-session only (§3.3), so a void never rewrites a closed Z-report.
 
+-- ═════════ integrity probes (empty = healthy; checked at startup and in the support bundle) ═════════
+CREATE VIEW v_integrity_pending_orders AS            -- a committed 'pending' order means a Rust bug
+SELECT id, receipt_no, created_at FROM orders WHERE status = 'pending';
+CREATE VIEW v_integrity_void_unreversed AS           -- voided orders whose sale slices aren't fully reversed
+SELECT o.id AS order_id, m.order_item_id, m.batch_item_id, SUM(m.qty_delta) AS net_qty
+FROM orders o JOIN order_items oi ON oi.order_id = o.id
+JOIN stock_movements m ON m.order_item_id = oi.id AND m.reason IN ('sale','void')
+WHERE o.status = 'voided'
+GROUP BY o.id, m.order_item_id, m.batch_item_id
+HAVING SUM(m.qty_delta) <> 0;
+
 -- ═════════ local-only plumbing ═════════
 CREATE TABLE receipt_counters (day TEXT PRIMARY KEY, last_seq INTEGER NOT NULL);
-CREATE TABLE held_carts (
+CREATE TABLE sku_counters (device_digit INTEGER PRIMARY KEY, last_seq INTEGER NOT NULL);
+CREATE TABLE held_carts (                            -- '__current__' = crash-recovery cart (500 ms debounce)
   id TEXT PRIMARY KEY, label TEXT, payload TEXT NOT NULL,
+  checkout_token TEXT,                               -- the cart's token; deleted in the checkout transaction
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL
 );
+CREATE TABLE print_jobs (                            -- written in the SAME transaction as the thing printed
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('receipt','void_slip','z_report','labels','drawer_kick','test')),
+  ref_id TEXT,                                       -- order / session / label job id
+  printer_key TEXT NOT NULL,                         -- device_settings printer profile key
+  payload TEXT NOT NULL,                             -- JSON render input (re-rendered on retry)
+  status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','printing','done','failed','abandoned')),
+  attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE INDEX ix_print_jobs_pending ON print_jobs(status, created_at) WHERE status IN ('queued','printing','failed');
 
 CREATE TABLE sync_outbox (
   seq INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1960,7 +2342,8 @@ GROUP BY b.id;
   - A mutable parent gets a *new* `server_seq` on every edit. A `batch_item` created at seq 100 and edited at seq 200 sorts after the movement at seq 150 that references it.
 
   So the server adds to each page **every ancestor row with `server_seq > cursor`**, following the foreign keys: `order_items → orders/products/batches`, `stock_movements → batch_items → batches/products`, `order_payments → orders`, `orders → cash_sessions`, and so on. Those ancestors are applied again later at their own seq, which is harmless because applying is idempotent.
-- **Applying a page** is one transaction:
+- **Applying a page** is one transaction, taken through the single-writer lock:
+  - It starts with `UPDATE sync_ctx SET applying = 1` and ends with `UPDATE sync_ctx SET applying = 0` just before `COMMIT`. A rollback restores 0 automatically, because it's a table row. While the flag is set, **policy** triggers stand down. **Structural** and **derived** triggers keep running, and pulled orders arrive already `completed` or `voided`, never `pending` (§4.1).
   - It runs with `PRAGMA defer_foreign_keys = ON`, so order within the page doesn't matter.
   - It applies tables in topological order, so the derived triggers find their parents.
   - It advances the cursor to the page's max seq.
@@ -1996,11 +2379,21 @@ The format is `{device_code}-{YYYYMMDD}-{seq:04}`, e.g. `T01-20261108-0042`. The
 ## 7. Hardware integration
 
 ### 7.1 Barcode scanners
-- **Default: USB HID keyboard wedge.** `ScannerProvider` runs a global `keydown` buffer. If the inter-key gap is ≤ 30 ms, the code is ≥ 6 characters and it ends with `Enter`, it treats the input as a scan, calls `preventDefault` and dispatches `onScan(code)`. The scanner suffix must be configured to Enter.
+- **Default: USB HID keyboard wedge.** The race-free capture design (stress-tested in §13.3):
+  - **Configure every scanner with a prefix and a suffix.** Use the prefix `F13` (a key no keyboard has; most scanners can send it), or `Ctrl+Shift+F12` if a model can't, and the suffix `Enter`. With a prefix, capture is **deterministic**: the prefix opens capture mode before the first digit arrives, so nothing can leak into a focused input.
+  - **Fallback for unconfigured scanners:** a timing heuristic, where keys arriving ≤ 30 ms apart, ≥ 6 characters long and ended by `Enter` count as a scan.
+    - From the second fast key onwards the provider calls `preventDefault()` provisionally and buffers.
+    - If the burst ends without `Enter`, or the gap exceeds 30 ms, it's treated as human typing: the buffered characters are **replayed** into the focused input with `setRangeText`.
+    - If it is a scan, the one leaked first character is removed from the focused input.
+  - **Layout-independent decoding:** decode from `KeyboardEvent.code` (`Digit7`, `KeyA`, `Minus`…), **never** from `event.key`. A HID wedge types through the active Windows keyboard layout, so with a Sinhala layout `event.key` would give Sinhala characters. Caps Lock and Shift state are applied explicitly.
+  - **The scan's `Enter` is swallowed** (`preventDefault` + `stopPropagation` in the capture phase), so it can never submit a form, press a focused **Pay** button, or confirm a dialog.
+  - **While capture is open, F-key shortcuts are suspended.** The capture listener is registered in the **capture phase on `window`** ahead of every other handler.
+  - **Ordered processing:** decoded codes go into a FIFO queue drained by one async worker. That preserves scan order even when barcode lookups resolve out of order. Repeated scans of the same code apply as one functional Zustand update (`qty + 1`), so two fast scans can't overwrite each other.
+  - IME composition events (`isComposing`) are ignored by the scanner and passed through untouched.
 - On the till:
   - A known barcode adds the item, and repeated scans increment qty.
   - A scanned receipt QR opens that order. Reprint and void are offered only if the order's session is still open.
-  - An unknown barcode opens the Quick Sale bar, pre-filled with the barcode as a note, with a "Register product" shortcut for `PRODUCT_MANAGE`.
+  - An unknown barcode plays the **error tone**, flashes the scan field red, and shows a non-blocking toast: "Not found: 2000123456781". It then opens the Quick Sale bar pre-filled with the barcode as a note, with a "Register product" shortcut for `PRODUCT_MANAGE`. There's never a modal, so the next scan still works.
 - Serial (COM) scanners are supported through the optional `hardware/scanner_serial.rs`, which emits `scanner://scan`.
 
 ### 7.2 Thermal receipt printers (ESC/POS, generic)
@@ -2122,15 +2515,29 @@ pub enum PrinterKind { Receipt { width: PaperWidth, codepage: CodePage }, Label 
 pub fn layout(t: &LabelTemplate, cells: &[LabelCell]) -> LabelPreview;              // one engine for preview + print
 pub fn emit(t: &LabelTemplate, p: &LabelPreview, lang: LabelLanguage, dpi: u16) -> Vec<u8>; // TSPL or ZPL bytes
 ```
-- Print jobs run on a dedicated tokio task with a queue, so a jammed printer never freezes checkout.
-- **Checkout commits first, then prints.** A failed print shows "Reprint" (`REPRINT_RECEIPT`, audited) and never rolls back the sale.
-- Each of the 2–3 counters has its own printer and drawer profile in `device_settings` (not synced).
+**Printing is decoupled from the sale (stress-tested in §13.3):**
+1. **The job is created in the sale's own transaction.** `checkout_order` inserts a `print_jobs` row (`queued`) together with the order, so the job exists exactly when the sale exists. A crash right after the commit can't lose it, and a rolled-back sale can't print.
+2. **After `COMMIT`**, the command returns to the UI immediately ("Sale complete ✓") and pings the print worker over an in-memory channel. **The sale never awaits the printer.**
+3. **The print worker** is one tokio task per printer, with **at most one in-flight job per printer**.
+   - Network or serial I/O uses explicit timeouts: connect 2 s, write 5 s.
+   - The Windows spooler `WritePrinter` can block indefinitely on a frozen spooler, so it runs on `spawn_blocking` under a 5 s `tokio::time::timeout`.
+   - On a timeout, the printer is marked **unhealthy**: its blocked thread is abandoned, since it can't be killed, and no new thread is started for that printer until a health probe succeeds. Threads never pile up.
+4. **Paper-out and errors.** Where the transport supports it (network and serial), the worker queries real-time status before each job: `DLE EOT 4` for the paper sensor, `DLE EOT 2` for the error state. Paper-out or cover-open sets the job to `failed`, with a reason code.
+   - The till shows a **persistent banner**: "Printer: paper out — 2 receipts waiting [Retry] [Reprint later]".
+   - Selling continues.
+5. **Retries** re-render from the stored payload, with exponential backoff (2 s → 30 s) up to 5 attempts, then `failed`. A job is `abandoned` only when a user dismisses it, and that's audited.
+6. **On startup**, any `queued`, `printing` or `failed` jobs from before a crash are listed: "3 receipts from before the restart were not printed — Print now / Skip". There are no silent reprints, which avoids duplicate paper receipts.
+7. **Cash drawer:** the kick is its own `drawer_kick` job, sent **before** the receipt bytes on the same printer. If the printer is down, the banner tells the cashier to use the drawer key. The sale is already recorded.
+
+Each of the 2–3 counters has its own printer and drawer profile in `device_settings` (not synced).
 
 ---
 
 ## 8. Phased execution plan
 
 Each phase ends with **exit criteria**. Don't start the next phase until they pass. RBAC guards and audit writes are built **from the start**, because retrofitting them across every command later is painful.
+
+> **Execution detail lives in [`AGENT.md`](../AGENT.md) §5: the canonical Atomic Block roadmap.** Each block lists its deliverables, its verification gate, and a status checkbox. Every block that passes its gate gets its own git commit, `feat(block-X.Y): …`. This section keeps the phase scope and exit criteria; `AGENT.md` holds the step-by-step blocks. If the two disagree, fix `AGENT.md` to match this document, then continue.
 
 ### Phase 0: Foundations (≈ 1.5 weeks) — ⏸ ON HOLD (owner request)
 - Toolchain and scaffold (§9). Tailwind v4 and shadcn init. Tauri plugins: `single-instance`, `log`, `window-state`, `dialog`.
@@ -2174,13 +2581,17 @@ Each phase ends with **exit criteria**. Don't start the next phase until they pa
   - **Quick Sale bar (F2 → type → Enter)** with the live parse preview.
   - **Customer phone (F4 / Numpad `/`)**, optional, with known-customer lookup (§3.8).
   - Payment: cash with change, card, transfer, QR, split.
-- **`checkout_order` is one transaction.** It writes:
-  - The order, items and payments (all ≥ 0).
-  - The customer link or creation.
-  - FIFO stock movements with `revenue_net`.
-  - The receipt counter.
-  - Audit rows for any override or above-limit discount.
-  - **Outbox rows** for everything.
+- **`checkout_order(checkout_token, …)` is one transaction**, using the seal pattern (§13.5). In order:
+  1. An idempotency check: if an order with this `checkout_token` exists, return it unchanged.
+  2. Resolve or create the customer. This must happen **before** the order insert: `orders.customer_id` is a foreign key checked immediately, and the state machine freezes it after insert.
+  3. Bump the receipt counter, for the same reason: `receipt_no` is frozen after insert.
+  4. Insert the order as `pending`, with the customer and receipt number already set.
+  5. Insert the items, payments (all ≥ 0) and FIFO stock slices with `revenue_net`.
+  6. **Seal** it (`pending → completed`), which makes SQL re-verify every total.
+  7. Write audit rows for any override or above-limit discount.
+  8. Delete the `held_carts` `__current__` row.
+  9. Insert the `print_jobs` receipt row (plus a drawer kick for cash).
+  10. Write **outbox rows** for everything.
 - **Same-session void** (§3.3):
   - Whole order only, with a reason from the fixed list.
   - A cashier needs supervisor approval.
@@ -2401,6 +2812,8 @@ cargo add --dev proptest
 14. Anything tappable is ≥ 48 px on till screens and has a keyboard path.
 15. Never copy live `pos.db` / `-wal` files. Backups always use `VACUUM INTO` plus an integrity check.
 16. Customer phone numbers live only on `customers` and are never printed unmasked or logged in full.
+17. Local orders are always inserted `pending` and **sealed**. Never insert `completed` locally, and never touch `sync_ctx` outside the sync pull.
+18. No `unwrap` / `expect` / `panic` in production Rust (clippy-denied), no floats outside label geometry, and no mock placeholders. Each Atomic Block gets one git commit after its gate is green (`AGENT.md` §2–§4).
 
 ---
 
@@ -2449,3 +2862,131 @@ cargo add --dev proptest
 | 7 | **The audit hash chain is per device**, and breaks are flagged, not rejected | A global chain; rejecting rows | A global chain forks under offline interleaving. Rejecting rows would lose evidence. |
 | 8 | **PIN hashes sync** to all counters | Online-only login | Offline login is mandatory. The risk is documented and mitigated (longer manager PINs, optional DB encryption). |
 | 9 | **Every terminal holds the full history** | Only the device's own orders | Store-wide reports and customer history at any counter, and the Phase 5 exchanges later. |
+| 15 | **`synchronous = FULL`** | `NORMAL` (faster) | Under WAL, `NORMAL` can lose the last committed sale on a power cut after its receipt has printed. `FULL` costs one fsync (~1–5 ms) per commit (§13.2). |
+| 16 | **Seal pattern** (`pending → completed`) with SQL-verified totals | Inserting orders as `completed` | It closes the "add a line or payment to a sold order later" hole and makes SQL re-check every total (§13.5). |
+| 17 | **Negative stock layers are flagged, never auto-rebalanced** | Automatic layer rebalancing | Rebalancing would rewrite COGS on past sales, and the system can't know physical truth. Only a stock count can (§13.1). |
+
+
+---
+
+## 13. Architecture stress test (2026-11-08)
+
+This section is the result of attacking the design with real-world retail failure modes. Each finding says **what can go wrong**, **what the design now does**, and **which named test proves it**.
+
+Nothing here has run inside the app yet; Phase 0 is on hold. The exception is the §4.3 schema: its triggers and invariants were exercised in a scratch harness against SQLite 3.50.4, and those checks pass. The app bundles an older SQLite (libsqlite3-sys 0.30), so Block 0.3 must re-run the same assertions there.
+
+### 13.1 Concurrency and drift: three offline counters selling the last units of one layer
+
+**Scenario.** Layer L (Shoe batch, size 42) has `on_hand = 2`. T01, T02 and T03 are offline, and each sells 1 pair. T02 then sells a second pair.
+
+| Step | What happens |
+|---|---|
+| Local sale | Each counter's FIFO (`domain::fifo`) sees `on_hand = 2` locally and draws from L. No counter blocks: `allow_negative_stock` defaults to true, and a sale must never wait on the network. |
+| IDs | Every row is UUIDv7 with the device id inside the row. Receipt numbers are `T0x-YYYYMMDD-seq`, unique per device. **No two counters can create the same primary key or receipt number.** |
+| Sync | `stock_movements` is insert-only, so the merge is a set union. `INSERT OR IGNORE` is idempotent, and there's no conflict to resolve and no last-write-wins on quantities. After all three sync, every counter computes `on_hand(L) = 2 − 4 = −2`, the same everywhere. |
+| After sync | FIFO only draws from layers with `on_hand > 0`, so new sales take the next layer automatically. The layer appears in **Oversold layers** (`ix_bis_negative`). COGS for the four sales used L's cost, which is the best-known cost when they were sold. |
+
+**What is automatic:** the merge itself, with no collisions and no lost sales; identical totals on all counters; FIFO moving on; and the flag.
+
+**What is deliberately not automatic: the physical truth.** −2 means one of three things, and software can't tell which:
+- The batch held more pairs than were recorded
+- Pairs from another layer were sold under L's barcode
+- A data-entry error
+
+Automatically "rebalancing" (moving −2 from L into the next layer) would **rewrite the COGS of sales already made** and could hide shrinkage. So the design keeps the flag and fixes it with one `count_correction` (`STOCK_COUNT`, audited).
+
+**The owner asked for reconciliation "without human intervention". The data side achieves that; the physical-stock side needs a count, and that's the correct accounting.** (Decision #17.)
+
+**Proof:** Block 3.6 chaos test `three_counters_oversell_last_units`, with the assertion "identical ledger on 3 nodes, layer = −2, flagged, next sale uses the next layer".
+
+### 13.2 Abrupt power loss or crash mid-transaction
+
+| Failure point | Outcome | Why |
+|---|---|---|
+| During `checkout_order`, before `COMMIT` | **Nothing was sold.** No order, slices, payments, receipt-counter bump, audit row, outbox row or print job. The cart is still in the `held_carts` `__current__` row (≤ 500 ms old) and offered back on restart ("Recover cart?"). | One SQLite transaction. The WAL rolls uncommitted frames back on open. There's no orphan risk: every child row is in the same transaction as its parent. |
+| Just after `COMMIT`, before the receipt prints | The sale exists. The `print_jobs` row (same transaction) lists it as unprinted on restart. The recovered cart **can't be re-sold**, because the checkout transaction deleted `__current__`. | The print job and the held-cart delete are inside the sale transaction (§7.5, §4.3). |
+| Power cut seconds after the receipt printed | **The sale survives.** | **`synchronous = FULL`** (§1.1). It was changed from `NORMAL`, which under WAL can drop the last commits on OS crash or power loss. |
+| Double-tap on **Pay**, or a UI retry after an IPC timeout | Exactly one order. The second call returns the first order. | `orders.checkout_token` is UNIQUE and generated once per cart (§4.3). |
+| Crash with the cart in an unusual state | On restart: `quick_check`, the integrity probes (`v_integrity_pending_orders`, `v_integrity_void_unreversed` must be empty), cart recovery, and unprinted-receipt recovery. | §1.1, §4.3 |
+| Disk full | `SQLITE_FULL` aborts the transaction. The sale isn't recorded, the cart is kept, and a red banner appears. A free-space check at startup warns below 500 MB. | Transactions are atomic. |
+| Migration interrupted | Each migration runs in its own transaction, and an automatic `VACUUM INTO backups/pre-migration-*.db` runs first (Block 0.3). | sqlx migrator |
+
+**Corruption:** SQLite in WAL mode with `FULL` doesn't corrupt on power loss on compliant storage. Cheap USB flash or SD cards are *not* compliant, so the DB always lives on the internal SSD (`%APPDATA%`), and USB is used only for backups.
+
+**Proof:** Block 1.4 test `crash_mid_checkout_leaves_nothing` kills the process at every `await` point using a fault-injection hook. Block 1.12 adds a pull-the-plug manual drill on real counter hardware.
+
+### 13.3 Hardware latency and race conditions
+
+**Scanner (HID wedge, keys < 30 ms apart).** The full design is in §7.1.
+
+| Race | Mitigation |
+|---|---|
+| The first characters of a scan land in a focused input before detection | A configured **prefix** (`F13`) makes capture deterministic. The timing-heuristic fallback provisionally swallows from the 2nd fast key, removes the 1 leaked char, and replays the buffer if it turns out to be a human typing. |
+| The scan's terminating `Enter` presses Pay or submits a form | `Enter` is consumed in the window capture phase while capture is open |
+| A Sinhala keyboard layout garbles scans | Decode from `KeyboardEvent.code`, not `.key` |
+| Two quick scans, with lookups resolving out of order | FIFO scan queue with one worker; functional state updates (`qty + 1`) |
+| An F-key shortcut fires mid-scan | Shortcuts are suspended while capture is open |
+
+**Proof:** Block 1.8 vitest suite `scanner.race.test.ts`, which synthesises bursts at 5, 15 and 29 ms, human typing at 80 ms, a Sinhala layout, focus in an input, and an `Enter` over the Pay button.
+
+**Printer (paper-out, spooler freeze).** The full design is in §7.5. The checkout command returns after `COMMIT` and never awaits I/O.
+- Jobs are persisted in the sale's own transaction.
+- One worker runs per printer, with one in-flight job and hard timeouts.
+- `WritePrinter` runs on `spawn_blocking` under a timeout, and a hung printer is marked unhealthy without piling up threads.
+- Paper-out is detected via `DLE EOT` where the transport supports it, and shown as a persistent banner with Retry.
+
+**Proof:** Block 1.7 tests with a fake transport that blocks forever, errors and reports paper-out. The assertion is "a checkout completes in < 100 ms while the printer is hung; the job ends `failed`; no second thread is spawned".
+
+### 13.4 Database scale budget (targets, verified by named tests)
+
+**Dataset for the benchmark:**
+- **Gate:** 50,000 products and **100,000 order items** (≈ 35k orders).
+- **Headroom run:** 1,000,000 order items (~3 years at 3 counters). It must stay within 2× of the gate numbers.
+- Generated deterministically by `tests/perf/seed.rs`.
+
+**Hardware:** the slowest counter PC. A CI runner is used for regression only.
+
+| Query | Index / structure | Target (p95) |
+|---|---|---|
+| Barcode scan → product | `ux_products_barcode` (partial unique), then `ux_products_sku` | < 2 ms |
+| Type-ahead `"blu* buc*"` (LIMIT 20) | `products_fts` unicode61 + `prefix='2 3'` | < 15 ms |
+| Sinhala substring search | `products_fts_si` (trigram) | < 25 ms |
+| Phone → customer | `ux_customers_phone` | < 2 ms |
+| Checkout transaction (5 lines, FIFO, seal checks, outbox), `FULL` fsync included | PK and FK indexes; seal subqueries are per-order | < 40 ms |
+| Daily, weekly, monthly or yearly P&L | `daily_sales_summary` (≤ 365 × 3 rows per year) + `ix_expenses_bdate` + `ix_mov_date_reason` | < 20 ms |
+| Order history page (500 rows, keyset) | `ix_orders_keyset (completed_at DESC, id DESC)` | < 20 ms |
+| Customer list sorted by spend | **Derived `customer_stats`** + `ix_customer_stats_spend`. A view aggregating `orders` was replaced, because it would scan orders. | < 20 ms |
+| Quick-sale review sorted by frequency | **Derived `quick_sale_stats`** + `ix_qss_frequency`. This replaced a correlated-subquery view. | < 20 ms |
+| Batch report / stock valuation | `batch_item_stock` + `ix_bis_batch` | < 30 ms |
+| Audit log page | `ix_audit_keyset` | < 20 ms |
+
+- **Plan assertions:** every hot query also runs `EXPLAIN QUERY PLAN` in the test and fails on `SCAN <table>` over orders, order items, movements, products or audit logs. That catches a missing index even when the data is small.
+- **Pragmas:** `cache_size` 64 MiB, `mmap_size` 256 MiB, `temp_store = MEMORY`, `PRAGMA optimize` on close and daily, and `ANALYZE` after bootstrap or import (§1.1).
+- **Sinhala FTS is unverified.** unicode61's treatment of Sinhala combining vowel signs is unknown. `products_fts_si` therefore uses the trigram tokenizer, which matches substrings in any script. Block 1.1's test `fts_sinhala_names` checks 20 real Sinhala product names against both tokenizers, and the doc is updated with the result.
+
+**Proof:** Block 1.1 runs `cargo test --release --test perf_budgets -- --ignored` for the search and lookup rows. Block 2.10 runs the full table above, including the headroom run.
+
+### 13.5 Integrity invariants enforced inside SQLite
+
+These hold even if Rust has a bug or someone runs SQL against the file. Each one was checked in a throwaway scratch script during the stress test, which isn't kept in the repo. Block 0.3 rebuilds them as `tests/migration_invariants.rs`, from the scenario list in `AGENT.md`.
+
+| Invariant | Enforced by | Class |
+|---|---|---|
+| **No negative payments**, and no refund-shaped rows | `CHECK (amount >= 0)`; `tendered ≥ amount` and cash-only | Structural |
+| Payments always equal the bill exactly; change only from cash tendered | `CHECK (paid_total = grand_total)` + seal check | Structural + policy |
+| **Completed orders can't be mutated.** Money, customer, staff, session, date and receipt are frozen. The only transitions are `pending → completed` (seal) and `completed → voided`. Voided is terminal, and deletion is impossible. | `trg_orders_state_machine`, `trg_orders_no_delete` | Structural |
+| **No lines, payments or sale slices added to a sealed order** | `trg_items_only_into_pending`, `trg_payments_only_into_pending`, `trg_mov_sale_void_guard` | Policy |
+| **Local orders must be sealed through verification.** Header totals = Σ lines; grand = lines + rounding (+ tax when exclusive); payments = grand; stock slices cover each tracked line exactly in qty, revenue and cost | `trg_orders_insert_pending`, `trg_orders_seal_verify` | Policy |
+| Price below list needs `PRICE_OVERRIDE` or an approver holding it | Seal check via `v_staff_effective` | Policy (structural) |
+| A discount above the cashier's limit needs an approver whose limit covers it | Seal check | Policy (structural) |
+| **No unapproved voids:** same device, session still open, the voider holds `VOID_ORDER` or a *different* active approver does, reason required (and a note for `OTHER`) | `trg_orders_void_verify`, the `void_reason` CHECKs | Policy (structural) |
+| A closed session can't reopen, so a void can't be made possible again after the Z-report | `trg_cash_session_no_reopen` | Structural |
+| A void slice must mirror a real sale slice and can't over-reverse it | `trg_mov_sale_void_guard` | Policy |
+| Append-only: order items, payments, stock movements, cash movements, audit logs | no-update / no-delete triggers | Structural |
+| Audit chain extends gaplessly with a linked `prev_hash` | `trg_audit_chain_guard` | Policy |
+| Batch cost and qty locked after receive | `trg_batch_item_cost_lock` | Structural |
+
+**Limits, stated honestly:**
+- **SQL can't verify a PIN.** The triggers check that an approver *exists, is active and holds the bit*. The PIN check, the single-use 60 s approval token, and the binding of approval to target all live in Rust (`auth::guard`, §3.5), and are tested in Block 0.6.
+- **Policy triggers stand down while `sync_ctx.applying = 1`** (§4.1, §6.2). Pulled rows were checked at their origin and by the server's `sync_push` invariants (Block 3.2).
+- **"Every sale slice is reversed by a void"** can't be enforced at commit time in SQLite, which has no deferred triggers. Rust does it in the void transaction, `tests/void_reversal.rs` proves it, and the probe `v_integrity_void_unreversed` must stay empty at startup.
