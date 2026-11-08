@@ -1,6 +1,7 @@
 import { createHashHistory, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 import { AuditLogScreen } from "@/features/audit/AuditLogScreen";
 import { CounterStatus } from "@/features/home/CounterStatus";
+import { ProductsScreen } from "@/features/products/ProductsScreen";
 import { AppShell } from "./AppShell";
 
 // Hash history: the app is served from Tauri's asset protocol, so routes must not depend on a server.
@@ -17,7 +18,13 @@ export const auditRoute = createRoute({
   component: AuditLogScreen,
 });
 
-export const routeTree = rootRoute.addChildren([homeRoute, auditRoute]);
+export const productsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/products",
+  component: ProductsScreen,
+});
+
+export const routeTree = rootRoute.addChildren([homeRoute, productsRoute, auditRoute]);
 
 export function createAppRouter() {
   return createRouter({ routeTree, history: createHashHistory() });

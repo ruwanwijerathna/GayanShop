@@ -2962,7 +2962,12 @@ Automatically "rebalancing" (moving −2 from L into the next layer) would **rew
 
 - **Plan assertions:** every hot query also runs `EXPLAIN QUERY PLAN` in the test and fails on `SCAN <table>` over orders, order items, movements, products or audit logs. That catches a missing index even when the data is small.
 - **Pragmas:** `cache_size` 64 MiB, `mmap_size` 256 MiB, `temp_store = MEMORY`, `PRAGMA optimize` on close and daily, and `ANALYZE` after bootstrap or import (§1.1).
-- **Sinhala FTS is unverified.** unicode61's treatment of Sinhala combining vowel signs is unknown. `products_fts_si` therefore uses the trigram tokenizer, which matches substrings in any script. Block 1.1's test `fts_sinhala_names` checks 20 real Sinhala product names against both tokenizers, and the doc is updated with the result.
+- **Sinhala FTS: verified in Block 1.1** (`tests/fts_sinhala_names.rs`, 20 real product names, bundled SQLite 3.46.0):
+  - **unicode61 is unusable for Sinhala.** It treats every dependent vowel sign and the virama (al-lakuna) as a separator, so it indexes bare consonants ('ක', 'ද', …) and no whole word survives. Words that differ only in their vowel signs collide: "බෝල" (ball) and "බිල" (bill) both match "බාල්දිය" (bucket), and "කපා" (cut) matches "කපු" (cotton).
+  - **trigram is correct.** It finds all 20 names by any 3+ character substring from inside a word, with none of those false matches. `products_fts_si` stays trigram.
+  - Queries of 1–2 characters can't use a trigram `MATCH`, so the till falls back to `LIKE` over `products_fts_si` (a scan of the Sinhala index only; outside the budget table).
+  - The zero-width joiner in conjuncts such as "ශ්‍රී" is part of the stored name: a query typed the same way matches. A keyboard that omits the ZWJ won't match across it; revisit if staff report misses.
+- **Block 1.1 measurement** (`cargo test --release --test perf_budgets -- --ignored search`, dev machine, 50,000 products / 20,000 customers, p95): barcode scan 0.14 ms, SKU scan 0.25 ms, type-ahead 1.7 ms, Sinhala substring 4.3 ms, phone → customer 0.10 ms. All within budget.
 
 **Proof:** Block 1.1 runs `cargo test --release --test perf_budgets -- --ignored` for the search and lookup rows. Block 2.10 runs the full table above, including the headroom run.
 

@@ -1,6 +1,14 @@
 // TanStack Query hooks over the generated commands. Only src/db and src/hardware call Rust (AGENT.md §2).
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { commands, type Perm, type SetupInput, type UiLanguage, type UiTheme } from "./bindings";
+import {
+  commands,
+  type CategoryInput,
+  type Perm,
+  type ProductInput,
+  type SetupInput,
+  type UiLanguage,
+  type UiTheme,
+} from "./bindings";
 import { unwrap } from "./client";
 
 export const queryKeys = {
@@ -10,6 +18,9 @@ export const queryKeys = {
   integrity: ["app", "integrity"] as const,
   loginStaff: ["auth", "login-staff"] as const,
   audit: ["audit", "pages"] as const,
+  categories: ["catalog", "categories"] as const,
+  products: ["catalog", "products"] as const,
+  productSearch: (query: string) => ["catalog", "search", query] as const,
 };
 
 /** Polled so the shell notices an idle auto-lock done by Rust (doc §3.5). */
@@ -100,4 +111,56 @@ export function useSetDeviceTheme() {
     mutationFn: (theme: UiTheme) => unwrap(commands.setDeviceTheme(theme)),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.devicePrefs }),
   });
+}
+
+// ───────── catalog ─────────
+
+export function useCategories() {
+  return useQuery({ queryKey: queryKeys.categories, queryFn: () => unwrap(commands.listCategories()) });
+}
+
+/** Every live product, loaded once and filtered client-side (bounded list, doc §1.4). */
+export function useProducts() {
+  return useQuery({ queryKey: queryKeys.products, queryFn: () => unwrap(commands.listProducts()) });
+}
+
+export const SEARCH_LIMIT = 20;
+
+/** Till type-ahead (Rust FTS). Disabled for an empty query. */
+export function useProductSearch(query: string) {
+  const q = query.trim();
+  return useQuery({
+    queryKey: queryKeys.productSearch(q),
+    queryFn: () => unwrap(commands.searchProducts(q, SEARCH_LIMIT)),
+    enabled: q.length > 0,
+    staleTime: 5_000,
+  });
+}
+
+function useCatalogMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["catalog"] }),
+  });
+}
+
+export function useSaveProduct() {
+  return useCatalogMutation(({ id, input }: { id: string | null; input: ProductInput }) =>
+    unwrap(id === null ? commands.createProduct(input) : commands.updateProduct(id, input)),
+  );
+}
+
+export function useDeleteProduct() {
+  return useCatalogMutation((id: string) => unwrap(commands.deleteProduct(id)));
+}
+
+export function useSaveCategory() {
+  return useCatalogMutation(({ id, input }: { id: string | null; input: CategoryInput }) =>
+    unwrap(id === null ? commands.createCategory(input) : commands.updateCategory(id, input)),
+  );
+}
+
+export function useDeleteCategory() {
+  return useCatalogMutation((id: string) => unwrap(commands.deleteCategory(id)));
 }

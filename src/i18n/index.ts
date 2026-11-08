@@ -7,19 +7,21 @@ import enApp from "./locales/en/app.json";
 import enAuth from "./locales/en/auth.json";
 import enCommon from "./locales/en/common.json";
 import enErrors from "./locales/en/errors.json";
+import enProducts from "./locales/en/products.json";
 import siApp from "./locales/si/app.json";
 import siAuth from "./locales/si/auth.json";
 import siCommon from "./locales/si/common.json";
 import siErrors from "./locales/si/errors.json";
+import siProducts from "./locales/si/products.json";
 
 export const LANGUAGES = ["en", "si"] as const;
 export type UiLanguage = (typeof LANGUAGES)[number];
 
-export const NAMESPACES = ["common", "errors", "auth", "app"] as const;
+export const NAMESPACES = ["common", "errors", "auth", "app", "products"] as const;
 
 export const resources = {
-  en: { common: enCommon, errors: enErrors, auth: enAuth, app: enApp },
-  si: { common: siCommon, errors: siErrors, auth: siAuth, app: siApp },
+  en: { common: enCommon, errors: enErrors, auth: enAuth, app: enApp, products: enProducts },
+  si: { common: siCommon, errors: siErrors, auth: siAuth, app: siApp, products: siProducts },
 } as const;
 
 export function isUiLanguage(value: string): value is UiLanguage {

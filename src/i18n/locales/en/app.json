@@ -1,5 +1,9 @@
 {
-  "nav": { "home": "Counter", "audit": "Audit log" },
+  "nav": {
+    "home": "Counter",
+    "audit": "Audit log",
+    "products": "Products"
+  },
   "status": {
     "title": "Counter status",
     "version": "App version",
@@ -44,5 +48,8 @@
     "DRAWER_NO_SALE": "open the drawer",
     "OTHER": "a restricted action"
   },
-  "shortcuts": { "lock": "Ctrl+L", "language": "Ctrl+Shift+L" }
+  "shortcuts": {
+    "lock": "Ctrl+L",
+    "language": "Ctrl+Shift+L"
+  }
 }

@@ -7,7 +7,7 @@
 >
 > Never change an architectural decision silently. Propose the doc change to the owner first.
 
-**Current state (2026-11-08): ✅ PHASE 0 COMPLETE.** Blocks 0.1–0.10 are committed and green. The GUI smoke checks were run against the real release app (`docs/qa/phase0-smoke.md`), and the CI steps were reproduced from a clean clone. Still pending the owner: dragging the window border below 1024×768 (item 1.3c), and the first real CI run (it needs a GitHub remote). **Phase 1 is not started.** Begin Block 1.1 only when the owner explicitly says to.
+**Current state (2026-11-08): Phase 1 in progress on branch `feat/phase-1-mvp-till`.** Phase 0 is complete and approved. Block 1.1 is committed and green; the next block is 1.2. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
 
 ---
 
@@ -289,7 +289,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
 
 ### Phase 1: Offline MVP till
 
-- [ ] **1.1 Products, categories and search**
+- [x] **1.1 Products, categories and search**: done 2026-11-08 (unicode61 rejected for Sinhala; trigram kept, see doc §13.4)
   - **Deliverables:**
     - CRUD commands + UI, including `name_si`.
     - SKU and in-store barcode generators.

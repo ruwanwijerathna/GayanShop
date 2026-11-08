@@ -1,5 +1,9 @@
 {
-  "nav": { "home": "කවුන්ටරය", "audit": "විගණන සටහන" },
+  "nav": {
+    "home": "කවුන්ටරය",
+    "audit": "විගණන සටහන",
+    "products": "භාණ්ඩ"
+  },
   "status": {
     "title": "කවුන්ටරයේ තත්ත්වය",
     "version": "යෙදුම් අනුවාදය",
@@ -44,5 +48,8 @@
     "DRAWER_NO_SALE": "ලාච්චුව විවෘත කිරීම",
     "OTHER": "සීමා කළ ක්‍රියාවක්"
   },
-  "shortcuts": { "lock": "Ctrl+L", "language": "Ctrl+Shift+L" }
+  "shortcuts": {
+    "lock": "Ctrl+L",
+    "language": "Ctrl+Shift+L"
+  }
 }

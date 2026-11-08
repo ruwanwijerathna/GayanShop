@@ -2,6 +2,7 @@
 
 pub mod integrity;
 pub mod outbox;
+pub mod repo;
 pub mod settings;
 pub mod sync_ctx;
 

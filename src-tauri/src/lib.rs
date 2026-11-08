@@ -53,6 +53,17 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::prefs::device_preferences,
         commands::prefs::set_device_theme,
         commands::prefs::set_ui_language,
+        commands::products::list_categories,
+        commands::products::create_category,
+        commands::products::update_category,
+        commands::products::delete_category,
+        commands::products::list_products,
+        commands::products::get_product,
+        commands::products::create_product,
+        commands::products::update_product,
+        commands::products::delete_product,
+        commands::products::search_products,
+        commands::products::lookup_product_code,
     ])
 }
 
@@ -113,6 +124,17 @@ mod tests {
             "devicePreferences",
             "setDeviceTheme",
             "setUiLanguage",
+            "listCategories",
+            "createCategory",
+            "updateCategory",
+            "deleteCategory",
+            "listProducts",
+            "getProduct",
+            "createProduct",
+            "updateProduct",
+            "deleteProduct",
+            "searchProducts",
+            "lookupProductCode",
         ] {
             assert!(ts.contains(&format!("{cmd}:")), "command {cmd} missing from bindings");
         }

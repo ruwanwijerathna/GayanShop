@@ -1,10 +1,11 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { History, Lock, Store } from "lucide-react";
+import { History, Lock, Package, Store } from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Can } from "@/components/auth/Can";
 import { Kbd } from "@/components/common/Kbd";
 import { Button } from "@/components/ui/button";
+import { useDbChangedInvalidation } from "@/db/events";
 import { useAppStatus, useDevicePrefs, useLogout, useSetDeviceTheme, useSetUiLanguage } from "@/db/hooks";
 import type { UiLanguage } from "@/i18n";
 import { BackOfficeLayout } from "./layouts/BackOfficeLayout";
@@ -23,6 +24,7 @@ export function AppShell() {
   const logout = useLogout();
   const setLanguage = useSetUiLanguage();
   const setTheme = useSetDeviceTheme();
+  useDbChangedInvalidation();
 
   const lock = () => {
     markExplicitLock(); // so the login screen doesn't report this as an idle lock
@@ -61,12 +63,16 @@ export function AppShell() {
       }
       nav={
         <>
-          <Link to="/" className={NAV_LINK}>
+          <Link to="/" className={NAV_LINK} aria-label={t("nav.home")}>
             <Store aria-hidden className="size-5 shrink-0" />
             <span className="hidden xl:inline">{t("nav.home")}</span>
           </Link>
+          <Link to="/products" className={NAV_LINK} aria-label={t("nav.products")}>
+            <Package aria-hidden className="size-5 shrink-0" />
+            <span className="hidden xl:inline">{t("nav.products")}</span>
+          </Link>
           <Can perm="AUDIT_VIEW">
-            <Link to="/audit" className={NAV_LINK}>
+            <Link to="/audit" className={NAV_LINK} aria-label={t("nav.audit")}>
               <History aria-hidden className="size-5 shrink-0" />
               <span className="hidden xl:inline">{t("nav.audit")}</span>
             </Link>
