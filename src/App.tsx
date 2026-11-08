@@ -1,5 +1,5 @@
 import { RouterProvider } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ExplicitLockContext } from "@/app/lock-context";
 import { createAppRouter } from "@/app/router";
@@ -37,11 +37,16 @@ function App() {
   // Keep the read-only session mirror (used by <Can>) in step with Rust.
   useEffect(() => setSession(rustSession), [rustSession, setSession]);
 
+  // Apply the saved language only when the staff member (or their saved language) changes. Re-applying on
+  // every effect run would undo a live EN ↔ සිං switch, because the session copy stays stale until re-login.
   const language = rustSession?.ui_language ?? prefs.data?.default_language;
+  const languageKey = `${sessionKey ?? ""}:${language ?? ""}`;
+  const appliedLanguageKey = useRef<string | null>(null);
   useEffect(() => {
-    if (language && isUiLanguage(language) && i18n.resolvedLanguage !== language)
-      void i18n.changeLanguage(language);
-  }, [language, i18n]);
+    if (!language || !isUiLanguage(language) || appliedLanguageKey.current === languageKey) return;
+    appliedLanguageKey.current = languageKey;
+    if (i18n.resolvedLanguage !== language) void i18n.changeLanguage(language);
+  }, [language, languageKey, i18n]);
 
   useApplyTheme(prefs.data?.theme ?? "light");
 

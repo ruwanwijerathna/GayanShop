@@ -9,6 +9,19 @@ import { CommandError } from "@/db/client";
 import { useAuditPages, useAuditVerify } from "@/db/hooks";
 import { translateError } from "@/i18n";
 
+/**
+ * Column widths (px). Together they must fit the table at the 1024×768 minimum window: 911 px grid
+ * minus the vertical scrollbar. Sized for the widest content: an en-LK timestamp and the longest si action label.
+ */
+export const AUDIT_COLUMN_WIDTHS = {
+  when: 216,
+  action: 232,
+  staff: 150,
+  approvedBy: 150,
+  entity: 120,
+} as const;
+export const AUDIT_TABLE_BUDGET = 895;
+
 function ChainResult({ report }: { report: ChainReport }) {
   const { t } = useTranslation("app");
   const device = report.device_id.slice(0, 8);
@@ -41,7 +54,7 @@ export function AuditLogScreen() {
       {
         id: "when",
         header: t("audit.when"),
-        size: 190,
+        size: AUDIT_COLUMN_WIDTHS.when,
         accessorFn: (r) =>
           new Date(r.created_at).toLocaleString(i18n.resolvedLanguage === "si" ? "si-LK" : "en-LK"),
         enableSorting: false,
@@ -49,7 +62,7 @@ export function AuditLogScreen() {
       {
         id: "action",
         header: t("audit.action"),
-        size: 240,
+        size: AUDIT_COLUMN_WIDTHS.action,
         accessorFn: (r) =>
           i18n.exists(`app:audit.actions.${r.action}`) ? t(`audit.actions.${r.action}`) : r.action,
         enableSorting: false,
@@ -57,21 +70,21 @@ export function AuditLogScreen() {
       {
         id: "staff",
         header: t("audit.staff"),
-        size: 160,
+        size: AUDIT_COLUMN_WIDTHS.staff,
         accessorFn: (r) => r.staff_name ?? "—",
         enableSorting: false,
       },
       {
         id: "approvedBy",
         header: t("audit.approvedBy"),
-        size: 160,
+        size: AUDIT_COLUMN_WIDTHS.approvedBy,
         accessorFn: (r) => r.approver_name ?? "",
         enableSorting: false,
       },
       {
         id: "entity",
         header: t("audit.entity"),
-        size: 200,
+        size: AUDIT_COLUMN_WIDTHS.entity,
         accessorFn: (r) => (r.entity_type ? `${r.entity_type}` : ""),
         enableSorting: false,
       },

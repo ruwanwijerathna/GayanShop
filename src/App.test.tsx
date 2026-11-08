@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { commands } from "@/db/bindings";
 import { ok, renderWithProviders, session } from "@/test/render";
@@ -14,6 +14,7 @@ vi.mock("@/db/bindings", () => ({
       ok({ quick_check: "ok", pending_orders: 0, unreversed_voids: 0, stale_sync_flag: false }),
     ),
     auditPage: vi.fn(() => ok({ rows: [], next_cursor: null })),
+    setUiLanguage: vi.fn(() => ok(null)),
   },
 }));
 
@@ -26,6 +27,15 @@ describe("App routing", () => {
     );
     renderWithProviders(<App />);
     expect(await screen.findByRole("heading", { name: "Set up this counter" })).toBeInTheDocument();
+  });
+
+  it("lets the wizard switch to Sinhala (the device default must not override it)", async () => {
+    status.mockImplementation(() =>
+      ok({ initialized: false, store_name: null, device_code: null, session: null }),
+    );
+    renderWithProviders(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "සිංහල" }));
+    expect(await screen.findByRole("button", { name: "ඉදිරියට" })).toBeInTheDocument();
   });
 
   it("asks for a login when nobody is logged in", async () => {
@@ -63,5 +73,21 @@ describe("App routing", () => {
     renderWithProviders(<App />);
     expect(await screen.findByRole("link", { name: /විගණන සටහන/ })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "කවුන්ටරයේ තත්ත්වය" })).toBeInTheDocument();
+  });
+
+  it("switches language live from the toggle and Ctrl+Shift+L while logged in", async () => {
+    status.mockImplementation(() =>
+      ok({ initialized: true, store_name: "GayanShop", device_code: "T01", session: session() }),
+    );
+    renderWithProviders(<App />);
+    expect(await screen.findByRole("heading", { name: "Counter status" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "සිං" }));
+    expect(await screen.findByRole("heading", { name: "කවුන්ටරයේ තත්ත්වය" })).toBeInTheDocument();
+    expect(commands.setUiLanguage).toHaveBeenLastCalledWith("si");
+
+    fireEvent.keyDown(window, { key: "L", code: "KeyL", ctrlKey: true, shiftKey: true });
+    expect(await screen.findByRole("heading", { name: "Counter status" })).toBeInTheDocument();
+    expect(commands.setUiLanguage).toHaveBeenLastCalledWith("en");
   });
 });
