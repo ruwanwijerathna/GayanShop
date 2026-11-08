@@ -7,7 +7,7 @@
 >
 > Never change an architectural decision silently. Propose the doc change to the owner first.
 
-**Current state (2026-11-08): ⏸ PHASE 0 IS ON HOLD.** Don't write application code, scaffold or install anything until the owner explicitly says to start (e.g. "start Block 0.1" or "begin the /goal run for Phase 0").
+**Current state (2026-11-08): ✅ PHASE 0 COMPLETE.** Blocks 0.1–0.10 are committed and green. Two things are pending the owner: the manual GUI items in `docs/qa/phase0-smoke.md`, and the first CI run (it needs a GitHub remote). **Phase 1 is not started.** Begin Block 1.1 only when the owner explicitly says to.
 
 ---
 
@@ -111,12 +111,12 @@ Every block must comply. Reviewers and gates enforce them.
    - A decision would change architecture or policy.
    - Something needs credentials, payment, accounts, a Supabase project, code-signing certificates or physical hardware.
    - An operation is destructive beyond this block's own uncommitted work.
-8. **Pre-v4 draft files.** Some files already on disk predate v4:
-   - `src-tauri/migrations/0001_init.sql`
-   - `src-tauri/src/{error,clock}.rs`
-   - `src-tauri/src/{domain,db,audit,auth}/**`
+8. **Pre-v4 draft files (resolved in Phase 0).** The pre-v4 drafts were reviewed and reworked or replaced in Blocks 0.2–0.8:
+   - `migrations/0001_init.sql`
+   - `error.rs` and `clock.rs`
+   - `domain/`, `db/`, `audit/` and `auth/`
 
-   They contain exchange and credit-note code and `.expect()` calls. They're **not compiled** until a block wires them in. The block that owns a file must review it against v4 and these rules, fix or replace it, and test it before declaring the module.
+   No exchange or credit-note code and no `.expect()` remain in production code. Any future file that predates its block gets the same treatment: review it against v4 and these rules, then fix or replace it and test it before wiring it in.
 9. **Context hygiene:** after each block, the status in §5 plus the commit log *is* the progress record. After a context reset, resume from the first unticked block.
 
 ---

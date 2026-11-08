@@ -6,9 +6,8 @@ The import above loads the full operating manual: identity, non-negotiable rules
 
 ## Claude Code–specific rules
 
-1. **Phase 0 is ON HOLD.**
-   - Don't write application code, scaffold or install packages until the owner explicitly says to start, naming a phase or block.
-   - Git is already initialised (`main`, root commit `ca36dcc`).
+1. **Phase 0 is complete (Blocks 0.1–0.10). Phase 1 is NOT started.**
+   - Don't start a new phase or block until the owner explicitly says to, naming it.
    - "Explain", "plan" or "review" is not a start command.
 2. **Work in roadmap order, one block per turn sequence.** Before each block:
    - Read `AGENT.md` §5 for that block, and the doc sections it cites.
@@ -21,7 +20,7 @@ The import above loads the full operating manual: identity, non-negotiable rules
    - Run long builds (first `cargo build`, `pnpm tauri build`) in the background and wait for the completion notification. Don't poll.
 4. **Commit exactly once per green block**, using the `AGENT.md` §4 convention: `feat(block-X.Y): …` / `test(block-X.Y): …`.
    - The message body lists the deliverables and the gate commands that passed.
-   - The message ends with the trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+   - The message ends with the attribution trailer(s) the current session's instructions specify (`Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`, plus a `Claude-Session:` line when given).
    - Never `--amend` a committed block, never `--no-verify`, never push unless asked.
    - The block's `[x]` tick in `AGENT.md` §5 goes in the same commit.
 5. **Stop and ask** on:
@@ -31,5 +30,8 @@ The import above loads the full operating manual: identity, non-negotiable rules
    - 3 failed fix attempts on the same gate failure
 
    Propose doc edits; don't silently diverge from `docs/ARCHITECTURE.md`.
-6. **Pre-v4 drafts** already in `src-tauri/` are not trustworthy (see `AGENT.md` §3.8). Review and rework them inside the block that owns them. Never wire them in as-is.
+6. **Windows gotchas learned in Phase 0:**
+   - Long scripted edits through Bash heredocs can be mangled by the shell, so prefer the Write/Edit tools.
+   - `cargo fetch` can need `CARGO_NET_RETRY=10 CARGO_HTTP_TIMEOUT=180` on this network.
+   - Regenerate and **stage** `src/db/bindings.ts` before `pnpm verify` when commands change. `bindings:check` diffs the working tree against the index.
 7. **Context resets:** resume from the first unticked block in `AGENT.md` §5, after checking the last commit. The roadmap checkboxes plus `git log` are the progress record.
