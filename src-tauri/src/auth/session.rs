@@ -86,6 +86,15 @@ impl SessionStore {
     pub fn peek(&self) -> Option<Session> {
         self.slot().clone()
     }
+
+    /// Like `peek`, but applies the idle lock: an idle session is cleared and reported as `None`.
+    pub fn active(&self, now: DateTime<Utc>, idle: Duration) -> Option<Session> {
+        let mut slot = self.slot();
+        if slot.as_ref().is_some_and(|s| now - s.last_activity > idle) {
+            *slot = None;
+        }
+        slot.clone()
+    }
 }
 
 #[cfg(test)]

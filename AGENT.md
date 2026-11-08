@@ -240,7 +240,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `cargo test --manifest-path src-tauri/Cargo.toml --test rbac`
     - `pnpm verify`
 
-- [ ] **0.7 First-run setup, identity and seeds**
+- [x] **0.7 First-run setup, identity and seeds**: done 2026-11-08
   - **Deliverables:**
     - `commands/{setup,system,auth}.rs`: generate `store_id`/`device_id`/`device_code`; seed in one transaction the 4 roles with masks (Cashier 500 bp), the Owner (PIN ≥ 6), expense categories, the `OPENING-STOCK`/`ADJUSTMENTS` batches, every §11 store setting (the **footer verbatim**), and the device settings (`ui.default_language=en`, label templates **203 dpi, 2 mm row gap**).
     - Outbox rows for seeds, and one `STORE_INITIALIZED` audit row.

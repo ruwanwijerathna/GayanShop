@@ -8,8 +8,25 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 export const commands = {
 	/**  Version and storage information for the about box and the support bundle. */
 	appInfo: () => typedError<AppInfo, AppError>(__TAURI_INVOKE("app_info")),
+	/**  What the shell needs to route: first-run wizard, login, or the app. */
+	appStatus: () => typedError<AppStatus_Serialize, AppError>(__TAURI_INVOKE("app_status")),
 	/**  SQLite quick_check plus the schema's integrity probes (ARCHITECTURE §13.2). */
 	integrityCheck: () => typedError<IntegrityReport, AppError>(__TAURI_INVOKE("integrity_check")),
+	/**  Create this store/terminal: identity, roles, the Owner and every seed, in one transaction. */
+	firstRunSetup: (input: SetupInput) => typedError<SetupResult, AppError>(__TAURI_INVOKE("first_run_setup", { input })),
+	/**  Active staff for the login picker (names and roles only). */
+	listLoginStaff: () => typedError<LoginStaff[], AppError>(__TAURI_INVOKE("list_login_staff")),
+	login: (staffId: string, pin: string) => typedError<SessionInfo, AppError>(__TAURI_INVOKE("login", { staffId, pin })),
+	logout: () => typedError<null, AppError>(__TAURI_INVOKE("logout")),
+	/**  The active session, if any (idle sessions are reported as logged out). */
+	currentSession: () => typedError<SessionInfo | null, AppError>(__TAURI_INVOKE("current_session")),
+	/**  A supervisor enters their PIN to authorise `perm` on `target_ref` for the logged-in staff member. */
+	requestApproval: (perm: Perm, targetRef: string, approverId: string, pin: string) => typedError<ApprovalGrant, AppError>(__TAURI_INVOKE("request_approval", { perm, targetRef, approverId, pin })),
+	/**
+	 *  Run the RBAC guard for `perm` (consuming `approval_id` if given). The UI calls this before opening a
+	 *  privileged screen; each mutating command still runs the guard itself.
+	 */
+	authorize: (perm: Perm, targetRef: string, approvalId: string | null) => typedError<Authorization_Serialize, AppError>(__TAURI_INVOKE("authorize", { perm, targetRef, approvalId })),
 };
 
 /* Types */
@@ -26,6 +43,39 @@ export type AppInfo = {
 	data_dir: string,
 };
 
+export type AppStatus = AppStatus_Serialize | AppStatus_Deserialize;
+
+export type AppStatus_Deserialize = {
+	initialized: boolean,
+	store_name?: string | null,
+	device_code?: string | null,
+	session?: SessionInfo | null,
+};
+
+export type AppStatus_Serialize = {
+	initialized: boolean,
+	store_name: string | null,
+	device_code: string | null,
+	session: SessionInfo | null,
+};
+
+export type ApprovalGrant = {
+	approval_id: string,
+	expires_at: string,
+};
+
+export type Authorization = Authorization_Serialize | Authorization_Deserialize;
+
+export type Authorization_Deserialize = {
+	staff_id: string,
+	approved_by?: string | null,
+};
+
+export type Authorization_Serialize = {
+	staff_id: string,
+	approved_by: string | null,
+};
+
 export type IntegrityReport = {
 	/**  `"ok"` when SQLite's quick_check found nothing; otherwise its first message. */
 	quick_check: string,
@@ -37,8 +87,42 @@ export type IntegrityReport = {
 	stale_sync_flag: boolean,
 };
 
+export type LoginStaff = {
+	id: string,
+	display_name: string,
+	role_name: string,
+};
+
 /**  Permission key as seen by the UI and stored in audit metadata. */
 export type Perm = "SALE_CREATE" | "QUICK_SALE" | "PRICE_OVERRIDE" | "LINE_DISCOUNT" | "ORDER_DISCOUNT" | "VOID_ORDER" | "DRAWER_NO_SALE" | "CASH_PAY_IN_OUT" | "CASH_SESSION_MANAGE" | "CASH_SESSION_FORCE_CLOSE" | "REPRINT_RECEIPT" | "STOCK_ADJUST" | "STOCK_DAMAGE" | "BATCH_MANAGE" | "PRODUCT_MANAGE" | "QUICK_SALE_PROMOTE" | "LABEL_PRINT" | "VIEW_COST" | "REPORT_SALES" | "REPORT_FINANCIAL" | "EXPENSE_MANAGE" | "SETTINGS_MANAGE" | "USER_MANAGE" | "AUDIT_VIEW" | "SYNC_MANAGE" | "BACKUP_RESTORE" | "DATA_EXPORT" | "CUSTOMER_VIEW" | "BACKUP_CREATE";
+
+/**  What the UI receives — never the PIN hash; permissions as keys, not a mask. */
+export type SessionInfo = {
+	staff_id: string,
+	display_name: string,
+	role_name: string,
+	permissions: Perm[],
+	max_discount_bp: number,
+	max_override_bp: number,
+	ui_language: string,
+};
+
+export type SetupInput = {
+	store_name: string,
+	owner_name: string,
+	owner_pin: string,
+	/**  `T01` for the first counter. */
+	device_code: string,
+	/**  `en` or `si`. */
+	ui_language: string,
+};
+
+export type SetupResult = {
+	store_id: string,
+	device_id: string,
+	device_code: string,
+	owner_staff_id: string,
+};
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

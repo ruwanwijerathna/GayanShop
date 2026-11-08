@@ -21,20 +21,33 @@ pub mod commands;
 pub mod db;
 pub mod domain;
 pub mod error;
+pub mod setup;
 pub mod state;
 
 use std::sync::Arc;
 
 use tauri::Manager;
 
+use crate::auth::Auth;
+use crate::auth::pin::PinHasher;
 use crate::clock::SystemClock;
 use crate::db::Db;
 use crate::state::AppState;
 
 /// The typed IPC surface. `cargo test export_bindings` writes it to `src/db/bindings.ts`.
 pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
-    tauri_specta::Builder::<tauri::Wry>::new()
-        .commands(tauri_specta::collect_commands![commands::system::app_info, commands::system::integrity_check,])
+    tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
+        commands::system::app_info,
+        commands::system::app_status,
+        commands::system::integrity_check,
+        commands::setup::first_run_setup,
+        commands::auth::list_login_staff,
+        commands::auth::login,
+        commands::auth::logout,
+        commands::auth::current_session,
+        commands::auth::request_approval,
+        commands::auth::authorize,
+    ])
 }
 
 /// Builds and runs the Tauri application. Errors are returned to `main`, never panicked.
@@ -56,7 +69,9 @@ pub fn run() -> Result<(), tauri::Error> {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             let db = tauri::async_runtime::block_on(Db::open(&data_dir.join("pos.db"), &data_dir.join("backups")))?;
-            app.manage(AppState::new(db, Arc::new(SystemClock), data_dir));
+            let identity = tauri::async_runtime::block_on(setup::load_identity(&db.pool))?;
+            let auth = Auth::new(PinHasher::production());
+            app.manage(AppState::new(db, Arc::new(SystemClock), data_dir, auth, identity));
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -76,7 +91,20 @@ mod tests {
             .export(specta_typescript::Typescript::default().header(BINDINGS_HEADER), &path)
             .expect("export TypeScript bindings");
         let ts = std::fs::read_to_string(&path).expect("read bindings");
-        assert!(ts.contains("appInfo") && ts.contains("integrityCheck"), "commands missing from bindings");
+        for cmd in [
+            "appInfo",
+            "appStatus",
+            "integrityCheck",
+            "firstRunSetup",
+            "listLoginStaff",
+            "login",
+            "logout",
+            "currentSession",
+            "requestApproval",
+            "authorize",
+        ] {
+            assert!(ts.contains(&format!("{cmd}:")), "command {cmd} missing from bindings");
+        }
         assert!(ts.contains("NOT_LOGGED_IN") || ts.contains("AppError"), "AppError type missing from bindings");
     }
 }
