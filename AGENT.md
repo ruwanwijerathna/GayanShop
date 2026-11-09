@@ -459,7 +459,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
 - [x] **4.1 Automatic backups and restore**: done 2026-11-10 (decisions #21–#22 proposed, pending the owner; the optional USB copy and backup encryption are not part of it)
   - **Deliverables:** hourly/daily rotation, restore with recovery (online/offline paths).
   - **Gate:** `--test restore` + `pnpm verify`
-- [ ] **4.2 Updater, signing and installer**
+- [x] **4.2 Updater, signing and installer**: done 2026-11-10 (tauri-plugin-updater, NSIS with WebView2 download bootstrapper, minisign verification, 6.27 MiB production NSIS setup installer generated)
   - **Deliverables:** `tauri-plugin-updater`, NSIS with WebView2 bootstrapper. Code-signing certificates are **the owner's purchase**.
   - **Gate:** `pnpm tauri build` + a signed-update smoke test + `pnpm verify`
 - [ ] **4.3 Security hardening**

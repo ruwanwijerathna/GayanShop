@@ -253,6 +253,7 @@ pub fn run() -> Result<(), tauri::Error> {
         }))
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
