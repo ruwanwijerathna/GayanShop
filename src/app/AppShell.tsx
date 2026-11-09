@@ -14,6 +14,7 @@ import {
   Contact,
   Receipt,
   BarChart3,
+  ScrollText,
 } from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
@@ -120,6 +121,12 @@ export function AppShell() {
             <Link to="/reports" className={NAV_LINK} aria-label={t("nav.reports")}>
               <BarChart3 aria-hidden className="size-5 shrink-0" />
               <span className="hidden xl:inline">{t("nav.reports")}</span>
+            </Link>
+          </Can>
+          <Can perm="REPORT_SALES">
+            <Link to="/orders" className={NAV_LINK} aria-label={t("nav.orders")}>
+              <ScrollText aria-hidden className="size-5 shrink-0" />
+              <span className="hidden xl:inline">{t("nav.orders")}</span>
             </Link>
           </Can>
           <Can perm="CUSTOMER_VIEW">

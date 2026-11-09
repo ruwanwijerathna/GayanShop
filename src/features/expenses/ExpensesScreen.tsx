@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ApprovalDialog } from "@/components/auth/ApprovalDialog";
 import { DataTable } from "@/components/data-table/DataTable";
+import { ExportButton } from "@/components/export/ExportButton";
 import { PeriodPicker, periodFor } from "@/components/period/PeriodPicker";
 import { Button } from "@/components/ui/button";
 import {
@@ -438,6 +439,7 @@ function Expenses({ today }: { today: string }) {
     <section className="flex flex-col gap-4">
       <header className="flex flex-wrap items-center gap-3">
         <h1 className="flex-1 text-2xl font-semibold">{t("title")}</h1>
+        <ExportButton kind="expenses" period={period} />
         <Button type="button" size="pos" variant="outline" onClick={() => setShowCategories((s) => !s)}>
           <Tags aria-hidden />
           {t("categories.title")}

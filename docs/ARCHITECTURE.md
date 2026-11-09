@@ -142,6 +142,17 @@ Every back-office list is one shared `components/data-table/` built on `@tanstac
 
 - Fixed row heights: 48 px on touch layouts and 36 px in compact back-office density. That keeps virtualisation exact.
 - Column visibility and widths are saved per user in `device_settings`.
+- **Block 2.9 implementation notes:**
+  - **Lists on the shared virtualised DataTable:** Products, Orders, Batches, Batch items, Customers, Audit log, Quick-sale review, Stock movements and Expenses.
+  - **Keyset paging (`useInfiniteQuery` + `onEndReached`):**
+    - Orders: `order_history` over `ix_orders_keyset`, filtered by period, counter, status and receipt-number prefix, with a receipt drill-down.
+    - The audit log, stock movements and customer purchase history.
+  - **CSV export** (`export.rs`, `DATA_EXPORT`, audited):
+    - **What:** orders, order lines, products, customers, expenses, stock movements and sales by product, for the chosen §5 period where one applies.
+    - **Permissions:** each kind also needs the permission of the screen that shows it (`REPORT_SALES`, `CUSTOMER_VIEW`, `EXPENSE_MANAGE` or `REPORT_FINANCIAL`), and cost columns appear only with `VIEW_COST`.
+    - **Format:** UTF-8 with a BOM (so Excel shows Sinhala) and CRLF line ends. Quoting follows RFC 4180, and money is written as plain decimals from integer cents.
+    - **Formula guard:** text cells starting with `= + - @`, tab or CR get a leading `'`.
+    - **Writing:** the file is written to `.partial`, flushed and renamed, then one `DATA_EXPORT` audit row records the kind, the row count, the period and the file name, never the data.
 
 **Analytics charts: shadcn/ui Chart (Recharts)**
 

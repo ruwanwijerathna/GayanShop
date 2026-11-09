@@ -43,5 +43,36 @@
     "weekOf": "Any day in the week",
     "from": "From",
     "to": "To"
+  },
+  "receipt": {
+    "title": "Receipt {{no}}",
+    "item": "Item",
+    "qty": "Qty",
+    "total": "Total",
+    "discount": "Discount",
+    "grandTotal": "Total paid",
+    "change": "Change",
+    "voided": "Voided",
+    "methods": {
+      "cash": "Cash",
+      "card": "Card",
+      "bank_transfer": "Bank transfer",
+      "qr": "QR",
+      "other": "Other"
+    }
+  },
+  "export": {
+    "kinds": {
+      "orders": "Export orders",
+      "order_lines": "Export order lines",
+      "products": "Export products",
+      "customers": "Export customers",
+      "expenses": "Export expenses",
+      "stock_movements": "Export stock movements",
+      "sales_by_product": "Export sales by product"
+    },
+    "done_one": "Exported {{count}} row to {{path}}",
+    "done_other": "Exported {{count}} rows to {{path}}",
+    "failed": "The export failed."
   }
 }

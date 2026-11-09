@@ -19,6 +19,9 @@ import {
   type CustomerUpdate,
   type ExpenseCategoryInput,
   type ExpenseInput,
+  type ExportKind,
+  type OrderCursor,
+  type OrderFilter_Deserialize as OrderFilter,
   type Granularity,
   type HistoryCursor,
   type Period,
@@ -74,6 +77,8 @@ export const queryKeys = {
   reportVoids: (period: Period, deviceId: string | null) =>
     ["reports", "voids", JSON.stringify(period), deviceId ?? "store"] as const,
   reportDevices: ["reports", "devices"] as const,
+  orderHistory: (filter: OrderFilter) => ["orders", "history", JSON.stringify(filter)] as const,
+  orderReceipt: (id: string) => ["orders", "receipt", id] as const,
   expenseCategories: ["expenses", "categories"] as const,
   expenseList: (period: Period, categoryId: string | null) =>
     ["expenses", "list", JSON.stringify(period), categoryId ?? "all"] as const,
@@ -867,5 +872,39 @@ export function useRebuildDerived() {
   return useMutation({
     mutationFn: () => unwrap(commands.rebuildDerived()),
     onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+// ───────── order history and CSV export (doc §1.4, §5) ─────────
+
+const ORDER_PAGE = 200;
+
+export function useOrderHistory(filter: OrderFilter) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.orderHistory(filter),
+    initialPageParam: null as OrderCursor | null,
+    queryFn: ({ pageParam }) => unwrap(commands.orderHistory(filter, pageParam, ORDER_PAGE)),
+    getNextPageParam: (last) => last.next_cursor ?? null,
+  });
+}
+
+export function useOrderReceipt(orderId: string) {
+  return useQuery({
+    queryKey: queryKeys.orderReceipt(orderId),
+    queryFn: () => unwrap(commands.orderReceipt(orderId)),
+  });
+}
+
+/** The native folder picker for exports; `null` when cancelled. */
+export function pickExportFolder() {
+  return unwrap(commands.exportPickFolder());
+}
+
+export function useExportCsv() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ kind, period, dir }: { kind: ExportKind; period: Period; dir: string }) =>
+      unwrap(commands.exportCsv(kind, period, dir)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.audit }),
   });
 }

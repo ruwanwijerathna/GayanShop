@@ -9,6 +9,7 @@ pub mod customers;
 pub mod expenses;
 pub mod held_carts;
 pub mod inventory;
+pub mod orders;
 pub mod print_jobs;
 pub mod products;
 pub mod quick_sales;

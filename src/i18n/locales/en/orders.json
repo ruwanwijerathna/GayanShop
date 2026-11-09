@@ -1,0 +1,32 @@
+{
+  "title": "Orders",
+  "empty": "No orders in this period.",
+  "columns": {
+    "receipt": "Receipt",
+    "when": "Completed",
+    "cashier": "Cashier",
+    "items": "Items",
+    "total": "Total",
+    "status": "Status"
+  },
+  "status": {
+    "completed": "Completed",
+    "voided": "Voided",
+    "withCustomer": "Completed · customer"
+  },
+  "filters": {
+    "receipt": "Receipt number",
+    "counter": "Counter",
+    "allCounters": "All counters",
+    "status": "Status",
+    "allStatuses": "All"
+  },
+  "reasons": {
+    "WRONG_ITEM": "Wrong item",
+    "WRONG_PRICE": "Wrong price",
+    "WRONG_QTY": "Wrong quantity",
+    "DUPLICATE_SCAN": "Scanned twice",
+    "CUSTOMER_CANCELLED": "Customer cancelled",
+    "OTHER": "Other"
+  }
+}

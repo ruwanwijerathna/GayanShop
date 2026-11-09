@@ -1,11 +1,19 @@
 import { PackagePlus, Plus, Tag, Trash2, Truck } from "lucide-react";
-import { useState } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { DataTable } from "@/components/data-table/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { AllocationMethod, Batch, BatchDetail, ProductSummary } from "@/db/bindings";
+import type {
+  AllocationMethod,
+  Batch,
+  BatchDetail_Serialize as BatchDetail,
+  BatchItem_Serialize as BatchItem,
+  ProductSummary,
+} from "@/db/bindings";
 import { CommandError } from "@/db/client";
 import { useBatch, useBatches, useReceiveBatch, useRemoveBatchItem, useSetBatchItem } from "@/db/hooks";
 import { translateError } from "@/i18n";
@@ -137,6 +145,76 @@ function Detail({ detail }: { detail: BatchDetail }) {
   const { batch, items } = detail;
   const draft = batch.status === "draft";
   const failure = receive.error ?? remove.error;
+  const itemColumns = useMemo<ColumnDef<BatchItem>[]>(() => {
+    const cols: ColumnDef<BatchItem>[] = [
+      {
+        id: "product",
+        header: t("fields.product"),
+        size: 280,
+        enableSorting: false,
+        cell: ({ row }) => (
+          <span className="truncate">
+            {row.original.product_name}
+            {row.original.added_after_receipt && (
+              <Badge variant="outline" className="ml-2">
+                {t("late.badge")}
+              </Badge>
+            )}
+            {row.original.product_sku && (
+              <span className="ml-2 font-mono text-sm text-muted-foreground">{row.original.product_sku}</span>
+            )}
+          </span>
+        ),
+      },
+      { id: "qty", header: t("fields.qty"), size: 80, accessorFn: (i) => i.qty_received },
+      {
+        id: "unitCost",
+        header: t("fields.unitCost"),
+        size: 120,
+        accessorFn: (i) => i.unit_cost,
+        cell: ({ row }) => <span className="font-mono">{formatMoney(row.original.unit_cost)}</span>,
+      },
+    ];
+    if (!draft) {
+      cols.push(
+        {
+          id: "onHand",
+          header: t("detail.onHand"),
+          size: 90,
+          accessorFn: (i) => i.on_hand,
+          cell: ({ row }) => (
+            <span className={cn("font-mono", row.original.on_hand < 0 && "text-destructive")}>
+              {row.original.on_hand}
+            </span>
+          ),
+        },
+        { id: "sold", header: t("detail.sold"), size: 80, accessorFn: (i) => i.sold_qty },
+      );
+    } else {
+      cols.push({
+        id: "remove",
+        header: "",
+        size: 72,
+        enableSorting: false,
+        cell: ({ row }) => (
+          <Button
+            type="button"
+            size="icon-pos"
+            variant="outline"
+            aria-label={t("detail.removeItem", { name: row.original.product_name })}
+            disabled={remove.isPending}
+            onClick={(e) => {
+              e.stopPropagation();
+              remove.mutate({ batchId: batch.id, itemId: row.original.id });
+            }}
+          >
+            <Trash2 aria-hidden />
+          </Button>
+        ),
+      });
+    }
+    return cols;
+  }, [t, draft, remove, batch.id]);
   const error = failure instanceof CommandError ? translateError(i18n.t, failure.error) : null;
   const landed = batch.total_cost + batch.extra_costs;
 
@@ -183,57 +261,13 @@ function Detail({ detail }: { detail: BatchDetail }) {
       {items.length === 0 ? (
         <p className="text-muted-foreground">{t("detail.noItems")}</p>
       ) : (
-        <table className="w-full text-left">
-          <thead className="border-b border-border text-sm">
-            <tr>
-              <th className="py-2">{t("fields.product")}</th>
-              <th className="py-2 text-right">{t("fields.qty")}</th>
-              <th className="py-2 text-right">{t("fields.unitCost")}</th>
-              {!draft && <th className="py-2 text-right">{t("detail.onHand")}</th>}
-              {!draft && <th className="py-2 text-right">{t("detail.sold")}</th>}
-              {draft && <th className="py-2" />}
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((i) => (
-              <tr key={i.id} className="h-12 border-b border-border">
-                <td>
-                  {i.product_name}
-                  {i.added_after_receipt && (
-                    <Badge variant="outline" className="ml-2">
-                      {t("late.badge")}
-                    </Badge>
-                  )}
-                  {i.product_sku && (
-                    <span className="ml-2 font-mono text-sm text-muted-foreground">{i.product_sku}</span>
-                  )}
-                </td>
-                <td className="text-right font-mono">{i.qty_received}</td>
-                <td className="text-right font-mono">{formatMoney(i.unit_cost)}</td>
-                {!draft && (
-                  <td className={cn("text-right font-mono", i.on_hand < 0 && "text-destructive")}>
-                    {i.on_hand}
-                  </td>
-                )}
-                {!draft && <td className="text-right font-mono">{i.sold_qty}</td>}
-                {draft && (
-                  <td className="text-right">
-                    <Button
-                      type="button"
-                      size="icon-pos"
-                      variant="outline"
-                      aria-label={t("detail.removeItem", { name: i.product_name })}
-                      disabled={remove.isPending}
-                      onClick={() => remove.mutate({ batchId: batch.id, itemId: i.id })}
-                    >
-                      <Trash2 aria-hidden />
-                    </Button>
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <DataTable<BatchItem>
+          ariaLabel={t("wizard.items")}
+          columns={itemColumns}
+          data={items}
+          getRowId={(i) => i.id}
+          height={Math.min(48 * (items.length + 1), 432)}
+        />
       )}
       {error && (
         <p role="alert" className="rounded-md bg-destructive px-3 py-2 text-destructive-foreground">
@@ -322,6 +356,41 @@ export function BatchesScreen() {
   const detail = useBatch(selected);
   const loadError = list.error instanceof CommandError ? translateError(i18n.t, list.error.error) : null;
   const batches = (list.data ?? []).filter((b) => b.code !== "ADJUSTMENTS");
+  const batchColumns = useMemo<ColumnDef<Batch>[]>(
+    () => [
+      {
+        id: "batch",
+        header: t("columns.batch"),
+        size: 318,
+        enableSorting: false,
+        cell: ({ row }) => {
+          const b = row.original;
+          return (
+            <button
+              type="button"
+              aria-current={selected === b.id ? "true" : undefined}
+              className={cn(
+                "flex min-h-12 w-full flex-col items-start rounded-md px-1 text-left",
+                selected === b.id && "bg-accent",
+              )}
+              onClick={() => setSelected(b.id)}
+            >
+              <span className="flex w-full items-center gap-2">
+                <span className="flex-1 truncate font-medium">{batchLabel(b, t("openingStock"))}</span>
+                <Badge variant={b.status === "draft" ? "outline" : "secondary"}>
+                  {t(`status.${b.status}`)}
+                </Badge>
+              </span>
+              <span className="font-mono text-xs text-muted-foreground">
+                {b.code} · {b.total_units} · {formatMoney(b.items_cost)}
+              </span>
+            </button>
+          );
+        },
+      },
+    ],
+    [t, selected],
+  );
 
   return (
     <section className="flex flex-col gap-4">
@@ -346,31 +415,14 @@ export function BatchesScreen() {
           {batches.length === 0 ? (
             <p className="text-muted-foreground">{list.isLoading ? t("common:table.loading") : t("empty")}</p>
           ) : (
-            <ul className="flex flex-col gap-1">
-              {batches.map((b) => (
-                <li key={b.id}>
-                  <button
-                    type="button"
-                    aria-current={selected === b.id ? "true" : undefined}
-                    className={cn(
-                      "flex min-h-12 w-full flex-col items-start rounded-md border border-border px-3 py-2 text-left hover:bg-accent",
-                      selected === b.id && "border-primary bg-accent",
-                    )}
-                    onClick={() => setSelected(b.id)}
-                  >
-                    <span className="flex w-full items-center gap-2">
-                      <span className="flex-1 font-medium">{batchLabel(b, t("openingStock"))}</span>
-                      <Badge variant={b.status === "draft" ? "outline" : "secondary"}>
-                        {t(`status.${b.status}`)}
-                      </Badge>
-                    </span>
-                    <span className="font-mono text-sm text-muted-foreground">
-                      {b.code} · {b.total_units} · {formatMoney(b.items_cost)}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <DataTable<Batch>
+              ariaLabel={t("title")}
+              columns={batchColumns}
+              data={batches}
+              getRowId={(b) => b.id}
+              height={Math.min(64 * batches.length + 48, 576)}
+              onRowActivate={(b) => setSelected(b.id)}
+            />
           )}
         </nav>
         <div className="rounded-lg border border-border p-4">

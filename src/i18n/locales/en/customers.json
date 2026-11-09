@@ -47,21 +47,6 @@
     "voided": "Voided",
     "empty": "No purchases yet."
   },
-  "receipt": {
-    "title": "Receipt {{no}}",
-    "item": "Item",
-    "qty": "Qty",
-    "total": "Total",
-    "discount": "Discount",
-    "grandTotal": "Total paid",
-    "methods": {
-      "cash": "Cash",
-      "card": "Card",
-      "transfer": "Bank transfer",
-      "qr": "QR",
-      "other": "Other"
-    }
-  },
   "erase": {
     "action": "Erase personal data",
     "title": "Erase this customer's details?",

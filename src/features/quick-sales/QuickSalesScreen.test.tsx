@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   commands,
   type Batch_Serialize as Batch,
@@ -42,6 +42,12 @@ const BATCH = {
   is_system: false,
 } as unknown as Batch;
 
+beforeAll(() => {
+  // jsdom has no layout: give the virtualised table a viewport.
+  Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 480 });
+  Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 1000 });
+});
+
 beforeEach(() => {
   vi.mocked(commands.quickSaleReview).mockImplementation(() => ok([ROW]));
   vi.mocked(commands.quickSaleDetail).mockImplementation(() =>
@@ -61,7 +67,9 @@ beforeEach(() => {
 describe("QuickSalesScreen", () => {
   it("lists keys to review, most sold first", async () => {
     renderWithProviders(<QuickSalesScreen />);
-    const row = (await screen.findByRole("button", { name: "Blue Bucket 10L" })).closest("tr");
+    const row = (await screen.findByRole("button", { name: "Blue Bucket 10L" })).closest<HTMLElement>(
+      '[role="row"]',
+    );
     expect(row).not.toBeNull();
     if (row) expect(within(row).getByText("Rs 400.00–Rs 500.00")).toBeInTheDocument();
     expect(commands.quickSaleReview).toHaveBeenCalledWith("new");

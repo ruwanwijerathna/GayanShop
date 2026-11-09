@@ -12,7 +12,8 @@
     "quickSales": "Quick sales",
     "customers": "Customers",
     "expenses": "Expenses",
-    "reports": "Reports"
+    "reports": "Reports",
+    "orders": "Orders"
   },
   "status": {
     "title": "Counter status",

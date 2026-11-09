@@ -2,9 +2,11 @@
 // and dates. Open one to see its median price, which counters sell it and how it was spelled; then promote
 // it to a real product (optionally with a shelf count, in a received batch) or ignore it.
 import { Ban, PackagePlus } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { useMemo, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { DataTable } from "@/components/data-table/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +23,6 @@ import {
 } from "@/db/hooks";
 import { translateError } from "@/i18n";
 import { formatMoney, parseMajor, toMajorInput } from "@/lib/money";
-import { cn } from "@/lib/utils";
 
 const FIELD = "h-12 text-base";
 const SELECT = "h-12 w-full rounded-md border border-input bg-background px-3 text-base";
@@ -207,11 +208,65 @@ function Detail({ row, onDone }: { row: QuickSaleRow; onDone: () => void }) {
 }
 
 export function QuickSalesScreen() {
-  const { t } = useTranslation("quickSales");
+  const { t } = useTranslation(["quickSales", "common"]);
   const [show, setShow] = useState<QuickSaleStatus | null>("new");
   const review = useQuickSaleReview(show);
   const [open, setOpen] = useState<QuickSaleRow | null>(null);
   const rows = review.data ?? [];
+  const columns = useMemo<ColumnDef<QuickSaleRow>[]>(
+    () => [
+      {
+        id: "name",
+        header: t("columns.name"),
+        size: 220,
+        enableSorting: false,
+        cell: ({ row }) => (
+          <button
+            type="button"
+            className="min-h-12 text-left font-medium underline-offset-4 hover:underline"
+            onClick={() => setOpen(row.original)}
+          >
+            {row.original.display_name}
+          </button>
+        ),
+      },
+      { id: "times", header: t("columns.times"), size: 80, accessorFn: (r) => r.times_sold },
+      { id: "units", header: t("columns.units"), size: 80, accessorFn: (r) => r.units_sold },
+      {
+        id: "revenue",
+        header: t("columns.revenue"),
+        size: 130,
+        accessorFn: (r) => r.revenue_net,
+        cell: ({ row }) => formatMoney(row.original.revenue_net),
+      },
+      {
+        id: "prices",
+        header: t("columns.prices"),
+        size: 200,
+        enableSorting: false,
+        cell: ({ row }) => `${formatMoney(row.original.min_price)}–${formatMoney(row.original.max_price)}`,
+      },
+      {
+        id: "last",
+        header: t("columns.last"),
+        size: 120,
+        accessorFn: (r) => r.last_sold_at,
+        cell: ({ row }) => new Date(row.original.last_sold_at).toLocaleDateString(),
+      },
+      {
+        id: "status",
+        header: t("columns.status"),
+        size: 120,
+        enableSorting: false,
+        cell: ({ row }) => (
+          <Badge variant={row.original.status === "new" ? "outline" : "secondary"}>
+            {t(`status.${row.original.status}`)}
+          </Badge>
+        ),
+      },
+    ],
+    [t],
+  );
 
   return (
     <section className="flex flex-col gap-4">
@@ -237,53 +292,15 @@ export function QuickSalesScreen() {
       </header>
       <p className="text-sm text-muted-foreground">{t("hint")}</p>
       <div className="grid gap-4 xl:grid-cols-[1fr_28rem]">
-        {rows.length === 0 ? (
-          <p className="text-muted-foreground">{review.isLoading ? "" : t("empty")}</p>
-        ) : (
-          <table className="w-full text-left text-sm">
-            <thead className="border-b">
-              <tr>
-                <th className="py-2">{t("columns.name")}</th>
-                <th className="text-right">{t("columns.times")}</th>
-                <th className="text-right">{t("columns.units")}</th>
-                <th className="text-right">{t("columns.revenue")}</th>
-                <th className="text-right">{t("columns.prices")}</th>
-                <th>{t("columns.last")}</th>
-                <th>{t("columns.status")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr
-                  key={r.custom_key}
-                  className={cn("h-12 border-b", open?.custom_key === r.custom_key && "bg-accent")}
-                >
-                  <td>
-                    <button
-                      type="button"
-                      className="min-h-12 text-left font-medium underline-offset-4 hover:underline"
-                      onClick={() => setOpen(r)}
-                    >
-                      {r.display_name}
-                    </button>
-                  </td>
-                  <td className="text-right font-mono">{r.times_sold}</td>
-                  <td className="text-right font-mono">{r.units_sold}</td>
-                  <td className="text-right font-mono">{formatMoney(r.revenue_net)}</td>
-                  <td className="text-right font-mono">
-                    {formatMoney(r.min_price)}–{formatMoney(r.max_price)}
-                  </td>
-                  <td>{new Date(r.last_sold_at).toLocaleDateString()}</td>
-                  <td>
-                    <Badge variant={r.status === "new" ? "outline" : "secondary"}>
-                      {t(`status.${r.status}`)}
-                    </Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <DataTable<QuickSaleRow>
+          ariaLabel={t("title")}
+          columns={columns}
+          data={rows}
+          getRowId={(r) => r.custom_key}
+          height={480}
+          emptyLabel={review.isLoading ? t("common:table.loading") : t("empty")}
+          onRowActivate={setOpen}
+        />
         {open && <Detail key={open.custom_key} row={open} onDone={() => setOpen(null)} />}
       </div>
     </section>

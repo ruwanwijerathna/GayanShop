@@ -9,6 +9,7 @@ import { ProductsScreen } from "@/features/products/ProductsScreen";
 import { QuickSalesScreen } from "@/features/quick-sales/QuickSalesScreen";
 import { CustomersScreen } from "@/features/customers/CustomersScreen";
 import { ExpensesScreen } from "@/features/expenses/ExpensesScreen";
+import { OrdersScreen } from "@/features/orders/OrdersScreen";
 import { ReportsScreen } from "@/features/reports/ReportsScreen";
 import { StaffScreen } from "@/features/staff/StaffScreen";
 import { AppShell } from "./AppShell";
@@ -82,6 +83,12 @@ export const reportsRoute = createRoute({
   component: ReportsScreen,
 });
 
+export const ordersRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/orders",
+  component: OrdersScreen,
+});
+
 export const staffRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/staff",
@@ -106,6 +113,7 @@ export const routeTree = rootRoute.addChildren([
   customersRoute,
   expensesRoute,
   reportsRoute,
+  ordersRoute,
   staffRoute,
   settingsRoute,
 ]);

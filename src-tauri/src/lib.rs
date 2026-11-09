@@ -22,6 +22,7 @@ pub mod commands;
 pub mod db;
 pub mod domain;
 pub mod error;
+pub mod export;
 pub mod hardware;
 pub mod prefs;
 pub mod setup;
@@ -134,6 +135,10 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::reports::report_devices,
         commands::reports::report_batch_sell_through,
         commands::reports::rebuild_derived,
+        commands::export::export_pick_folder,
+        commands::export::export_csv,
+        commands::orders::order_history,
+        commands::orders::order_receipt,
         commands::hardware::printer_status,
         commands::hardware::printer_profile,
         commands::hardware::set_printer_profile,

@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   commands,
   type BatchDetail_Serialize as BatchDetail,
@@ -83,6 +83,12 @@ const bucket: ProductSummary = {
   min_price: null,
   track_stock: true,
 };
+
+beforeAll(() => {
+  // jsdom has no layout: give the virtualised lists a viewport.
+  Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 576 });
+  Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 1000 });
+});
 
 beforeEach(() => {
   vi.mocked(commands.listBatches).mockImplementation(() =>

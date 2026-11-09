@@ -140,6 +140,11 @@ export const commands = {
 	reportBatchSellThrough: () => typedError<BatchSellThrough[], AppError>(__TAURI_INVOKE("report_batch_sell_through")),
 	/**  Settings → Maintenance: recompute every derived table from the base tables. */
 	rebuildDerived: () => typedError<RebuildReport, AppError>(__TAURI_INVOKE("rebuild_derived")),
+	/**  The native folder picker; `None` when the user cancels. */
+	exportPickFolder: () => typedError<string | null, AppError>(__TAURI_INVOKE("export_pick_folder")),
+	exportCsv: (kind: ExportKind, period: Period, destDir: string) => typedError<ExportOutcome, AppError>(__TAURI_INVOKE("export_csv", { kind, period, destDir })),
+	orderHistory: (filter: OrderFilter_Deserialize, cursor: OrderCursor | null, limit: number) => typedError<OrderPage_Serialize, AppError>(__TAURI_INVOKE("order_history", { filter, cursor, limit })),
+	orderReceipt: (orderId: string) => typedError<ReceiptData_Serialize, AppError>(__TAURI_INVOKE("order_receipt", { orderId })),
 	printerStatus: () => typedError<PrinterStatusView_Serialize, AppError>(__TAURI_INVOKE("printer_status")),
 	printerProfile: () => typedError<ReceiptPrinterProfile | null, AppError>(__TAURI_INVOKE("printer_profile")),
 	setPrinterProfile: (profile: ReceiptPrinterProfile) => typedError<null, AppError>(__TAURI_INVOKE("set_printer_profile", { profile })),
@@ -1135,6 +1140,13 @@ export type ExpenseRow_Serialize = {
 	created_at: string,
 };
 
+export type ExportKind = "orders" | "order_lines" | "products" | "customers" | "expenses" | "stock_movements" | "sales_by_product";
+
+export type ExportOutcome = {
+	path: string,
+	rows: number,
+};
+
 /**
  *  The §5.1 metrics for one period. Cost-derived fields are `None` when the viewer may not see costs
  *  (`REPORT_FINANCIAL` + `VIEW_COST`; see [`FinancialSummary::without_costs`]).
@@ -1563,6 +1575,71 @@ export type NewStaff_Serialize = {
 export type OpenSessionInput = {
 	opening_float: number,
 };
+
+export type OrderCursor = {
+	completed_at: string,
+	id: string,
+};
+
+export type OrderFilter = OrderFilter_Serialize | OrderFilter_Deserialize;
+
+export type OrderFilter_Deserialize = {
+	period: Period,
+	device_id?: string | null,
+	status?: OrderStatusFilter | null,
+	/**  A receipt number, or the start of one (`T01-2611`). */
+	receipt?: string | null,
+};
+
+export type OrderFilter_Serialize = {
+	period: Period,
+	device_id: string | null,
+	status: OrderStatusFilter | null,
+	/**  A receipt number, or the start of one (`T01-2611`). */
+	receipt: string | null,
+};
+
+export type OrderPage = OrderPage_Serialize | OrderPage_Deserialize;
+
+export type OrderPage_Deserialize = {
+	rows: OrderRow_Deserialize[],
+	next_cursor?: OrderCursor | null,
+};
+
+export type OrderPage_Serialize = {
+	rows: OrderRow_Serialize[],
+	next_cursor: OrderCursor | null,
+};
+
+export type OrderRow = OrderRow_Serialize | OrderRow_Deserialize;
+
+export type OrderRow_Deserialize = {
+	id: string,
+	receipt_no: string,
+	business_date: string,
+	completed_at: string,
+	status: string,
+	cashier?: string | null,
+	item_count: number,
+	grand_total: number,
+	has_customer: boolean,
+	void_reason?: string | null,
+};
+
+export type OrderRow_Serialize = {
+	id: string,
+	receipt_no: string,
+	business_date: string,
+	completed_at: string,
+	status: string,
+	cashier: string | null,
+	item_count: number,
+	grand_total: number,
+	has_customer: boolean,
+	void_reason: string | null,
+};
+
+export type OrderStatusFilter = "completed" | "voided";
 
 /**  A layer that sold more than it held (offline counters draining the same layer, or a sale before intake). */
 export type OversoldLayer = {

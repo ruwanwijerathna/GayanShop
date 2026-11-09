@@ -107,5 +107,8 @@
     "writeOffConfirm": "Write off the remaining stock of this batch (it becomes a loss in its profit), so it can be closed?",
     "confirmWriteOff": "Yes, write off",
     "writeOffNote": "Batch closed with stock left"
+  },
+  "columns": {
+    "batch": "Batch"
   }
 }

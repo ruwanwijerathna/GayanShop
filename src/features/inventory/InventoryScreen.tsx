@@ -1,15 +1,23 @@
 // Stock (doc §3.1, §5): valuation now or as of a date (by batch and by category), oversold layers, a stock
 // count, damage and adjustments (with a supervisor's approval where the role lacks it), and movement history.
 import { ClipboardList, History, PackageMinus, Scale, TriangleAlert } from "lucide-react";
-import { useState, type FormEvent, type ReactNode } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ApprovalDialog } from "@/components/auth/ApprovalDialog";
 import { Can } from "@/components/auth/Can";
+import { DataTable } from "@/components/data-table/DataTable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { DamageReason, Perm, ProductSummary, ValuationGroup } from "@/db/bindings";
+import type {
+  DamageReason,
+  MovementRow_Serialize as MovementRow,
+  Perm,
+  ProductSummary,
+  ValuationGroup,
+} from "@/db/bindings";
 import { CommandError } from "@/db/client";
 import {
   useAdjustStock,
@@ -427,10 +435,66 @@ function DamageTab() {
 }
 
 function HistoryTab() {
-  const { t } = useTranslation("inventory");
+  const { t } = useTranslation(["inventory", "common"]);
   const [product, setProduct] = useState<ProductSummary | null>(null);
   const history = useStockMovements(product?.id ?? null);
-  const rows = history.data?.pages.flatMap((p) => p.rows) ?? [];
+  const rows = useMemo(() => history.data?.pages.flatMap((p) => p.rows) ?? [], [history.data]);
+  const columns = useMemo<ColumnDef<MovementRow>[]>(
+    () => [
+      {
+        id: "when",
+        header: t("history.when"),
+        size: 190,
+        enableSorting: false,
+        accessorFn: (r) => new Date(r.created_at).toLocaleString(),
+      },
+      {
+        id: "reason",
+        header: t("history.reason"),
+        size: 260,
+        enableSorting: false,
+        cell: ({ row }) => (
+          <span>
+            {t(`history.reasons.${row.original.reason}`, { defaultValue: row.original.reason })}
+            {row.original.note && <span className="ml-2 text-muted-foreground">{row.original.note}</span>}
+          </span>
+        ),
+      },
+      {
+        id: "batch",
+        header: t("history.batch"),
+        size: 150,
+        enableSorting: false,
+        accessorFn: (r) => r.batch_code,
+      },
+      {
+        id: "qty",
+        header: t("history.qty"),
+        size: 80,
+        enableSorting: false,
+        cell: ({ row }) => (
+          <span className={cn("font-mono", row.original.qty_delta < 0 && "text-destructive")}>
+            {row.original.qty_delta}
+          </span>
+        ),
+      },
+      {
+        id: "cost",
+        header: t("history.cost"),
+        size: 120,
+        enableSorting: false,
+        accessorFn: (r) => formatMoney(r.unit_cost),
+      },
+      {
+        id: "by",
+        header: t("history.by"),
+        size: 140,
+        enableSorting: false,
+        accessorFn: (r) => r.staff_name ?? "",
+      },
+    ],
+    [t],
+  );
   return (
     <div className="flex flex-col gap-3">
       {product ? (
@@ -444,46 +508,18 @@ function HistoryTab() {
         <ProductSearch label={t("history.product")} onPick={setProduct} />
       )}
       {product && (
-        <table className="w-full text-left text-sm" aria-label={t("tabs.history")}>
-          <thead className="border-b">
-            <tr>
-              <th className="py-2">{t("history.when")}</th>
-              <th>{t("history.reason")}</th>
-              <th>{t("history.batch")}</th>
-              <th className="text-right">{t("history.qty")}</th>
-              <th className="text-right">{t("history.cost")}</th>
-              <th>{t("history.by")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} className="h-10 border-b">
-                <td>{new Date(r.created_at).toLocaleString()}</td>
-                <td>
-                  {t(`history.reasons.${r.reason}`, { defaultValue: r.reason })}
-                  {r.note && <span className="ml-2 text-muted-foreground">{r.note}</span>}
-                </td>
-                <td className="font-mono">{r.batch_code}</td>
-                <td className={cn("text-right font-mono", r.qty_delta < 0 && "text-destructive")}>
-                  {r.qty_delta}
-                </td>
-                <td className="text-right font-mono">{formatMoney(r.unit_cost)}</td>
-                <td>{r.staff_name ?? ""}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      {history.hasNextPage && (
-        <Button
-          type="button"
-          size="pos"
-          variant="outline"
-          className="self-start"
-          onClick={() => void history.fetchNextPage()}
-        >
-          {t("history.more")}
-        </Button>
+        <DataTable<MovementRow>
+          ariaLabel={t("tabs.history")}
+          columns={columns}
+          data={rows}
+          getRowId={(r) => r.id}
+          height={432}
+          rowHeight={48}
+          emptyLabel={history.isLoading ? t("common:table.loading") : t("history.empty")}
+          onEndReached={() => {
+            if (history.hasNextPage && !history.isFetchingNextPage) void history.fetchNextPage();
+          }}
+        />
       )}
     </div>
   );

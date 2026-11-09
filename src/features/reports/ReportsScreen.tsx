@@ -9,6 +9,7 @@ import { BatchSellThroughBar } from "@/components/charts/BatchSellThroughBar";
 import { PaymentDonut } from "@/components/charts/PaymentDonut";
 import { RevenueExpenseBar } from "@/components/charts/RevenueExpenseBar";
 import { SalesTrendArea } from "@/components/charts/SalesTrendArea";
+import { ExportButton } from "@/components/export/ExportButton";
 import { PeriodPicker, periodFor } from "@/components/period/PeriodPicker";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -303,7 +304,11 @@ function Reports({ today }: { today: string }) {
   const s = summary.data;
   return (
     <section className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{t("title")}</h1>
+      <header className="flex flex-wrap items-center gap-3">
+        <h1 className="flex-1 text-2xl font-semibold">{t("title")}</h1>
+        <ExportButton kind="sales_by_product" period={period} />
+        <ExportButton kind="stock_movements" period={period} />
+      </header>
       <PeriodPicker value={period} onChange={setPeriod} today={today} />
       <div className="flex flex-wrap items-end gap-4">
         <div className="flex min-w-48 flex-col gap-2">

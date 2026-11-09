@@ -1,0 +1,32 @@
+{
+  "title": "ඇණවුම්",
+  "empty": "මෙම කාල සීමාවේ ඇණවුම් නැත.",
+  "columns": {
+    "receipt": "රිසිට්පත",
+    "when": "සම්පූර්ණ කළේ",
+    "cashier": "අයකැමි",
+    "items": "අයිතම",
+    "total": "එකතුව",
+    "status": "තත්ත්වය"
+  },
+  "status": {
+    "completed": "සම්පූර්ණයි",
+    "voided": "අවලංගු කළ",
+    "withCustomer": "සම්පූර්ණයි · පාරිභෝගිකයා"
+  },
+  "filters": {
+    "receipt": "රිසිට්පත් අංකය",
+    "counter": "කවුන්ටරය",
+    "allCounters": "සියලු කවුන්ටර",
+    "status": "තත්ත්වය",
+    "allStatuses": "සියල්ල"
+  },
+  "reasons": {
+    "WRONG_ITEM": "වැරදි අයිතමය",
+    "WRONG_PRICE": "වැරදි මිල",
+    "WRONG_QTY": "වැරදි ප්‍රමාණය",
+    "DUPLICATE_SCAN": "දෙවරක් ස්කෑන් කළා",
+    "CUSTOMER_CANCELLED": "පාරිභෝගිකයා අවලංගු කළා",
+    "OTHER": "වෙනත්"
+  }
+}

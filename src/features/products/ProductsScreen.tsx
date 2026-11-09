@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useSession } from "@/app/session";
 import { Can } from "@/components/auth/Can";
 import { DataTable } from "@/components/data-table/DataTable";
+import { ExportButton } from "@/components/export/ExportButton";
 import { PrintLabelsDialog } from "@/components/labels/PrintLabelsDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -193,6 +194,7 @@ export function ProductsScreen() {
         <span role="status" className="flex-1 text-sm text-muted-foreground">
           {t("count", { count: rows.length })}
         </span>
+        <ExportButton kind="products" period={{ kind: "all_time" }} />
         <Button
           type="button"
           size="pos"

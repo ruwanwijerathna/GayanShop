@@ -8,8 +8,9 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { TopCustomersBar } from "@/components/charts/TopCustomersBar";
 import { DataTable } from "@/components/data-table/DataTable";
+import { ExportButton } from "@/components/export/ExportButton";
 import { PeriodPicker, periodFor } from "@/components/period/PeriodPicker";
-import { Badge } from "@/components/ui/badge";
+import { ReceiptDialog } from "@/components/receipt/ReceiptDialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -63,7 +64,7 @@ function ErrorText({ error }: { error: unknown }) {
   );
 }
 
-function ReceiptDialog({
+function Receipt({
   customerId,
   orderId,
   onClose,
@@ -72,64 +73,8 @@ function ReceiptDialog({
   orderId: string;
   onClose: () => void;
 }) {
-  const { t } = useTranslation(["customers", "common"]);
   const receipt = useCustomerReceipt(customerId, orderId);
-  const r = receipt.data;
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{t("receipt.title", { no: r?.receipt_no ?? "" })}</DialogTitle>
-          <DialogDescription>
-            {r
-              ? `${r.business_date} · ${r.cashier}${r.customer_masked ? ` · ${r.customer_masked}` : ""}`
-              : ""}
-          </DialogDescription>
-        </DialogHeader>
-        <ErrorText error={receipt.error} />
-        {r && (
-          <div className="flex flex-col gap-3">
-            {r.status === "voided" && <Badge variant="destructive">{t("history.voided")}</Badge>}
-            <table className="w-full text-left text-sm">
-              <thead className="border-b">
-                <tr>
-                  <th className="py-2">{t("receipt.item")}</th>
-                  <th className="text-right">{t("receipt.qty")}</th>
-                  <th className="text-right">{t("receipt.total")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {r.lines.map((l, i) => (
-                  <tr key={i} className="h-10 border-b">
-                    <td>{l.name}</td>
-                    <td className="text-right font-mono">{l.qty}</td>
-                    <td className="text-right font-mono">{formatMoney(l.line_total)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <dl className="grid grid-cols-2 gap-1 text-base">
-              <dt>{t("receipt.discount")}</dt>
-              <dd className="text-right font-mono">{formatMoney(r.discount_total)}</dd>
-              <dt className="font-semibold">{t("receipt.grandTotal")}</dt>
-              <dd className="text-right font-mono font-semibold">{formatMoney(r.grand_total)}</dd>
-              {r.payments.map((p, i) => (
-                <div key={i} className="contents">
-                  <dt>{t(`receipt.methods.${p.method}`, { defaultValue: p.method })}</dt>
-                  <dd className="text-right font-mono">{formatMoney(p.amount)}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-        )}
-        <DialogFooter>
-          <Button type="button" size="pos" variant="outline" onClick={onClose}>
-            {t("common:actions.close")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+  return <ReceiptDialog receipt={receipt.data} error={receipt.error} onClose={onClose} />;
 }
 
 function History({ customerId }: { customerId: string }) {
@@ -172,7 +117,7 @@ function History({ customerId }: { customerId: string }) {
           if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
         }}
       />
-      {open && <ReceiptDialog customerId={customerId} orderId={open} onClose={() => setOpen(null)} />}
+      {open && <Receipt customerId={customerId} orderId={open} onClose={() => setOpen(null)} />}
     </section>
   );
 }
@@ -542,6 +487,7 @@ export function CustomersScreen() {
     <section className="flex flex-col gap-4">
       <header className="flex flex-wrap items-center gap-3">
         <h1 className="flex-1 text-2xl font-semibold">{t("title")}</h1>
+        <ExportButton kind="customers" period={{ kind: "all_time" }} />
         <div className="flex gap-2" role="tablist" aria-label={t("title")}>
           <Button
             type="button"

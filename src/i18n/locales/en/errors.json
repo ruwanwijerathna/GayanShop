@@ -125,7 +125,9 @@
     "EXPENSE_DRAWER_CASH_ONLY": "Only cash can be paid from the drawer.",
     "EXPENSE_DRAWER_TODAY_ONLY": "Drawer payments are for today only.",
     "EXPENSE_DRAWER_LOCKED": "This expense moved drawer cash: its amount, date and method are fixed, and it can only be deleted while its shift is open.",
-    "EXPENSE_TEXT_TOO_LONG": "Paid to and note can have at most 200 characters."
+    "EXPENSE_TEXT_TOO_LONG": "Paid to and note can have at most 200 characters.",
+    "EXPORT_DIR_INVALID": "That folder isn't available. Check the drive and pick it again.",
+    "EXPORT_WRITE_FAILED": "The file couldn't be written. Check the drive has space."
   },
   "INVARIANT": {
     "_": "This change isn't allowed.",

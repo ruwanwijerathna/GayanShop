@@ -63,7 +63,6 @@
     "qty": "Units",
     "cost": "Cost each",
     "by": "By",
-    "more": "Show older",
     "reasons": {
       "batch_intake": "Received",
       "batch_reopen": "Batch reopened",
@@ -72,6 +71,7 @@
       "damage": "Damaged",
       "count_correction": "Count",
       "adjustment": "Adjusted"
-    }
+    },
+    "empty": "No movements yet."
   }
 }
