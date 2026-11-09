@@ -50,6 +50,7 @@ tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2"
 reqwest = { version = "0.12", features = ["json"] }
 keyring = { version = "3", features = ["windows-native"] }
+zip = { version = "9.5", default-features = false, features = ["deflate"] }
 
 [target.'cfg(windows)'.dependencies]
 # Receipt printers: the spooler's RAW datatype and COM-port setup (doc §7.2).

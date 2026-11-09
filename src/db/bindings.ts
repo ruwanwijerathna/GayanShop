@@ -211,6 +211,9 @@ export const commands = {
 	restoreStatus: () => typedError<RestoreStatus_Serialize, AppError>(__TAURI_INVOKE("restore_status")),
 	/**  Finish a restore. Authorised by the Owner's PIN; nothing is audited until the recovery's own last step. */
 	restoreRecover: (input: RecoverInput) => typedError<RecoveryOutcome, AppError>(__TAURI_INVOKE("restore_recover", { input })),
+	supportDiagnostics: () => typedError<SupportBundle_Serialize, AppError>(__TAURI_INVOKE("support_diagnostics")),
+	supportBundlePickFolder: () => typedError<string | null, AppError>(__TAURI_INVOKE("support_bundle_pick_folder")),
+	supportBundleExport: (destinationFolder: string | null) => typedError<SupportBundleExportResult, AppError>(__TAURI_INVOKE("support_bundle_export", { destinationFolder })),
 };
 
 /* Types */
@@ -333,6 +336,18 @@ export type AppStatus_Serialize = {
 export type ApprovalGrant = {
 	approval_id: string,
 	expires_at: string,
+};
+
+export type AuditChainSummary = AuditChainSummary_Serialize | AuditChainSummary_Deserialize;
+
+export type AuditChainSummary_Deserialize = {
+	reports: ChainReport_Deserialize[],
+	all_valid: boolean,
+};
+
+export type AuditChainSummary_Serialize = {
+	reports: ChainReport_Serialize[],
+	all_valid: boolean,
 };
 
 /**  Keyset page cursor: rows strictly older than `(created_at, id)`. */
@@ -1615,6 +1630,12 @@ export type LayerStock_Serialize = {
 	sold_qty: number,
 };
 
+export type LogFileEntry = {
+	filename: string,
+	size_bytes: number,
+	snippet: string,
+};
+
 export type LoginStaff = {
 	id: string,
 	display_name: string,
@@ -2520,9 +2541,59 @@ export type StockValuation_Serialize = {
 	negative_layers: number,
 };
 
+export type SupportBundle = SupportBundle_Serialize | SupportBundle_Deserialize;
+
+export type SupportBundleExportResult = {
+	path: string,
+	size_bytes: number,
+	files_included: string[],
+};
+
+export type SupportBundle_Deserialize = {
+	app_version: string,
+	os_platform: string,
+	generated_at: string,
+	store_id?: string | null,
+	device_id?: string | null,
+	device_code?: string | null,
+	integrity: IntegrityReport,
+	table_counts: TableCount[],
+	audit_chain: AuditChainSummary_Deserialize,
+	sync: SyncDiagnostic_Deserialize,
+	logs: LogFileEntry[],
+};
+
+export type SupportBundle_Serialize = {
+	app_version: string,
+	os_platform: string,
+	generated_at: string,
+	store_id: string | null,
+	device_id: string | null,
+	device_code: string | null,
+	integrity: IntegrityReport,
+	table_counts: TableCount[],
+	audit_chain: AuditChainSummary_Serialize,
+	sync: SyncDiagnostic_Serialize,
+	logs: LogFileEntry[],
+};
+
 export type Symbology = "code128" | "ean13";
 
 export type SymbologyRule = "auto" | "code128" | "ean13";
+
+export type SyncDiagnostic = SyncDiagnostic_Serialize | SyncDiagnostic_Deserialize;
+
+export type SyncDiagnostic_Deserialize = {
+	last_logs: SyncLogRow_Deserialize[],
+	pending_outbox_count: number,
+	dead_ops_count: number,
+};
+
+export type SyncDiagnostic_Serialize = {
+	last_logs: SyncLogRow_Serialize[],
+	pending_outbox_count: number,
+	dead_ops_count: number,
+};
 
 export type SyncInfo = SyncInfo_Serialize | SyncInfo_Deserialize;
 
@@ -2610,6 +2681,11 @@ export type SyncStatus_Serialize = {
 	last_error: string | null,
 	/**  Devices whose audit chain the server flagged. */
 	chain_broken: ChainBreakView_Serialize[],
+};
+
+export type TableCount = {
+	table_name: string,
+	count: number,
 };
 
 /**  Calibration of a template (Settings → Labels): roll geometry only; the element boxes are the built-ins'. */

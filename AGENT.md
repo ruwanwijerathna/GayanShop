@@ -465,7 +465,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
 - [x] **4.3 Security hardening**: done 2026-11-10 (CSP without unsafe-eval, capability least-privilege audit, PIN-length enforcement per role [Owner/Manager 6+, Cashier 4+], no secrets in bundle, store tenancy isolation)
   - **Deliverables:** CSP, capability audit, optional SQLCipher, PIN-length enforcement, RLS foreign-token tests.
   - **Gate:** `--test security` + `pnpm verify`
-- [ ] **4.4 Observability**
+- [x] **4.4 Observability**: done 2026-11-10 (rotating logs with KeepSome(5), support bundle with diagnostic summary, integrity probes, audit chain verification, zip export)
   - **Deliverables:** rotating logs, a support bundle (logs, sync_logs, integrity probes, chain verify).
   - **Gate:** `--test support_bundle` + `pnpm verify`
 - [ ] **4.5 Pilot readiness**

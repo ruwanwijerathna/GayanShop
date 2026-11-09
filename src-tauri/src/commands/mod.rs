@@ -27,6 +27,7 @@ pub mod reports;
 pub mod restore;
 pub mod setup;
 pub mod staff;
+pub mod support;
 pub mod sync;
 pub mod system;
 pub mod void;

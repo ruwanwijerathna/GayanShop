@@ -28,6 +28,7 @@ pub mod prefs;
 pub mod restore;
 pub mod setup;
 pub mod state;
+pub mod support;
 pub mod sync;
 
 use std::sync::Arc;
@@ -181,6 +182,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::restore::restore_stage_fresh,
         commands::restore::restore_status,
         commands::restore::restore_recover,
+        commands::support::support_diagnostics,
+        commands::support::support_bundle_pick_folder,
+        commands::support::support_bundle_export,
     ])
 }
 
@@ -251,7 +255,12 @@ pub fn run() -> Result<(), tauri::Error> {
                 let _ = window.set_focus();
             }
         }))
-        .plugin(tauri_plugin_log::Builder::new().build())
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(5))
+                .max_file_size(2 * 1024 * 1024)
+                .build(),
+        )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(builder.invoke_handler())
