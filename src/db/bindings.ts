@@ -94,6 +94,12 @@ export const commands = {
 	/**  `as_of` = a business date (`YYYY-MM-DD`), or `None` for now. */
 	stockValuation: (asOf: string | null) => typedError<StockValuation_Serialize, AppError>(__TAURI_INVOKE("stock_valuation", { asOf })),
 	oversoldLayers: () => typedError<OversoldLayer[], AppError>(__TAURI_INVOKE("oversold_layers")),
+	quickSaleReview: (show: QuickSaleStatus | null) => typedError<QuickSaleRow_Serialize[], AppError>(__TAURI_INVOKE("quick_sale_review", { show })),
+	quickSaleDetail: (customKey: string) => typedError<QuickSaleDetail, AppError>(__TAURI_INVOKE("quick_sale_detail", { customKey })),
+	promoteQuickSale: (input: PromoteInput_Deserialize) => typedError<PromoteResult_Serialize, AppError>(__TAURI_INVOKE("promote_quick_sale", { input })),
+	ignoreQuickSale: (customKey: string) => typedError<null, AppError>(__TAURI_INVOKE("ignore_quick_sale", { customKey })),
+	/**  "Now a product: Blue Bucket 10L (scan or ↓ Enter)" under the till's Quick Sale bar. */
+	quickSaleHint: (name: string) => typedError<PromotedHint_Serialize | null, AppError>(__TAURI_INVOKE("quick_sale_hint", { name })),
 	/**  This counter's open session, if any (any logged-in staff member: the till needs it). */
 	currentCashSession: () => typedError<CashSession_Serialize | null, AppError>(__TAURI_INVOKE("current_cash_session")),
 	openCashSession: (input: OpenSessionInput) => typedError<CashSession_Serialize, AppError>(__TAURI_INVOKE("open_cash_session", { input })),
@@ -755,6 +761,12 @@ export type CountResult = {
 	unchanged: number,
 };
 
+export type CounterSales = {
+	device_code: string,
+	times_sold: number,
+	units: number,
+};
+
 /**  What the till sees after 9–10 digits (doc §3.8): no history without `CUSTOMER_VIEW`. */
 export type CustomerLookup = CustomerLookup_Serialize | CustomerLookup_Deserialize;
 
@@ -1392,6 +1404,110 @@ export type Product_Serialize = {
 	updated_at: string,
 	version: number,
 };
+
+export type PromoteInput = PromoteInput_Serialize | PromoteInput_Deserialize;
+
+export type PromoteInput_Deserialize = {
+	custom_key: string,
+	/**  The product name (defaults in the UI to the latest spelling; editable). */
+	name: string,
+	price: number,
+	default_cost: number,
+	category_id?: string | null,
+	/**  Give the new product an in-store barcode (for labels) as well as its SKU. */
+	generate_barcode: boolean,
+	/**  Units on the shelf right now (`None` = none counted). */
+	shelf_qty?: number | null,
+	/**  A received batch the shelf stock belongs to; `None` = the `ADJUSTMENTS` batch at `default_cost`. */
+	batch_id?: string | null,
+};
+
+export type PromoteInput_Serialize = {
+	custom_key: string,
+	/**  The product name (defaults in the UI to the latest spelling; editable). */
+	name: string,
+	price: number,
+	default_cost: number,
+	category_id: string | null,
+	/**  Give the new product an in-store barcode (for labels) as well as its SKU. */
+	generate_barcode: boolean,
+	/**  Units on the shelf right now (`None` = none counted). */
+	shelf_qty: number | null,
+	/**  A received batch the shelf stock belongs to; `None` = the `ADJUSTMENTS` batch at `default_cost`. */
+	batch_id: string | null,
+};
+
+export type PromoteResult = PromoteResult_Serialize | PromoteResult_Deserialize;
+
+export type PromoteResult_Deserialize = {
+	product: Product_Deserialize,
+	shelf_qty: number,
+};
+
+export type PromoteResult_Serialize = {
+	product: Product_Serialize,
+	shelf_qty: number,
+};
+
+/**  What the till's Quick Sale bar shows when the typed name is a promoted key: "Now a product: …". */
+export type PromotedHint = PromotedHint_Serialize | PromotedHint_Deserialize;
+
+/**  What the till's Quick Sale bar shows when the typed name is a promoted key: "Now a product: …". */
+export type PromotedHint_Deserialize = {
+	product: ProductSummary_Deserialize,
+};
+
+/**  What the till's Quick Sale bar shows when the typed name is a promoted key: "Now a product: …". */
+export type PromotedHint_Serialize = {
+	product: ProductSummary_Serialize,
+};
+
+export type QuickSaleDetail = {
+	custom_key: string,
+	/**  Median unit price over the completed sales of this key. */
+	median_price: number,
+	counters: CounterSales[],
+	/**  Every spelling typed for it, most recent first. */
+	spellings: string[],
+};
+
+export type QuickSaleRow = QuickSaleRow_Serialize | QuickSaleRow_Deserialize;
+
+export type QuickSaleRow_Deserialize = {
+	custom_key: string,
+	/**  The latest spelling typed at the till. */
+	display_name: string,
+	times_sold: number,
+	units_sold: number,
+	revenue_net: number,
+	last_price: number,
+	min_price: number,
+	max_price: number,
+	first_sold_at: string,
+	last_sold_at: string,
+	status: QuickSaleStatus,
+	/**  The product it became, when promoted. */
+	product_id?: string | null,
+};
+
+export type QuickSaleRow_Serialize = {
+	custom_key: string,
+	/**  The latest spelling typed at the till. */
+	display_name: string,
+	times_sold: number,
+	units_sold: number,
+	revenue_net: number,
+	last_price: number,
+	min_price: number,
+	max_price: number,
+	first_sold_at: string,
+	last_sold_at: string,
+	status: QuickSaleStatus,
+	/**  The product it became, when promoted. */
+	product_id: string | null,
+};
+
+export type QuickSaleStatus = "new" | "promoted" | "ignored";
 
 /**  This counter's receipt printer (and the drawer on its RJ11 port). Device-local, not synced. */
 export type ReceiptPrinterProfile = {

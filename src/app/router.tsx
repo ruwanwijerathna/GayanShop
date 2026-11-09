@@ -6,6 +6,7 @@ import { CounterStatus } from "@/features/home/CounterStatus";
 import { InventoryScreen } from "@/features/inventory/InventoryScreen";
 import { PosScreen } from "@/features/pos/PosScreen";
 import { ProductsScreen } from "@/features/products/ProductsScreen";
+import { QuickSalesScreen } from "@/features/quick-sales/QuickSalesScreen";
 import { StaffScreen } from "@/features/staff/StaffScreen";
 import { AppShell } from "./AppShell";
 import { SettingsPage } from "./SettingsPage";
@@ -54,6 +55,12 @@ export const inventoryRoute = createRoute({
   component: InventoryScreen,
 });
 
+export const quickSalesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/quick-sales",
+  component: QuickSalesScreen,
+});
+
 export const staffRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/staff",
@@ -74,6 +81,7 @@ export const routeTree = rootRoute.addChildren([
   batchesRoute,
   auditRoute,
   inventoryRoute,
+  quickSalesRoute,
   staffRoute,
   settingsRoute,
 ]);

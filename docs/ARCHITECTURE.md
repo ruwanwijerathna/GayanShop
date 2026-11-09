@@ -603,6 +603,15 @@ It's sorted by frequency. Two one-click actions:
 - **Promote to product** runs one transaction. It creates a `products` row (name = latest spelling, editable; price = last price, cost entered by the manager). If a batch is chosen, it adds a layer to it, with a shelf count entered so stock starts correct. It writes a `quick_sale_links` row (`custom_key → product_id, batch_id`) and audits `QUICK_SALE_PROMOTE`.
 - **Ignore** writes a link with `action = 'ignored'`, which hides one-off noise.
 
+**Block 2.4 implementation notes (`db/repo/quick_sales.rs`).**
+- The review reads `quick_sale_stats` joined to the key's decision: New, Promoted or Ignored, filterable. Opening a key computes the median price, the counters that sold it (by receipt prefix) and its recent spellings from completed orders only.
+- Promote is one transaction:
+  - It creates the product: SKU always; an in-store barcode optionally; tracked; the manager's cost. Only one promotion per key (`QUICK_SALE_ALREADY_PROMOTED`).
+  - With a shelf count and a chosen received batch, the stock arrives as a layer added after receipt (`added_after_receipt = 1`) at the manager's cost.
+  - Without a batch, it arrives as a `count_correction` into `ADJUSTMENTS` at that cost.
+  - An ignored key can still be promoted later.
+- The till's Quick Sale bar asks `quick_sale_hint` for the typed name. A promoted key shows "Now a product: … (↓ then Enter)"; plain Enter still commits the typed quick sale.
+
 **Promotion is forward-only.** Past quick-sale lines keep their original attribution, and no historical batch P&L changes. The review screen can still show the key's pre-promotion history through the link. `quick_sale_links.id = UUIDv5(store_id, custom_key)`, so two managers promoting the same key on different terminals produce the *same* row, which merges by LWW.
 
 ### 3.3 Sales are final: same-session void is the only correction

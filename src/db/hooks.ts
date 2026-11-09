@@ -19,6 +19,8 @@ import {
   type Perm,
   type NewStaff_Deserialize as NewStaff,
   type ProductInput,
+  type PromoteInput,
+  type QuickSaleStatus,
   type ReceiptPrinterProfile,
   type SetupInput,
   type StaffInput_Deserialize as StaffInput,
@@ -54,6 +56,9 @@ export const queryKeys = {
   labelTemplates: ["labels", "templates"] as const,
   valuation: (asOf: string | null) => ["inventory", "valuation", asOf ?? "now"] as const,
   oversold: ["inventory", "oversold"] as const,
+  quickSales: (show: QuickSaleStatus | null) => ["quickSales", "review", show ?? "all"] as const,
+  quickSaleDetail: (key: string) => ["quickSales", "detail", key] as const,
+  quickSaleHint: (name: string) => ["quickSales", "hint", name] as const,
   movements: (productId: string) => ["inventory", "movements", productId] as const,
   labelProfile: ["labels", "profile"] as const,
   labelPreview: (job: LabelJob) => ["labels", "preview", JSON.stringify(job)] as const,
@@ -603,4 +608,50 @@ export function useWriteOffBatch() {
   return useStockMutation(({ batchId, note }: { batchId: string; note: string }) =>
     unwrap(commands.writeOffBatch(batchId, note)),
   );
+}
+
+// ───────── quick-sale review (doc §3.2) ─────────
+
+export function useQuickSaleReview(show: QuickSaleStatus | null) {
+  return useQuery({
+    queryKey: queryKeys.quickSales(show),
+    queryFn: () => unwrap(commands.quickSaleReview(show)),
+  });
+}
+
+export function useQuickSaleDetail(key: string | null) {
+  return useQuery({
+    queryKey: queryKeys.quickSaleDetail(key ?? ""),
+    queryFn: () => unwrap(commands.quickSaleDetail(key ?? "")),
+    enabled: key !== null,
+  });
+}
+
+function useQuickSaleMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["quickSales"] });
+      await qc.invalidateQueries({ queryKey: ["catalog"] });
+    },
+  });
+}
+
+export function usePromoteQuickSale() {
+  return useQuickSaleMutation((input: PromoteInput) => unwrap(commands.promoteQuickSale(input)));
+}
+
+export function useIgnoreQuickSale() {
+  return useQuickSaleMutation((key: string) => unwrap(commands.ignoreQuickSale(key)));
+}
+
+/** The till's "now a product" hint for what is typed in the Quick Sale bar (null name = nothing typed). */
+export function useQuickSaleHint(name: string | null) {
+  return useQuery({
+    queryKey: queryKeys.quickSaleHint(name ?? ""),
+    queryFn: () => unwrap(commands.quickSaleHint(name ?? "")),
+    enabled: name !== null && name.trim() !== "",
+    staleTime: 30_000,
+  });
 }

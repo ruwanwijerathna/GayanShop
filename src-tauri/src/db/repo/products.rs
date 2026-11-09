@@ -267,6 +267,34 @@ pub async fn get(pool: &SqlitePool, store_id: &str, id: &str, view_cost: bool) -
     get_conn(&mut conn, store_id, id).await?.into_product(view_cost)
 }
 
+/// [`get`] on the caller's connection (inside a write transaction).
+pub async fn get_on(conn: &mut SqliteConnection, store_id: &str, id: &str, view_cost: bool) -> AppResult<Product> {
+    get_conn(conn, store_id, id).await?.into_product(view_cost)
+}
+
+/// The till's view of one active product, by id.
+pub async fn summary(pool: &SqlitePool, store_id: &str, id: &str) -> AppResult<Option<ProductSummary>> {
+    let p = match get(pool, store_id, id, false).await {
+        Ok(p) => p,
+        Err(AppError::NotFound { .. }) => return Ok(None),
+        Err(e) => return Err(e),
+    };
+    if !p.is_active {
+        return Ok(None);
+    }
+    Ok(Some(ProductSummary {
+        id: p.id,
+        kind: p.kind,
+        name: p.name,
+        name_si: p.name_si,
+        sku: p.sku,
+        barcode: p.barcode,
+        price: p.price,
+        min_price: p.min_price,
+        track_stock: p.track_stock,
+    }))
+}
+
 /// Scanner lookup (doc §7.4): `barcode` first, then the in-store `sku`. Active products only.
 pub async fn lookup_code(pool: &SqlitePool, store_id: &str, code: &str) -> AppResult<Option<ProductSummary>> {
     let code = code.trim();
@@ -563,9 +591,23 @@ pub async fn create(
     view_cost: bool,
 ) -> AppResult<Product> {
     let mut tx = db.write().await?;
-    let c = clean(tx.conn(), &ctx.store_id, input).await?;
+    let id = create_conn(tx.conn(), ctx, actor, input, view_cost).await?;
+    let created = get_conn(tx.conn(), &ctx.store_id, &id).await?.into_product(view_cost)?;
+    tx.commit().await?;
+    Ok(created)
+}
+
+/// [`create`] inside the caller's transaction (quick-sale promotion composes it); returns the new id.
+pub async fn create_conn(
+    conn: &mut SqliteConnection,
+    ctx: &WriteCtx,
+    actor: &Actor,
+    input: &ProductInput,
+    view_cost: bool,
+) -> AppResult<String> {
+    let c = clean(conn, &ctx.store_id, input).await?;
     let id = new_id();
-    let (sku, barcode) = resolve_codes(tx.conn(), ctx, &id, input).await?;
+    let (sku, barcode) = resolve_codes(conn, ctx, &id, input).await?;
     let cost = if view_cost { input.default_cost.unwrap_or(0) } else { 0 };
     sqlx::query(
         "INSERT INTO products (id, store_id, kind, name, name_si, sku, barcode, category_id, default_cost, price,
@@ -590,15 +632,15 @@ pub async fn create(
     .bind(input.is_active)
     .bind(&ctx.now)
     .bind(&ctx.device_id)
-    .execute(tx.conn())
+    .execute(&mut *conn)
     .await?;
-    outbox::enqueue_upsert(tx.conn(), "products", &id, &ctx.now).await?;
+    outbox::enqueue_upsert(conn, "products", &id, &ctx.now).await?;
     let mut meta = json!({ "name": c.name, "sku": sku, "barcode": barcode, "price": input.price });
     if view_cost {
         meta["default_cost"] = json!(cost);
     }
     audit::record(
-        tx.conn(),
+        conn,
         &audit_ctx(ctx),
         AuditEntry {
             action: AuditAction::PRODUCT_CREATE,
@@ -610,9 +652,7 @@ pub async fn create(
         },
     )
     .await?;
-    let created = get_conn(tx.conn(), &ctx.store_id, &id).await?.into_product(view_cost)?;
-    tx.commit().await?;
-    Ok(created)
+    Ok(id)
 }
 
 /// `{ field: [old, new] }` for every field that changed.

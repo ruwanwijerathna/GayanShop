@@ -19,6 +19,7 @@ pub mod labels;
 pub mod pos;
 pub mod prefs;
 pub mod products;
+pub mod quick_sales;
 pub mod setup;
 pub mod staff;
 pub mod system;

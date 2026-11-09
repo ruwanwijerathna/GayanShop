@@ -1,0 +1,48 @@
+{
+  "title": "Quick sales",
+  "hint": "Items sold through F2 Quick Sale, most frequent first. Promote the regulars to products so they can be scanned and counted.",
+  "filter": "Show",
+  "filters": {
+    "new": "To review",
+    "all": "All",
+    "promoted": "Promoted",
+    "ignored": "Ignored"
+  },
+  "empty": "Nothing here.",
+  "columns": {
+    "name": "Name",
+    "times": "Sales",
+    "units": "Units",
+    "revenue": "Sales (net)",
+    "prices": "Price range",
+    "last": "Last sold",
+    "status": "Status"
+  },
+  "status": {
+    "new": "New",
+    "promoted": "Promoted",
+    "ignored": "Ignored"
+  },
+  "detail": {
+    "median": "Median price",
+    "counters": "Sold at",
+    "counter": "{{code}} ({{count}})",
+    "spellings": "Typed as"
+  },
+  "alreadyPromoted": "Already a product: past quick sales keep their history.",
+  "promote": {
+    "title": "Promote to a product",
+    "name": "Product name",
+    "price": "Selling price (Rs)",
+    "cost": "Cost per unit (Rs)",
+    "category": "Category",
+    "noCategory": "No category",
+    "barcode": "Give it an in-store barcode",
+    "shelf": "Units on the shelf now (optional)",
+    "batch": "Batch the shelf stock belongs to",
+    "noBatch": "None (stock adjustment at this cost)",
+    "submit": "Promote"
+  },
+  "ignore": "Ignore",
+  "promoted": "{{name}} is now a product."
+}

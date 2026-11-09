@@ -3,7 +3,11 @@ import { keysForTables } from "./events";
 
 describe("db://changed → query invalidation", () => {
   it("maps changed tables to query-key prefixes, once each", () => {
-    expect(keysForTables(["products", "categories", "audit_logs"])).toEqual([["catalog"], ["audit"]]);
+    expect(keysForTables(["products", "categories", "audit_logs"])).toEqual([
+      ["catalog"],
+      ["quickSales"],
+      ["audit"],
+    ]);
   });
 
   it("refreshes every screen that shows a table", () => {

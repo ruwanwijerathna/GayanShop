@@ -10,7 +10,7 @@ export interface DbChanged {
 
 /** Query-key prefixes to refresh per changed table (an array of prefixes when several screens show it). */
 const TABLE_KEYS: Record<string, readonly string[] | readonly (readonly string[])[]> = {
-  products: ["catalog"],
+  products: [["catalog"], ["quickSales"]],
   categories: ["catalog"],
   audit_logs: ["audit"],
   batches: ["batches"],
@@ -19,9 +19,10 @@ const TABLE_KEYS: Record<string, readonly string[] | readonly (readonly string[]
   cash_sessions: ["cash"],
   cash_movements: ["cash"],
   print_jobs: ["printer"],
-  orders: ["orders"],
+  orders: [["orders"], ["quickSales"]],
   customers: ["customers"],
   staff: ["staff"],
+  quick_sale_links: ["quickSales"],
 };
 
 export function keysForTables(tables: string[]): (readonly string[])[] {

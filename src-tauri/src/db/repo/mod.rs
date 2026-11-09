@@ -10,6 +10,7 @@ pub mod held_carts;
 pub mod inventory;
 pub mod print_jobs;
 pub mod products;
+pub mod quick_sales;
 pub mod receipts;
 pub mod staff;
 pub mod stock;

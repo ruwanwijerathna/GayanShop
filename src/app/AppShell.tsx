@@ -10,6 +10,7 @@ import {
   Store,
   Users,
   Warehouse,
+  Zap,
 } from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
@@ -104,6 +105,12 @@ export function AppShell() {
             <Link to="/inventory" className={NAV_LINK} aria-label={t("nav.inventory")}>
               <Warehouse aria-hidden className="size-5 shrink-0" />
               <span className="hidden xl:inline">{t("nav.inventory")}</span>
+            </Link>
+          </Can>
+          <Can perm="QUICK_SALE_PROMOTE">
+            <Link to="/quick-sales" className={NAV_LINK} aria-label={t("nav.quickSales")}>
+              <Zap aria-hidden className="size-5 shrink-0" />
+              <span className="hidden xl:inline">{t("nav.quickSales")}</span>
             </Link>
           </Can>
           <Can perm="AUDIT_VIEW">
