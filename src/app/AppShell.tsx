@@ -1,5 +1,5 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { Banknote, Boxes, History, Lock, Package, Settings, ShoppingCart, Store } from "lucide-react";
+import { Banknote, Boxes, History, Lock, Package, Settings, ShoppingCart, Store, Users } from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Can } from "@/components/auth/Can";
@@ -93,6 +93,12 @@ export function AppShell() {
             <Link to="/audit" className={NAV_LINK} aria-label={t("nav.audit")}>
               <History aria-hidden className="size-5 shrink-0" />
               <span className="hidden xl:inline">{t("nav.audit")}</span>
+            </Link>
+          </Can>
+          <Can perm="USER_MANAGE">
+            <Link to="/staff" className={NAV_LINK} aria-label={t("nav.staff")}>
+              <Users aria-hidden className="size-5 shrink-0" />
+              <span className="hidden xl:inline">{t("nav.staff")}</span>
             </Link>
           </Can>
           <Can perm={["SETTINGS_MANAGE", "BACKUP_CREATE"]}>

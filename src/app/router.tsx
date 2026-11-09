@@ -5,6 +5,7 @@ import { CashScreen } from "@/features/cash/CashScreen";
 import { CounterStatus } from "@/features/home/CounterStatus";
 import { PosScreen } from "@/features/pos/PosScreen";
 import { ProductsScreen } from "@/features/products/ProductsScreen";
+import { StaffScreen } from "@/features/staff/StaffScreen";
 import { AppShell } from "./AppShell";
 import { SettingsPage } from "./SettingsPage";
 
@@ -46,6 +47,12 @@ export const posRoute = createRoute({
   component: PosScreen,
 });
 
+export const staffRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/staff",
+  component: StaffScreen,
+});
+
 export const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
@@ -59,6 +66,7 @@ export const routeTree = rootRoute.addChildren([
   productsRoute,
   batchesRoute,
   auditRoute,
+  staffRoute,
   settingsRoute,
 ]);
 

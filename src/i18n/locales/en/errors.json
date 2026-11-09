@@ -92,7 +92,11 @@
     "BACKUP_EXISTS": "A backup with this name already exists. Try again in a second.",
     "BACKUP_WRITE_FAILED": "The backup couldn't be written. Was the drive removed?",
     "BACKUP_VERIFY_FAILED": "The backup copy failed its check and was deleted. Try another drive.",
-    "BACKUP_FAILED": "The backup failed. Sales are not affected."
+    "BACKUP_FAILED": "The backup failed. Sales are not affected.",
+    "STAFF_NAME_INVALID": "The name needs 1 to 40 characters.",
+    "OWNER_ROLE_OWNER_ONLY": "Only an Owner can give or change Owner powers.",
+    "OVERRIDE_CONFLICT": "A permission can't be granted and denied at the same time.",
+    "DISCOUNT_LIMIT_INVALID": "The discount limit must be between 0% and 100%."
   },
   "INVARIANT": {
     "_": "This change isn't allowed.",

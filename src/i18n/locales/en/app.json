@@ -6,7 +6,8 @@
     "batches": "Batches",
     "cash": "Cash",
     "settings": "Settings",
-    "pos": "Till"
+    "pos": "Till",
+    "staff": "Staff"
   },
   "status": {
     "title": "Counter status",

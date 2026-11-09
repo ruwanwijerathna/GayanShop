@@ -13,6 +13,7 @@ import enErrors from "./locales/en/errors.json";
 import enPos from "./locales/en/pos.json";
 import enPrinting from "./locales/en/printing.json";
 import enProducts from "./locales/en/products.json";
+import enStaff from "./locales/en/staff.json";
 import siApp from "./locales/si/app.json";
 import siAuth from "./locales/si/auth.json";
 import siBackup from "./locales/si/backup.json";
@@ -23,6 +24,7 @@ import siErrors from "./locales/si/errors.json";
 import siPos from "./locales/si/pos.json";
 import siPrinting from "./locales/si/printing.json";
 import siProducts from "./locales/si/products.json";
+import siStaff from "./locales/si/staff.json";
 
 export const LANGUAGES = ["en", "si"] as const;
 export type UiLanguage = (typeof LANGUAGES)[number];
@@ -38,6 +40,7 @@ export const NAMESPACES = [
   "printing",
   "pos",
   "backup",
+  "staff",
 ] as const;
 
 export const resources = {
@@ -52,6 +55,7 @@ export const resources = {
     printing: enPrinting,
     pos: enPos,
     backup: enBackup,
+    staff: enStaff,
   },
   si: {
     common: siCommon,
@@ -64,6 +68,7 @@ export const resources = {
     printing: siPrinting,
     pos: siPos,
     backup: siBackup,
+    staff: siStaff,
   },
 } as const;
 

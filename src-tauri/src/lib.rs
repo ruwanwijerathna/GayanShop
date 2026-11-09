@@ -103,6 +103,11 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::backup::backup_status,
         commands::backup::backup_pick_folder,
         commands::backup::backup_now,
+        commands::staff::list_staff,
+        commands::staff::list_roles,
+        commands::staff::create_staff,
+        commands::staff::update_staff,
+        commands::staff::reset_staff_pin,
         commands::void::void_order,
         commands::void::session_orders,
     ])
@@ -225,6 +230,11 @@ mod tests {
             "backupStatus",
             "backupPickFolder",
             "backupNow",
+            "listStaff",
+            "listRoles",
+            "createStaff",
+            "updateStaff",
+            "resetStaffPin",
         ] {
             assert!(ts.contains(&format!("{cmd}:")), "command {cmd} missing from bindings");
         }

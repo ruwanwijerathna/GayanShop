@@ -18,6 +18,7 @@ pub mod pos;
 pub mod prefs;
 pub mod products;
 pub mod setup;
+pub mod staff;
 pub mod system;
 pub mod void;
 

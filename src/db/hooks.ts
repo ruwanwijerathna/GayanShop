@@ -11,9 +11,11 @@ import {
   type CloseInput,
   type DrawerMovementInput,
   type Perm,
+  type NewStaff_Deserialize as NewStaff,
   type ProductInput,
   type ReceiptPrinterProfile,
   type SetupInput,
+  type StaffInput_Deserialize as StaffInput,
   type UiLanguage,
   type UiTheme,
   type VoidInput_Deserialize as VoidInput,
@@ -40,6 +42,8 @@ export const queryKeys = {
   heldCarts: ["pos", "held"] as const,
   currentCart: ["pos", "current"] as const,
   backupStatus: ["backup", "status"] as const,
+  staff: ["staff", "list"] as const,
+  roles: ["staff", "roles"] as const,
 };
 
 /** Polled so the shell notices an idle auto-lock done by Rust (doc §3.5). */
@@ -409,4 +413,41 @@ export function useBackupNow() {
     mutationFn: (destDir: string) => unwrap(commands.backupNow(destDir)),
     onSettled: () => qc.invalidateQueries({ queryKey: ["backup"] }),
   });
+}
+
+// ───────── staff (USER_MANAGE, doc §3.5) ─────────
+
+export function useStaffList() {
+  return useQuery({ queryKey: queryKeys.staff, queryFn: () => unwrap(commands.listStaff()) });
+}
+
+export function useRoles() {
+  return useQuery({ queryKey: queryKeys.roles, queryFn: () => unwrap(commands.listRoles()) });
+}
+
+function useStaffMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["staff"] });
+      await qc.invalidateQueries({ queryKey: queryKeys.loginStaff });
+    },
+  });
+}
+
+export function useCreateStaff() {
+  return useStaffMutation((input: NewStaff) => unwrap(commands.createStaff(input)));
+}
+
+export function useUpdateStaff() {
+  return useStaffMutation(({ id, input }: { id: string; input: StaffInput }) =>
+    unwrap(commands.updateStaff(id, input)),
+  );
+}
+
+export function useResetStaffPin() {
+  return useStaffMutation(({ id, pin }: { id: string; pin: string }) =>
+    unwrap(commands.resetStaffPin(id, pin)),
+  );
 }

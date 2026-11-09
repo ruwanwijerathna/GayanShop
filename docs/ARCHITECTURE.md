@@ -706,6 +706,7 @@ The defaults above are seeded in Phase 0 and can be edited per store (except Own
 - Login is required to use the till. Idle auto-lock is configurable (default 5 min), with fast user switching.
 - **Known trade-off:** PIN hashes sync to every terminal so offline login works. A 4–6-digit PIN can be brute-forced by anyone holding a DB copy, so PINs protect against *casual* misuse at the counter, not a stolen database.
   - Mitigations: use 6+ digits for Manager and Owner, keep the DB file in the user profile, and plan optional Windows-account-bound DB encryption (SQLCipher) for Phase 4.
+- **Staff management (Block 1.11, `USER_MANAGE`):** only an Owner can make someone an Owner, change an Owner, reset an Owner's PIN, or grant / deny `USER_MANAGE`; a permission can't be granted and denied at once; a PIN reset also lifts that person's lockout on the counter. Audited as `USER_CREATE`, `USER_UPDATE` (before/after), `USER_DISABLE` and `USER_PIN_RESET`, never with PIN material.
 - **Owner invariant:** there must always be at least one active staff member with the Owner role. Rust refuses any disable or demote that breaks this, and `sync_push` rejects merged changes that would break it (dead op, surfaced to the owner).
 
 ### 3.6 Audit trail

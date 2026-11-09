@@ -103,6 +103,11 @@ export const commands = {
 	/**  The native folder picker, opened at the last-used folder. `None` when the user cancels. */
 	backupPickFolder: () => typedError<string | null, AppError>(__TAURI_INVOKE("backup_pick_folder")),
 	backupNow: (destDir: string) => typedError<BackupOutcome, AppError>(__TAURI_INVOKE("backup_now", { destDir })),
+	listStaff: () => typedError<StaffMember_Serialize[], AppError>(__TAURI_INVOKE("list_staff")),
+	listRoles: () => typedError<Role[], AppError>(__TAURI_INVOKE("list_roles")),
+	createStaff: (input: NewStaff_Deserialize) => typedError<StaffMember_Serialize, AppError>(__TAURI_INVOKE("create_staff", { input })),
+	updateStaff: (id: string, input: StaffInput_Deserialize) => typedError<StaffMember_Serialize, AppError>(__TAURI_INVOKE("update_staff", { id, input })),
+	resetStaffPin: (id: string, pin: string) => typedError<null, AppError>(__TAURI_INVOKE("reset_staff_pin", { id, pin })),
 	voidOrder: (input: VoidInput_Deserialize) => typedError<VoidResult, AppError>(__TAURI_INVOKE("void_order", { input })),
 	/**  The open session's orders on this counter (the void list). */
 	sessionOrders: () => typedError<SessionOrder[], AppError>(__TAURI_INVOKE("session_orders")),
@@ -744,6 +749,18 @@ export type LoginStaff = {
 	role_name: string,
 };
 
+export type NewStaff = NewStaff_Serialize | NewStaff_Deserialize;
+
+export type NewStaff_Deserialize = {
+	staff: StaffInput_Deserialize,
+	pin: string,
+};
+
+export type NewStaff_Serialize = {
+	staff: StaffInput_Serialize,
+	pin: string,
+};
+
 export type OpenSessionInput = {
 	opening_float: number,
 };
@@ -944,6 +961,17 @@ export type ReceiptPrinterProfile = {
 	drawer_pin: DrawerPin,
 };
 
+export type Role = {
+	id: string,
+	name: string,
+	is_system: boolean,
+	permissions: Perm[],
+	max_discount_bp: number,
+	max_override_bp: number,
+	/**  Minimum PIN length for this role (6 for Manager and Owner, else 4). */
+	min_pin_len: number,
+};
+
 /**  What the UI receives — never the PIN hash; permissions as keys, not a mask. */
 export type SessionInfo = {
 	staff_id: string,
@@ -982,6 +1010,71 @@ export type SetupResult = {
 	device_id: string,
 	device_code: string,
 	owner_staff_id: string,
+};
+
+export type StaffInput = StaffInput_Serialize | StaffInput_Deserialize;
+
+export type StaffInput_Deserialize = {
+	display_name: string,
+	role_id: string,
+	/**  `en` or `si`. */
+	ui_language: string,
+	grants: Perm[],
+	denies: Perm[],
+	max_discount_bp?: number | null,
+	is_active: boolean,
+};
+
+export type StaffInput_Serialize = {
+	display_name: string,
+	role_id: string,
+	/**  `en` or `si`. */
+	ui_language: string,
+	grants: Perm[],
+	denies: Perm[],
+	max_discount_bp: number | null,
+	is_active: boolean,
+};
+
+/**  A staff member as the back office sees them (never the PIN hash). */
+export type StaffMember = StaffMember_Serialize | StaffMember_Deserialize;
+
+/**  A staff member as the back office sees them (never the PIN hash). */
+export type StaffMember_Deserialize = {
+	id: string,
+	display_name: string,
+	role_id: string,
+	role_name: string,
+	is_owner: boolean,
+	is_active: boolean,
+	ui_language: string,
+	grants: Perm[],
+	denies: Perm[],
+	/**  Personal discount limit; `None` = the role's. */
+	max_discount_bp?: number | null,
+	/**  What they can actually do: `(role | grants) & ~denies`, or everything for an Owner. */
+	effective: Perm[],
+	/**  The only active Owner: can't be disabled or moved to another role (owner invariant). */
+	last_owner: boolean,
+};
+
+/**  A staff member as the back office sees them (never the PIN hash). */
+export type StaffMember_Serialize = {
+	id: string,
+	display_name: string,
+	role_id: string,
+	role_name: string,
+	is_owner: boolean,
+	is_active: boolean,
+	ui_language: string,
+	grants: Perm[],
+	denies: Perm[],
+	/**  Personal discount limit; `None` = the role's. */
+	max_discount_bp: number | null,
+	/**  What they can actually do: `(role | grants) & ~denies`, or everything for an Owner. */
+	effective: Perm[],
+	/**  The only active Owner: can't be disabled or moved to another role (owner invariant). */
+	last_owner: boolean,
 };
 
 export type TransportConfig = 
