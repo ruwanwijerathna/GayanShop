@@ -528,6 +528,11 @@ batches (header)  1 ──── n  batch_items (cost layers)  1 ──── n 
 - **Ad-hoc purchase of one item:** a one-line batch.
 - **Positive count correction** (found 3 extra): the stock goes into the product's **newest** layer at that layer's cost. If the product has no layer, it goes into the system batch `ADJUSTMENTS` at the product's `default_cost`.
 
+**Phase 1 implementation notes (Block 1.2).**
+- Batch codes are `B-{business year}-{device digit}{seq:03}`, e.g. `B-2026-1045` from T01, so counters never collide offline.
+- If a manual-cost batch is received with no invoice total and no extra costs (opening stock, quick purchases), `total_cost` is set to Σ(unit_cost × qty) and the variance is 0. With an invoice total, `allocation_variance = landed − Σ(unit_cost × qty)`, which can be negative in manual mode.
+- A tracked product sold before it has any layer gets one in `ADJUSTMENTS` at its `default_cost` (`added_after_receipt = 1`, `qty_received = 0`), created inside the checkout transaction. The sale is never blocked, and the layer shows as oversold until stock is received.
+
 **Layer selection at checkout (FIFO, offline-safe).** For each tracked line of qty *n*:
 1. Take layers of that product ordered by `batches.received_at, batch_items.id`.
 2. Consume from the **oldest layer with positive local `on_hand`**, splitting across layers if needed.
@@ -701,6 +706,7 @@ The defaults above are seeded in Phase 0 and can be edited per store (except Own
 - Login is required to use the till. Idle auto-lock is configurable (default 5 min), with fast user switching.
 - **Known trade-off:** PIN hashes sync to every terminal so offline login works. A 4–6-digit PIN can be brute-forced by anyone holding a DB copy, so PINs protect against *casual* misuse at the counter, not a stolen database.
   - Mitigations: use 6+ digits for Manager and Owner, keep the DB file in the user profile, and plan optional Windows-account-bound DB encryption (SQLCipher) for Phase 4.
+- **Staff management (Block 1.11, `USER_MANAGE`):** only an Owner can make someone an Owner, change an Owner, reset an Owner's PIN, or grant / deny `USER_MANAGE`; a permission can't be granted and denied at once; a PIN reset also lifts that person's lockout on the counter. Audited as `USER_CREATE`, `USER_UPDATE` (before/after), `USER_DISABLE` and `USER_PIN_RESET`, never with PIN material.
 - **Owner invariant:** there must always be at least one active staff member with the Owner role. Rust refuses any disable or demote that breaks this, and `sync_push` rejects merged changes that would break it (dead op, surfaced to the owner).
 
 ### 3.6 Audit trail
@@ -728,7 +734,7 @@ hash = SHA256( prev_hash ‖ canonical_json(id, store_id, device_id, device_seq,
 |---|---|
 | Authentication | `AUTH_LOGIN`, `AUTH_LOGOUT`, `AUTH_FAILED`, `AUTH_LOCKOUT`, `APPROVAL_GRANTED`, `APPROVAL_DENIED` |
 | Cash | `CASH_SESSION_OPEN`, `CASH_SESSION_CLOSE`, `CASH_SESSION_FORCE_CLOSE`, `DRAWER_KICK` (no-sale), `CASH_PAY_IN`, `CASH_PAY_OUT` |
-| Pricing and orders | `PRICE_OVERRIDE`, `LINE_DISCOUNT`, `ORDER_DISCOUNT` (above the cashier's limit, or any with approval), `VOID_ORDER`, `REPRINT_RECEIPT` |
+| Pricing and orders | `PRICE_OVERRIDE`, `LINE_DISCOUNT`, `ORDER_DISCOUNT` (above the cashier's limit, or any with approval), `VOID_ORDER`, `REPRINT_RECEIPT`, `PRINT_JOB_ABANDON` (unprinted receipts dismissed: "Skip" / "Reprint later") |
 | Customers | `CUSTOMER_CREATE`, `CUSTOMER_UPDATE`, `CUSTOMER_ERASE` (personal data removed on request) |
 | Labels | `LABEL_PRINT` (template, product count, label count) |
 | Stock and batches | `STOCK_ADJUSTMENT`, `STOCK_DAMAGE`, `STOCK_COUNT`, `BATCH_CREATE`, `BATCH_RECEIVE`, `BATCH_REOPEN`, `BATCH_CLOSE`, `BATCH_LATE_ITEM` |
@@ -805,7 +811,7 @@ line_net              = inclusive ? line_total − tax_amount : line_total   (ex
 - **Consent is verbal at the counter** (owner decision). The cashier asks, "Would you like to add your phone number?", and only types it if the customer agrees.
   - The UI shows **no popup, notice dialog or confirmation step**. The field is simply optional, and Enter or Esc on an empty field moves on.
   - Store only the phone number and an optional name and note.
-- **Erase on request** (`CUSTOMER_ERASE`, Owner and Manager). This clears the phone, name and notes on the `customers` row and sets `erased_at`. The row and its id remain, so past orders keep an anonymous `customer_id` and the store's totals stay correct. Orders are not modified.
+- **Erase on request** (`CUSTOMER_ERASE`, Owner and Manager). This clears the phone, name and notes on the `customers` row and sets `erased_at`. The row and its id remain, so past orders keep an anonymous `customer_id` and the store's totals stay correct. Orders are not modified. The same transaction drops that row's queued, unsent `sync_outbox` snapshots (an upsert carries the whole row, so the new erased snapshot supersedes them), so no unsent copy of the phone stays on disk.
   - The UUIDv5 id is derived from the phone. If the same person returns later and gives their number, the lookup finds the erased row by id. In that case, Rust **re-activates the same id** with a fresh profile. Visit history before the erasure stays anonymous, because it's still linked by id. Tell the customer this is how erasure works.
 - Exporting customer data needs `DATA_EXPORT` and is audited.
 
@@ -814,7 +820,7 @@ line_net              = inclusive ? line_total − tax_amount : line_total   (ex
 **Who and where:**
 - **Settings → Backup** shows a **"Backup Database Now"** button (`BACKUP_CREATE`: Owner and Manager).
 - The user picks a destination folder with the native folder picker (`tauri-plugin-dialog`), for example a plugged-in USB drive, an external disk or a secondary directory.
-- The last-used folder is remembered per device.
+- The last-used folder is remembered per device (`backup.last_dir`). The picker is opened from Rust (`backup_pick_folder`, `tauri-plugin-dialog`'s Rust API), so the webview needs no dialog permission.
 
 **How (`commands::backup::backup_now(dest_dir)`):**
 1. **Pre-checks:**
@@ -1232,7 +1238,7 @@ export type AuditAction =
   | 'CASH_SESSION_OPEN' | 'CASH_SESSION_CLOSE' | 'CASH_SESSION_FORCE_CLOSE'
   | 'DRAWER_KICK' | 'CASH_PAY_IN' | 'CASH_PAY_OUT'
   | 'PRICE_OVERRIDE' | 'LINE_DISCOUNT' | 'ORDER_DISCOUNT'
-  | 'VOID_ORDER' | 'REPRINT_RECEIPT'
+  | 'VOID_ORDER' | 'REPRINT_RECEIPT' | 'PRINT_JOB_ABANDON'
   | 'CUSTOMER_CREATE' | 'CUSTOMER_UPDATE' | 'CUSTOMER_ERASE'
   | 'LABEL_PRINT'
   | 'STOCK_ADJUSTMENT' | 'STOCK_DAMAGE' | 'STOCK_COUNT'
@@ -2520,9 +2526,9 @@ pub fn emit(t: &LabelTemplate, p: &LabelPreview, lang: LabelLanguage, dpi: u16) 
 2. **After `COMMIT`**, the command returns to the UI immediately ("Sale complete ✓") and pings the print worker over an in-memory channel. **The sale never awaits the printer.**
 3. **The print worker** is one tokio task per printer, with **at most one in-flight job per printer**.
    - Network or serial I/O uses explicit timeouts: connect 2 s, write 5 s.
-   - The Windows spooler `WritePrinter` can block indefinitely on a frozen spooler, so it runs on `spawn_blocking` under a 5 s `tokio::time::timeout`.
+   - The Windows spooler `WritePrinter` can block indefinitely on a frozen spooler, so every transport call runs on its own OS thread (`std::thread`, not `spawn_blocking`, so an abandoned call can never hold up runtime shutdown when the app exits) under a 5 s `tokio::time::timeout`.
    - On a timeout, the printer is marked **unhealthy**: its blocked thread is abandoned, since it can't be killed, and no new thread is started for that printer until a health probe succeeds. Threads never pile up.
-4. **Paper-out and errors.** Where the transport supports it (network and serial), the worker queries real-time status before each job: `DLE EOT 4` for the paper sensor, `DLE EOT 2` for the error state. Paper-out or cover-open sets the job to `failed`, with a reason code.
+4. **Paper-out and errors.** Where the transport supports it (network and serial), the worker queries real-time status before each job: `DLE EOT 4` for the paper sensor, `DLE EOT 2` for the error state. Paper-out or cover-open sets the job, and every other job waiting for that printer, to `failed` with a reason code (no paper is wasted and nothing is sent), and the worker idles until Retry or a new job.
    - The till shows a **persistent banner**: "Printer: paper out — 2 receipts waiting [Retry] [Reprint later]".
    - Selling continues.
 5. **Retries** re-render from the stored payload, with exponential backoff (2 s → 30 s) up to 5 attempts, then `failed`. A job is `abandoned` only when a user dismisses it, and that's audited.
@@ -2530,6 +2536,8 @@ pub fn emit(t: &LabelTemplate, p: &LabelPreview, lang: LabelLanguage, dpi: u16) 
 7. **Cash drawer:** the kick is its own `drawer_kick` job, sent **before** the receipt bytes on the same printer. If the printer is down, the banner tells the cashier to use the drawer key. The sale is already recorded.
 
 Each of the 2–3 counters has its own printer and drawer profile in `device_settings` (not synced).
+
+**Data folder override.** `GAYANSHOP_DATA_DIR` points the app at another data folder (it holds `pos.db` and `backups\`); the default is `%APPDATA%\com.gayanshop.pos`. The Block 1.12 e2e suite (`pnpm e2e`, WebdriverIO + `tauri-driver`) uses it so a test run never touches the shop's database.
 
 ---
 
@@ -2592,6 +2600,14 @@ Each phase ends with **exit criteria**. Don't start the next phase until they pa
   8. Delete the `held_carts` `__current__` row.
   9. Insert the `print_jobs` receipt row (plus a drawer kick for cash).
   10. Write **outbox rows** for everything.
+- **Block 1.4 implementation notes (`db/repo/checkout.rs`, `commands/checkout.rs`):**
+  - Rust prices and validates the whole cart before writing anything, and refuses what the seal would refuse with a translatable error. The SQL seal stays the second line of defence.
+  - One approval covers the order. The first attempt fails with `ApprovalRequired { perm }`, where perm is `PRICE_OVERRIDE` before `ORDER_DISCOUNT` before `LINE_DISCOUNT`. The UI gets an approval bound to (perm, `checkout_token`, cashier) and retries. The approver must be a different, active staff member whose own permissions and limits cover every line, otherwise `APPROVER_LIMIT_TOO_LOW`. The approver is stored on the order header and on each overridden or discounted line.
+  - Selling below `min_price` always needs someone else's approval, even when the seller holds `PRICE_OVERRIDE`.
+  - Audit: `PRICE_OVERRIDE` per overridden line and `LINE_DISCOUNT` / `ORDER_DISCOUNT` for approved discounts. A refused attempt writes nothing; the approval request itself is audited (`APPROVAL_GRANTED` / `APPROVAL_DENIED`).
+  - Untracked catalog lines cost `default_cost × qty` (cost unknown if 0). Quick-sale lines cost what the cashier typed, or unknown.
+  - Receipt and drawer-kick print jobs use the `receipt` printer profile. The outbox row for the order is written after the seal, so sync always ships the completed order.
+  - `tests/fixtures/pricing_cases.json` holds golden carts priced by Rust; the till's TypeScript preview (Block 1.9) is tested against it.
 - **Same-session void** (§3.3):
   - Whole order only, with a reason from the fixed list.
   - A cashier needs supervisor approval.
@@ -2599,6 +2615,7 @@ Each phase ends with **exit criteria**. Don't start the next phase until they pa
   - Refused once the session is closed.
 - ESC/POS receipt with QR (spooler, network), the "All sales are final" footer, the masked customer phone, the automatic drawer kick, and an audited **no-sale kick**. Printer test page.
 - Hold and recall, and debounced crash recovery of the current cart.
+  - **Block 1.9 notes:** the cart is a Zustand store (`features/pos/store/cart.store.ts`) whose `held_carts` payload is versioned JSON (`v: 1`, validated with zod on recall). Commands `cart_save_current` (500 ms debounce), `cart_current` ("Recover cart?"; never offers a token that was already sold), `cart_hold` (F8, at most 50), `held_carts` and `cart_recall` (F11, holding the cart in progress first). The till previews totals with `features/pos/lib/pricing.ts`, a BigInt-exact port of `domain::pricing`, tested against `pricing_cases.json`.
 - **Manual "Backup Database Now"** (§3.9) to USB or a chosen folder, with an integrity check, manifest and audit. It ships in Phase 1 because, until Phase 3 sync, it's the only off-machine copy.
 - Staff management (create staff, assign role, reset PIN, set UI language) for the Owner.
 - The till's Sinhala translation is complete.
@@ -2932,7 +2949,7 @@ Automatically "rebalancing" (moving −2 from L into the next layer) would **rew
 **Printer (paper-out, spooler freeze).** The full design is in §7.5. The checkout command returns after `COMMIT` and never awaits I/O.
 - Jobs are persisted in the sale's own transaction.
 - One worker runs per printer, with one in-flight job and hard timeouts.
-- `WritePrinter` runs on `spawn_blocking` under a timeout, and a hung printer is marked unhealthy without piling up threads.
+- `WritePrinter` runs on a dedicated thread under a timeout, and a hung printer is marked unhealthy without piling up threads.
 - Paper-out is detected via `DLE EOT` where the transport supports it, and shown as a persistent banner with Retry.
 
 **Proof:** Block 1.7 tests with a fake transport that blocks forever, errors and reports paper-out. The assertion is "a checkout completes in < 100 ms while the printer is hung; the job ends `failed`; no second thread is spawned".
@@ -2962,7 +2979,12 @@ Automatically "rebalancing" (moving −2 from L into the next layer) would **rew
 
 - **Plan assertions:** every hot query also runs `EXPLAIN QUERY PLAN` in the test and fails on `SCAN <table>` over orders, order items, movements, products or audit logs. That catches a missing index even when the data is small.
 - **Pragmas:** `cache_size` 64 MiB, `mmap_size` 256 MiB, `temp_store = MEMORY`, `PRAGMA optimize` on close and daily, and `ANALYZE` after bootstrap or import (§1.1).
-- **Sinhala FTS is unverified.** unicode61's treatment of Sinhala combining vowel signs is unknown. `products_fts_si` therefore uses the trigram tokenizer, which matches substrings in any script. Block 1.1's test `fts_sinhala_names` checks 20 real Sinhala product names against both tokenizers, and the doc is updated with the result.
+- **Sinhala FTS: verified in Block 1.1** (`tests/fts_sinhala_names.rs`, 20 real product names, bundled SQLite 3.46.0):
+  - **unicode61 is unusable for Sinhala.** It treats every dependent vowel sign and the virama (al-lakuna) as a separator, so it indexes bare consonants ('ක', 'ද', …) and no whole word survives. Words that differ only in their vowel signs collide: "බෝල" (ball) and "බිල" (bill) both match "බාල්දිය" (bucket), and "කපා" (cut) matches "කපු" (cotton).
+  - **trigram is correct.** It finds all 20 names by any 3+ character substring from inside a word, with none of those false matches. `products_fts_si` stays trigram.
+  - Queries of 1–2 characters can't use a trigram `MATCH`, so the till falls back to `LIKE` over `products_fts_si` (a scan of the Sinhala index only; outside the budget table).
+  - The zero-width joiner in conjuncts such as "ශ්‍රී" is part of the stored name: a query typed the same way matches. A keyboard that omits the ZWJ won't match across it; revisit if staff report misses.
+- **Block 1.1 measurement** (`cargo test --release --test perf_budgets -- --ignored search`, dev machine, 50,000 products / 20,000 customers, p95): barcode scan 0.14 ms, SKU scan 0.25 ms, type-ahead 1.7 ms, Sinhala substring 4.3 ms, phone → customer 0.10 ms. All within budget.
 
 **Proof:** Block 1.1 runs `cargo test --release --test perf_budgets -- --ignored` for the search and lookup rows. Block 2.10 runs the full table above, including the headroom run.
 

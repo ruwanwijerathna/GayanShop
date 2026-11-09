@@ -1,0 +1,236 @@
+import type { ColumnDef } from "@tanstack/react-table";
+import { Plus, Search } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useSession } from "@/app/session";
+import { Can } from "@/components/auth/Can";
+import { DataTable } from "@/components/data-table/DataTable";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import type { Product } from "@/db/bindings";
+import { CommandError } from "@/db/client";
+import { useCategories, useProducts } from "@/db/hooks";
+import { translateError } from "@/i18n";
+import { formatMoney } from "@/lib/money";
+import { hasPerm } from "@/lib/permissions";
+import { CategoryPanel, categoryPath } from "./CategoryPanel";
+import { ProductFormDialog } from "./ProductFormDialog";
+import { matchesText } from "./productForm";
+
+/**
+ * Column widths (px). With the cost column they must fit the 1024×768 grid (≈ 895 px usable, see the audit
+ * table); a 13-digit barcode in the mono font needs ~135 px.
+ */
+export const PRODUCT_COLUMN_WIDTHS = {
+  name: 220,
+  sku: 84,
+  barcode: 150,
+  category: 116,
+  price: 104,
+  cost: 104,
+  status: 100,
+} as const;
+
+type Editing = { product: Product | null } | null;
+
+/** Back-office product list (bounded: loaded once, filtered client-side) plus categories. */
+export function ProductsScreen() {
+  const { t, i18n } = useTranslation(["products", "common"]);
+  const { session } = useSession();
+  const canManage = hasPerm(session, "PRODUCT_MANAGE");
+  const canViewCost = hasPerm(session, "VIEW_COST");
+  const products = useProducts();
+  const categories = useCategories();
+  const [text, setText] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
+  const [editing, setEditing] = useState<Editing>(null);
+
+  const cats = useMemo(() => categories.data ?? [], [categories.data]);
+  const catName = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of cats) m.set(c.id, categoryPath(c, cats));
+    return m;
+  }, [cats]);
+
+  const all = products.data;
+  const rows = useMemo(
+    () =>
+      (all ?? []).filter(
+        (p) =>
+          (showInactive || p.is_active) &&
+          (categoryId === "" || p.category_id === categoryId) &&
+          matchesText(p, text),
+      ),
+    [all, showInactive, categoryId, text],
+  );
+
+  const columns = useMemo<ColumnDef<Product>[]>(() => {
+    const cols: ColumnDef<Product>[] = [
+      {
+        id: "name",
+        header: t("columns.name"),
+        size: PRODUCT_COLUMN_WIDTHS.name,
+        accessorFn: (p) => p.name,
+        cell: ({ row }) => (
+          <span className="flex min-w-0 flex-col leading-tight">
+            <span className="truncate">{row.original.name}</span>
+            {row.original.name_si && (
+              <span lang="si" className="truncate text-sm text-muted-foreground">
+                {row.original.name_si}
+              </span>
+            )}
+          </span>
+        ),
+      },
+      {
+        id: "sku",
+        header: t("columns.sku"),
+        size: PRODUCT_COLUMN_WIDTHS.sku,
+        accessorFn: (p) => p.sku ?? "",
+        cell: ({ getValue }) => <span className="font-mono text-sm">{String(getValue())}</span>,
+      },
+      {
+        id: "barcode",
+        header: t("columns.barcode"),
+        size: PRODUCT_COLUMN_WIDTHS.barcode,
+        accessorFn: (p) => p.barcode ?? "",
+        cell: ({ getValue }) => <span className="font-mono text-sm">{String(getValue())}</span>,
+      },
+      {
+        id: "category",
+        header: t("columns.category"),
+        size: PRODUCT_COLUMN_WIDTHS.category,
+        accessorFn: (p) => (p.category_id ? (catName.get(p.category_id) ?? "") : ""),
+      },
+      {
+        id: "price",
+        header: t("columns.price"),
+        size: PRODUCT_COLUMN_WIDTHS.price,
+        accessorFn: (p) => p.price,
+        cell: ({ row }) => <span className="font-mono text-sm">{formatMoney(row.original.price)}</span>,
+      },
+    ];
+    if (canViewCost) {
+      cols.push({
+        id: "cost",
+        header: t("columns.cost"),
+        size: PRODUCT_COLUMN_WIDTHS.cost,
+        accessorFn: (p) => p.default_cost ?? 0,
+        cell: ({ row }) => (
+          <span className="font-mono text-sm">{formatMoney(row.original.default_cost ?? 0)}</span>
+        ),
+      });
+    }
+    cols.push({
+      id: "status",
+      header: t("columns.status"),
+      size: PRODUCT_COLUMN_WIDTHS.status,
+      enableSorting: false,
+      accessorFn: (p) => (p.is_active ? 1 : 0),
+      cell: ({ row }) => (
+        <span className="flex flex-wrap gap-1">
+          {row.original.barcode_conflict ? (
+            <Badge variant="destructive">{t("status.conflict")}</Badge>
+          ) : row.original.is_active ? (
+            <Badge variant="secondary">{t("status.active")}</Badge>
+          ) : (
+            <Badge variant="outline">{t("status.inactive")}</Badge>
+          )}
+        </span>
+      ),
+    });
+    return cols;
+  }, [t, canViewCost, catName]);
+
+  const loadError =
+    (products.error ?? categories.error) instanceof CommandError
+      ? translateError(i18n.t, ((products.error ?? categories.error) as CommandError).error)
+      : null;
+
+  const emptyLabel = products.isLoading
+    ? t("common:table.loading")
+    : (all?.length ?? 0) === 0
+      ? t("empty")
+      : t("noMatch");
+
+  return (
+    <section className="flex flex-col gap-4">
+      <header className="flex flex-wrap items-center gap-3">
+        <h1 className="text-2xl font-semibold">{t("title")}</h1>
+        <span role="status" className="flex-1 text-sm text-muted-foreground">
+          {t("count", { count: rows.length })}
+        </span>
+        <Can perm="PRODUCT_MANAGE">
+          <Button type="button" size="pos" onClick={() => setEditing({ product: null })}>
+            <Plus aria-hidden />
+            {t("add")}
+          </Button>
+        </Can>
+      </header>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-64 flex-1">
+          <Search
+            aria-hidden
+            className="pointer-events-none absolute top-3.5 left-3 size-5 text-muted-foreground"
+          />
+          <Input
+            type="search"
+            aria-label={t("searchLabel")}
+            placeholder={t("search")}
+            className="h-12 pl-10 text-base"
+            value={text}
+            autoComplete="off"
+            onChange={(e) => setText(e.target.value)}
+          />
+        </div>
+        <select
+          aria-label={t("categoryFilter")}
+          className="h-12 rounded-md border border-input bg-background px-3 text-base"
+          value={categoryId}
+          onChange={(e) => setCategoryId(e.target.value)}
+        >
+          <option value="">{t("allCategories")}</option>
+          {cats.map((c) => (
+            <option key={c.id} value={c.id}>
+              {catName.get(c.id)}
+            </option>
+          ))}
+        </select>
+        <label className="flex min-h-12 items-center gap-2">
+          <input
+            type="checkbox"
+            className="size-6 accent-primary"
+            checked={showInactive}
+            onChange={(e) => setShowInactive(e.target.checked)}
+          />
+          {t("showInactive")}
+        </label>
+      </div>
+      {loadError && (
+        <p role="alert" className="rounded-md bg-destructive px-3 py-2 text-destructive-foreground">
+          {loadError}
+        </p>
+      )}
+      <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[1fr_22rem]">
+        <DataTable<Product>
+          ariaLabel={t("title")}
+          columns={columns}
+          data={rows}
+          getRowId={(p) => p.id}
+          height={480}
+          emptyLabel={emptyLabel}
+          onRowActivate={canManage ? (p) => setEditing({ product: p }) : undefined}
+        />
+        <CategoryPanel categories={cats} />
+      </div>
+      <ProductFormDialog
+        open={editing !== null}
+        product={editing?.product ?? null}
+        categories={cats}
+        onClose={() => setEditing(null)}
+      />
+    </section>
+  );
+}

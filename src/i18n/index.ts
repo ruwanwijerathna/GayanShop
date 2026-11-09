@@ -5,21 +5,71 @@ import type { AppError } from "@/db/bindings";
 import { errorKey } from "@/db/client";
 import enApp from "./locales/en/app.json";
 import enAuth from "./locales/en/auth.json";
+import enBackup from "./locales/en/backup.json";
+import enBatches from "./locales/en/batches.json";
+import enCash from "./locales/en/cash.json";
 import enCommon from "./locales/en/common.json";
 import enErrors from "./locales/en/errors.json";
+import enPos from "./locales/en/pos.json";
+import enPrinting from "./locales/en/printing.json";
+import enProducts from "./locales/en/products.json";
+import enStaff from "./locales/en/staff.json";
 import siApp from "./locales/si/app.json";
 import siAuth from "./locales/si/auth.json";
+import siBackup from "./locales/si/backup.json";
+import siBatches from "./locales/si/batches.json";
+import siCash from "./locales/si/cash.json";
 import siCommon from "./locales/si/common.json";
 import siErrors from "./locales/si/errors.json";
+import siPos from "./locales/si/pos.json";
+import siPrinting from "./locales/si/printing.json";
+import siProducts from "./locales/si/products.json";
+import siStaff from "./locales/si/staff.json";
 
 export const LANGUAGES = ["en", "si"] as const;
 export type UiLanguage = (typeof LANGUAGES)[number];
 
-export const NAMESPACES = ["common", "errors", "auth", "app"] as const;
+export const NAMESPACES = [
+  "common",
+  "errors",
+  "auth",
+  "app",
+  "products",
+  "batches",
+  "cash",
+  "printing",
+  "pos",
+  "backup",
+  "staff",
+] as const;
 
 export const resources = {
-  en: { common: enCommon, errors: enErrors, auth: enAuth, app: enApp },
-  si: { common: siCommon, errors: siErrors, auth: siAuth, app: siApp },
+  en: {
+    common: enCommon,
+    errors: enErrors,
+    auth: enAuth,
+    app: enApp,
+    products: enProducts,
+    batches: enBatches,
+    cash: enCash,
+    printing: enPrinting,
+    pos: enPos,
+    backup: enBackup,
+    staff: enStaff,
+  },
+  si: {
+    common: siCommon,
+    errors: siErrors,
+    auth: siAuth,
+    app: siApp,
+    products: siProducts,
+    batches: siBatches,
+    cash: siCash,
+    printing: siPrinting,
+    pos: siPos,
+    backup: siBackup,
+    staff: siStaff,
+  },
 } as const;
 
 export function isUiLanguage(value: string): value is UiLanguage {

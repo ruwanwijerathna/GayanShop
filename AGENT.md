@@ -7,7 +7,7 @@
 >
 > Never change an architectural decision silently. Propose the doc change to the owner first.
 
-**Current state (2026-11-08): ✅ PHASE 0 COMPLETE.** Blocks 0.1–0.10 are committed and green. The GUI smoke checks were run against the real release app (`docs/qa/phase0-smoke.md`), and the CI steps were reproduced from a clean clone. Still pending the owner: dragging the window border below 1024×768 (item 1.3c), and the first real CI run (it needs a GitHub remote). **Phase 1 is not started.** Begin Block 1.1 only when the owner explicitly says to.
+**Current state (2026-11-09): Phase 1 complete on branch `feat/phase-1-mvp-till`** (Blocks 1.1–1.12 committed and green; the manual hardware, touch and pull-the-plug checks in `docs/qa/phase1-acceptance.md` are pending the owner). Phase 2 starts only when the owner says so. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
 
 ---
 
@@ -289,7 +289,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
 
 ### Phase 1: Offline MVP till
 
-- [ ] **1.1 Products, categories and search**
+- [x] **1.1 Products, categories and search**: done 2026-11-08 (unicode61 rejected for Sinhala; trigram kept, see doc §13.4)
   - **Deliverables:**
     - CRUD commands + UI, including `name_si`.
     - SKU and in-store barcode generators.
@@ -301,13 +301,13 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `cargo test --manifest-path src-tauri/Cargo.toml --release --test perf_budgets -- --ignored search`
     - `pnpm verify`
 
-- [ ] **1.2 Minimal batches, stock ledger and FIFO**
+- [x] **1.2 Minimal batches, stock ledger and FIFO**: done 2026-11-08
   - **Deliverables:** draft → receive (manual cost), opening stock, `batch_item_stock`/`stock_levels` derivation, FIFO consumption service, `tests/stock_ledger.rs`.
   - **Gate:**
     - `cargo test --manifest-path src-tauri/Cargo.toml --test stock_ledger`
     - `pnpm verify`
 
-- [ ] **1.3 Cash sessions and the Z-report**
+- [x] **1.3 Cash sessions and the Z-report**: done 2026-11-08
   - **Deliverables:**
     - Open and close sessions, count and variance, pay-in and pay-out, and the no-sale command (`DRAWER_NO_SALE`, audited).
     - The Z-report data model.
@@ -316,7 +316,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `cargo test --manifest-path src-tauri/Cargo.toml --test cash_session`
     - `pnpm verify`
 
-- [ ] **1.4 Checkout engine (the heart)**
+- [x] **1.4 Checkout engine (the heart)**: done 2026-11-08
   - **Deliverables:**
     - `checkout_order` with the **seal pattern**, in exactly the step order of doc §8 Phase 1: token check → customer → receipt counter → insert `pending` → lines, payments and slices → seal → audit, held-cart delete, print job, outbox. It covers the idempotent `checkout_token`, line and bill discounts with apportionment, the 5% limit and approvals, price override, payments ≥ 0 with cash change, the customer link, the receipt counter, deletion of the `__current__` held cart, the `print_jobs` row, audit and outbox.
     - Tests:
@@ -327,7 +327,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `cargo test --manifest-path src-tauri/Cargo.toml --test checkout --test checkout_props --test crash_mid_checkout`
     - `pnpm verify`
 
-- [ ] **1.5 Void engine**
+- [x] **1.5 Void engine**: done 2026-11-08
   - **Deliverables:**
     - `void_order`: whole order only, same device and open session, the reason list (note required for `OTHER`), and supervisor approval for cashiers.
     - Exact slice reversal, rollup removal, and print jobs for the VOID slip and drawer kick.
@@ -336,7 +336,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `cargo test --manifest-path src-tauri/Cargo.toml --test void_reversal`
     - `pnpm verify`
 
-- [ ] **1.6 Customers at the till**
+- [x] **1.6 Customers at the till**: done 2026-11-09
   - **Deliverables:**
     - `customer_lookup` and create-at-checkout using `UUIDv5(phone)`.
     - The masked phone on receipts.
@@ -346,7 +346,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `cargo test --manifest-path src-tauri/Cargo.toml --test customers`
     - `pnpm verify`
 
-- [ ] **1.7 Printing pipeline**
+- [x] **1.7 Printing pipeline**: done 2026-11-09
   - **Deliverables:**
     - Transports: spooler RAW, TCP 9100 and serial.
     - The ESC/POS builder: footer, QR, cut, drawer kick.
@@ -357,7 +357,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `cargo test --manifest-path src-tauri/Cargo.toml --test print_pipeline`
     - `pnpm verify`
 
-- [ ] **1.8 Scanner capture and feedback**
+- [x] **1.8 Scanner capture and feedback**: done 2026-11-09
   - **Deliverables:**
     - `ScannerProvider`: prefix capture (F13), the timing fallback with leak removal and replay, `event.code` decoding, `Enter` swallowing, the FIFO queue.
     - Audio cues, plus the unknown-barcode toast and Quick Sale prefill.
@@ -366,7 +366,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `pnpm exec vitest run src/hardware/scanner`
     - `pnpm verify`
 
-- [ ] **1.9 Till UI**
+- [x] **1.9 Till UI**: done 2026-11-09
   - **Deliverables:**
     - The POS screen per doc §1.9 layout (1024×768 baseline).
     - The cart (virtualised), the Quick Sale bar with `parseQuickSale`, the phone field, the payment dialog (split, cash change), held carts with debounced recovery, the shortcut map with `<Kbd>` badges, and micro-interactions.
@@ -375,7 +375,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `pnpm exec vitest run src/features/pos`
     - `pnpm verify`
 
-- [ ] **1.10 Manual "Backup Database Now"**
+- [x] **1.10 Manual "Backup Database Now"**: done 2026-11-09
   - **Deliverables:**
     - `backup_now` (folder picker, `VACUUM INTO` on a read connection, `.partial` → integrity check → SHA-256 → manifest → rename), the audit rows `BACKUP_CREATE`/`BACKUP_FAILED`, and the reminder banner.
     - `tests/backup.rs`, including "concurrent checkout during backup" and "destination removed mid-write ⇒ no `.partial` left".
@@ -383,13 +383,13 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `cargo test --manifest-path src-tauri/Cargo.toml --test backup`
     - `pnpm verify`
 
-- [ ] **1.11 Staff management**
+- [x] **1.11 Staff management**: done 2026-11-09
   - **Deliverables:** create staff, assign role, reset PIN, set UI language, grant and deny overrides (`USER_MANAGE`), the owner invariant in the UI, `tests/staff.rs`.
   - **Gate:**
     - `cargo test --manifest-path src-tauri/Cargo.toml --test staff`
     - `pnpm verify`
 
-- [ ] **1.12 Phase 1 acceptance**
+- [x] **1.12 Phase 1 acceptance**: done 2026-11-09 (e2e green; owner hardware/touch items pending in docs/qa/phase1-acceptance.md)
   - **Deliverables:**
     - WebdriverIO + `tauri-driver` e2e suite in `tests/e2e/phase1.e2e.ts`, scripting doc §8 Phase 1 exit criteria.
     - `docs/qa/phase1-acceptance.md`: touch-only and keyboard-only runs in EN and SI, a pull-the-plug drill, and real printer and scanner checks.

@@ -1,5 +1,14 @@
 {
-  "nav": { "home": "කවුන්ටරය", "audit": "විගණන සටහන" },
+  "nav": {
+    "home": "කවුන්ටරය",
+    "audit": "විගණන සටහන",
+    "products": "භාණ්ඩ",
+    "batches": "තොග කාණ්ඩ",
+    "cash": "මුදල්",
+    "settings": "සැකසුම්",
+    "pos": "මුදල් ලාච්චුව",
+    "staff": "කාර්ය මණ්ඩලය"
+  },
   "status": {
     "title": "කවුන්ටරයේ තත්ත්වය",
     "version": "යෙදුම් අනුවාදය",
@@ -42,7 +51,11 @@
     "LINE_DISCOUNT": "අයිතම වට්ටම",
     "ORDER_DISCOUNT": "බිල්පත් වට්ටම",
     "DRAWER_NO_SALE": "ලාච්චුව විවෘත කිරීම",
-    "OTHER": "සීමා කළ ක්‍රියාවක්"
+    "OTHER": "සීමා කළ ක්‍රියාවක්",
+    "CASH_PAY_IN_OUT": "මුදල් දැමීම හෝ ගැනීම"
   },
-  "shortcuts": { "lock": "Ctrl+L", "language": "Ctrl+Shift+L" }
+  "shortcuts": {
+    "lock": "Ctrl+L",
+    "language": "Ctrl+Shift+L"
+  }
 }

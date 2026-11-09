@@ -40,9 +40,101 @@ export const commands = {
 	 *  login on any counter); otherwise ⇒ this counter's default for the lock and login screens.
 	 */
 	setUiLanguage: (language: UiLanguage) => typedError<null, AppError>(__TAURI_INVOKE("set_ui_language", { language })),
+	listCategories: () => typedError<Category_Serialize[], AppError>(__TAURI_INVOKE("list_categories")),
+	createCategory: (input: CategoryInput_Deserialize) => typedError<Category_Serialize, AppError>(__TAURI_INVOKE("create_category", { input })),
+	updateCategory: (id: string, input: CategoryInput_Deserialize) => typedError<Category_Serialize, AppError>(__TAURI_INVOKE("update_category", { id, input })),
+	deleteCategory: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_category", { id })),
+	/**  Every live product for the back-office list (cost masked without `VIEW_COST`). */
+	listProducts: () => typedError<Product_Serialize[], AppError>(__TAURI_INVOKE("list_products")),
+	getProduct: (id: string) => typedError<Product_Serialize, AppError>(__TAURI_INVOKE("get_product", { id })),
+	createProduct: (input: ProductInput_Deserialize) => typedError<Product_Serialize, AppError>(__TAURI_INVOKE("create_product", { input })),
+	updateProduct: (id: string, input: ProductInput_Deserialize) => typedError<Product_Serialize, AppError>(__TAURI_INVOKE("update_product", { id, input })),
+	deleteProduct: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_product", { id })),
+	/**  Type-ahead search (English names, SKUs, barcodes; Sinhala names by substring). */
+	searchProducts: (query: string, limit: number) => typedError<ProductSummary_Serialize[], AppError>(__TAURI_INVOKE("search_products", { query, limit })),
+	/**  Scanner lookup: barcode first, then in-store SKU. `None` = unknown code. */
+	lookupProductCode: (code: string) => typedError<ProductSummary_Serialize | null, AppError>(__TAURI_INVOKE("lookup_product_code", { code })),
+	listBatches: () => typedError<Batch_Serialize[], AppError>(__TAURI_INVOKE("list_batches")),
+	getBatch: (id: string) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("get_batch", { id })),
+	createBatch: (input: BatchInput_Deserialize) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("create_batch", { input })),
+	updateBatch: (id: string, input: BatchInput_Deserialize) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("update_batch", { id, input })),
+	setBatchItem: (batchId: string, input: BatchItemInput_Deserialize) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("set_batch_item", { batchId, input })),
+	removeBatchItem: (batchId: string, itemId: string) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("remove_batch_item", { batchId, itemId })),
+	/**  Receive a draft: costs lock and stock arrives (one transaction). */
+	receiveBatch: (id: string) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("receive_batch", { id })),
+	/**  Buy and receive one item in one step. */
+	adHocPurchase: (input: AdHocPurchase_Deserialize) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("ad_hoc_purchase", { input })),
+	/**  A product's cost layers in FIFO order, with stock on hand per layer. */
+	productLayers: (productId: string) => typedError<LayerStock_Serialize[], AppError>(__TAURI_INVOKE("product_layers", { productId })),
+	/**  This counter's open session, if any (any logged-in staff member: the till needs it). */
+	currentCashSession: () => typedError<CashSession_Serialize | null, AppError>(__TAURI_INVOKE("current_cash_session")),
+	openCashSession: (input: OpenSessionInput) => typedError<CashSession_Serialize, AppError>(__TAURI_INVOKE("open_cash_session", { input })),
+	/**  Pay-in or pay-out with a reason; returns the updated X-report. */
+	cashDrawerMovement: (input: DrawerMovementInput, approvalId: string | null) => typedError<ZReport_Serialize, AppError>(__TAURI_INVOKE("cash_drawer_movement", { input, approvalId })),
+	/**  Open the drawer without a sale. */
+	noSale: (reason: string, approvalId: string | null) => typedError<null, AppError>(__TAURI_INVOKE("no_sale", { reason, approvalId })),
+	/**  Count and close; returns the Z-report (also queued for printing). */
+	closeCashSession: (input: CloseInput_Deserialize) => typedError<ZReport_Serialize, AppError>(__TAURI_INVOKE("close_cash_session", { input })),
+	/**  This counter's recent sessions. */
+	listCashSessions: (limit: number) => typedError<CashSession_Serialize[], AppError>(__TAURI_INVOKE("list_cash_sessions", { limit })),
+	/**  Z-report of a closed session, or X-report of the open one. */
+	cashSessionReport: (sessionId: string) => typedError<ZReport_Serialize, AppError>(__TAURI_INVOKE("cash_session_report", { sessionId })),
+	checkoutOrder: (input: CheckoutInput_Deserialize) => typedError<CheckoutResult_Serialize, AppError>(__TAURI_INVOKE("checkout_order", { input })),
+	customerLookup: (input: CustomerLookupInput) => typedError<CustomerLookup_Serialize, AppError>(__TAURI_INVOKE("customer_lookup", { input })),
+	printerStatus: () => typedError<PrinterStatusView_Serialize, AppError>(__TAURI_INVOKE("printer_status")),
+	printerProfile: () => typedError<ReceiptPrinterProfile | null, AppError>(__TAURI_INVOKE("printer_profile")),
+	setPrinterProfile: (profile: ReceiptPrinterProfile) => typedError<null, AppError>(__TAURI_INVOKE("set_printer_profile", { profile })),
+	/**  Ruler, code-page sample, QR and cut, then the drawer kick (doc §7.2). */
+	printTestPage: () => typedError<null, AppError>(__TAURI_INVOKE("print_test_page")),
+	/**  The banner's Retry: failed jobs go back to the queue. */
+	printRetry: () => typedError<null, AppError>(__TAURI_INVOKE("print_retry")),
+	/**  The banner's "Reprint later": failed jobs are dropped (abandoned, audited). The sales stand. */
+	printDismissFailed: () => typedError<null, AppError>(__TAURI_INVOKE("print_dismiss_failed")),
+	/**  The startup prompt: print the jobs left from before the restart, or skip them (abandoned, audited). */
+	printRecoveryResolve: (printNow: boolean) => typedError<null, AppError>(__TAURI_INVOKE("print_recovery_resolve", { printNow })),
+	cartSaveCurrent: (input: CartInput_Deserialize) => typedError<null, AppError>(__TAURI_INVOKE("cart_save_current", { input })),
+	cartDiscardCurrent: () => typedError<null, AppError>(__TAURI_INVOKE("cart_discard_current")),
+	/**  "Recover cart?" after a restart. */
+	cartCurrent: () => typedError<HeldCart_Serialize | null, AppError>(__TAURI_INVOKE("cart_current")),
+	cartHold: (input: CartInput_Deserialize) => typedError<HeldCart_Serialize, AppError>(__TAURI_INVOKE("cart_hold", { input })),
+	heldCarts: () => typedError<HeldCart_Serialize[], AppError>(__TAURI_INVOKE("held_carts")),
+	cartRecall: (id: string) => typedError<HeldCart_Serialize, AppError>(__TAURI_INVOKE("cart_recall", { id })),
+	backupStatus: () => typedError<BackupStatus_Serialize, AppError>(__TAURI_INVOKE("backup_status")),
+	/**  The native folder picker, opened at the last-used folder. `None` when the user cancels. */
+	backupPickFolder: () => typedError<string | null, AppError>(__TAURI_INVOKE("backup_pick_folder")),
+	backupNow: (destDir: string) => typedError<BackupOutcome, AppError>(__TAURI_INVOKE("backup_now", { destDir })),
+	listStaff: () => typedError<StaffMember_Serialize[], AppError>(__TAURI_INVOKE("list_staff")),
+	listRoles: () => typedError<Role[], AppError>(__TAURI_INVOKE("list_roles")),
+	createStaff: (input: NewStaff_Deserialize) => typedError<StaffMember_Serialize, AppError>(__TAURI_INVOKE("create_staff", { input })),
+	updateStaff: (id: string, input: StaffInput_Deserialize) => typedError<StaffMember_Serialize, AppError>(__TAURI_INVOKE("update_staff", { id, input })),
+	resetStaffPin: (id: string, pin: string) => typedError<null, AppError>(__TAURI_INVOKE("reset_staff_pin", { id, pin })),
+	voidOrder: (input: VoidInput_Deserialize) => typedError<VoidResult, AppError>(__TAURI_INVOKE("void_order", { input })),
+	/**  The open session's orders on this counter (the void list). */
+	sessionOrders: () => typedError<SessionOrder[], AppError>(__TAURI_INVOKE("session_orders")),
 };
 
 /* Types */
+/**  A one-item purchase received immediately ("bought 12 umbrellas at the market"). */
+export type AdHocPurchase = AdHocPurchase_Serialize | AdHocPurchase_Deserialize;
+
+/**  A one-item purchase received immediately ("bought 12 umbrellas at the market"). */
+export type AdHocPurchase_Deserialize = {
+	product_id: string,
+	qty: number,
+	unit_cost: number,
+	supplier_name?: string | null,
+	note?: string | null,
+};
+
+/**  A one-item purchase received immediately ("bought 12 umbrellas at the market"). */
+export type AdHocPurchase_Serialize = {
+	product_id: string,
+	qty: number,
+	unit_cost: number,
+	supplier_name: string | null,
+	note: string | null,
+};
+
 export type AppError = { kind: "NOT_INITIALIZED" } | { kind: "ALREADY_INITIALIZED" } | { kind: "NOT_LOGGED_IN" } | { kind: "SESSION_LOCKED" } | { kind: "FORBIDDEN"; perm: Perm } | { kind: "APPROVAL_REQUIRED"; perm: Perm } | { kind: "INVALID_APPROVAL" } | { kind: "INVALID_PIN"; attempts_left: number } | { kind: "ACCOUNT_LOCKED"; until: string } | 
 /**  Bad input. `code` is a stable SCREAMING_SNAKE identifier, e.g. `PIN_TOO_SHORT`. */
 { kind: "VALIDATION"; code: string; detail: string } | 
@@ -141,6 +233,254 @@ export type Authorization_Serialize = {
 	approved_by: string | null,
 };
 
+export type BackupOutcome = {
+	path: string,
+	manifest_path: string,
+	size_bytes: number,
+	sha256: string,
+	created_at: string,
+};
+
+export type BackupStatus = BackupStatus_Serialize | BackupStatus_Deserialize;
+
+export type BackupStatus_Deserialize = {
+	last_at?: string | null,
+	last_path?: string | null,
+	/**  The folder the picker should open in. */
+	last_dir?: string | null,
+	/**  No manual backup within `backup.reminder_days` (7) and no cloud sync yet: show "Back up today". */
+	reminder_due: boolean,
+};
+
+export type BackupStatus_Serialize = {
+	last_at: string | null,
+	last_path: string | null,
+	/**  The folder the picker should open in. */
+	last_dir: string | null,
+	/**  No manual backup within `backup.reminder_days` (7) and no cloud sync yet: show "Back up today". */
+	reminder_due: boolean,
+};
+
+export type Batch = Batch_Serialize | Batch_Deserialize;
+
+export type BatchDetail = BatchDetail_Serialize | BatchDetail_Deserialize;
+
+export type BatchDetail_Deserialize = {
+	batch: Batch_Deserialize,
+	items: BatchItem_Deserialize[],
+};
+
+export type BatchDetail_Serialize = {
+	batch: Batch_Serialize,
+	items: BatchItem_Serialize[],
+};
+
+export type BatchInput = BatchInput_Serialize | BatchInput_Deserialize;
+
+export type BatchInput_Deserialize = {
+	name: string,
+	supplier_name?: string | null,
+	supplier_ref?: string | null,
+	/**  ISO date-time of the purchase; `None` = now. */
+	purchased_at?: string | null,
+	/**  Invoice total. 0 with no extra costs ⇒ the batch costs exactly Σ(unit cost × qty). */
+	total_cost: number,
+	extra_costs: number,
+	notes?: string | null,
+};
+
+export type BatchInput_Serialize = {
+	name: string,
+	supplier_name: string | null,
+	supplier_ref: string | null,
+	/**  ISO date-time of the purchase; `None` = now. */
+	purchased_at: string | null,
+	/**  Invoice total. 0 with no extra costs ⇒ the batch costs exactly Σ(unit cost × qty). */
+	total_cost: number,
+	extra_costs: number,
+	notes: string | null,
+};
+
+export type BatchItem = BatchItem_Serialize | BatchItem_Deserialize;
+
+export type BatchItemInput = BatchItemInput_Serialize | BatchItemInput_Deserialize;
+
+export type BatchItemInput_Deserialize = {
+	product_id: string,
+	qty: number,
+	unit_cost: number,
+	/**  `None` = the product's current price. */
+	retail_price?: number | null,
+};
+
+export type BatchItemInput_Serialize = {
+	product_id: string,
+	qty: number,
+	unit_cost: number,
+	/**  `None` = the product's current price. */
+	retail_price: number | null,
+};
+
+export type BatchItem_Deserialize = {
+	id: string,
+	product_id: string,
+	product_name: string,
+	product_sku?: string | null,
+	qty_received: number,
+	/**  While a draft: the typed (manual) cost; once received: the locked layer cost. */
+	unit_cost: number,
+	retail_price_at_intake: number,
+	added_after_receipt: boolean,
+	on_hand: number,
+	sold_qty: number,
+};
+
+export type BatchItem_Serialize = {
+	id: string,
+	product_id: string,
+	product_name: string,
+	product_sku: string | null,
+	qty_received: number,
+	/**  While a draft: the typed (manual) cost; once received: the locked layer cost. */
+	unit_cost: number,
+	retail_price_at_intake: number,
+	added_after_receipt: boolean,
+	on_hand: number,
+	sold_qty: number,
+};
+
+export type BatchStatus = "draft" | "received" | "closed";
+
+export type Batch_Deserialize = {
+	id: string,
+	code: string,
+	name: string,
+	supplier_name?: string | null,
+	supplier_ref?: string | null,
+	purchased_at: string,
+	received_at?: string | null,
+	total_cost: number,
+	extra_costs: number,
+	allocation_variance: number,
+	status: BatchStatus,
+	is_system: boolean,
+	notes?: string | null,
+	item_count: number,
+	total_units: number,
+	/**  Σ unit_cost × qty over the layers (manual costs while still a draft). */
+	items_cost: number,
+	version: number,
+};
+
+export type Batch_Serialize = {
+	id: string,
+	code: string,
+	name: string,
+	supplier_name: string | null,
+	supplier_ref: string | null,
+	purchased_at: string,
+	received_at: string | null,
+	total_cost: number,
+	extra_costs: number,
+	allocation_variance: number,
+	status: BatchStatus,
+	is_system: boolean,
+	notes: string | null,
+	item_count: number,
+	total_units: number,
+	/**  Σ unit_cost × qty over the layers (manual costs while still a draft). */
+	items_cost: number,
+	version: number,
+};
+
+export type CartInput = CartInput_Serialize | CartInput_Deserialize;
+
+export type CartInput_Deserialize = {
+	/**  The till's cart JSON. */
+	payload: string,
+	checkout_token?: string | null,
+	/**  Hold only: a short name such as "Lady in red". */
+	label?: string | null,
+};
+
+export type CartInput_Serialize = {
+	/**  The till's cart JSON. */
+	payload: string,
+	checkout_token: string | null,
+	/**  Hold only: a short name such as "Lady in red". */
+	label: string | null,
+};
+
+export type CashSession = CashSession_Serialize | CashSession_Deserialize;
+
+export type CashSession_Deserialize = {
+	id: string,
+	device_id: string,
+	business_date: string,
+	/**  `open` or `closed`. */
+	status: string,
+	opened_by: string,
+	opened_by_name: string,
+	opened_at: string,
+	opening_float: number,
+	closed_by?: string | null,
+	closed_by_name?: string | null,
+	closed_at?: string | null,
+	expected_cash?: number | null,
+	counted_cash?: number | null,
+	variance?: number | null,
+	close_note?: string | null,
+};
+
+export type CashSession_Serialize = {
+	id: string,
+	device_id: string,
+	business_date: string,
+	/**  `open` or `closed`. */
+	status: string,
+	opened_by: string,
+	opened_by_name: string,
+	opened_at: string,
+	opening_float: number,
+	closed_by: string | null,
+	closed_by_name: string | null,
+	closed_at: string | null,
+	expected_cash: number | null,
+	counted_cash: number | null,
+	variance: number | null,
+	close_note: string | null,
+};
+
+export type Category = Category_Serialize | Category_Deserialize;
+
+export type CategoryInput = CategoryInput_Serialize | CategoryInput_Deserialize;
+
+export type CategoryInput_Deserialize = {
+	name: string,
+	parent_id?: string | null,
+};
+
+export type CategoryInput_Serialize = {
+	name: string,
+	parent_id: string | null,
+};
+
+export type Category_Deserialize = {
+	id: string,
+	name: string,
+	parent_id?: string | null,
+	/**  Live products in this category (not counting sub-categories). */
+	product_count: number,
+};
+
+export type Category_Serialize = {
+	id: string,
+	name: string,
+	parent_id: string | null,
+	/**  Live products in this category (not counting sub-categories). */
+	product_count: number,
+};
+
 export type ChainBreak = {
 	device_seq: number,
 	reason: ChainBreakReason,
@@ -164,10 +504,205 @@ export type ChainReport_Serialize = {
 	first_break: ChainBreak | null,
 };
 
+export type CheckoutInput = CheckoutInput_Serialize | CheckoutInput_Deserialize;
+
+export type CheckoutInput_Deserialize = {
+	/**  Generated per cart by the UI; a retry with the same token returns the same order. */
+	checkout_token: string,
+	lines: CheckoutLine_Deserialize[],
+	bill_discount: number,
+	payments: PaymentLine_Deserialize[],
+	customer_phone?: string | null,
+	customer_name?: string | null,
+	note?: string | null,
+	/**  A supervisor's single-use approval bound to (perm, `checkout_token`, this cashier). */
+	approval_id?: string | null,
+};
+
+export type CheckoutInput_Serialize = {
+	/**  Generated per cart by the UI; a retry with the same token returns the same order. */
+	checkout_token: string,
+	lines: CheckoutLine_Serialize[],
+	bill_discount: number,
+	payments: PaymentLine_Serialize[],
+	customer_phone: string | null,
+	customer_name: string | null,
+	note: string | null,
+	/**  A supervisor's single-use approval bound to (perm, `checkout_token`, this cashier). */
+	approval_id: string | null,
+};
+
+export type CheckoutLine = CheckoutLine_Serialize | CheckoutLine_Deserialize;
+
+export type CheckoutLine_Deserialize = {
+	/**  A catalog product, or `None` for a quick-sale line (then `name` is required). */
+	product_id?: string | null,
+	/**  Quick-sale name as typed (ignored for catalog lines, which use the product's printable name). */
+	name?: string | null,
+	/**  Price per unit actually charged. Below the product's list price = a price override. */
+	unit_price: number,
+	qty: number,
+	line_discount: number,
+	/**  Quick-sale only: the cost per unit if the cashier knows it. */
+	unit_cost?: number | null,
+	override_reason?: string | null,
+};
+
+export type CheckoutLine_Serialize = {
+	/**  A catalog product, or `None` for a quick-sale line (then `name` is required). */
+	product_id: string | null,
+	/**  Quick-sale name as typed (ignored for catalog lines, which use the product's printable name). */
+	name: string | null,
+	/**  Price per unit actually charged. Below the product's list price = a price override. */
+	unit_price: number,
+	qty: number,
+	line_discount: number,
+	/**  Quick-sale only: the cost per unit if the cashier knows it. */
+	unit_cost: number | null,
+	override_reason: string | null,
+};
+
+export type CheckoutResult = CheckoutResult_Serialize | CheckoutResult_Deserialize;
+
+export type CheckoutResult_Deserialize = {
+	order_id: string,
+	receipt_no: string,
+	grand_total: number,
+	change_due: number,
+	customer_id?: string | null,
+	/**  True when this token had already been checked out: nothing new was written. */
+	replayed: boolean,
+};
+
+export type CheckoutResult_Serialize = {
+	order_id: string,
+	receipt_no: string,
+	grand_total: number,
+	change_due: number,
+	customer_id: string | null,
+	/**  True when this token had already been checked out: nothing new was written. */
+	replayed: boolean,
+};
+
+export type CloseInput = CloseInput_Serialize | CloseInput_Deserialize;
+
+export type CloseInput_Deserialize = {
+	counted_cash: number,
+	/**  Optional count by note/coin; when given it must add up to `counted_cash`. */
+	denominations?: DenominationCount[] | null,
+	note?: string | null,
+};
+
+export type CloseInput_Serialize = {
+	counted_cash: number,
+	/**  Optional count by note/coin; when given it must add up to `counted_cash`. */
+	denominations: DenominationCount[] | null,
+	note: string | null,
+};
+
+/**  How a code field is set when saving: cleared, generated by this counter, or typed/scanned. */
+export type CodeChoice = { mode: "none" } | { mode: "generate" } | { mode: "manual"; value: string };
+
+export type CodePage = "pc437" | "wpc1252";
+
+/**  What the till sees after 9–10 digits (doc §3.8): no history without `CUSTOMER_VIEW`. */
+export type CustomerLookup = CustomerLookup_Serialize | CustomerLookup_Deserialize;
+
+export type CustomerLookupInput = {
+	phone: string,
+};
+
+/**  What the till sees after 9–10 digits (doc §3.8): no history without `CUSTOMER_VIEW`. */
+export type CustomerLookup_Deserialize = {
+	/**  `None` ⇒ a new number (or an erased profile): the customer is created at checkout. */
+	customer_id?: string | null,
+	phone_e164: string,
+	/**  `077 123 4567`, for the cart header. */
+	phone_display: string,
+	display_name?: string | null,
+	/**  Completed visits so far (voids excluded); the header shows "Visit #N+1". */
+	visit_count: number,
+};
+
+/**  What the till sees after 9–10 digits (doc §3.8): no history without `CUSTOMER_VIEW`. */
+export type CustomerLookup_Serialize = {
+	/**  `None` ⇒ a new number (or an erased profile): the customer is created at checkout. */
+	customer_id: string | null,
+	phone_e164: string,
+	/**  `077 123 4567`, for the cart header. */
+	phone_display: string,
+	display_name: string | null,
+	/**  Completed visits so far (voids excluded); the header shows "Visit #N+1". */
+	visit_count: number,
+};
+
+export type CutMode = "full" | "partial" | "none";
+
+export type DenominationCount = {
+	/**  Face value in cents (one of `LKR_DENOMINATIONS`). */
+	value: number,
+	count: number,
+};
+
 export type DevicePreferences = {
 	/**  Language for the lock/login screens (before anyone logs in). */
 	default_language: UiLanguage,
 	theme: UiTheme,
+};
+
+export type DrawerMovement = DrawerMovement_Serialize | DrawerMovement_Deserialize;
+
+export type DrawerMovementInput = {
+	kind: DrawerMovementKind,
+	amount: number,
+	reason: string,
+};
+
+export type DrawerMovementKind = "pay_in" | "pay_out";
+
+export type DrawerMovement_Deserialize = {
+	/**  `pay_in`, `pay_out` or `no_sale`. */
+	kind: string,
+	amount: number,
+	reason: string,
+	staff: string,
+	approved_by?: string | null,
+	created_at: string,
+};
+
+export type DrawerMovement_Serialize = {
+	/**  `pay_in`, `pay_out` or `no_sale`. */
+	kind: string,
+	amount: number,
+	reason: string,
+	staff: string,
+	approved_by: string | null,
+	created_at: string,
+};
+
+/**  Which drawer pin the kick pulses (`ESC p m`): pin 2 by default, pin 5 for drawers wired that way. */
+export type DrawerPin = "pin2" | "pin5";
+
+export type HeldCart = HeldCart_Serialize | HeldCart_Deserialize;
+
+export type HeldCart_Deserialize = {
+	id: string,
+	label?: string | null,
+	/**  The till's cart JSON. */
+	payload: string,
+	checkout_token?: string | null,
+	created_at: string,
+	updated_at: string,
+};
+
+export type HeldCart_Serialize = {
+	id: string,
+	label: string | null,
+	/**  The till's cart JSON. */
+	payload: string,
+	checkout_token: string | null,
+	created_at: string,
+	updated_at: string,
 };
 
 export type IntegrityReport = {
@@ -181,14 +716,261 @@ export type IntegrityReport = {
 	stale_sync_flag: boolean,
 };
 
+/**  One layer of a product's stock, for the product and batch screens. */
+export type LayerStock = LayerStock_Serialize | LayerStock_Deserialize;
+
+/**  One layer of a product's stock, for the product and batch screens. */
+export type LayerStock_Deserialize = {
+	batch_item_id: string,
+	batch_id: string,
+	batch_code: string,
+	received_at?: string | null,
+	unit_cost: number,
+	received_qty: number,
+	on_hand: number,
+	sold_qty: number,
+};
+
+/**  One layer of a product's stock, for the product and batch screens. */
+export type LayerStock_Serialize = {
+	batch_item_id: string,
+	batch_id: string,
+	batch_code: string,
+	received_at: string | null,
+	unit_cost: number,
+	received_qty: number,
+	on_hand: number,
+	sold_qty: number,
+};
+
 export type LoginStaff = {
 	id: string,
 	display_name: string,
 	role_name: string,
 };
 
+export type NewStaff = NewStaff_Serialize | NewStaff_Deserialize;
+
+export type NewStaff_Deserialize = {
+	staff: StaffInput_Deserialize,
+	pin: string,
+};
+
+export type NewStaff_Serialize = {
+	staff: StaffInput_Serialize,
+	pin: string,
+};
+
+export type OpenSessionInput = {
+	opening_float: number,
+};
+
+export type PaperWidth = 
+/**  58 mm, 32 columns (Font A). */
+"mm58" | 
+/**  80 mm, 48 columns (Font A). */
+"mm80";
+
+export type PaymentLine = PaymentLine_Serialize | PaymentLine_Deserialize;
+
+export type PaymentLine_Deserialize = {
+	method: PaymentMethod,
+	/**  Applied to the bill (never negative: all sales are final). */
+	amount: number,
+	/**  Cash handed over; change = tendered − amount. Cash only. */
+	tendered?: number | null,
+	reference?: string | null,
+};
+
+export type PaymentLine_Serialize = {
+	method: PaymentMethod,
+	/**  Applied to the bill (never negative: all sales are final). */
+	amount: number,
+	/**  Cash handed over; change = tendered − amount. Cash only. */
+	tendered: number | null,
+	reference: string | null,
+};
+
+export type PaymentMethod = "cash" | "card" | "bank_transfer" | "qr" | "other";
+
+export type PaymentTotal = {
+	method: string,
+	count: number,
+	amount: number,
+};
+
 /**  Permission key as seen by the UI and stored in audit metadata. */
 export type Perm = "SALE_CREATE" | "QUICK_SALE" | "PRICE_OVERRIDE" | "LINE_DISCOUNT" | "ORDER_DISCOUNT" | "VOID_ORDER" | "DRAWER_NO_SALE" | "CASH_PAY_IN_OUT" | "CASH_SESSION_MANAGE" | "CASH_SESSION_FORCE_CLOSE" | "REPRINT_RECEIPT" | "STOCK_ADJUST" | "STOCK_DAMAGE" | "BATCH_MANAGE" | "PRODUCT_MANAGE" | "QUICK_SALE_PROMOTE" | "LABEL_PRINT" | "VIEW_COST" | "REPORT_SALES" | "REPORT_FINANCIAL" | "EXPENSE_MANAGE" | "SETTINGS_MANAGE" | "USER_MANAGE" | "AUDIT_VIEW" | "SYNC_MANAGE" | "BACKUP_RESTORE" | "DATA_EXPORT" | "CUSTOMER_VIEW" | "BACKUP_CREATE";
+
+export type PrinterHealth = 
+/**  No profile in `device_settings` yet: jobs wait, selling continues. */
+"not_configured" | "ready" | 
+/**  The last call failed (paper out, cover open, connect/write error); see `fault`. */
+"fault" | 
+/**  A call timed out; its thread is abandoned and the printer is probed until it answers again. */
+"unhealthy";
+
+export type PrinterStatusView = PrinterStatusView_Serialize | PrinterStatusView_Deserialize;
+
+export type PrinterStatusView_Deserialize = {
+	health: PrinterHealth,
+	/**  `PAPER_OUT`, `COVER_OPEN`, `TIMEOUT`, `CONNECT_FAILED`, … for the banner. */
+	fault?: string | null,
+	/**  Waiting to print (or printing). */
+	queued: number,
+	/**  Failed and waiting for Retry / Reprint later. */
+	failed: number,
+	/**  Unprinted jobs from before the restart, waiting for "Print now / Skip". */
+	recovered: number,
+};
+
+export type PrinterStatusView_Serialize = {
+	health: PrinterHealth,
+	/**  `PAPER_OUT`, `COVER_OPEN`, `TIMEOUT`, `CONNECT_FAILED`, … for the banner. */
+	fault: string | null,
+	/**  Waiting to print (or printing). */
+	queued: number,
+	/**  Failed and waiting for Retry / Reprint later. */
+	failed: number,
+	/**  Unprinted jobs from before the restart, waiting for "Print now / Skip". */
+	recovered: number,
+};
+
+/**  The full product, for the back office. `default_cost` is `None` unless the viewer holds `VIEW_COST`. */
+export type Product = Product_Serialize | Product_Deserialize;
+
+export type ProductInput = ProductInput_Serialize | ProductInput_Deserialize;
+
+export type ProductInput_Deserialize = {
+	kind: ProductKind,
+	name: string,
+	name_si?: string | null,
+	sku: CodeChoice,
+	barcode: CodeChoice,
+	category_id?: string | null,
+	/**  `None` keeps the stored cost (and is what a viewer without `VIEW_COST` must send). */
+	default_cost?: number | null,
+	price: number,
+	min_price?: number | null,
+	track_stock: boolean,
+	allow_negative_stock: boolean,
+	attributes: { [key in string]: string },
+	is_active: boolean,
+};
+
+export type ProductInput_Serialize = {
+	kind: ProductKind,
+	name: string,
+	name_si: string | null,
+	sku: CodeChoice,
+	barcode: CodeChoice,
+	category_id: string | null,
+	/**  `None` keeps the stored cost (and is what a viewer without `VIEW_COST` must send). */
+	default_cost: number | null,
+	price: number,
+	min_price: number | null,
+	track_stock: boolean,
+	allow_negative_stock: boolean,
+	attributes: { [key in string]: string },
+	is_active: boolean,
+};
+
+export type ProductKind = "standard" | 
+/**  "Plasticware – any item Rs 250": one product standing for many unlabelled items. */
+"generic";
+
+/**  What the till needs from a search or a scan. Never carries cost. */
+export type ProductSummary = ProductSummary_Serialize | ProductSummary_Deserialize;
+
+/**  What the till needs from a search or a scan. Never carries cost. */
+export type ProductSummary_Deserialize = {
+	id: string,
+	kind: ProductKind,
+	name: string,
+	name_si?: string | null,
+	sku?: string | null,
+	barcode?: string | null,
+	price: number,
+	min_price?: number | null,
+	track_stock: boolean,
+};
+
+/**  What the till needs from a search or a scan. Never carries cost. */
+export type ProductSummary_Serialize = {
+	id: string,
+	kind: ProductKind,
+	name: string,
+	name_si: string | null,
+	sku: string | null,
+	barcode: string | null,
+	price: number,
+	min_price: number | null,
+	track_stock: boolean,
+};
+
+/**  The full product, for the back office. `default_cost` is `None` unless the viewer holds `VIEW_COST`. */
+export type Product_Deserialize = {
+	id: string,
+	kind: ProductKind,
+	name: string,
+	name_si?: string | null,
+	sku?: string | null,
+	barcode?: string | null,
+	category_id?: string | null,
+	default_cost?: number | null,
+	price: number,
+	min_price?: number | null,
+	track_stock: boolean,
+	allow_negative_stock: boolean,
+	attributes: { [key in string]: string },
+	is_active: boolean,
+	barcode_conflict: boolean,
+	updated_at: string,
+	version: number,
+};
+
+/**  The full product, for the back office. `default_cost` is `None` unless the viewer holds `VIEW_COST`. */
+export type Product_Serialize = {
+	id: string,
+	kind: ProductKind,
+	name: string,
+	name_si: string | null,
+	sku: string | null,
+	barcode: string | null,
+	category_id: string | null,
+	default_cost: number | null,
+	price: number,
+	min_price: number | null,
+	track_stock: boolean,
+	allow_negative_stock: boolean,
+	attributes: { [key in string]: string },
+	is_active: boolean,
+	barcode_conflict: boolean,
+	updated_at: string,
+	version: number,
+};
+
+/**  This counter's receipt printer (and the drawer on its RJ11 port). Device-local, not synced. */
+export type ReceiptPrinterProfile = {
+	transport: TransportConfig,
+	width: PaperWidth,
+	codepage: CodePage,
+	cut: CutMode,
+	feed_lines: number,
+	qr: boolean,
+	drawer_pin: DrawerPin,
+};
+
+export type Role = {
+	id: string,
+	name: string,
+	is_system: boolean,
+	permissions: Perm[],
+	max_discount_bp: number,
+	max_override_bp: number,
+	/**  Minimum PIN length for this role (6 for Manager and Owner, else 4). */
+	min_pin_len: number,
+};
 
 /**  What the UI receives — never the PIN hash; permissions as keys, not a mask. */
 export type SessionInfo = {
@@ -199,6 +981,18 @@ export type SessionInfo = {
 	max_discount_bp: number,
 	max_override_bp: number,
 	ui_language: string,
+};
+
+/**  An order of the counter's open session, for the till's void list (F10). */
+export type SessionOrder = {
+	order_id: string,
+	receipt_no: string,
+	/**  `completed` or `voided`. */
+	status: string,
+	grand_total: number,
+	item_count: number,
+	staff_name: string,
+	completed_at: string,
 };
 
 export type SetupInput = {
@@ -218,9 +1012,209 @@ export type SetupResult = {
 	owner_staff_id: string,
 };
 
+export type StaffInput = StaffInput_Serialize | StaffInput_Deserialize;
+
+export type StaffInput_Deserialize = {
+	display_name: string,
+	role_id: string,
+	/**  `en` or `si`. */
+	ui_language: string,
+	grants: Perm[],
+	denies: Perm[],
+	max_discount_bp?: number | null,
+	is_active: boolean,
+};
+
+export type StaffInput_Serialize = {
+	display_name: string,
+	role_id: string,
+	/**  `en` or `si`. */
+	ui_language: string,
+	grants: Perm[],
+	denies: Perm[],
+	max_discount_bp: number | null,
+	is_active: boolean,
+};
+
+/**  A staff member as the back office sees them (never the PIN hash). */
+export type StaffMember = StaffMember_Serialize | StaffMember_Deserialize;
+
+/**  A staff member as the back office sees them (never the PIN hash). */
+export type StaffMember_Deserialize = {
+	id: string,
+	display_name: string,
+	role_id: string,
+	role_name: string,
+	is_owner: boolean,
+	is_active: boolean,
+	ui_language: string,
+	grants: Perm[],
+	denies: Perm[],
+	/**  Personal discount limit; `None` = the role's. */
+	max_discount_bp?: number | null,
+	/**  What they can actually do: `(role | grants) & ~denies`, or everything for an Owner. */
+	effective: Perm[],
+	/**  The only active Owner: can't be disabled or moved to another role (owner invariant). */
+	last_owner: boolean,
+};
+
+/**  A staff member as the back office sees them (never the PIN hash). */
+export type StaffMember_Serialize = {
+	id: string,
+	display_name: string,
+	role_id: string,
+	role_name: string,
+	is_owner: boolean,
+	is_active: boolean,
+	ui_language: string,
+	grants: Perm[],
+	denies: Perm[],
+	/**  Personal discount limit; `None` = the role's. */
+	max_discount_bp: number | null,
+	/**  What they can actually do: `(role | grants) & ~denies`, or everything for an Owner. */
+	effective: Perm[],
+	/**  The only active Owner: can't be disabled or moved to another role (owner invariant). */
+	last_owner: boolean,
+};
+
+export type TransportConfig = 
+/**  A Windows printer queue, written with the RAW datatype (USB printers with a vendor/generic driver). */
+{ kind: "spooler"; printer_name: string } | 
+/**  TCP 9100. */
+{ kind: "network"; host: string; port: number } | 
+/**  `COM3` at the printer's baud rate. */
+{ kind: "serial"; port: string; baud: number };
+
 export type UiLanguage = "en" | "si";
 
 export type UiTheme = "light" | "dark";
+
+export type VoidInput = VoidInput_Serialize | VoidInput_Deserialize;
+
+export type VoidInput_Deserialize = {
+	order_id: string,
+	reason: VoidReason,
+	/**  Required for `OTHER`. */
+	note?: string | null,
+	/**  A supervisor's single-use approval bound to (VOID_ORDER, this order id, this cashier). */
+	approval_id?: string | null,
+};
+
+export type VoidInput_Serialize = {
+	order_id: string,
+	reason: VoidReason,
+	/**  Required for `OTHER`. */
+	note: string | null,
+	/**  A supervisor's single-use approval bound to (VOID_ORDER, this order id, this cashier). */
+	approval_id: string | null,
+};
+
+export type VoidLine = VoidLine_Serialize | VoidLine_Deserialize;
+
+export type VoidLine_Deserialize = {
+	receipt_no: string,
+	value: number,
+	reason: string,
+	note?: string | null,
+	voided_by: string,
+	/**  The supervisor who approved it; `None` when the voider held VOID_ORDER themselves. */
+	approved_by?: string | null,
+	voided_at: string,
+};
+
+export type VoidLine_Serialize = {
+	receipt_no: string,
+	value: number,
+	reason: string,
+	note: string | null,
+	voided_by: string,
+	/**  The supervisor who approved it; `None` when the voider held VOID_ORDER themselves. */
+	approved_by: string | null,
+	voided_at: string,
+};
+
+export type VoidReason = "WRONG_ITEM" | "WRONG_PRICE" | "WRONG_QTY" | "DUPLICATE_SCAN" | "CUSTOMER_CANCELLED" | "OTHER";
+
+export type VoidReasonTotal = {
+	reason: string,
+	count: number,
+	value: number,
+};
+
+export type VoidResult = {
+	order_id: string,
+	receipt_no: string,
+	grand_total: number,
+	/**  Cash to hand back to the customer (the cash payments of the order, net of change). */
+	cash_returned: number,
+};
+
+/**  Everything the Z-report prints for one session (also the X-report while it is still open). */
+export type ZReport = ZReport_Serialize | ZReport_Deserialize;
+
+/**  Everything the Z-report prints for one session (also the X-report while it is still open). */
+export type ZReport_Deserialize = {
+	session: CashSession_Deserialize,
+	generated_at: string,
+	sales_count: number,
+	items_sold: number,
+	gross_sales: number,
+	discount_total: number,
+	net_sales: number,
+	sales_total: number,
+	payments: PaymentTotal[],
+	change_given: number,
+	overrides_count: number,
+	/**  Σ (list − sold price) × qty on overridden lines. */
+	overrides_value: number,
+	quick_sale_lines: number,
+	quick_sale_net: number,
+	voids_count: number,
+	voids_value: number,
+	void_reasons: VoidReasonTotal[],
+	voids: VoidLine_Deserialize[],
+	drawer: DrawerMovement_Deserialize[],
+	pay_ins: number,
+	pay_outs: number,
+	no_sales: number,
+	opening_float: number,
+	cash_sales: number,
+	expected_cash: number,
+	counted_cash?: number | null,
+	variance?: number | null,
+};
+
+/**  Everything the Z-report prints for one session (also the X-report while it is still open). */
+export type ZReport_Serialize = {
+	session: CashSession_Serialize,
+	generated_at: string,
+	sales_count: number,
+	items_sold: number,
+	gross_sales: number,
+	discount_total: number,
+	net_sales: number,
+	sales_total: number,
+	payments: PaymentTotal[],
+	change_given: number,
+	overrides_count: number,
+	/**  Σ (list − sold price) × qty on overridden lines. */
+	overrides_value: number,
+	quick_sale_lines: number,
+	quick_sale_net: number,
+	voids_count: number,
+	voids_value: number,
+	void_reasons: VoidReasonTotal[],
+	voids: VoidLine_Serialize[],
+	drawer: DrawerMovement_Serialize[],
+	pay_ins: number,
+	pay_outs: number,
+	no_sales: number,
+	opening_float: number,
+	cash_sales: number,
+	expected_cash: number,
+	counted_cash: number | null,
+	variance: number | null,
+};
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

@@ -7,6 +7,7 @@ use crate::auth::{Auth, DeviceCtx};
 use crate::clock::Clock;
 use crate::db::Db;
 use crate::error::{AppError, AppResult};
+use crate::hardware::printer::worker::PrintHub;
 use crate::setup::Identity;
 
 pub struct AppState {
@@ -17,11 +18,20 @@ pub struct AppState {
     pub auth: Auth,
     /// `None` until first-run setup has completed on this terminal.
     identity: RwLock<Option<Identity>>,
+    /// The receipt printer's worker (doc §7.5); commands ping it after committing a print job.
+    pub printer: PrintHub,
 }
 
 impl AppState {
-    pub fn new(db: Db, clock: Arc<dyn Clock>, data_dir: PathBuf, auth: Auth, identity: Option<Identity>) -> Self {
-        Self { db, clock, data_dir, auth, identity: RwLock::new(identity) }
+    pub fn new(
+        db: Db,
+        clock: Arc<dyn Clock>,
+        data_dir: PathBuf,
+        auth: Auth,
+        identity: Option<Identity>,
+        printer: PrintHub,
+    ) -> Self {
+        Self { db, clock, data_dir, auth, identity: RwLock::new(identity), printer }
     }
 
     pub fn identity(&self) -> AppResult<Option<Identity>> {

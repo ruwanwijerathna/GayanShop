@@ -1,7 +1,13 @@
 import { createHashHistory, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 import { AuditLogScreen } from "@/features/audit/AuditLogScreen";
+import { BatchesScreen } from "@/features/batches/BatchesScreen";
+import { CashScreen } from "@/features/cash/CashScreen";
 import { CounterStatus } from "@/features/home/CounterStatus";
+import { PosScreen } from "@/features/pos/PosScreen";
+import { ProductsScreen } from "@/features/products/ProductsScreen";
+import { StaffScreen } from "@/features/staff/StaffScreen";
 import { AppShell } from "./AppShell";
+import { SettingsPage } from "./SettingsPage";
 
 // Hash history: the app is served from Tauri's asset protocol, so routes must not depend on a server.
 const rootRoute = createRootRoute({ component: AppShell });
@@ -17,7 +23,52 @@ export const auditRoute = createRoute({
   component: AuditLogScreen,
 });
 
-export const routeTree = rootRoute.addChildren([homeRoute, auditRoute]);
+export const productsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/products",
+  component: ProductsScreen,
+});
+
+export const batchesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/batches",
+  component: BatchesScreen,
+});
+
+export const cashRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/cash",
+  component: CashScreen,
+});
+
+export const posRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/pos",
+  component: PosScreen,
+});
+
+export const staffRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/staff",
+  component: StaffScreen,
+});
+
+export const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings",
+  component: SettingsPage,
+});
+
+export const routeTree = rootRoute.addChildren([
+  homeRoute,
+  posRoute,
+  cashRoute,
+  productsRoute,
+  batchesRoute,
+  auditRoute,
+  staffRoute,
+  settingsRoute,
+]);
 
 export function createAppRouter() {
   return createRouter({ routeTree, history: createHashHistory() });

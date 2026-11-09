@@ -126,3 +126,210 @@ pub async fn rejects_sale(pool: &SqlitePool, sale: &Sale<'_>, needle: &str) {
     let refs: Vec<&str> = stmts.iter().map(String::as_str).collect();
     rejects(pool, &refs, needle).await;
 }
+
+/// A store set up through the real first-run path (roles, Owner, system batches, settings).
+pub async fn store(t: &TestDb) -> gayanshop_lib::setup::SetupResult {
+    use gayanshop_lib::auth::pin::PinHasher;
+    use gayanshop_lib::clock::ManualClock;
+    use gayanshop_lib::setup::{SetupInput, first_run};
+    let at = chrono::DateTime::parse_from_rfc3339(NOW).unwrap().with_timezone(&chrono::Utc);
+    let input = SetupInput {
+        store_name: "GayanShop".into(),
+        owner_name: "Gayan".into(),
+        owner_pin: "246810".into(),
+        device_code: "T01".into(),
+        ui_language: "en".into(),
+    };
+    first_run(&t.db, &PinHasher::fast_for_tests(), &ManualClock::new(at), &input).await.unwrap()
+}
+
+/// Write context for `store()` at an ISO time (business date = its Colombo date; tests stay after 04:00).
+pub fn ctx_at(s: &gayanshop_lib::setup::SetupResult, now: &str) -> gayanshop_lib::db::repo::WriteCtx {
+    gayanshop_lib::db::repo::WriteCtx {
+        store_id: s.store_id.clone(),
+        device_id: s.device_id.clone(),
+        device_code: s.device_code.clone(),
+        now: now.into(),
+        business_date: now[..10].into(),
+    }
+}
+
+// ───────── a working till (Phase 1 checkout and void tests) ─────────
+
+/// A first-run store with real Cashier and Supervisor staff (seeded roles, hashed PINs), an open cash
+/// session on this counter, and an `Auth` for the command-level approval flow.
+pub struct Till {
+    pub t: TestDb,
+    pub s: gayanshop_lib::setup::SetupResult,
+    pub auth: gayanshop_lib::auth::Auth,
+    pub clock: gayanshop_lib::clock::ManualClock,
+    pub dev: gayanshop_lib::auth::DeviceCtx,
+    pub session_id: String,
+}
+
+pub const CASHIER: &str = "cashier";
+pub const SUP: &str = "sup";
+pub const CASHIER_PIN: &str = "1111";
+pub const SUP_PIN: &str = "2222";
+
+pub async fn till() -> Till {
+    use gayanshop_lib::auth::pin::PinHasher;
+    use gayanshop_lib::auth::{Auth, DeviceCtx};
+    use gayanshop_lib::clock::ManualClock;
+    let t = open().await;
+    let s = store(&t).await;
+    let hasher = PinHasher::fast_for_tests();
+    for (id, role, pin) in [(CASHIER, "Cashier", CASHIER_PIN), (SUP, "Supervisor", SUP_PIN)] {
+        let hash = hasher.hash(pin).unwrap();
+        exec(
+            t.pool(),
+            &format!(
+                "INSERT INTO staff (id, store_id, display_name, role_id, pin_hash, created_at, updated_at, updated_by_device)
+                 SELECT '{id}', '{store}', '{id}', id, '{hash}', '{NOW}', '{NOW}', '{dev}' FROM roles WHERE name = '{role}'",
+                store = s.store_id,
+                dev = s.device_id
+            ),
+        )
+        .await;
+    }
+    let owner = gayanshop_lib::auth::guard::Actor { staff_id: s.owner_staff_id.clone(), approved_by: None };
+    let session = gayanshop_lib::db::repo::cash::open(&t.db, &ctx_at(&s, NOW), &owner, 0).await.unwrap();
+    let identity = gayanshop_lib::setup::load_identity(t.pool()).await.unwrap().unwrap();
+    let at = chrono::DateTime::parse_from_rfc3339(NOW).unwrap().with_timezone(&chrono::Utc);
+    Till {
+        dev: DeviceCtx { store_id: identity.store_id, device_id: identity.device_id, calendar: identity.calendar },
+        auth: Auth::new(hasher),
+        clock: ManualClock::new(at),
+        session_id: session.id,
+        t,
+        s,
+    }
+}
+
+impl Till {
+    pub fn pool(&self) -> &SqlitePool {
+        self.t.pool()
+    }
+
+    pub fn ctx(&self) -> gayanshop_lib::db::repo::WriteCtx {
+        ctx_at(&self.s, NOW)
+    }
+
+    pub fn owner(&self) -> gayanshop_lib::auth::guard::Actor {
+        gayanshop_lib::auth::guard::Actor { staff_id: self.s.owner_staff_id.clone(), approved_by: None }
+    }
+
+    /// The staff member's effective permissions and limits, as a seller.
+    pub async fn seller(&self, staff_id: &str) -> gayanshop_lib::db::repo::checkout::Seller {
+        let (perms, max_discount_bp, max_override_bp): (i64, i64, i64) =
+            sqlx::query_as("SELECT perms, max_discount_bp, max_override_bp FROM v_staff_effective WHERE staff_id = ?1")
+                .bind(staff_id)
+                .fetch_one(self.pool())
+                .await
+                .unwrap();
+        gayanshop_lib::db::repo::checkout::Seller {
+            staff_id: staff_id.to_owned(),
+            perms: gayanshop_lib::domain::permissions::PermMask(perms),
+            max_discount_bp,
+            max_override_bp,
+        }
+    }
+
+    pub async fn login(&self, staff_id: &str, pin: &str) {
+        gayanshop_lib::auth::login(&self.t.db, &self.auth, &self.clock, &self.dev, staff_id, pin).await.unwrap();
+    }
+
+    /// A tracked product received in one ad-hoc batch per `(qty, unit_cost)` layer, oldest first.
+    pub async fn stocked(&self, name: &str, price: i64, layers: &[(i64, i64)]) -> String {
+        let id = self.product(name, price, true, 0, None).await;
+        for (qty, cost) in layers {
+            let buy = gayanshop_lib::db::repo::batches::AdHocPurchase {
+                product_id: id.clone(),
+                qty: *qty,
+                unit_cost: *cost,
+                supplier_name: None,
+                note: None,
+            };
+            gayanshop_lib::db::repo::batches::ad_hoc_purchase(&self.t.db, &self.ctx(), &self.owner(), &buy)
+                .await
+                .unwrap();
+        }
+        id
+    }
+
+    pub async fn product(&self, name: &str, price: i64, tracked: bool, cost: i64, min_price: Option<i64>) -> String {
+        use gayanshop_lib::db::repo::products::{self, CodeChoice, ProductInput, ProductKind};
+        let input = ProductInput {
+            kind: ProductKind::Standard,
+            name: name.into(),
+            name_si: None,
+            sku: CodeChoice::Generate,
+            barcode: CodeChoice::None,
+            category_id: None,
+            default_cost: Some(cost),
+            price,
+            min_price,
+            track_stock: tracked,
+            allow_negative_stock: true,
+            attributes: std::collections::BTreeMap::new(),
+            is_active: true,
+        };
+        products::create(&self.t.db, &self.ctx(), &self.owner(), &input, true).await.unwrap().id
+    }
+
+    pub async fn count(&self, sql: &str) -> i64 {
+        scalar_i64(self.pool(), sql).await
+    }
+}
+
+/// A catalog line at list price.
+pub fn line(product_id: &str, unit_price: i64, qty: i64) -> gayanshop_lib::db::repo::checkout::CheckoutLine {
+    gayanshop_lib::db::repo::checkout::CheckoutLine {
+        product_id: Some(product_id.into()),
+        name: None,
+        unit_price,
+        qty,
+        line_discount: 0,
+        unit_cost: None,
+        override_reason: None,
+    }
+}
+
+/// A quick-sale line.
+pub fn quick(name: &str, unit_price: i64, qty: i64) -> gayanshop_lib::db::repo::checkout::CheckoutLine {
+    gayanshop_lib::db::repo::checkout::CheckoutLine {
+        product_id: None,
+        name: Some(name.into()),
+        unit_price,
+        qty,
+        line_discount: 0,
+        unit_cost: None,
+        override_reason: None,
+    }
+}
+
+pub fn cash(amount: i64, tendered: Option<i64>) -> gayanshop_lib::db::repo::checkout::PaymentLine {
+    gayanshop_lib::db::repo::checkout::PaymentLine {
+        method: gayanshop_lib::domain::payments::PaymentMethod::Cash,
+        amount,
+        tendered,
+        reference: None,
+    }
+}
+
+pub fn cart(
+    token: &str,
+    lines: Vec<gayanshop_lib::db::repo::checkout::CheckoutLine>,
+    payments: Vec<gayanshop_lib::db::repo::checkout::PaymentLine>,
+) -> gayanshop_lib::db::repo::checkout::CheckoutInput {
+    gayanshop_lib::db::repo::checkout::CheckoutInput {
+        checkout_token: token.into(),
+        lines,
+        bill_discount: 0,
+        payments,
+        customer_phone: None,
+        customer_name: None,
+        note: None,
+        approval_id: None,
+    }
+}

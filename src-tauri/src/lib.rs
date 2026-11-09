@@ -16,11 +16,13 @@
 
 pub mod audit;
 pub mod auth;
+pub mod backup;
 pub mod clock;
 pub mod commands;
 pub mod db;
 pub mod domain;
 pub mod error;
+pub mod hardware;
 pub mod prefs;
 pub mod setup;
 pub mod state;
@@ -33,7 +35,13 @@ use crate::auth::Auth;
 use crate::auth::pin::PinHasher;
 use crate::clock::SystemClock;
 use crate::db::Db;
+use crate::db::repo::print_jobs::RECEIPT_PRINTER;
+use crate::hardware::printer::worker::{PrintHub, WorkerConfig};
+use crate::hardware::printer::{self, TransportConfig};
 use crate::state::AppState;
+
+/// Environment override for the data folder (holds `pos.db` and `backups\`).
+pub const DATA_DIR_ENV: &str = "GAYANSHOP_DATA_DIR";
 
 /// The typed IPC surface. `cargo test export_bindings` writes it to `src/db/bindings.ts`.
 pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
@@ -53,6 +61,58 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::prefs::device_preferences,
         commands::prefs::set_device_theme,
         commands::prefs::set_ui_language,
+        commands::products::list_categories,
+        commands::products::create_category,
+        commands::products::update_category,
+        commands::products::delete_category,
+        commands::products::list_products,
+        commands::products::get_product,
+        commands::products::create_product,
+        commands::products::update_product,
+        commands::products::delete_product,
+        commands::products::search_products,
+        commands::products::lookup_product_code,
+        commands::batches::list_batches,
+        commands::batches::get_batch,
+        commands::batches::create_batch,
+        commands::batches::update_batch,
+        commands::batches::set_batch_item,
+        commands::batches::remove_batch_item,
+        commands::batches::receive_batch,
+        commands::batches::ad_hoc_purchase,
+        commands::batches::product_layers,
+        commands::cash::current_cash_session,
+        commands::cash::open_cash_session,
+        commands::cash::cash_drawer_movement,
+        commands::cash::no_sale,
+        commands::cash::close_cash_session,
+        commands::cash::list_cash_sessions,
+        commands::cash::cash_session_report,
+        commands::checkout::checkout_order,
+        commands::customers::customer_lookup,
+        commands::hardware::printer_status,
+        commands::hardware::printer_profile,
+        commands::hardware::set_printer_profile,
+        commands::hardware::print_test_page,
+        commands::hardware::print_retry,
+        commands::hardware::print_dismiss_failed,
+        commands::hardware::print_recovery_resolve,
+        commands::pos::cart_save_current,
+        commands::pos::cart_discard_current,
+        commands::pos::cart_current,
+        commands::pos::cart_hold,
+        commands::pos::held_carts,
+        commands::pos::cart_recall,
+        commands::backup::backup_status,
+        commands::backup::backup_pick_folder,
+        commands::backup::backup_now,
+        commands::staff::list_staff,
+        commands::staff::list_roles,
+        commands::staff::create_staff,
+        commands::staff::update_staff,
+        commands::staff::reset_staff_pin,
+        commands::void::void_order,
+        commands::void::session_orders,
     ])
 }
 
@@ -69,15 +129,33 @@ pub fn run() -> Result<(), tauri::Error> {
             }
         }))
         .plugin(tauri_plugin_log::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
-            let data_dir = app.path().app_data_dir()?;
+            // `GAYANSHOP_DATA_DIR` points the app at another folder (the e2e suite, a support copy); by default
+            // it is `%APPDATA%\com.gayanshop.pos`.
+            let data_dir = match std::env::var_os(DATA_DIR_ENV) {
+                Some(dir) if !dir.is_empty() => std::path::PathBuf::from(dir),
+                _ => app.path().app_data_dir()?,
+            };
             std::fs::create_dir_all(&data_dir)?;
             let db = tauri::async_runtime::block_on(Db::open(&data_dir.join("pos.db"), &data_dir.join("backups")))?;
             let identity = tauri::async_runtime::block_on(setup::load_identity(&db.pool))?;
             let auth = Auth::new(PinHasher::production());
-            app.manage(AppState::new(db, Arc::new(SystemClock), data_dir, auth, identity));
+            let clock: Arc<dyn clock::Clock> = Arc::new(SystemClock);
+            let tz = identity.as_ref().map_or(chrono_tz::Asia::Colombo, |i| i.calendar.timezone);
+            let handle = app.handle().clone();
+            let printer = tauri::async_runtime::block_on(PrintHub::start(
+                db.clone(),
+                RECEIPT_PRINTER,
+                Arc::new(|c: &TransportConfig| printer::connect(c)),
+                clock.clone(),
+                tz,
+                WorkerConfig::default(),
+                Arc::new(move || commands::emit_changed(&handle, &["print_jobs"])),
+            ))?;
+            app.manage(AppState::new(db, clock, data_dir, auth, identity, printer));
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -113,6 +191,58 @@ mod tests {
             "devicePreferences",
             "setDeviceTheme",
             "setUiLanguage",
+            "listCategories",
+            "createCategory",
+            "updateCategory",
+            "deleteCategory",
+            "listProducts",
+            "getProduct",
+            "createProduct",
+            "updateProduct",
+            "deleteProduct",
+            "searchProducts",
+            "lookupProductCode",
+            "listBatches",
+            "getBatch",
+            "createBatch",
+            "updateBatch",
+            "setBatchItem",
+            "removeBatchItem",
+            "receiveBatch",
+            "adHocPurchase",
+            "productLayers",
+            "currentCashSession",
+            "openCashSession",
+            "cashDrawerMovement",
+            "noSale",
+            "closeCashSession",
+            "listCashSessions",
+            "cashSessionReport",
+            "checkoutOrder",
+            "voidOrder",
+            "sessionOrders",
+            "customerLookup",
+            "printerStatus",
+            "printerProfile",
+            "setPrinterProfile",
+            "printTestPage",
+            "printRetry",
+            "printDismissFailed",
+            "printRecoveryResolve",
+            "cartSaveCurrent",
+            "cartDiscardCurrent",
+            "cartCurrent",
+            "cartHold",
+            "heldCarts",
+            "cartRecall",
+            "backupStatus",
+            "backupPickFolder",
+            "backupNow",
+            "listStaff",
+            "listRoles",
+            "createStaff",
+            "updateStaff",
+            "resetStaffPin",
         ] {
             assert!(ts.contains(&format!("{cmd}:")), "command {cmd} missing from bindings");
         }

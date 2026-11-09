@@ -1,0 +1,178 @@
+{
+  "scanner": {
+    "notFound": "Not found: {{code}}"
+  },
+  "title": "Till",
+  "scan": {
+    "label": "Scan or search",
+    "placeholder": "Scan a barcode or type a name, SKU or code",
+    "results": "Products",
+    "noResults": "No product matches “{{query}}”.",
+    "hint": "Scan, or type and press Enter. ↓ ↑ choose a result."
+  },
+  "quick": {
+    "label": "Quick sale",
+    "placeholder": "e.g. 3* Bucket 10L 450",
+    "preview": "{{name}} · {{price}} × {{qty}}",
+    "add": "Add",
+    "cost": "Cost per unit (optional)",
+    "more": "Tab: add a cost",
+    "reasons": {
+      "empty": "Type a name and a price.",
+      "price_missing": "Price missing — end with the price, e.g. 450.",
+      "name_missing": "Type the item name before the price.",
+      "qty_invalid": "Quantity must be 1 to 9,999.",
+      "name_too_long": "The name can have at most 80 characters."
+    }
+  },
+  "customer": {
+    "label": "Customer phone",
+    "placeholder": "07X XXX XXXX",
+    "known": "{{name}} · Visit #{{visit}}",
+    "knownNoName": "Visit #{{visit}}",
+    "new": "New customer",
+    "name": "Name (optional)",
+    "invalid": "Not a Sri Lankan number yet",
+    "clear": "Clear customer"
+  },
+  "cart": {
+    "title": "Cart",
+    "empty": "Scan an item to start a sale.",
+    "qty": "Qty",
+    "each": "{{price}} each",
+    "was": "was {{price}}",
+    "discount": "− {{amount}}",
+    "remove": "Remove {{name}}",
+    "more": "One more {{name}}",
+    "less": "One less {{name}}",
+    "select": "Edit {{name}}",
+    "announce": "{{count}} item(s), total {{total}}",
+    "quickSale": "Quick sale"
+  },
+  "totals": {
+    "items": "Items",
+    "subtotal": "Subtotal",
+    "discounts": "Discounts",
+    "total": "TOTAL",
+    "needsApproval": "Above your discount limit: a supervisor will approve at payment."
+  },
+  "actions": {
+    "pay": "PAY",
+    "hold": "Hold",
+    "recall": "Recall",
+    "lineDiscount": "Edit line",
+    "billDiscount": "Bill discount",
+    "void": "Void",
+    "help": "Shortcuts",
+    "newSale": "Clear cart"
+  },
+  "keypad": {
+    "label": "Keypad",
+    "back": "Delete",
+    "enter": "Enter"
+  },
+  "line": {
+    "title": "Edit line",
+    "qty": "Quantity",
+    "price": "Price each (Rs)",
+    "reason": "Reason for the lower price",
+    "reasonRequired": "Give a reason for selling below the list price.",
+    "belowMin": "Below the minimum price of {{price}}: needs a supervisor.",
+    "discount": "Line discount (Rs or %)",
+    "save": "Apply",
+    "remove": "Remove line",
+    "none": "Add an item first."
+  },
+  "bill": {
+    "title": "Bill discount",
+    "amount": "Discount (Rs or %)",
+    "save": "Apply",
+    "clear": "Remove discount",
+    "invalid": "Enter an amount such as 150 or a percentage such as 5%.",
+    "tooBig": "The discount can't be more than the bill."
+  },
+  "pay": {
+    "title": "Payment",
+    "due": "Amount due",
+    "paid": "Paid",
+    "remaining": "Remaining",
+    "change": "Change",
+    "methods": {
+      "cash": "Cash",
+      "card": "Card",
+      "bank_transfer": "Bank transfer",
+      "qr": "QR payment",
+      "other": "Other"
+    },
+    "tendered": "Cash received (Rs)",
+    "amount": "Amount (Rs)",
+    "reference": "Reference (optional)",
+    "add": "Add payment",
+    "exact": "Exact",
+    "remove": "Remove payment",
+    "complete": "Complete sale",
+    "notEnough": "Payments don't cover the amount due yet.",
+    "tooMuch": "Card, transfer and QR payments can't exceed what is due.",
+    "processing": "Saving the sale…"
+  },
+  "done": {
+    "title": "Sale complete ✓",
+    "change": "Change {{change}}",
+    "receipt": "Receipt {{receipt}}"
+  },
+  "hold": {
+    "held": "Sale held.",
+    "label": "Held at {{time}}"
+  },
+  "recall": {
+    "title": "Held sales",
+    "empty": "No held sales.",
+    "lines": "{{count}} line(s) · {{total}}",
+    "take": "Recall",
+    "swap": "The sale in progress will be held."
+  },
+  "recover": {
+    "message": "A sale in progress was found from before the app closed.",
+    "restore": "Recover cart",
+    "discard": "Discard"
+  },
+  "void": {
+    "title": "Void a sale",
+    "help": "All sales are final. A void cancels a whole sale from this counter's open session.",
+    "empty": "No sales in this session yet.",
+    "voided": "Voided",
+    "reason": "Reason",
+    "note": "Explain (required for Other)",
+    "submit": "Void sale",
+    "done": "{{receipt}} voided. Hand back {{cash}} cash.",
+    "doneNoCash": "{{receipt}} voided.",
+    "reasons": {
+      "WRONG_ITEM": "Wrong item",
+      "WRONG_PRICE": "Wrong price",
+      "WRONG_QTY": "Wrong quantity",
+      "DUPLICATE_SCAN": "Scanned twice",
+      "CUSTOMER_CANCELLED": "Customer cancelled",
+      "OTHER": "Other"
+    }
+  },
+  "help": {
+    "title": "Till shortcuts",
+    "keys": {
+      "help": "This list",
+      "quickSale": "Quick sale bar",
+      "search": "Scan / search field",
+      "phone": "Customer phone (also Numpad /)",
+      "lineDiscount": "Edit the selected line: qty, price, discount",
+      "billDiscount": "Bill discount",
+      "hold": "Hold this sale",
+      "pay": "Pay (also Numpad +)",
+      "void": "Void a sale from this session",
+      "recall": "Recall a held sale",
+      "cancel": "Cancel / back to the scan field"
+    },
+    "lock": "Lock the till",
+    "language": "Switch language"
+  },
+  "noSession": "Open a cash session before selling.",
+  "openCash": "Go to Cash"
+}
