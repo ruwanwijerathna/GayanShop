@@ -169,6 +169,16 @@ async fn ensure_adjustment_layer(conn: &mut SqliteConnection, ctx: &WriteCtx, pr
     outbox::enqueue_upsert(conn, "batch_items", &item_id, &ctx.now).await
 }
 
+/// The layer found stock goes into (doc §3.1): the product's newest layer at its cost, or a new one in the
+/// system `ADJUSTMENTS` batch at the product's `default_cost` when it has none.
+pub async fn newest_layer(conn: &mut SqliteConnection, ctx: &WriteCtx, product_id: &str) -> AppResult<Layer> {
+    if let Some(l) = layers(conn, product_id).await?.pop() {
+        return Ok(l);
+    }
+    ensure_adjustment_layer(conn, ctx, product_id).await?;
+    layers(conn, product_id).await?.pop().ok_or_else(|| AppError::internal("no cost layer after creating one"))
+}
+
 fn fifo_err(e: FifoError) -> AppError {
     match e {
         FifoError::NonPositiveQty => AppError::validation("QTY_INVALID", e.to_string()),

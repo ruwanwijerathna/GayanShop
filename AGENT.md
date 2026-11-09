@@ -7,7 +7,7 @@
 >
 > Never change an architectural decision silently. Propose the doc change to the owner first.
 
-**Current state (2026-11-09): Phase 1 complete on branch `feat/phase-1-mvp-till`** (Blocks 1.1–1.12 committed and green; the manual hardware, touch and pull-the-plug checks in `docs/qa/phase1-acceptance.md` are pending the owner). Phase 2 starts only when the owner says so. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
+**Current state (2026-11-09): Phase 2 complete on branch `feat/phase-2-batches-reports`, awaiting the owner's acceptance and merge.** Phase 1 is complete, accepted and merged to `main` (the manual hardware, touch and pull-the-plug checks in `docs/qa/phase1-acceptance.md` are pending the owner). Blocks 2.1–2.10 are committed and green (the manual label-printer, scanner, counter-PC and Sinhala checks in `docs/qa/phase2-acceptance.md` are pending the owner); Phase 3 needs the owner's go and a Supabase project. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
 
 ---
 
@@ -399,34 +399,34 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `pnpm tauri build --no-bundle`
 
 ### Phase 2: Batches, labels, customers, expenses and reports
-- [ ] **2.1 Batch intake wizard and lifecycle**
+- [x] **2.1 Batch intake wizard and lifecycle**: done 2026-11-09
   - **Deliverables:** allocation methods with live variance, receive, reopen, late items, close.
   - **Gate:** `--test batches` + `pnpm verify`
-- [ ] **2.2 Label engine**
+- [x] **2.2 Label engine**: done 2026-11-09
   - **Deliverables:** `label/{layout,templates,tspl,zpl}.rs` (2-up 2″×1″, 3-up 1″×1″, 203 dpi, 2 mm gap), barcode-fit rules, the SVG preview, the alignment test and calibration.
   - **Gate:** `--test labels` (golden TSPL/ZPL byte snapshots, barcode-fit cases) + `pnpm verify`
-- [ ] **2.3 Stock operations**
+- [x] **2.3 Stock operations**: done 2026-11-09
   - **Deliverables:** adjustments, damage, counts, movement history, valuation (now and as-of), oversold layers.
   - **Gate:** `--test stock_ops` + `pnpm verify`
-- [ ] **2.4 Quick-sale review and promotion**
+- [x] **2.4 Quick-sale review and promotion**: done 2026-11-09
   - **Deliverables:** the review screen over `quick_sale_stats`, promote and ignore.
   - **Gate:** `--test quick_sales` + `pnpm verify`
-- [ ] **2.5 Customer back office**
+- [x] **2.5 Customer back office**: done 2026-11-09
   - **Deliverables:** list, profile, history, analytics, erasure.
   - **Gate:** `--test customer_backoffice` + `pnpm verify`
-- [ ] **2.6 Expenses**
+- [x] **2.6 Expenses**: done 2026-11-09
   - **Deliverables:** categories, entry, drawer pay-out integration.
   - **Gate:** `--test expenses` + `pnpm verify`
-- [ ] **2.7 Reports engine**
+- [x] **2.7 Reports engine**: done 2026-11-09
   - **Deliverables:** all §5 periods and metrics, plus `rebuild_derived`.
   - **Gate:** `--test reports` (rollups == raw sums on random data; monthly == Σ daily) + `pnpm verify`
-- [ ] **2.8 Charts and dashboards**
+- [x] **2.8 Charts and dashboards**: done 2026-11-09
   - **Deliverables:** shadcn Chart components per doc §1.4, both themes, both languages.
   - **Gate:** `pnpm exec vitest run src/components/charts` + `pnpm verify`
-- [ ] **2.9 Back-office tables and export**
+- [x] **2.9 Back-office tables and export**: done 2026-11-09
   - **Deliverables:** all lists on keyset DataTables, CSV export (`DATA_EXPORT`, audited).
   - **Gate:** `--test export` + `pnpm verify`
-- [ ] **2.10 Phase 2 acceptance and scale**
+- [x] **2.10 Phase 2 acceptance and scale**: done 2026-11-09 (perf table and headroom green; e2e phase1 + phase2 green; owner hardware items pending in docs/qa/phase2-acceptance.md)
   - **Deliverables:** the full §13.4 budget table, including the 1M-item headroom run, a 60 fps scroll benchmark, `tests/e2e/phase2.e2e.ts`, and `docs/qa/phase2-acceptance.md`.
   - **Gate:**
     - `cargo test --manifest-path src-tauri/Cargo.toml --release --test perf_budgets -- --ignored`

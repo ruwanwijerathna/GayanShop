@@ -1,0 +1,103 @@
+{
+  "title": "Reports",
+  "counter": "Counter",
+  "wholeStore": "Whole store",
+  "compare": "Compare with the previous period",
+  "storeWideNote": "Expenses, write-offs and batch cost variance belong to the whole store, so they stay store-wide on a counter's report.",
+  "allTime": "All time",
+  "empty": "Nothing in this period.",
+  "noCosts": "Costs and profit need the Financial reports and View cost permissions.",
+  "unknownCostNote": "Quick sales and items without a cost count no cost of goods, so gross profit is higher than it really is.",
+  "pnl": {
+    "title": "Profit and loss",
+    "metric": "Metric",
+    "current": "This period",
+    "previous": "Previous",
+    "change": "Change"
+  },
+  "metrics": {
+    "sales_count": "Sales",
+    "gross_sales": "Gross sales",
+    "discounts": "Discounts",
+    "net_sales": "Net sales (revenue)",
+    "tax_collected": "Tax collected",
+    "avg_basket": "Average sale",
+    "cogs": "Cost of goods sold",
+    "gross_profit": "Gross profit",
+    "gross_margin": "Gross margin",
+    "stock_write_offs": "Stock write-offs",
+    "operating_expenses": "Operating expenses",
+    "net_profit": "Net profit",
+    "quick_sale_net": "Quick-sale revenue",
+    "unknown_cost_net": "Revenue with unknown cost",
+    "void_count": "Voids",
+    "void_value": "Voided value",
+    "customer_attached": "Sales with a customer"
+  },
+  "payments": {
+    "title": "Payments",
+    "methods": {
+      "cash": "Cash",
+      "card": "Card",
+      "bank_transfer": "Bank transfer",
+      "qr": "QR",
+      "other": "Other"
+    }
+  },
+  "salesBy": {
+    "title": "Sales by",
+    "by": {
+      "product": "Product",
+      "category": "Category",
+      "batch": "Batch"
+    },
+    "none": {
+      "product": "Quick sales",
+      "category": "Uncategorised",
+      "batch": "No batch layer"
+    },
+    "qty": "Units",
+    "net": "Revenue",
+    "profit": "Gross profit"
+  },
+  "voids": {
+    "title": "Voids",
+    "summary_one": "{{count}} void, {{value}} (not counted in revenue).",
+    "summary_other": "{{count}} voids, {{value}} (not counted in revenue).",
+    "byReason": "By reason",
+    "byApprover": "By approver",
+    "count": "Count",
+    "value": "Value",
+    "reasons": {
+      "WRONG_ITEM": "Wrong item",
+      "WRONG_PRICE": "Wrong price",
+      "WRONG_QTY": "Wrong quantity",
+      "DUPLICATE_SCAN": "Scanned twice",
+      "CUSTOMER_CANCELLED": "Customer cancelled",
+      "OTHER": "Other"
+    }
+  },
+  "maintenance": {
+    "title": "Maintenance",
+    "explain": "Rebuild reports recomputes the daily totals, customer and quick-sale figures, stock levels and search from the sales and stock records. Use it after restoring a backup. It never changes a sale, a payment or the stock ledger.",
+    "rebuild": "Rebuild reports",
+    "confirm": "This reads every sale and stock movement and can take a few seconds. Selling can carry on afterwards.",
+    "run": "Rebuild now",
+    "running": "Rebuilding…",
+    "rebuilt": "Reports rebuilt.",
+    "done": "Rebuilt {{days}} day totals, {{customers}} customers and {{layers}} stock layers."
+  },
+  "dashboard": {
+    "title": "Today",
+    "vsYesterday": "vs yesterday",
+    "kpis": {
+      "net_sales": "Net sales",
+      "sales_count": "Sales",
+      "avg_basket": "Average sale",
+      "gross_profit": "Gross profit"
+    },
+    "last30": "Last 30 days",
+    "thisYear": "This year by month",
+    "thisMonth": "This month"
+  }
+}

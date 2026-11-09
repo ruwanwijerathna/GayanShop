@@ -11,13 +11,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { BatchDetail, ProductSummary } from "@/db/bindings";
+import type { AllocationMethod, BatchDetail, ProductSummary } from "@/db/bindings";
 import { CommandError } from "@/db/client";
 import { useAdHocPurchase, useCreateBatch } from "@/db/hooks";
 import { translateError } from "@/i18n";
 import { playCue } from "@/lib/audio";
 import { parseMajor } from "@/lib/money";
 import { parseOptionalMoney, parseQty } from "./batchForm";
+import { METHODS } from "./IntakeWizard";
 import { ProductPicker } from "./ProductPicker";
 
 const FIELD = "h-12 text-base";
@@ -67,6 +68,7 @@ export function NewBatchDialog({
   const [supplierRef, setSupplierRef] = useState("");
   const [total, setTotal] = useState("");
   const [extra, setExtra] = useState("");
+  const [method, setMethod] = useState<AllocationMethod>("even_per_unit");
   const [localError, setLocalError] = useState<string | null>(null);
 
   const serverError =
@@ -89,6 +91,7 @@ export function NewBatchDialog({
         purchased_at: null,
         total_cost: totalCost,
         extra_costs: extraCosts,
+        allocation_method: method,
         notes: null,
       },
       {
@@ -159,6 +162,20 @@ export function NewBatchDialog({
               value={extra}
               onChange={(e) => setExtra(e.target.value)}
             />
+          </Field>
+          <Field id="new-batch-method" label={t("wizard.method")} hint={t(`methodHints.${method}`)}>
+            <select
+              id="new-batch-method"
+              className="h-12 w-full rounded-md border border-input bg-background px-3 text-base"
+              value={method}
+              onChange={(e) => setMethod(METHODS.find((m) => m === e.target.value) ?? "manual")}
+            >
+              {METHODS.map((m) => (
+                <option key={m} value={m}>
+                  {t(`methods.${m}`)}
+                </option>
+              ))}
+            </select>
           </Field>
           <FieldError message={localError ?? serverError} />
           <DialogFooter className="gap-2">

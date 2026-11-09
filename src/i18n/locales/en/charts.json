@@ -1,0 +1,33 @@
+{
+  "empty": "No data for this period.",
+  "period": "Period",
+  "revenue": "Revenue",
+  "expenses": "Expenses",
+  "revenueVsExpenses": "Revenue and expenses",
+  "salesTrend": "Sales trend",
+  "thisPeriod": "This period",
+  "previousPeriod": "Previous period",
+  "paymentMethods": "Payment methods",
+  "method": "Method",
+  "amount": "Amount",
+  "share": "Share",
+  "count": "Payments",
+  "methods": {
+    "cash": "Cash",
+    "card": "Card",
+    "bank_transfer": "Bank transfer",
+    "qr": "QR",
+    "other": "Other"
+  },
+  "topCustomers": "Top customers by spend",
+  "customer": "Customer",
+  "visits": "Visits",
+  "spend": "Spend",
+  "batchSellThrough": "Batch sell-through",
+  "batch": "Batch",
+  "received": "Received",
+  "sold": "Sold",
+  "writtenOff": "Written off",
+  "left": "Left",
+  "sellThrough": "Sell-through"
+}

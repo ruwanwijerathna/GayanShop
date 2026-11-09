@@ -7,7 +7,13 @@
     "cash": "Cash",
     "settings": "Settings",
     "pos": "Till",
-    "staff": "Staff"
+    "staff": "Staff",
+    "inventory": "Stock",
+    "quickSales": "Quick sales",
+    "customers": "Customers",
+    "expenses": "Expenses",
+    "reports": "Reports",
+    "orders": "Orders"
   },
   "status": {
     "title": "Counter status",

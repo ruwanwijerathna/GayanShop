@@ -441,7 +441,7 @@ pub async fn open(db: &Db, ctx: &WriteCtx, actor: &Actor, opening_float: i64) ->
     Ok(session)
 }
 
-async fn insert_movement(
+pub(crate) async fn insert_movement(
     conn: &mut SqliteConnection,
     ctx: &WriteCtx,
     actor: &Actor,

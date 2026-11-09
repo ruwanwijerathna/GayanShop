@@ -8,27 +8,34 @@ export interface DbChanged {
   tables: string[];
 }
 
-/** Query-key prefixes to refresh per changed table. */
-const TABLE_KEYS: Record<string, readonly string[]> = {
-  products: ["catalog"],
+/** Query-key prefixes to refresh per changed table (an array of prefixes when several screens show it). */
+const TABLE_KEYS: Record<string, readonly string[] | readonly (readonly string[])[]> = {
+  products: [["catalog"], ["quickSales"]],
   categories: ["catalog"],
   audit_logs: ["audit"],
-  batches: ["batches"],
+  batches: [["batches"], ["reports"]],
   batch_items: ["batches"],
-  stock_movements: ["batches"],
+  stock_movements: [["batches"], ["inventory"], ["reports"]],
   cash_sessions: ["cash"],
   cash_movements: ["cash"],
   print_jobs: ["printer"],
-  orders: ["orders"],
+  orders: [["orders"], ["quickSales"], ["customers"], ["reports"]],
   customers: ["customers"],
   staff: ["staff"],
+  quick_sale_links: ["quickSales"],
+  expenses: [["expenses"], ["reports"]],
+  expense_categories: ["expenses"],
 };
 
 export function keysForTables(tables: string[]): (readonly string[])[] {
   const keys = new Map<string, readonly string[]>();
   for (const table of tables) {
-    const key = TABLE_KEYS[table];
-    if (key) keys.set(key.join("/"), key);
+    const entry = TABLE_KEYS[table];
+    if (!entry) continue;
+    const prefixes = entry.every((k) => Array.isArray(k))
+      ? (entry as readonly (readonly string[])[])
+      : [entry as readonly string[]];
+    for (const key of prefixes) keys.set(key.join("/"), key);
   }
   return [...keys.values()];
 }

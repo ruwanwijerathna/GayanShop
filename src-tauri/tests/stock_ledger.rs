@@ -52,6 +52,7 @@ fn header(name: &str, total: i64, extra: i64) -> BatchInput {
         purchased_at: None,
         total_cost: total,
         extra_costs: extra,
+        allocation_method: None,
         notes: None,
     }
 }

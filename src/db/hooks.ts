@@ -6,16 +6,36 @@ import {
   type BatchInput,
   type BatchItemInput,
   type CartInput_Deserialize as CartInput,
+  type AdjustmentInput,
   type CategoryInput,
+  type CountInput,
+  type DamageInput,
+  type LabelJob,
+  type LabelPrinterProfile,
+  type LateItemInput,
   type CheckoutInput_Deserialize as CheckoutInput,
   type CloseInput,
+  type CustomerSort,
+  type CustomerUpdate,
+  type ExpenseCategoryInput,
+  type ExpenseInput,
+  type ExportKind,
+  type OrderCursor,
+  type OrderFilter_Deserialize as OrderFilter,
+  type Granularity,
+  type HistoryCursor,
+  type Period,
+  type SalesDimension,
   type DrawerMovementInput,
   type Perm,
   type NewStaff_Deserialize as NewStaff,
   type ProductInput,
+  type PromoteInput,
+  type QuickSaleStatus,
   type ReceiptPrinterProfile,
   type SetupInput,
   type StaffInput_Deserialize as StaffInput,
+  type TemplateCalibration,
   type UiLanguage,
   type UiTheme,
   type VoidInput_Deserialize as VoidInput,
@@ -34,15 +54,48 @@ export const queryKeys = {
   productSearch: (query: string) => ["catalog", "search", query] as const,
   batches: ["batches", "list"] as const,
   batch: (id: string) => ["batches", "detail", id] as const,
+  batchPreview: (id: string) => ["batches", "preview", id] as const,
   cashSession: ["cash", "current"] as const,
   printerStatus: ["printer", "status"] as const,
   printerProfile: ["printer", "profile"] as const,
   customer: (phone: string) => ["customers", "lookup", phone] as const,
+  customerList: (search: string, sort: CustomerSort) => ["customers", "list", search, sort] as const,
+  customerProfile: (id: string) => ["customers", "profile", id] as const,
+  customerHistory: (id: string) => ["customers", "history", id] as const,
+  customerReceipt: (customerId: string, orderId: string) =>
+    ["customers", "receipt", customerId, orderId] as const,
+  customerAnalytics: (period: Period, g: Granularity) =>
+    ["customers", "analytics", JSON.stringify(period), g] as const,
+  businessToday: ["app", "today"] as const,
+  reportSummary: (period: Period, deviceId: string | null, compare: boolean) =>
+    ["reports", "summary", JSON.stringify(period), deviceId ?? "store", compare] as const,
+  reportTrend: (period: Period, deviceId: string | null, g: Granularity, compare: boolean) =>
+    ["reports", "trend", JSON.stringify(period), deviceId ?? "store", g, compare] as const,
+  reportSellThrough: ["reports", "sellThrough"] as const,
+  reportSalesBy: (period: Period, deviceId: string | null, d: SalesDimension) =>
+    ["reports", "salesBy", JSON.stringify(period), deviceId ?? "store", d] as const,
+  reportVoids: (period: Period, deviceId: string | null) =>
+    ["reports", "voids", JSON.stringify(period), deviceId ?? "store"] as const,
+  reportDevices: ["reports", "devices"] as const,
+  orderHistory: (filter: OrderFilter) => ["orders", "history", JSON.stringify(filter)] as const,
+  orderReceipt: (id: string) => ["orders", "receipt", id] as const,
+  expenseCategories: ["expenses", "categories"] as const,
+  expenseList: (period: Period, categoryId: string | null) =>
+    ["expenses", "list", JSON.stringify(period), categoryId ?? "all"] as const,
   sessionOrders: ["orders", "session"] as const,
   heldCarts: ["pos", "held"] as const,
   currentCart: ["pos", "current"] as const,
   backupStatus: ["backup", "status"] as const,
   staff: ["staff", "list"] as const,
+  labelTemplates: ["labels", "templates"] as const,
+  valuation: (asOf: string | null) => ["inventory", "valuation", asOf ?? "now"] as const,
+  oversold: ["inventory", "oversold"] as const,
+  quickSales: (show: QuickSaleStatus | null) => ["quickSales", "review", show ?? "all"] as const,
+  quickSaleDetail: (key: string) => ["quickSales", "detail", key] as const,
+  quickSaleHint: (name: string) => ["quickSales", "hint", name] as const,
+  movements: (productId: string) => ["inventory", "movements", productId] as const,
+  labelProfile: ["labels", "profile"] as const,
+  labelPreview: (job: LabelJob) => ["labels", "preview", JSON.stringify(job)] as const,
   roles: ["staff", "roles"] as const,
 };
 
@@ -231,6 +284,35 @@ export function useRemoveBatchItem() {
 
 export function useReceiveBatch() {
   return useBatchMutation((id: string) => unwrap(commands.receiveBatch(id)));
+}
+
+export function useUpdateBatch() {
+  return useBatchMutation(({ id, input }: { id: string; input: BatchInput }) =>
+    unwrap(commands.updateBatch(id, input)),
+  );
+}
+
+/** What "Receive" would fix right now (refreshed with every batch change). */
+export function useBatchAllocationPreview(id: string | null) {
+  return useQuery({
+    queryKey: queryKeys.batchPreview(id ?? ""),
+    queryFn: () => unwrap(commands.batchAllocationPreview(id ?? "")),
+    enabled: id !== null,
+  });
+}
+
+export function useReopenBatch() {
+  return useBatchMutation((id: string) => unwrap(commands.reopenBatch(id)));
+}
+
+export function useAddLateBatchItem() {
+  return useBatchMutation(({ batchId, input }: { batchId: string; input: LateItemInput }) =>
+    unwrap(commands.addLateBatchItem(batchId, input)),
+  );
+}
+
+export function useCloseBatch() {
+  return useBatchMutation((id: string) => unwrap(commands.closeBatch(id)));
 }
 
 export function useAdHocPurchase() {
@@ -450,4 +532,379 @@ export function useResetStaffPin() {
   return useStaffMutation(({ id, pin }: { id: string; pin: string }) =>
     unwrap(commands.resetStaffPin(id, pin)),
   );
+}
+
+// ───────── barcode labels (doc §7.4) ─────────
+
+export function useLabelTemplates() {
+  return useQuery({ queryKey: queryKeys.labelTemplates, queryFn: () => unwrap(commands.labelTemplates()) });
+}
+
+export function useLabelPrinterProfile() {
+  return useQuery({
+    queryKey: queryKeys.labelProfile,
+    queryFn: () => unwrap(commands.labelPrinterProfile()),
+  });
+}
+
+function useLabelMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: fn, onSuccess: () => qc.invalidateQueries({ queryKey: ["labels"] }) });
+}
+
+export function useSetLabelPrinterProfile() {
+  return useLabelMutation((profile: LabelPrinterProfile) => unwrap(commands.setLabelPrinterProfile(profile)));
+}
+
+export function useCalibrateLabelTemplate() {
+  return useLabelMutation(({ id, calibration }: { id: string; calibration: TemplateCalibration | null }) =>
+    unwrap(commands.calibrateLabelTemplate(id, calibration)),
+  );
+}
+
+export function useLabelAlignmentTest() {
+  return useLabelMutation((templateId: string) => unwrap(commands.labelAlignmentTest(templateId)));
+}
+
+/** The Rust-computed layout of a job (what will print), for the SVG preview. */
+export function useLabelPreview(job: LabelJob | null) {
+  return useQuery({
+    queryKey: queryKeys.labelPreview(job ?? { template_id: "", items: [], fill_last_row: false }),
+    queryFn: () => unwrap(commands.labelPreview(job ?? { template_id: "", items: [], fill_last_row: false })),
+    enabled: job !== null && job.items.length > 0,
+    retry: false,
+  });
+}
+
+export function usePrintLabels() {
+  return useLabelMutation(({ job, approvalId }: { job: LabelJob; approvalId: string | null }) =>
+    unwrap(commands.printLabels(job, approvalId)),
+  );
+}
+
+// ───────── stock operations (doc §3.1, §5) ─────────
+
+export function useStockValuation(asOf: string | null) {
+  return useQuery({
+    queryKey: queryKeys.valuation(asOf),
+    queryFn: () => unwrap(commands.stockValuation(asOf)),
+  });
+}
+
+export function useOversoldLayers() {
+  return useQuery({ queryKey: queryKeys.oversold, queryFn: () => unwrap(commands.oversoldLayers()) });
+}
+
+const MOVEMENTS_PAGE = 100;
+
+export function useStockMovements(productId: string | null) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.movements(productId ?? ""),
+    initialPageParam: null as { created_at: string; id: string } | null,
+    queryFn: ({ pageParam }) =>
+      unwrap(commands.stockMovements(productId ?? "", null, pageParam, MOVEMENTS_PAGE)),
+    getNextPageParam: (last) =>
+      last.next_cursor ? { created_at: last.next_cursor[0], id: last.next_cursor[1] } : null,
+    enabled: productId !== null,
+  });
+}
+
+function useStockMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["inventory"] });
+      await qc.invalidateQueries({ queryKey: ["batches"] });
+    },
+  });
+}
+
+export function useRecordDamage() {
+  return useStockMutation(({ input, approvalId }: { input: DamageInput; approvalId: string | null }) =>
+    unwrap(commands.recordDamage(input, approvalId)),
+  );
+}
+
+export function useAdjustStock() {
+  return useStockMutation(({ input, approvalId }: { input: AdjustmentInput; approvalId: string | null }) =>
+    unwrap(commands.adjustStock(input, approvalId)),
+  );
+}
+
+export function useRecordStockCount() {
+  return useStockMutation(({ input, approvalId }: { input: CountInput; approvalId: string | null }) =>
+    unwrap(commands.recordStockCount(input, approvalId)),
+  );
+}
+
+export function useWriteOffBatch() {
+  return useStockMutation(({ batchId, note }: { batchId: string; note: string }) =>
+    unwrap(commands.writeOffBatch(batchId, note)),
+  );
+}
+
+// ───────── quick-sale review (doc §3.2) ─────────
+
+export function useQuickSaleReview(show: QuickSaleStatus | null) {
+  return useQuery({
+    queryKey: queryKeys.quickSales(show),
+    queryFn: () => unwrap(commands.quickSaleReview(show)),
+  });
+}
+
+export function useQuickSaleDetail(key: string | null) {
+  return useQuery({
+    queryKey: queryKeys.quickSaleDetail(key ?? ""),
+    queryFn: () => unwrap(commands.quickSaleDetail(key ?? "")),
+    enabled: key !== null,
+  });
+}
+
+function useQuickSaleMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["quickSales"] });
+      await qc.invalidateQueries({ queryKey: ["catalog"] });
+    },
+  });
+}
+
+export function usePromoteQuickSale() {
+  return useQuickSaleMutation((input: PromoteInput) => unwrap(commands.promoteQuickSale(input)));
+}
+
+export function useIgnoreQuickSale() {
+  return useQuickSaleMutation((key: string) => unwrap(commands.ignoreQuickSale(key)));
+}
+
+/** The till's "now a product" hint for what is typed in the Quick Sale bar (null name = nothing typed). */
+export function useQuickSaleHint(name: string | null) {
+  return useQuery({
+    queryKey: queryKeys.quickSaleHint(name ?? ""),
+    queryFn: () => unwrap(commands.quickSaleHint(name ?? "")),
+    enabled: name !== null && name.trim() !== "",
+    staleTime: 30_000,
+  });
+}
+
+/** Today's business date on this counter (the default for report periods). */
+export function useBusinessToday() {
+  return useQuery({
+    queryKey: queryKeys.businessToday,
+    queryFn: () => unwrap(commands.businessToday()),
+    staleTime: 60_000,
+  });
+}
+
+// ───────── customer back office (doc §3.8, CUSTOMER_VIEW) ─────────
+
+export function useCustomerList(search: string, sort: CustomerSort) {
+  return useQuery({
+    queryKey: queryKeys.customerList(search, sort),
+    queryFn: () => unwrap(commands.customerList(search.trim() === "" ? null : search, sort)),
+  });
+}
+
+export function useCustomerProfile(id: string | null) {
+  return useQuery({
+    queryKey: queryKeys.customerProfile(id ?? ""),
+    queryFn: () => unwrap(commands.customerProfile(id ?? "")),
+    enabled: id !== null,
+  });
+}
+
+const HISTORY_PAGE = 100;
+
+export function useCustomerHistory(id: string | null) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.customerHistory(id ?? ""),
+    initialPageParam: null as HistoryCursor | null,
+    queryFn: ({ pageParam }) => unwrap(commands.customerHistory(id ?? "", pageParam, HISTORY_PAGE)),
+    getNextPageParam: (last) => last.next_cursor ?? null,
+    enabled: id !== null,
+  });
+}
+
+export function useCustomerReceipt(customerId: string, orderId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.customerReceipt(customerId, orderId ?? ""),
+    queryFn: () => unwrap(commands.customerOrderReceipt(customerId, orderId ?? "")),
+    enabled: orderId !== null,
+  });
+}
+
+const TOP_CUSTOMERS = 10;
+
+export function useCustomerAnalytics(period: Period | null, granularity: Granularity) {
+  return useQuery({
+    queryKey: queryKeys.customerAnalytics(period ?? { kind: "all_time" }, granularity),
+    queryFn: () =>
+      unwrap(commands.customerAnalytics(period ?? { kind: "all_time" }, granularity, TOP_CUSTOMERS)),
+    enabled: period !== null,
+  });
+}
+
+function useCustomerMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["customers"] });
+      await qc.invalidateQueries({ queryKey: queryKeys.audit });
+    },
+  });
+}
+
+export function useUpdateCustomer() {
+  return useCustomerMutation(({ id, input }: { id: string; input: CustomerUpdate }) =>
+    unwrap(commands.updateCustomer(id, input)),
+  );
+}
+
+export function useEraseCustomer() {
+  return useCustomerMutation((id: string) => unwrap(commands.eraseCustomer(id)));
+}
+
+// ───────── expenses (doc §5.1, EXPENSE_MANAGE) ─────────
+
+export function useExpenseCategories() {
+  return useQuery({
+    queryKey: queryKeys.expenseCategories,
+    queryFn: () => unwrap(commands.expenseCategories()),
+  });
+}
+
+export function useExpenseList(period: Period, categoryId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.expenseList(period, categoryId),
+    queryFn: () => unwrap(commands.expenseList(period, categoryId)),
+  });
+}
+
+function useExpenseMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["expenses"] });
+      await qc.invalidateQueries({ queryKey: ["cash"] });
+      await qc.invalidateQueries({ queryKey: queryKeys.audit });
+    },
+  });
+}
+
+export function useSaveExpenseCategory() {
+  return useExpenseMutation(({ id, input }: { id: string | null; input: ExpenseCategoryInput }) =>
+    unwrap(commands.saveExpenseCategory(id, input)),
+  );
+}
+
+export function useRecordExpense() {
+  return useExpenseMutation(({ input, approvalId }: { input: ExpenseInput; approvalId: string | null }) =>
+    unwrap(commands.recordExpense(input, approvalId)),
+  );
+}
+
+export function useUpdateExpense() {
+  return useExpenseMutation(({ id, input }: { id: string; input: ExpenseInput }) =>
+    unwrap(commands.updateExpense(id, input)),
+  );
+}
+
+export function useDeleteExpense() {
+  return useExpenseMutation(({ id, approvalId }: { id: string; approvalId: string | null }) =>
+    unwrap(commands.deleteExpense(id, approvalId)),
+  );
+}
+
+// ───────── reports (doc §5, REPORT_SALES; costs need REPORT_FINANCIAL + VIEW_COST) ─────────
+
+export function useReportSummary(period: Period, deviceId: string | null, compare: boolean) {
+  return useQuery({
+    queryKey: queryKeys.reportSummary(period, deviceId, compare),
+    queryFn: () => unwrap(commands.reportSummary(period, deviceId, compare)),
+  });
+}
+
+export function useReportTrend(
+  period: Period,
+  deviceId: string | null,
+  granularity: Granularity,
+  compare: boolean,
+) {
+  return useQuery({
+    queryKey: queryKeys.reportTrend(period, deviceId, granularity, compare),
+    queryFn: () => unwrap(commands.reportTrend(period, deviceId, granularity, compare)),
+  });
+}
+
+export function useReportSellThrough() {
+  return useQuery({
+    queryKey: queryKeys.reportSellThrough,
+    queryFn: () => unwrap(commands.reportBatchSellThrough()),
+  });
+}
+
+export function useReportSalesBy(period: Period, deviceId: string | null, dimension: SalesDimension) {
+  return useQuery({
+    queryKey: queryKeys.reportSalesBy(period, deviceId, dimension),
+    queryFn: () => unwrap(commands.reportSalesBy(period, deviceId, dimension)),
+  });
+}
+
+export function useReportVoids(period: Period, deviceId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.reportVoids(period, deviceId),
+    queryFn: () => unwrap(commands.reportVoids(period, deviceId)),
+  });
+}
+
+export function useReportDevices() {
+  return useQuery({ queryKey: queryKeys.reportDevices, queryFn: () => unwrap(commands.reportDevices()) });
+}
+
+/** Settings → Maintenance: recompute every derived table (then every screen refreshes). */
+export function useRebuildDerived() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => unwrap(commands.rebuildDerived()),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+// ───────── order history and CSV export (doc §1.4, §5) ─────────
+
+const ORDER_PAGE = 200;
+
+export function useOrderHistory(filter: OrderFilter) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.orderHistory(filter),
+    initialPageParam: null as OrderCursor | null,
+    queryFn: ({ pageParam }) => unwrap(commands.orderHistory(filter, pageParam, ORDER_PAGE)),
+    getNextPageParam: (last) => last.next_cursor ?? null,
+  });
+}
+
+export function useOrderReceipt(orderId: string) {
+  return useQuery({
+    queryKey: queryKeys.orderReceipt(orderId),
+    queryFn: () => unwrap(commands.orderReceipt(orderId)),
+  });
+}
+
+/** The native folder picker for exports; `null` when cancelled. */
+export function pickExportFolder() {
+  return unwrap(commands.exportPickFolder());
+}
+
+export function useExportCsv() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ kind, period, dir }: { kind: ExportKind; period: Period; dir: string }) =>
+      unwrap(commands.exportCsv(kind, period, dir)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.audit }),
+  });
 }

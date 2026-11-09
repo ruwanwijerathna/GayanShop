@@ -1,0 +1,77 @@
+{
+  "title": "Stock",
+  "tabs": {
+    "valuation": "Valuation",
+    "oversold": "Oversold",
+    "count": "Stock count",
+    "damage": "Damage and adjust",
+    "history": "History"
+  },
+  "note": "Note (optional)",
+  "noteRequired": "Reason (required)",
+  "valuation": {
+    "asOf": "As of (business date)",
+    "now": "Now",
+    "units": "Units",
+    "atCost": "At cost",
+    "atRetail": "At today's prices",
+    "byBatch": "By batch",
+    "byCategory": "By category",
+    "uncategorised": "No category",
+    "negative": "{{count}} oversold layer(s) are not counted: see Oversold."
+  },
+  "oversold": {
+    "none": "No oversold layers.",
+    "hint": "These layers sold more than they held (counters selling the same stock offline, or a sale before the batch arrived). Count the product to correct it.",
+    "product": "Product",
+    "batch": "Batch",
+    "onHand": "On hand"
+  },
+  "count": {
+    "add": "Add a product to the count",
+    "counted": "Counted {{name}}",
+    "submit": "Save count ({{count}})",
+    "done": "Count saved: {{corrected}} corrected, {{unchanged}} matched."
+  },
+  "damage": {
+    "kind": "What happened",
+    "modes": {
+      "damage": "Damaged or lost",
+      "adjust": "Adjust (+ found / - removed)"
+    },
+    "product": "Product",
+    "change": "Change product",
+    "qty": "Units",
+    "delta": "Units (+ or -)",
+    "reason": "Why",
+    "reasons": {
+      "broken": "Broken",
+      "expired": "Expired",
+      "stolen": "Stolen",
+      "faulty": "Faulty",
+      "other": "Other"
+    },
+    "submit": "Write off",
+    "submitAdjust": "Adjust stock",
+    "done": "Stock updated: {{name}}."
+  },
+  "history": {
+    "product": "Product",
+    "when": "When",
+    "reason": "What",
+    "batch": "Batch",
+    "qty": "Units",
+    "cost": "Cost each",
+    "by": "By",
+    "reasons": {
+      "batch_intake": "Received",
+      "batch_reopen": "Batch reopened",
+      "sale": "Sold",
+      "void": "Void",
+      "damage": "Damaged",
+      "count_correction": "Count",
+      "adjustment": "Adjusted"
+    },
+    "empty": "No movements yet."
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "empty": "මෙම කාල සීමාවට දත්ත නැත.",
+  "period": "කාලය",
+  "revenue": "ආදායම",
+  "expenses": "වියදම්",
+  "revenueVsExpenses": "ආදායම සහ වියදම්",
+  "salesTrend": "විකුණුම් ප්‍රවණතාව",
+  "thisPeriod": "මෙම කාලය",
+  "previousPeriod": "පෙර කාලය",
+  "paymentMethods": "ගෙවීම් ක්‍රම",
+  "method": "ක්‍රමය",
+  "amount": "මුදල",
+  "share": "කොටස",
+  "count": "ගෙවීම්",
+  "methods": {
+    "cash": "මුදල්",
+    "card": "කාඩ්පත",
+    "bank_transfer": "බැංකු මාරුව",
+    "qr": "QR",
+    "other": "වෙනත්"
+  },
+  "topCustomers": "වැඩිපුර වියදම් කළ පාරිභෝගිකයන්",
+  "customer": "පාරිභෝගිකයා",
+  "visits": "පැමිණීම්",
+  "spend": "වියදම",
+  "batchSellThrough": "කාණ්ඩ විකිණීමේ ප්‍රගතිය",
+  "batch": "කාණ්ඩය",
+  "received": "ලැබුණු",
+  "sold": "විකුණූ",
+  "writtenOff": "ලියා හැරි",
+  "left": "ඉතිරි",
+  "sellThrough": "විකිණුම් අනුපාතය"
+}

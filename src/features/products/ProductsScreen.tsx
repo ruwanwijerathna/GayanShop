@@ -1,10 +1,12 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Tag } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSession } from "@/app/session";
 import { Can } from "@/components/auth/Can";
 import { DataTable } from "@/components/data-table/DataTable";
+import { ExportButton } from "@/components/export/ExportButton";
+import { PrintLabelsDialog } from "@/components/labels/PrintLabelsDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,10 +25,11 @@ import { matchesText } from "./productForm";
  * table); a 13-digit barcode in the mono font needs ~135 px.
  */
 export const PRODUCT_COLUMN_WIDTHS = {
-  name: 220,
+  select: 48,
+  name: 204,
   sku: 84,
   barcode: 150,
-  category: 116,
+  category: 100,
   price: 104,
   cost: 104,
   status: 100,
@@ -46,6 +49,8 @@ export function ProductsScreen() {
   const [categoryId, setCategoryId] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState<Editing>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [printing, setPrinting] = useState(false);
 
   const cats = useMemo(() => categories.data ?? [], [categories.data]);
   const catName = useMemo(() => {
@@ -68,6 +73,33 @@ export function ProductsScreen() {
 
   const columns = useMemo<ColumnDef<Product>[]>(() => {
     const cols: ColumnDef<Product>[] = [
+      {
+        id: "select",
+        header: () => <span className="sr-only">{t("selectForLabels")}</span>,
+        size: PRODUCT_COLUMN_WIDTHS.select,
+        enableSorting: false,
+        accessorFn: (p) => p.id,
+        cell: ({ row }) => (
+          <input
+            type="checkbox"
+            className="size-6 accent-primary"
+            aria-label={t("selectProduct", { name: row.original.name })}
+            checked={selected.has(row.original.id)}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            onChange={(e) => {
+              const id = row.original.id;
+              const on = e.target.checked;
+              setSelected((prev) => {
+                const next = new Set(prev);
+                if (on) next.add(id);
+                else next.delete(id);
+                return next;
+              });
+            }}
+          />
+        ),
+      },
       {
         id: "name",
         header: t("columns.name"),
@@ -142,7 +174,7 @@ export function ProductsScreen() {
       ),
     });
     return cols;
-  }, [t, canViewCost, catName]);
+  }, [t, canViewCost, catName, selected]);
 
   const loadError =
     (products.error ?? categories.error) instanceof CommandError
@@ -162,6 +194,17 @@ export function ProductsScreen() {
         <span role="status" className="flex-1 text-sm text-muted-foreground">
           {t("count", { count: rows.length })}
         </span>
+        <ExportButton kind="products" period={{ kind: "all_time" }} />
+        <Button
+          type="button"
+          size="pos"
+          variant="outline"
+          disabled={selected.size === 0}
+          onClick={() => setPrinting(true)}
+        >
+          <Tag aria-hidden />
+          {t("printLabels", { count: selected.size })}
+        </Button>
         <Can perm="PRODUCT_MANAGE">
           <Button type="button" size="pos" onClick={() => setEditing({ product: null })}>
             <Plus aria-hidden />
@@ -231,6 +274,17 @@ export function ProductsScreen() {
         categories={cats}
         onClose={() => setEditing(null)}
       />
+      {printing && (
+        <PrintLabelsDialog
+          items={(all ?? [])
+            .filter((p) => selected.has(p.id))
+            .map((p) => ({ product_id: p.id, name: p.name, copies: 1 }))}
+          onClose={() => {
+            setPrinting(false);
+            setSelected(new Set());
+          }}
+        />
+      )}
     </section>
   );
 }

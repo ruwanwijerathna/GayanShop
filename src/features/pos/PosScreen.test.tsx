@@ -32,6 +32,7 @@ vi.mock("@/db/bindings", () => ({
     voidOrder: vi.fn(),
     listLoginStaff: vi.fn(),
     requestApproval: vi.fn(),
+    quickSaleHint: vi.fn(),
   },
 }));
 
@@ -137,6 +138,7 @@ beforeEach(() => {
   );
   vi.mocked(commands.heldCarts).mockImplementation(() => ok([]));
   vi.mocked(commands.checkoutOrder).mockReset();
+  vi.mocked(commands.quickSaleHint).mockImplementation(() => ok(null));
   vi.mocked(commands.listLoginStaff).mockImplementation(() =>
     ok([
       { id: "cashier", display_name: "Nimal", role_name: "Cashier" },
@@ -188,6 +190,29 @@ describe("PosScreen", () => {
     expect(screen.getByTestId("grand-total")).toHaveTextContent("Rs 1,350.00");
     fireEvent.change(bar, { target: { value: "Bucket 10L" } });
     expect(screen.getByText(/Price missing/)).toBeInTheDocument();
+  });
+
+  it("hints that a typed quick sale is now a product; ↓ Enter adds the product", async () => {
+    vi.mocked(commands.quickSaleHint).mockImplementation(() => ok({ product: BUCKET }));
+    await renderTill();
+    key("F2");
+    const bar = screen.getByLabelText(/Quick sale/);
+    fireEvent.change(bar, { target: { value: "Blue Bucket 450" } });
+    expect(await screen.findByText(/Now a product: Blue Bucket/)).toBeInTheDocument();
+    fireEvent.keyDown(bar, { key: "ArrowDown", code: "ArrowDown" });
+    fireEvent.keyDown(bar, { key: "Enter", code: "Enter" });
+    expect(cartStore.getState().lines[0]).toMatchObject({ productId: "p1", name: "Blue Bucket" });
+  });
+
+  it("plain Enter still commits the typed quick sale when a hint shows", async () => {
+    vi.mocked(commands.quickSaleHint).mockImplementation(() => ok({ product: BUCKET }));
+    await renderTill();
+    key("F2");
+    const bar = screen.getByLabelText(/Quick sale/);
+    fireEvent.change(bar, { target: { value: "Blue Bucket 450" } });
+    await screen.findByText(/Now a product/);
+    fireEvent.keyDown(bar, { key: "Enter", code: "Enter" });
+    expect(cartStore.getState().lines[0]).toMatchObject({ productId: null, name: "Blue Bucket" });
   });
 
   it("F4 shows a known customer by phone", async () => {

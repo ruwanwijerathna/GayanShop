@@ -142,6 +142,17 @@ Every back-office list is one shared `components/data-table/` built on `@tanstac
 
 - Fixed row heights: 48 px on touch layouts and 36 px in compact back-office density. That keeps virtualisation exact.
 - Column visibility and widths are saved per user in `device_settings`.
+- **Block 2.9 implementation notes:**
+  - **Lists on the shared virtualised DataTable:** Products, Orders, Batches, Batch items, Customers, Audit log, Quick-sale review, Stock movements and Expenses.
+  - **Keyset paging (`useInfiniteQuery` + `onEndReached`):**
+    - Orders: `order_history` over `ix_orders_keyset`, filtered by period, counter, status and receipt-number prefix, with a receipt drill-down.
+    - The audit log, stock movements and customer purchase history.
+  - **CSV export** (`export.rs`, `DATA_EXPORT`, audited):
+    - **What:** orders, order lines, products, customers, expenses, stock movements and sales by product, for the chosen §5 period where one applies.
+    - **Permissions:** each kind also needs the permission of the screen that shows it (`REPORT_SALES`, `CUSTOMER_VIEW`, `EXPENSE_MANAGE` or `REPORT_FINANCIAL`), and cost columns appear only with `VIEW_COST`.
+    - **Format:** UTF-8 with a BOM (so Excel shows Sinhala) and CRLF line ends. Quoting follows RFC 4180, and money is written as plain decimals from integer cents.
+    - **Formula guard:** text cells starting with `= + - @`, tab or CR get a leading `'`.
+    - **Writing:** the file is written to `.partial`, flushed and renamed, then one `DATA_EXPORT` audit row records the kind, the row count, the period and the file name, never the data.
 
 **Analytics charts: shadcn/ui Chart (Recharts)**
 
@@ -158,6 +169,15 @@ Charts use the official shadcn `chart` component (`ChartContainer`, `ChartToolti
 - Colours come from the shadcn CSS chart tokens (`--chart-1…5`), so light and dark themes both work.
 - Money axes use `formatMoney` (Latin digits, `Rs.` prefix) in both languages.
 - Charts only receive pre-aggregated rows from Rust, never raw orders.
+- **Block 2.8 implementation notes:**
+  - **Library.** `components/ui/chart.tsx` is the shadcn chart component for Recharts **3.8.0**, pinned exactly. Its registry `cn` import is repointed to `@/lib/utils`.
+  - **Charts.** `components/charts/` holds `SalesTrendArea`, `RevenueExpenseBar`, `PaymentDonut`, `TopCustomersBar` and `BatchSellThroughBar`.
+  - **Accessibility.** Each chart renders inside a `ChartFigure`: a titled `<figure>` plus a visually hidden table of the same numbers, in the UI language. Screen readers and the tests read that table.
+  - **Theming.** Colours are only the theme's `--chart-1…5` tokens, so light and dark need no extra work.
+  - **Trend data.** `report_trend` returns a densified series for bounded periods (every day, week or month, empty ones as zeros) and, on request, the previous period. The previous-period overlay therefore lines up point for point.
+  - **Bucketing.** The Reports screen picks day buckets for up to about two months, then weeks up to a year, then months.
+  - **Sell-through.** `report_batch_sell_through` (units only, `REPORT_SALES`) feeds the sell-through bars.
+  - **Dashboard.** Home shows a dashboard to `REPORT_SALES` holders: today against yesterday, the last 30 days against the 30 before, today's payment methods, and this year by month. Holders of `CUSTOMER_VIEW` also see this month's top customers.
 
 **Responsive, touch-first layout**
 
@@ -533,6 +553,19 @@ batches (header)  1 ──── n  batch_items (cost layers)  1 ──── n 
 - If a manual-cost batch is received with no invoice total and no extra costs (opening stock, quick purchases), `total_cost` is set to Σ(unit_cost × qty) and the variance is 0. With an invoice total, `allocation_variance = landed − Σ(unit_cost × qty)`, which can be negative in manual mode.
 - A tracked product sold before it has any layer gets one in `ADJUSTMENTS` at its `default_cost` (`added_after_receipt = 1`, `qty_received = 0`), created inside the checkout transaction. The sale is never blocked, and the layer shows as oversold until stock is received.
 
+**Block 2.1 implementation notes (`db/repo/batches.rs`, the intake wizard).**
+- The method is chosen per batch (default `even_per_unit` for a new purchase, `manual` for opening stock and quick purchases) and can change freely while it's a draft. `batch_allocation_preview` returns exactly what Receive would fix (each layer's unit and line cost, the landed cost, the variance) or why it would be refused, so the wizard shows the variance live.
+- `even_per_unit` and `by_retail_value` need an invoice total (`BATCH_TOTAL_REQUIRED`); `by_retail_value` with all retail prices zero has nothing to weigh (`BATCH_NO_WEIGHT`).
+- Reopen writes one `batch_reopen` movement per layer, mirroring its intake. It returns the locked costs as the draft's editable manual costs, and is refused once anything but intake has moved (`BATCH_HAS_MOVEMENTS`). The system batches can't be reopened or closed (`BATCH_SYSTEM`).
+- A late item is received immediately at unit cost 0 (`BATCH_LATE_ITEM`). If the batch is later reopened and received again, it becomes an ordinary layer that shares the cost.
+- Close is refused while any layer has stock (`BATCH_HAS_STOCK`). The batch P&L (`BatchDetail.pnl`) is read from `batch_item_stock` and audited with `BATCH_CLOSE`.
+
+**Block 2.3 implementation notes (`db/repo/inventory.rs`).**
+- Damage (`STOCK_DAMAGE`, reason broken / expired / stolen / faulty / other with a note) and negative adjustments take units FIFO at each layer's cost, and can't remove more than is on hand (`STOCK_INSUFFICIENT`). Positive adjustments and found stock go into the newest layer at its cost, or into `ADJUSTMENTS` at `default_cost`. An adjustment always needs a reason (`STOCK_NOTE_REQUIRED`).
+- A stock count (`STOCK_ADJUST`) sets each counted product to the shelf figure with `count_correction` movements in one transaction, audited once as `STOCK_COUNT` with system and counted figures. Matching lines write nothing; a single bad line refuses the whole count. Counting an oversold product back to its real figure is how a negative layer is fixed.
+- "Write off what's left" (`write_off_batch`, `BATCH_MANAGE` + `STOCK_ADJUST`) turns a received batch's remaining stock into `adjustment` movements on its own layers, so the batch can then be closed. The loss shows in its P&L.
+- Valuation "now" reads `batch_item_stock`; "as of" a business date sums the ledger up to that date. Both use today's prices for retail and list oversold layers separately. History, valuation and oversold layers need `REPORT_FINANCIAL`, because they show cost.
+
 **Layer selection at checkout (FIFO, offline-safe).** For each tracked line of qty *n*:
 1. Take layers of that product ordered by `batches.received_at, batch_items.id`.
 2. Consume from the **oldest layer with positive local `on_hand`**, splitting across layers if needed.
@@ -590,6 +623,15 @@ It's sorted by frequency. Two one-click actions:
 - **Promote to product** runs one transaction. It creates a `products` row (name = latest spelling, editable; price = last price, cost entered by the manager). If a batch is chosen, it adds a layer to it, with a shelf count entered so stock starts correct. It writes a `quick_sale_links` row (`custom_key → product_id, batch_id`) and audits `QUICK_SALE_PROMOTE`.
 - **Ignore** writes a link with `action = 'ignored'`, which hides one-off noise.
 
+**Block 2.4 implementation notes (`db/repo/quick_sales.rs`).**
+- The review reads `quick_sale_stats` joined to the key's decision: New, Promoted or Ignored, filterable. Opening a key computes the median price, the counters that sold it (by receipt prefix) and its recent spellings from completed orders only.
+- Promote is one transaction:
+  - It creates the product: SKU always; an in-store barcode optionally; tracked; the manager's cost. Only one promotion per key (`QUICK_SALE_ALREADY_PROMOTED`).
+  - With a shelf count and a chosen received batch, the stock arrives as a layer added after receipt (`added_after_receipt = 1`) at the manager's cost.
+  - Without a batch, it arrives as a `count_correction` into `ADJUSTMENTS` at that cost.
+  - An ignored key can still be promoted later.
+- The till's Quick Sale bar asks `quick_sale_hint` for the typed name. A promoted key shows "Now a product: … (↓ then Enter)"; plain Enter still commits the typed quick sale.
+
 **Promotion is forward-only.** Past quick-sale lines keep their original attribution, and no historical batch P&L changes. The review screen can still show the key's pre-promotion history through the link. `quick_sale_links.id = UUIDv5(store_id, custom_key)`, so two managers promoting the same key on different terminals produce the *same* row, which merges by LWW.
 
 ### 3.3 Sales are final: same-session void is the only correction
@@ -631,6 +673,8 @@ Each device has at most **one open `cash_session`**. Sales, cash movements and d
   - Cash reconciliation
 
 A **daily store report** aggregates all devices for a business date. The Z-report is per device per session.
+
+**Expenses and the drawer (Block 2.6).** Expenses need `EXPENSE_MANAGE`. An expense marked **paid from the drawer** must be cash, dated today, and needs this counter's open session. In the same transaction it writes a `pay_out` cash movement (reason `Expense: <category> – <payee>`, audited `CASH_PAY_OUT`, with a drawer kick) and stores `cash_session_id`, so expected cash and the Z-report's pay-outs include it. Moving drawer cash also needs `CASH_PAY_IN_OUT`, which a supervisor PIN can lend (target `cash_drawer`). Because cash movements are append-only, a drawer-paid expense keeps its amount, date and method (`EXPENSE_DRAWER_LOCKED`); only the category, payee and note change. Deleting one is allowed only while its session is still open on this counter, and appends a matching `pay_in` ("Expense deleted: …"), so the cash goes back. After the session closes it is final. Other expenses can be back-dated (never into the future), edited and soft-deleted freely, and never move cash. Categories can be added, renamed and retired (`SETTINGS_CHANGE`), never removed; names are unique case-insensitively, and a retired category takes no new expenses.
 
 ### 3.5 Role-based access control
 
@@ -814,6 +858,13 @@ line_net              = inclusive ? line_total − tax_amount : line_total   (ex
 - **Erase on request** (`CUSTOMER_ERASE`, Owner and Manager). This clears the phone, name and notes on the `customers` row and sets `erased_at`. The row and its id remain, so past orders keep an anonymous `customer_id` and the store's totals stay correct. Orders are not modified. The same transaction drops that row's queued, unsent `sync_outbox` snapshots (an upsert carries the whole row, so the new erased snapshot supersedes them), so no unsent copy of the phone stays on disk.
   - The UUIDv5 id is derived from the phone. If the same person returns later and gives their number, the lookup finds the erased row by id. In that case, Rust **re-activates the same id** with a fresh profile. Visit history before the erasure stays anonymous, because it's still linked by id. Tell the customer this is how erasure works.
 - Exporting customer data needs `DATA_EXPORT` and is audited.
+
+**Block 2.5 implementation notes (back office):**
+- **Permissions.** The list, profile, history, receipt drill-down, analytics, name/note edits and erasure all need `CUSTOMER_VIEW` (not approvable). There are no separate `CUSTOMER_UPDATE` / `CUSTOMER_ERASE` permission bits, and the bit table is frozen; `CUSTOMER_VIEW` is held by exactly the Manager and Owner roles that erasure names. Edits are audited as `CUSTOMER_UPDATE` with the changed *field names* only, never the values.
+- **List.** Erased profiles are left out. Searching digits matches the phone: a number typed from its start (`07…`, `+94…`, `94…`) matches the start of the 9 national digits, while bare digits (`4567`) match anywhere. Anything else matches the name, case-insensitively. Sorting is by spend, visits, last visit or name, and at most 500 rows come back (the UI says to narrow the search when there are more).
+- **Profile.** Top products and categories (5 each, by net revenue) come from completed orders. All quick sales count as one "Quick sales" row, and products without a category as "Uncategorised".
+- **History.** Completed *and* voided orders appear (voids flagged, never counted in spend), newest first, keyset-paged on `(business_date, id)`. A row drills down to the receipt, with the phone masked as on paper.
+- **Analytics.** Periods are the §5.2 ones (`domain::period`, shared with the reports engine). Top customers for a bounded period sum that period's completed orders; all time reads `customer_stats`. A customer counts as **new** in the week or month holding their first completed visit (`customer_stats.first_visit_date`) and as **returning** in every later one. The attached share is `Σ customer_orders / Σ sales_count` from `daily_sales_summary`.
 
 ### 3.9 Manual database backup ("Backup Database Now")
 
@@ -2215,6 +2266,9 @@ CREATE INDEX ix_sync_logs_started ON sync_logs(started_at);
 - Device settings: `ui.default_language = en`, and the two built-in label templates (`two_up_2x1`, `three_up_1x1`).
 - Every seeded row goes to the outbox. One `STORE_INITIALIZED` audit row starts this device's hash chain. `STORE_INITIALIZED` is the first entry in `AuditAction`, and it's appended to the §3.6 System actions.
 
+**Migrations after `0001_init.sql`** (append-only; doc and `rebuild_derived` updated with each):
+- `0002_report_indexes.sql` (Block 2.10): `CREATE INDEX ix_mov_writeoffs ON stock_movements(business_date) WHERE reason IN ('damage','count_correction','adjustment')`. Stock write-offs for the P&L read only write-off movements (§5.3, §13.4). No derived logic changed.
+
 ### 4.4 Cloud (Postgres) deltas
 
 - Types become `uuid`, `timestamptz`, `bigint` money and masks, `jsonb`, `boolean` and `date` (business_date).
@@ -2266,7 +2320,7 @@ Every period supports a `device_id` filter ("Counter 2 only") and comparison wit
 ### 5.3 How reports stay fast
 
 - Sales and payment metrics come from `daily_sales_summary` and `daily_payment_summary`. A yearly report is ~365 × 3 rows, even at millions of order lines.
-- Write-offs come from `stock_movements` via `ix_mov_date_reason`. Expenses use `ix_expenses_bdate`. Batch metrics come from `batch_item_stock`.
+- Write-offs come from `stock_movements` via the partial index `ix_mov_writeoffs` (migration `0002_report_indexes.sql`, Block 2.10; `ix_mov_date_reason` would walk every sale slice of the period). Expenses use `ix_expenses_bdate`. Batch metrics come from `batch_item_stock`. Date filters are plain `BETWEEN` bounds, with sentinels for open ends, so they always use these indexes.
 - Point-in-time stock valuation ("as of 31 Dec") sums the ledger, `WHERE business_date <= :d`, grouped by layer. It's slower but exact, and runs on demand.
 - **`rebuild_derived`** truncates and recomputes every derived table from the base tables. It runs after a restore, after a migration that touches derived logic, and from Settings → Maintenance.
   - A CI test asserts that rollup totals equal a raw `SUM` over orders and payments for randomised data.
@@ -2316,6 +2370,21 @@ WHERE b.id = :batch_id
 GROUP BY b.id;
 -- Rust derives realised_profit, payback, projected_profit, sell_through from these columns.
 ```
+
+**Block 2.7 implementation notes (reports engine, `db::repo::reports`):**
+- **Periods** are `domain::period` (§5.2), each resolved to inclusive business dates, with the previous equivalent period on request (all time has none).
+- **Counter filter.** It narrows the sales and payment metrics. Allocation variance, write-offs and expenses belong to the store, so they stay store-wide on a counter's report.
+- **Permissions.** Every report needs `REPORT_SALES`. COGS, profit, margin, write-offs, expenses and per-row cost come back empty (`null`) unless the viewer also has `REPORT_FINANCIAL` **and** `VIEW_COST`.
+- **Trend** (for the §1.4 charts) buckets the rollups and expenses by day, week (store week start) or month. Its buckets sum to the period. The allocation variance stays in the summary, because it is a batch-level figure.
+- **Sales by product / category / batch.** Each set of rows sums to the period's net sales and sale cost. Quick sales are one "Quick sales" row by product, and products without a category are one "Uncategorised" row. By batch, revenue and cost come from the sale slices (plus quick sales tagged to a batch). Everything else (untracked products, untagged quick sales) is one "No batch layer" row.
+- **Voids** are grouped by reason and by approver: the supervisor who approved, or the voider when their own role holds `VOID_ORDER`.
+- **`rebuild_derived`** (Settings → Maintenance, `SETTINGS_MANAGE`, audited `SETTINGS_CHANGE`) recomputes the tables below in one transaction:
+  - `daily_sales_summary` and `daily_payment_summary`
+  - `customer_stats` and `quick_sale_stats`
+  - `stock_levels` and `batch_item_stock`
+  - both product FTS indexes
+
+  `tests/reports.rs` checks on randomised data that the triggers and a rebuild agree row for row, and that monthly, weekly, yearly, custom and all-time reports equal the sum of their days. The only difference a rebuild makes is to drop all-zero payment-summary rows, left behind when a method's only sale was voided.
 
 **Report permissions:** `REPORT_SALES` shows revenue, payments and Z-reports. `REPORT_FINANCIAL` also shows COGS, profit, valuation and batch P&L. Cost columns anywhere require `VIEW_COST`. Exporting to CSV or PDF needs `DATA_EXPORT` and is audited.
 
@@ -2513,6 +2582,15 @@ Sinhala/Tamil text: most printers lack those code pages. Render such lines as a 
   - Receive a batch → "Print labels". The copies default to `qty_received`, and the template choice is remembered per category.
   - Product list → select rows → "Print labels".
   - Each job is audited once as `LABEL_PRINT` (template, product count, label count) and requires `LABEL_PRINT`.
+
+**Block 2.2 implementation notes (`hardware/label/`).**
+- `barcode.rs` encodes Code128 (subset C for all-digit codes, with a final CODE B for an odd last digit; else B) and EAN-13, so the fit rules count real modules and the SVG preview draws the real bars. `layout.rs` is the only module allowed float arithmetic (mm geometry and `dots = round(mm × dpi / 25.4)`); it never sees money.
+- Code choice per label: the first candidate (barcode, then SKU) that fits the box with ≥ 10 quiet modules each side at a 2–4-dot module (the largest that fits). If none fits, the first is printed at 2 dots with a `BARCODE_TOO_LONG` warning. Other warnings: `NO_CODE`, `TEXT_NOT_PRINTABLE` (anything outside printable ASCII prints as `?`; `"` becomes `'` and `^` / `~` become `?` because they are TSPL / ZPL syntax) and `TEXT_TRUNCATED`.
+- Attributes are joined with ` - ` rather than ` · `, because the printers' built-in fonts have no middle dot.
+- TSPL has no bold attribute, so a bold line is drawn twice, one dot apart. ZPL sets the darkness with `~SD` (0–30, twice the stored TSPL `DENSITY` 0–15).
+- The label printer has its own `print_jobs` queue (`printer_key = 'label'`) and its own print worker, so a jammed label printer never holds up receipts. The worker never sends it ESC/POS `DLE EOT`. Its profile lives in `device_settings` `printer.label`; templates live in `label.templates` and are calibrated per counter (gaps and margin; "Reset to default" restores the built-in).
+- `LABEL_PRINT` is approvable, so the print dialog asks for a supervisor's approval bound to the target `labels`. The preview itself needs only a login. The last template used is remembered per counter rather than per category (batch lines carry no category).
+- Golden TSPL / ZPL byte snapshots live in `src-tauri/tests/fixtures/labels/` (`UPDATE_FIXTURES=1 cargo test --test labels`, then review the bytes).
 
 ### 7.5 Hardware abstraction
 ```rust
@@ -2970,7 +3048,7 @@ Automatically "rebalancing" (moving −2 from L into the next layer) would **rew
 | Sinhala substring search | `products_fts_si` (trigram) | < 25 ms |
 | Phone → customer | `ux_customers_phone` | < 2 ms |
 | Checkout transaction (5 lines, FIFO, seal checks, outbox), `FULL` fsync included | PK and FK indexes; seal subqueries are per-order | < 40 ms |
-| Daily, weekly, monthly or yearly P&L | `daily_sales_summary` (≤ 365 × 3 rows per year) + `ix_expenses_bdate` + `ix_mov_date_reason` | < 20 ms |
+| Daily, weekly, monthly or yearly P&L | `daily_sales_summary` (≤ 365 × 3 rows per year) + `ix_expenses_bdate` + `ix_mov_writeoffs` | < 20 ms |
 | Order history page (500 rows, keyset) | `ix_orders_keyset (completed_at DESC, id DESC)` | < 20 ms |
 | Customer list sorted by spend | **Derived `customer_stats`** + `ix_customer_stats_spend`. A view aggregating `orders` was replaced, because it would scan orders. | < 20 ms |
 | Quick-sale review sorted by frequency | **Derived `quick_sale_stats`** + `ix_qss_frequency`. This replaced a correlated-subquery view. | < 20 ms |
@@ -2987,6 +3065,23 @@ Automatically "rebalancing" (moving −2 from L into the next layer) would **rew
 - **Block 1.1 measurement** (`cargo test --release --test perf_budgets -- --ignored search`, dev machine, 50,000 products / 20,000 customers, p95): barcode scan 0.14 ms, SKU scan 0.25 ms, type-ahead 1.7 ms, Sinhala substring 4.3 ms, phone → customer 0.10 ms. All within budget.
 
 **Proof:** Block 1.1 runs `cargo test --release --test perf_budgets -- --ignored` for the search and lookup rows. Block 2.10 runs the full table above, including the headroom run.
+
+**Block 2.10 measurement** (release build, dev machine, p95; details in `docs/qa/phase2-acceptance.md`). Gate: 50,000 products, 20,000 customers, 33,307 orders and 100,000 order items over a year at three counters. Headroom: 1,000,000 order items, within 2× of every budget.
+
+| Row | Gate | Headroom |
+|---|---|---|
+| Checkout | 21.2 ms | 22.3 ms |
+| P&L day / week / month / year | 0.46 / 0.47 / 0.51 / 1.5 ms | 0.44 / 0.45 / 0.46 / 1.2 ms |
+| Order history page | 5.6 ms | 4.6 ms |
+| Customer list by spend | 4.1 ms | 18.7 ms |
+| Quick-sale review | 2.0 ms | 1.8 ms |
+| Batch report (30 items) | 17.3 ms | 12.2 ms |
+| Audit page | 3.1 ms | 2.3 ms |
+
+- **Customer list.** The unfiltered spend and last-visit lists walk `customer_stats`' indexes.
+- **Order history.** It filters `+o.store_id`, so `ux_orders_receipt` never displaces the keyset index.
+- **Store-wide valuation.** Every layer, by batch and by category, is an on-demand report outside this table. It aggregates in SQL (191 ms at 50,000 layers) and is guarded at < 250 ms.
+- **Scrolling.** The 60 fps criterion is checked in the real WebView2 by `tests/e2e/phase2.e2e.ts`. It scrolls 50,000 products, and the year's orders while pages load, and both keep the display's frame rate.
 
 ### 13.5 Integrity invariants enforced inside SQLite
 

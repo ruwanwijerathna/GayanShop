@@ -21,8 +21,10 @@ pub enum PrintKind {
     VoidSlip,
     ZReport,
     DrawerKick,
-    /// Settings: "Print test page".
+    /// Settings: "Print test page" (receipt) or the alignment test (labels).
     Test,
+    /// A barcode label job (doc §7.4).
+    Labels,
 }
 
 impl PrintKind {
@@ -33,6 +35,7 @@ impl PrintKind {
             PrintKind::ZReport => "z_report",
             PrintKind::DrawerKick => "drawer_kick",
             PrintKind::Test => "test",
+            PrintKind::Labels => "labels",
         }
     }
 }
@@ -45,6 +48,18 @@ pub async fn enqueue(
     ref_id: Option<&str>,
     payload: &Value,
 ) -> AppResult<String> {
+    enqueue_for(conn, ctx, RECEIPT_PRINTER, kind, ref_id, payload).await
+}
+
+/// Queue a job for a given printer (`receipt`, or `label` for barcode labels).
+pub async fn enqueue_for(
+    conn: &mut SqliteConnection,
+    ctx: &WriteCtx,
+    printer_key: &str,
+    kind: PrintKind,
+    ref_id: Option<&str>,
+    payload: &Value,
+) -> AppResult<String> {
     let id = new_id();
     sqlx::query(
         "INSERT INTO print_jobs (id, kind, ref_id, printer_key, payload, created_at, updated_at)
@@ -53,7 +68,7 @@ pub async fn enqueue(
     .bind(&id)
     .bind(kind.code())
     .bind(ref_id)
-    .bind(RECEIPT_PRINTER)
+    .bind(printer_key)
     .bind(payload.to_string())
     .bind(&ctx.now)
     .execute(&mut *conn)

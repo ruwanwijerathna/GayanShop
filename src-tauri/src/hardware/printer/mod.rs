@@ -194,6 +194,35 @@ pub async fn save_profile(
     tx.commit().await
 }
 
+/// A printer's profile: the receipt printer (ESC/POS, with real-time status) or the label printer
+/// (TSPL / ZPL, no ESC/POS status: its transport is never sent `DLE EOT`).
+pub enum AnyProfile {
+    Receipt(ReceiptPrinterProfile),
+    Label(crate::hardware::label::LabelPrinterProfile),
+}
+
+impl AnyProfile {
+    pub fn transport(&self) -> &TransportConfig {
+        match self {
+            AnyProfile::Receipt(p) => &p.transport,
+            AnyProfile::Label(p) => &p.transport,
+        }
+    }
+
+    /// ESC/POS `DLE EOT` paper / cover checks apply to receipt printers only.
+    pub fn reads_status(&self) -> bool {
+        matches!(self, AnyProfile::Receipt(_))
+    }
+}
+
+pub async fn load_any(pool: &SqlitePool, printer_key: &str) -> AppResult<Option<AnyProfile>> {
+    if printer_key == crate::hardware::label::LABEL_PRINTER {
+        Ok(crate::hardware::label::load_profile(pool).await?.map(AnyProfile::Label))
+    } else {
+        Ok(load_profile(pool, printer_key).await?.map(AnyProfile::Receipt))
+    }
+}
+
 /// Builds the transport for a profile; production uses [`connect`], tests inject fakes.
 pub type Connector = Arc<dyn Fn(&TransportConfig) -> Arc<dyn PrinterTransport> + Send + Sync>;
 

@@ -68,5 +68,8 @@
     "products_one": "භාණ්ඩ {{count}}",
     "products_other": "භාණ්ඩ {{count}}",
     "empty": "තවම වර්ග නැත"
-  }
+  },
+  "selectForLabels": "ලේබල් සඳහා තෝරන්න",
+  "selectProduct": "{{name}} තෝරන්න",
+  "printLabels": "ලේබල් මුද්‍රණය ({{count}})"
 }

@@ -8,22 +8,38 @@ import enAuth from "./locales/en/auth.json";
 import enBackup from "./locales/en/backup.json";
 import enBatches from "./locales/en/batches.json";
 import enCash from "./locales/en/cash.json";
+import enCharts from "./locales/en/charts.json";
 import enCommon from "./locales/en/common.json";
+import enCustomers from "./locales/en/customers.json";
 import enErrors from "./locales/en/errors.json";
+import enExpenses from "./locales/en/expenses.json";
 import enPos from "./locales/en/pos.json";
 import enPrinting from "./locales/en/printing.json";
+import enInventory from "./locales/en/inventory.json";
+import enLabels from "./locales/en/labels.json";
+import enOrders from "./locales/en/orders.json";
 import enProducts from "./locales/en/products.json";
+import enQuickSales from "./locales/en/quickSales.json";
+import enReports from "./locales/en/reports.json";
 import enStaff from "./locales/en/staff.json";
 import siApp from "./locales/si/app.json";
 import siAuth from "./locales/si/auth.json";
 import siBackup from "./locales/si/backup.json";
 import siBatches from "./locales/si/batches.json";
 import siCash from "./locales/si/cash.json";
+import siCharts from "./locales/si/charts.json";
 import siCommon from "./locales/si/common.json";
+import siCustomers from "./locales/si/customers.json";
 import siErrors from "./locales/si/errors.json";
+import siExpenses from "./locales/si/expenses.json";
 import siPos from "./locales/si/pos.json";
 import siPrinting from "./locales/si/printing.json";
+import siInventory from "./locales/si/inventory.json";
+import siLabels from "./locales/si/labels.json";
+import siOrders from "./locales/si/orders.json";
 import siProducts from "./locales/si/products.json";
+import siQuickSales from "./locales/si/quickSales.json";
+import siReports from "./locales/si/reports.json";
 import siStaff from "./locales/si/staff.json";
 
 export const LANGUAGES = ["en", "si"] as const;
@@ -41,6 +57,14 @@ export const NAMESPACES = [
   "pos",
   "backup",
   "staff",
+  "labels",
+  "inventory",
+  "quickSales",
+  "customers",
+  "expenses",
+  "reports",
+  "charts",
+  "orders",
 ] as const;
 
 export const resources = {
@@ -56,6 +80,14 @@ export const resources = {
     pos: enPos,
     backup: enBackup,
     staff: enStaff,
+    labels: enLabels,
+    inventory: enInventory,
+    quickSales: enQuickSales,
+    customers: enCustomers,
+    expenses: enExpenses,
+    reports: enReports,
+    charts: enCharts,
+    orders: enOrders,
   },
   si: {
     common: siCommon,
@@ -69,6 +101,14 @@ export const resources = {
     pos: siPos,
     backup: siBackup,
     staff: siStaff,
+    labels: siLabels,
+    inventory: siInventory,
+    quickSales: siQuickSales,
+    customers: siCustomers,
+    expenses: siExpenses,
+    reports: siReports,
+    charts: siCharts,
+    orders: siOrders,
   },
 } as const;
 
@@ -105,6 +145,7 @@ export function translateError(t: TFunction, error: AppError): string {
   const params: Record<string, unknown> = {};
   if (error.kind === "INVALID_PIN") params.attempts_left = error.attempts_left;
   if (error.kind === "ACCOUNT_LOCKED") params.until = new Date(error.until).toLocaleTimeString();
+  if (error.kind === "VALIDATION") params.detail = error.detail;
   const generic = t("INTERNAL", { ns: "errors" });
   const kindFallback = key.includes(".") ? t(`${kind}._`, { ns: "errors", defaultValue: generic }) : generic;
   return t(key, { ns: "errors", ...params, defaultValue: kindFallback });

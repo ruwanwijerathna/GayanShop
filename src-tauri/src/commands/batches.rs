@@ -5,7 +5,9 @@ use tauri::{AppHandle, State};
 
 use super::{emit_changed, store_id, write_ctx};
 use crate::auth::guard::{Actor, require};
-use crate::db::repo::batches::{self, AdHocPurchase, Batch, BatchDetail, BatchInput, BatchItemInput};
+use crate::db::repo::batches::{
+    self, AdHocPurchase, AllocationPreview, Batch, BatchDetail, BatchInput, BatchItemInput, LateItemInput,
+};
 use crate::db::repo::stock::{self, LayerStock};
 use crate::domain::permissions::Perm;
 use crate::error::AppResult;
@@ -88,6 +90,49 @@ pub async fn remove_batch_item(
 pub async fn receive_batch(app: AppHandle, state: State<'_, AppState>, id: String) -> AppResult<BatchDetail> {
     let actor = batch_manager(&state)?;
     let detail = batches::receive(&state.db, &write_ctx(&state)?, &actor, &id).await?;
+    emit_changed(&app, &STOCK_TABLES);
+    Ok(detail)
+}
+
+/// What "Receive" would fix right now: each layer's cost and the variance (the wizard shows it live).
+#[tauri::command]
+#[specta::specta]
+pub async fn batch_allocation_preview(state: State<'_, AppState>, id: String) -> AppResult<AllocationPreview> {
+    batch_manager(&state)?;
+    batches::preview(&state.db.pool, &store_id(&state)?, &id).await
+}
+
+/// Received → draft, while nothing but intake has moved (audited `BATCH_REOPEN`).
+#[tauri::command]
+#[specta::specta]
+pub async fn reopen_batch(app: AppHandle, state: State<'_, AppState>, id: String) -> AppResult<BatchDetail> {
+    let actor = batch_manager(&state)?;
+    let detail = batches::reopen(&state.db, &write_ctx(&state)?, &actor, &id).await?;
+    emit_changed(&app, &STOCK_TABLES);
+    Ok(detail)
+}
+
+/// A product forgotten at intake, at unit cost 0 (audited `BATCH_LATE_ITEM`).
+#[tauri::command]
+#[specta::specta]
+pub async fn add_late_batch_item(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    batch_id: String,
+    input: LateItemInput,
+) -> AppResult<BatchDetail> {
+    let actor = batch_manager(&state)?;
+    let detail = batches::add_late_item(&state.db, &write_ctx(&state)?, &actor, &batch_id, &input).await?;
+    emit_changed(&app, &STOCK_TABLES);
+    Ok(detail)
+}
+
+/// Close an empty batch: read-only afterwards, final P&L (audited `BATCH_CLOSE`).
+#[tauri::command]
+#[specta::specta]
+pub async fn close_batch(app: AppHandle, state: State<'_, AppState>, id: String) -> AppResult<BatchDetail> {
+    let actor = batch_manager(&state)?;
+    let detail = batches::close(&state.db, &write_ctx(&state)?, &actor, &id).await?;
     emit_changed(&app, &STOCK_TABLES);
     Ok(detail)
 }

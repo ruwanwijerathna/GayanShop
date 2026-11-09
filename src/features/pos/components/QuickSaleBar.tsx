@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import { Kbd } from "@/components/common/Kbd";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { ProductSummary_Serialize as ProductSummary } from "@/db/bindings";
+import { useQuickSaleHint } from "@/db/hooks";
 import { formatMoney, parseMajor } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { parseQuickSale } from "../lib/parseQuickSale";
@@ -13,6 +15,8 @@ export interface QuickSaleBarProps {
   value: string;
   onChange: (value: string) => void;
   onAdd: (line: QuickSaleLine) => void;
+  /** ↓ then Enter on the "now a product" hint adds the real product instead. */
+  onAddProduct?: (product: ProductSummary) => void;
   /** Esc, or after adding: focus goes back to the scan field. */
   onDone: () => void;
   inputRef?: Ref<HTMLInputElement>;
@@ -20,13 +24,17 @@ export interface QuickSaleBarProps {
 
 /**
  * F2 → type → Enter (doc §3.2). Plain Enter always commits what was typed; Tab opens an optional cost.
- * The live preview says what will be added, or why Enter is disabled ("price missing").
+ * The live preview says what will be added, or why Enter is disabled ("price missing"). When the typed name
+ * has been promoted to a product, a hint says so; picking it takes ↓ then Enter, so speed is never hijacked.
  */
-export function QuickSaleBar({ value, onChange, onAdd, onDone, inputRef }: QuickSaleBarProps) {
+export function QuickSaleBar({ value, onChange, onAdd, onAddProduct, onDone, inputRef }: QuickSaleBarProps) {
   const { t } = useTranslation("pos");
   const [withCost, setWithCost] = useState(false);
   const [cost, setCost] = useState("");
+  const [pickHint, setPickHint] = useState(false);
   const parsed = parseQuickSale(value);
+  const hint = useQuickSaleHint(onAddProduct ? (parsed.ok ? parsed.name : value.trim()) || null : null);
+  const promoted = hint.data?.product ?? null;
   const costCents = cost.trim() === "" ? null : parseMajor(cost);
   const costValid = cost.trim() === "" || costCents !== null;
 
@@ -40,6 +48,20 @@ export function QuickSaleBar({ value, onChange, onAdd, onDone, inputRef }: Quick
   };
 
   const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown" && promoted) {
+      e.preventDefault();
+      setPickHint(true);
+      return;
+    }
+    if (e.key === "Enter" && pickHint && promoted && onAddProduct) {
+      e.preventDefault();
+      onAddProduct(promoted);
+      onChange("");
+      setPickHint(false);
+      onDone();
+      return;
+    }
+    if (e.key !== "Enter") setPickHint(false);
     if (e.key === "Enter") {
       e.preventDefault();
       add();
@@ -100,6 +122,17 @@ export function QuickSaleBar({ value, onChange, onAdd, onDone, inputRef }: Quick
       >
         {preview}
       </p>
+      {promoted && (
+        <p
+          role="status"
+          className={cn(
+            "rounded-md px-2 py-1 text-sm",
+            pickHint ? "bg-primary text-primary-foreground" : "bg-muted",
+          )}
+        >
+          {t("quick.promoted", { name: promoted.name, price: formatMoney(promoted.price) })}
+        </p>
+      )}
     </div>
   );
 }

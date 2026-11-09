@@ -1,0 +1,51 @@
+{
+  "title": "Expenses",
+  "add": "Add expense",
+  "edit": "Edit expense",
+  "notBatches": "Running costs only. Stock bought in batches goes through Batches, never here.",
+  "recorded": "Expense recorded.",
+  "saved": "Expense saved.",
+  "empty": "No expenses in this period.",
+  "allCategories": "All categories",
+  "drawer": "Cash from the drawer",
+  "lockedHint": "Paid from the drawer: the amount, date and method are fixed. Delete it while the shift is still open to put the cash back.",
+  "fields": {
+    "category": "Category",
+    "amount": "Amount (Rs)",
+    "date": "Date",
+    "method": "Paid by",
+    "payee": "Paid to (optional)",
+    "note": "Note (optional)",
+    "fromDrawer": "Paid now with cash from this counter's drawer (opens the drawer)",
+    "noSession": "Paying from the drawer needs an open shift on this counter"
+  },
+  "methods": {
+    "cash": "Cash",
+    "card": "Card",
+    "bank_transfer": "Bank transfer",
+    "qr": "QR",
+    "other": "Other"
+  },
+  "delete": {
+    "title": "Delete expense",
+    "plain": "The expense is removed from the reports.",
+    "drawer": "The cash goes back into the drawer: a pay-in of the same amount is recorded in this shift.",
+    "confirm": "Delete",
+    "done": "Expense deleted."
+  },
+  "totals": {
+    "title": "Totals",
+    "total": "Total",
+    "fromDrawer": "From the drawer"
+  },
+  "categories": {
+    "title": "Categories",
+    "name": "Category name",
+    "add": "New category",
+    "addButton": "Add",
+    "retire": "Retire",
+    "restore": "Restore",
+    "used_one": "{{count}} expense",
+    "used_other": "{{count}} expenses"
+  }
+}

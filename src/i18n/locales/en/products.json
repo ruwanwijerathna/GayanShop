@@ -68,5 +68,8 @@
     "products_one": "{{count}} product",
     "products_other": "{{count}} products",
     "empty": "No categories yet"
-  }
+  },
+  "selectForLabels": "Select for labels",
+  "selectProduct": "Select {{name}}",
+  "printLabels": "Print labels ({{count}})"
 }

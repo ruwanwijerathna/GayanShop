@@ -23,7 +23,8 @@
       "name_missing": "Type the item name before the price.",
       "qty_invalid": "Quantity must be 1 to 9,999.",
       "name_too_long": "The name can have at most 80 characters."
-    }
+    },
+    "promoted": "Now a product: {{name}} ({{price}}). Scan it, or press ↓ then Enter."
   },
   "customer": {
     "label": "Customer phone",

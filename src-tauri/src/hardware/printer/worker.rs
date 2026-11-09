@@ -21,7 +21,7 @@ use specta::Type;
 use sqlx::FromRow;
 use tokio::sync::{mpsc, oneshot};
 
-use super::{Connector, PrintFault, PrinterTransport, load_profile};
+use super::{AnyProfile, Connector, PrintFault, PrinterTransport, load_any};
 use crate::clock::{Clock, iso};
 use crate::db::Db;
 use crate::error::{AppError, AppResult};
@@ -334,16 +334,17 @@ impl Worker {
             }
             self.stuck = None;
         }
-        let Some(profile) = load_profile(&self.db.pool, &self.printer_key).await? else {
+        let Some(profile) = load_any(&self.db.pool, &self.printer_key).await? else {
             self.set_health(PrinterHealth::NotConfigured, None);
             return Ok(None);
         };
-        let transport = (self.connector)(&profile.transport);
-        let layout = profile.layout();
+        let transport = (self.connector)(profile.transport());
+        let reads_status = profile.reads_status();
 
-        // Unhealthy: one probe; stay unhealthy (and idle) until it answers.
+        // Unhealthy: one probe; stay unhealthy (and idle) until it answers. A label printer has no ESC/POS
+        // status, so the abandoned call returning is its probe.
         if self.health() == PrinterHealth::Unhealthy {
-            match self.call(transport.clone(), |t| t.status()).await {
+            match self.call(transport.clone(), move |t| if reads_status { t.status() } else { Ok(None) }).await {
                 Call::TimedOut(stuck) => {
                     self.stuck = Some(stuck);
                     return Ok(Some(self.config.probe_interval));
@@ -360,8 +361,8 @@ impl Worker {
             let (job, wait) = self.next_job().await?;
             let Some(job) = job else { return Ok(wait) };
 
-            // Paper and cover first, where the transport can tell (network, serial).
-            match self.call(transport.clone(), |t| t.status()).await {
+            // Paper and cover first, where the transport can tell (network, serial; receipt printers only).
+            match self.call(transport.clone(), move |t| if reads_status { t.status() } else { Ok(None) }).await {
                 Call::TimedOut(stuck) => {
                     self.set_job(&job.id, "failed", Some(job.attempts + 1), Some("TIMEOUT")).await?;
                     self.set_health(PrinterHealth::Unhealthy, Some("TIMEOUT"));
@@ -384,7 +385,13 @@ impl Worker {
 
             let payload: serde_json::Value = serde_json::from_str(&job.payload)?;
             let now = iso(self.clock.now());
-            let bytes = match render::job(&self.db.pool, &job.kind, &payload, layout, self.tz, &now).await {
+            let rendered = match &profile {
+                AnyProfile::Receipt(p) => {
+                    render::job(&self.db.pool, &job.kind, &payload, p.layout(), self.tz, &now).await
+                }
+                AnyProfile::Label(p) => crate::hardware::label::render_job(&self.db.pool, &job.kind, &payload, p).await,
+            };
+            let bytes = match rendered {
                 Ok(b) => b,
                 Err(e) => {
                     log::error!("print job {} could not be rendered: {e}", job.id);

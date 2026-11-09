@@ -22,6 +22,7 @@ pub mod commands;
 pub mod db;
 pub mod domain;
 pub mod error;
+pub mod export;
 pub mod hardware;
 pub mod prefs;
 pub mod setup;
@@ -49,6 +50,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::system::app_info,
         commands::system::app_status,
         commands::system::integrity_check,
+        commands::system::business_today,
         commands::setup::first_run_setup,
         commands::auth::list_login_staff,
         commands::auth::login,
@@ -81,6 +83,29 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::batches::receive_batch,
         commands::batches::ad_hoc_purchase,
         commands::batches::product_layers,
+        commands::batches::batch_allocation_preview,
+        commands::batches::reopen_batch,
+        commands::batches::add_late_batch_item,
+        commands::batches::close_batch,
+        commands::labels::label_templates,
+        commands::labels::label_printer_profile,
+        commands::labels::set_label_printer_profile,
+        commands::labels::calibrate_label_template,
+        commands::labels::label_preview,
+        commands::labels::print_labels,
+        commands::labels::label_alignment_test,
+        commands::inventory::record_damage,
+        commands::inventory::adjust_stock,
+        commands::inventory::record_stock_count,
+        commands::inventory::write_off_batch,
+        commands::inventory::stock_movements,
+        commands::inventory::stock_valuation,
+        commands::inventory::oversold_layers,
+        commands::quick_sales::quick_sale_review,
+        commands::quick_sales::quick_sale_detail,
+        commands::quick_sales::promote_quick_sale,
+        commands::quick_sales::ignore_quick_sale,
+        commands::quick_sales::quick_sale_hint,
         commands::cash::current_cash_session,
         commands::cash::open_cash_session,
         commands::cash::cash_drawer_movement,
@@ -90,6 +115,30 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::cash::cash_session_report,
         commands::checkout::checkout_order,
         commands::customers::customer_lookup,
+        commands::customers::customer_list,
+        commands::customers::customer_profile,
+        commands::customers::customer_history,
+        commands::customers::customer_order_receipt,
+        commands::customers::customer_analytics,
+        commands::customers::update_customer,
+        commands::customers::erase_customer,
+        commands::expenses::expense_categories,
+        commands::expenses::save_expense_category,
+        commands::expenses::expense_list,
+        commands::expenses::record_expense,
+        commands::expenses::update_expense,
+        commands::expenses::delete_expense,
+        commands::reports::report_summary,
+        commands::reports::report_trend,
+        commands::reports::report_sales_by,
+        commands::reports::report_voids,
+        commands::reports::report_devices,
+        commands::reports::report_batch_sell_through,
+        commands::reports::rebuild_derived,
+        commands::export::export_pick_folder,
+        commands::export::export_csv,
+        commands::orders::order_history,
+        commands::orders::order_receipt,
         commands::hardware::printer_status,
         commands::hardware::printer_profile,
         commands::hardware::set_printer_profile,
@@ -145,17 +194,21 @@ pub fn run() -> Result<(), tauri::Error> {
             let auth = Auth::new(PinHasher::production());
             let clock: Arc<dyn clock::Clock> = Arc::new(SystemClock);
             let tz = identity.as_ref().map_or(chrono_tz::Asia::Colombo, |i| i.calendar.timezone);
-            let handle = app.handle().clone();
-            let printer = tauri::async_runtime::block_on(PrintHub::start(
-                db.clone(),
-                RECEIPT_PRINTER,
-                Arc::new(|c: &TransportConfig| printer::connect(c)),
-                clock.clone(),
-                tz,
-                WorkerConfig::default(),
-                Arc::new(move || commands::emit_changed(&handle, &["print_jobs"])),
-            ))?;
-            app.manage(AppState::new(db, clock, data_dir, auth, identity, printer));
+            let hub = |key: &'static str| {
+                let handle = app.handle().clone();
+                tauri::async_runtime::block_on(PrintHub::start(
+                    db.clone(),
+                    key,
+                    Arc::new(|c: &TransportConfig| printer::connect(c)),
+                    clock.clone(),
+                    tz,
+                    WorkerConfig::default(),
+                    Arc::new(move || commands::emit_changed(&handle, &["print_jobs"])),
+                ))
+            };
+            let printer = hub(RECEIPT_PRINTER)?;
+            let label_printer = hub(hardware::label::LABEL_PRINTER)?;
+            app.manage(AppState::new(db, clock, data_dir, auth, identity, printer, label_printer));
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -211,6 +264,29 @@ mod tests {
             "receiveBatch",
             "adHocPurchase",
             "productLayers",
+            "batchAllocationPreview",
+            "reopenBatch",
+            "addLateBatchItem",
+            "closeBatch",
+            "labelTemplates",
+            "labelPrinterProfile",
+            "setLabelPrinterProfile",
+            "calibrateLabelTemplate",
+            "labelPreview",
+            "printLabels",
+            "labelAlignmentTest",
+            "recordDamage",
+            "adjustStock",
+            "recordStockCount",
+            "writeOffBatch",
+            "stockMovements",
+            "stockValuation",
+            "oversoldLayers",
+            "quickSaleReview",
+            "quickSaleDetail",
+            "promoteQuickSale",
+            "ignoreQuickSale",
+            "quickSaleHint",
             "currentCashSession",
             "openCashSession",
             "cashDrawerMovement",

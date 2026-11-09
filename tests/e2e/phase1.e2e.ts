@@ -5,39 +5,11 @@
 // or voided). Rules that have no UI path (negative payments, the SQL CHECKs) are proven by the Rust suites.
 import { $, browser, expect } from "@wdio/globals";
 import { Key } from "webdriverio";
+import { click, field, login, seeText, type } from "./helpers";
 
 const OWNER_PIN = "246810";
 const CASHIER_PIN = "1357";
 const SUP_PIN = "8642";
-
-/** The input a visible <label> points at. */
-async function field(label: string) {
-  const el = await $(`//label[normalize-space()="${label}"]`);
-  await el.waitForExist();
-  const id = await el.getAttribute("for");
-  return $(`[id="${id}"]`);
-}
-
-async function button(text: string) {
-  // Buttons and nav links (icon-only below xl, so matched by aria-label too).
-  const el = await $(
-    `//*[self::button or self::a][normalize-space()="${text}" or @aria-label="${text}"][not(@disabled)]`,
-  );
-  await el.waitForClickable();
-  return el;
-}
-
-async function click(text: string) {
-  await (await button(text)).click();
-}
-
-async function type(label: string, value: string) {
-  const el = await field(label);
-  await el.waitForDisplayed();
-  await el.click();
-  await el.clearValue();
-  await el.setValue(value);
-}
 
 /**
  * Type at a person's pace, then Enter. WebDriver types faster than 30 ms per key, which the till rightly
@@ -51,22 +23,6 @@ async function typeThenEnter(text: string) {
 
 async function pressKeys(...keys: string[]) {
   for (const k of keys) await browser.keys(k);
-}
-
-async function seeText(text: string) {
-  await $(`//*[contains(normalize-space(), "${text}")]`).waitForExist();
-}
-
-async function login(name: string, pin: string) {
-  // Login tiles show the name and the role underneath.
-  const tile = await $(`//button[.//span[normalize-space()="${name}"]]`);
-  await tile.waitForClickable();
-  await tile.click();
-  const pinField = await $("input[inputmode='numeric']");
-  await pinField.waitForDisplayed();
-  await pinField.setValue(pin);
-  await click("Log in");
-  await $("a[aria-label='Counter']").waitForExist();
 }
 
 async function lock() {
@@ -178,6 +134,8 @@ describe("Phase 1 acceptance: an offline sale day", () => {
     await $("[role='option']").waitForExist();
     await browser.pause(120);
     await browser.keys(Key.Enter);
+    // Like a cashier, see the line in the cart before reaching for the bill discount.
+    await browser.waitUntil(async () => (await grandTotal()) === "Rs 450.00");
     await pressKeys(Key.F7);
     await type("Discount (Rs or %)", "5%");
     await click("Apply");
@@ -191,6 +149,8 @@ describe("Phase 1 acceptance: an offline sale day", () => {
     await $("[role='option']").waitForExist();
     await browser.pause(120);
     await browser.keys(Key.Enter);
+    // Like a cashier, see the line in the cart before reaching for the bill discount.
+    await browser.waitUntil(async () => (await grandTotal()) === "Rs 450.00");
     await pressKeys(Key.F7);
     await type("Discount (Rs or %)", "6%");
     await click("Apply");

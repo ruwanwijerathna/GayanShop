@@ -439,6 +439,10 @@ function Till() {
             cartStore.getState().addQuickSale(q);
             playCue("tick");
           }}
+          onAddProduct={(p) => {
+            addProduct(p);
+            playCue("tick");
+          }}
           onDone={focusScan}
         />
       </div>

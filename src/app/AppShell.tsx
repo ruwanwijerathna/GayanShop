@@ -1,5 +1,21 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { Banknote, Boxes, History, Lock, Package, Settings, ShoppingCart, Store, Users } from "lucide-react";
+import {
+  Banknote,
+  Boxes,
+  History,
+  Lock,
+  Package,
+  Settings,
+  ShoppingCart,
+  Store,
+  Users,
+  Warehouse,
+  Zap,
+  Contact,
+  Receipt,
+  BarChart3,
+  ScrollText,
+} from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Can } from "@/components/auth/Can";
@@ -87,6 +103,42 @@ export function AppShell() {
             <Link to="/batches" className={NAV_LINK} aria-label={t("nav.batches")}>
               <Boxes aria-hidden className="size-5 shrink-0" />
               <span className="hidden xl:inline">{t("nav.batches")}</span>
+            </Link>
+          </Can>
+          <Can perm={["STOCK_DAMAGE", "STOCK_ADJUST", "REPORT_FINANCIAL"]}>
+            <Link to="/inventory" className={NAV_LINK} aria-label={t("nav.inventory")}>
+              <Warehouse aria-hidden className="size-5 shrink-0" />
+              <span className="hidden xl:inline">{t("nav.inventory")}</span>
+            </Link>
+          </Can>
+          <Can perm="QUICK_SALE_PROMOTE">
+            <Link to="/quick-sales" className={NAV_LINK} aria-label={t("nav.quickSales")}>
+              <Zap aria-hidden className="size-5 shrink-0" />
+              <span className="hidden xl:inline">{t("nav.quickSales")}</span>
+            </Link>
+          </Can>
+          <Can perm="REPORT_SALES">
+            <Link to="/reports" className={NAV_LINK} aria-label={t("nav.reports")}>
+              <BarChart3 aria-hidden className="size-5 shrink-0" />
+              <span className="hidden xl:inline">{t("nav.reports")}</span>
+            </Link>
+          </Can>
+          <Can perm="REPORT_SALES">
+            <Link to="/orders" className={NAV_LINK} aria-label={t("nav.orders")}>
+              <ScrollText aria-hidden className="size-5 shrink-0" />
+              <span className="hidden xl:inline">{t("nav.orders")}</span>
+            </Link>
+          </Can>
+          <Can perm="CUSTOMER_VIEW">
+            <Link to="/customers" className={NAV_LINK} aria-label={t("nav.customers")}>
+              <Contact aria-hidden className="size-5 shrink-0" />
+              <span className="hidden xl:inline">{t("nav.customers")}</span>
+            </Link>
+          </Can>
+          <Can perm="EXPENSE_MANAGE">
+            <Link to="/expenses" className={NAV_LINK} aria-label={t("nav.expenses")}>
+              <Receipt aria-hidden className="size-5 shrink-0" />
+              <span className="hidden xl:inline">{t("nav.expenses")}</span>
             </Link>
           </Can>
           <Can perm="AUDIT_VIEW">

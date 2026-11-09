@@ -12,6 +12,8 @@ export const commands = {
 	appStatus: () => typedError<AppStatus_Serialize, AppError>(__TAURI_INVOKE("app_status")),
 	/**  SQLite quick_check plus the schema's integrity probes (ARCHITECTURE §13.2). */
 	integrityCheck: () => typedError<IntegrityReport, AppError>(__TAURI_INVOKE("integrity_check")),
+	/**  Today's business date on this counter (store calendar, day cutoff), the default for report periods. */
+	businessToday: () => typedError<string, AppError>(__TAURI_INVOKE("business_today")),
 	/**  Create this store/terminal: identity, roles, the Owner and every seed, in one transaction. */
 	firstRunSetup: (input: SetupInput) => typedError<SetupResult, AppError>(__TAURI_INVOKE("first_run_setup", { input })),
 	/**  Active staff for the login picker (names and roles only). */
@@ -66,6 +68,40 @@ export const commands = {
 	adHocPurchase: (input: AdHocPurchase_Deserialize) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("ad_hoc_purchase", { input })),
 	/**  A product's cost layers in FIFO order, with stock on hand per layer. */
 	productLayers: (productId: string) => typedError<LayerStock_Serialize[], AppError>(__TAURI_INVOKE("product_layers", { productId })),
+	/**  What "Receive" would fix right now: each layer's cost and the variance (the wizard shows it live). */
+	batchAllocationPreview: (id: string) => typedError<AllocationPreview_Serialize, AppError>(__TAURI_INVOKE("batch_allocation_preview", { id })),
+	/**  Received → draft, while nothing but intake has moved (audited `BATCH_REOPEN`). */
+	reopenBatch: (id: string) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("reopen_batch", { id })),
+	/**  A product forgotten at intake, at unit cost 0 (audited `BATCH_LATE_ITEM`). */
+	addLateBatchItem: (batchId: string, input: LateItemInput_Deserialize) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("add_late_batch_item", { batchId, input })),
+	/**  Close an empty batch: read-only afterwards, final P&L (audited `BATCH_CLOSE`). */
+	closeBatch: (id: string) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("close_batch", { id })),
+	labelTemplates: () => typedError<LabelTemplate_Serialize[], AppError>(__TAURI_INVOKE("label_templates")),
+	labelPrinterProfile: () => typedError<LabelPrinterProfile | null, AppError>(__TAURI_INVOKE("label_printer_profile")),
+	setLabelPrinterProfile: (profile: LabelPrinterProfile) => typedError<null, AppError>(__TAURI_INVOKE("set_label_printer_profile", { profile })),
+	/**  Correct a template's column gap, row gap and left margin for this counter's roll; `None` = reset to default. */
+	calibrateLabelTemplate: (id: string, calibration: TemplateCalibration | null) => typedError<LabelTemplate_Serialize, AppError>(__TAURI_INVOKE("calibrate_label_template", { id, calibration })),
+	/**  The Rust-computed layout the UI draws as SVG: exactly what will print, with warnings. */
+	labelPreview: (job: LabelJob_Deserialize) => typedError<LabelPreview_Serialize, AppError>(__TAURI_INVOKE("label_preview", { job })),
+	/**  Queue a label job for the label printer (audited `LABEL_PRINT`: template, products, labels). */
+	printLabels: (job: LabelJob_Deserialize, approvalId: string | null) => typedError<LabelPreview_Serialize, AppError>(__TAURI_INVOKE("print_labels", { job, approvalId })),
+	/**  Settings → Labels "Alignment test": every cell's outline, for calibrating gaps and margins. */
+	labelAlignmentTest: (templateId: string) => typedError<null, AppError>(__TAURI_INVOKE("label_alignment_test", { templateId })),
+	recordDamage: (input: DamageInput_Deserialize, approvalId: string | null) => typedError<StockChange, AppError>(__TAURI_INVOKE("record_damage", { input, approvalId })),
+	adjustStock: (input: AdjustmentInput, approvalId: string | null) => typedError<StockChange, AppError>(__TAURI_INVOKE("adjust_stock", { input, approvalId })),
+	recordStockCount: (input: CountInput_Deserialize, approvalId: string | null) => typedError<CountResult, AppError>(__TAURI_INVOKE("record_stock_count", { input, approvalId })),
+	/**  Write off what a received batch still holds, so it can be closed (`STOCK_ADJUST` and `BATCH_MANAGE`). */
+	writeOffBatch: (batchId: string, note: string) => typedError<StockChange[], AppError>(__TAURI_INVOKE("write_off_batch", { batchId, note })),
+	stockMovements: (productId: string, batchItemId: string | null, cursor: MovementCursor | null, limit: number) => typedError<MovementPage_Serialize, AppError>(__TAURI_INVOKE("stock_movements", { productId, batchItemId, cursor, limit })),
+	/**  `as_of` = a business date (`YYYY-MM-DD`), or `None` for now. */
+	stockValuation: (asOf: string | null) => typedError<StockValuation_Serialize, AppError>(__TAURI_INVOKE("stock_valuation", { asOf })),
+	oversoldLayers: () => typedError<OversoldLayer[], AppError>(__TAURI_INVOKE("oversold_layers")),
+	quickSaleReview: (show: QuickSaleStatus | null) => typedError<QuickSaleRow_Serialize[], AppError>(__TAURI_INVOKE("quick_sale_review", { show })),
+	quickSaleDetail: (customKey: string) => typedError<QuickSaleDetail, AppError>(__TAURI_INVOKE("quick_sale_detail", { customKey })),
+	promoteQuickSale: (input: PromoteInput_Deserialize) => typedError<PromoteResult_Serialize, AppError>(__TAURI_INVOKE("promote_quick_sale", { input })),
+	ignoreQuickSale: (customKey: string) => typedError<null, AppError>(__TAURI_INVOKE("ignore_quick_sale", { customKey })),
+	/**  "Now a product: Blue Bucket 10L (scan or ↓ Enter)" under the till's Quick Sale bar. */
+	quickSaleHint: (name: string) => typedError<PromotedHint_Serialize | null, AppError>(__TAURI_INVOKE("quick_sale_hint", { name })),
 	/**  This counter's open session, if any (any logged-in staff member: the till needs it). */
 	currentCashSession: () => typedError<CashSession_Serialize | null, AppError>(__TAURI_INVOKE("current_cash_session")),
 	openCashSession: (input: OpenSessionInput) => typedError<CashSession_Serialize, AppError>(__TAURI_INVOKE("open_cash_session", { input })),
@@ -81,6 +117,34 @@ export const commands = {
 	cashSessionReport: (sessionId: string) => typedError<ZReport_Serialize, AppError>(__TAURI_INVOKE("cash_session_report", { sessionId })),
 	checkoutOrder: (input: CheckoutInput_Deserialize) => typedError<CheckoutResult_Serialize, AppError>(__TAURI_INVOKE("checkout_order", { input })),
 	customerLookup: (input: CustomerLookupInput) => typedError<CustomerLookup_Serialize, AppError>(__TAURI_INVOKE("customer_lookup", { input })),
+	customerList: (search: string | null, sort: CustomerSort | null) => typedError<CustomerList_Serialize, AppError>(__TAURI_INVOKE("customer_list", { search, sort })),
+	customerProfile: (id: string) => typedError<CustomerProfile_Serialize, AppError>(__TAURI_INVOKE("customer_profile", { id })),
+	customerHistory: (id: string, cursor: HistoryCursor | null, limit: number) => typedError<HistoryPage_Serialize, AppError>(__TAURI_INVOKE("customer_history", { id, cursor, limit })),
+	customerOrderReceipt: (customerId: string, orderId: string) => typedError<ReceiptData_Serialize, AppError>(__TAURI_INVOKE("customer_order_receipt", { customerId, orderId })),
+	customerAnalytics: (period: Period, granularity: Granularity, topN: number) => typedError<CustomerAnalytics_Serialize, AppError>(__TAURI_INVOKE("customer_analytics", { period, granularity, topN })),
+	updateCustomer: (id: string, input: CustomerUpdate_Deserialize) => typedError<null, AppError>(__TAURI_INVOKE("update_customer", { id, input })),
+	/**  PDPA erasure on request (doc §3.8). */
+	eraseCustomer: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("erase_customer", { id })),
+	expenseCategories: () => typedError<ExpenseCategory[], AppError>(__TAURI_INVOKE("expense_categories")),
+	saveExpenseCategory: (id: string | null, input: ExpenseCategoryInput) => typedError<string, AppError>(__TAURI_INVOKE("save_expense_category", { id, input })),
+	expenseList: (period: Period, categoryId: string | null) => typedError<ExpenseList_Serialize, AppError>(__TAURI_INVOKE("expense_list", { period, categoryId })),
+	recordExpense: (input: ExpenseInput_Deserialize, approvalId: string | null) => typedError<ExpenseRow_Serialize, AppError>(__TAURI_INVOKE("record_expense", { input, approvalId })),
+	updateExpense: (id: string, input: ExpenseInput_Deserialize) => typedError<ExpenseRow_Serialize, AppError>(__TAURI_INVOKE("update_expense", { id, input })),
+	deleteExpense: (id: string, approvalId: string | null) => typedError<null, AppError>(__TAURI_INVOKE("delete_expense", { id, approvalId })),
+	reportSummary: (period: Period, deviceId: string | null, compare: boolean) => typedError<PeriodReport_Serialize, AppError>(__TAURI_INVOKE("report_summary", { period, deviceId, compare })),
+	reportTrend: (period: Period, deviceId: string | null, granularity: Granularity, compare: boolean) => typedError<TrendSeries_Serialize, AppError>(__TAURI_INVOKE("report_trend", { period, deviceId, granularity, compare })),
+	reportSalesBy: (period: Period, deviceId: string | null, dimension: SalesDimension) => typedError<SalesByRow_Serialize[], AppError>(__TAURI_INVOKE("report_sales_by", { period, deviceId, dimension })),
+	reportVoids: (period: Period, deviceId: string | null) => typedError<VoidReport_Serialize, AppError>(__TAURI_INVOKE("report_voids", { period, deviceId })),
+	reportDevices: () => typedError<ReportDevice[], AppError>(__TAURI_INVOKE("report_devices")),
+	/**  Units only (no cost), so `REPORT_SALES` is enough. */
+	reportBatchSellThrough: () => typedError<BatchSellThrough[], AppError>(__TAURI_INVOKE("report_batch_sell_through")),
+	/**  Settings → Maintenance: recompute every derived table from the base tables. */
+	rebuildDerived: () => typedError<RebuildReport, AppError>(__TAURI_INVOKE("rebuild_derived")),
+	/**  The native folder picker; `None` when the user cancels. */
+	exportPickFolder: () => typedError<string | null, AppError>(__TAURI_INVOKE("export_pick_folder")),
+	exportCsv: (kind: ExportKind, period: Period, destDir: string) => typedError<ExportOutcome, AppError>(__TAURI_INVOKE("export_csv", { kind, period, destDir })),
+	orderHistory: (filter: OrderFilter_Deserialize, cursor: OrderCursor | null, limit: number) => typedError<OrderPage_Serialize, AppError>(__TAURI_INVOKE("order_history", { filter, cursor, limit })),
+	orderReceipt: (orderId: string) => typedError<ReceiptData_Serialize, AppError>(__TAURI_INVOKE("order_receipt", { orderId })),
 	printerStatus: () => typedError<PrinterStatusView_Serialize, AppError>(__TAURI_INVOKE("printer_status")),
 	printerProfile: () => typedError<ReceiptPrinterProfile | null, AppError>(__TAURI_INVOKE("printer_profile")),
 	setPrinterProfile: (profile: ReceiptPrinterProfile) => typedError<null, AppError>(__TAURI_INVOKE("set_printer_profile", { profile })),
@@ -133,6 +197,64 @@ export type AdHocPurchase_Serialize = {
 	unit_cost: number,
 	supplier_name: string | null,
 	note: string | null,
+};
+
+export type AdjustmentInput = {
+	product_id: string,
+	/**  Positive = found / added, negative = removed. */
+	qty_delta: number,
+	/**  Required: an adjustment always says why. */
+	note: string,
+};
+
+export type Align = "left" | "center" | "right";
+
+/**  How a batch's landed cost is spread over its layers (doc §3.1). */
+export type AllocationMethod = 
+/**  Every unit carries the same cost. */
+"even_per_unit" | 
+/**  Weighted by retail price × qty: expensive items carry more cost. */
+"by_retail_value" | 
+/**  The owner types each unit cost. */
+"manual";
+
+/**  What "Receive" would fix, shown live while the batch is a draft (doc §3.1 "variance is shown live"). */
+export type AllocationPreview = AllocationPreview_Serialize | AllocationPreview_Deserialize;
+
+/**  One layer of the live allocation preview. */
+export type AllocationPreviewLine = {
+	item_id: string,
+	product_name: string,
+	qty: number,
+	retail_price: number,
+	unit_cost: number,
+	line_cost: number,
+};
+
+/**  What "Receive" would fix, shown live while the batch is a draft (doc §3.1 "variance is shown live"). */
+export type AllocationPreview_Deserialize = {
+	method: AllocationMethod,
+	landed_cost: number,
+	/**  Σ unit_cost × qty. */
+	allocated: number,
+	/**  landed − allocated: 0 ≤ v < Σqty for even / by-value; anything for manual. */
+	variance: number,
+	lines: AllocationPreviewLine[],
+	/**  Why Receive would be refused right now (a translatable code), if it would. */
+	problem?: string | null,
+};
+
+/**  What "Receive" would fix, shown live while the batch is a draft (doc §3.1 "variance is shown live"). */
+export type AllocationPreview_Serialize = {
+	method: AllocationMethod,
+	landed_cost: number,
+	/**  Σ unit_cost × qty. */
+	allocated: number,
+	/**  landed − allocated: 0 ≤ v < Σqty for even / by-value; anything for manual. */
+	variance: number,
+	lines: AllocationPreviewLine[],
+	/**  Why Receive would be refused right now (a translatable code), if it would. */
+	problem: string | null,
 };
 
 export type AppError = { kind: "NOT_INITIALIZED" } | { kind: "ALREADY_INITIALIZED" } | { kind: "NOT_LOGGED_IN" } | { kind: "SESSION_LOCKED" } | { kind: "FORBIDDEN"; perm: Perm } | { kind: "APPROVAL_REQUIRED"; perm: Perm } | { kind: "INVALID_APPROVAL" } | { kind: "INVALID_PIN"; attempts_left: number } | { kind: "ACCOUNT_LOCKED"; until: string } | 
@@ -268,11 +390,15 @@ export type BatchDetail = BatchDetail_Serialize | BatchDetail_Deserialize;
 export type BatchDetail_Deserialize = {
 	batch: Batch_Deserialize,
 	items: BatchItem_Deserialize[],
+	/**  `None` for a draft (nothing received yet). */
+	pnl?: BatchPnl | null,
 };
 
 export type BatchDetail_Serialize = {
 	batch: Batch_Serialize,
 	items: BatchItem_Serialize[],
+	/**  `None` for a draft (nothing received yet). */
+	pnl: BatchPnl | null,
 };
 
 export type BatchInput = BatchInput_Serialize | BatchInput_Deserialize;
@@ -286,6 +412,8 @@ export type BatchInput_Deserialize = {
 	/**  Invoice total. 0 with no extra costs ⇒ the batch costs exactly Σ(unit cost × qty). */
 	total_cost: number,
 	extra_costs: number,
+	/**  `None` = manual (the Phase 1 default). */
+	allocation_method?: AllocationMethod | null,
 	notes?: string | null,
 };
 
@@ -298,6 +426,8 @@ export type BatchInput_Serialize = {
 	/**  Invoice total. 0 with no extra costs ⇒ the batch costs exactly Σ(unit cost × qty). */
 	total_cost: number,
 	extra_costs: number,
+	/**  `None` = manual (the Phase 1 default). */
+	allocation_method: AllocationMethod | null,
 	notes: string | null,
 };
 
@@ -349,6 +479,47 @@ export type BatchItem_Serialize = {
 	sold_qty: number,
 };
 
+/**  "Did this batch make money?" (doc §3.1 batch metrics), from the trigger-maintained `batch_item_stock`. */
+export type BatchPnl = {
+	landed_cost: number,
+	units_received: number,
+	units_sold: number,
+	units_remaining: number,
+	/**  Net sales of the batch's units (ex tax, after discounts). */
+	revenue_net: number,
+	/**  What the sold units cost. */
+	cogs: number,
+	written_off_qty: number,
+	written_off_cost: number,
+	allocation_variance: number,
+	/**  Σ on_hand × unit cost (positive layers only). */
+	remaining_value_cost: number,
+	/**  Σ on_hand × the product's current price. */
+	remaining_value_retail: number,
+	/**  revenue − cogs − written-off cost − allocation variance. */
+	realised_profit: number,
+	/**  revenue − landed cost: negative until the batch has paid for itself. */
+	payback: number,
+	/**  payback + what the rest would bring at today's prices. */
+	projected_profit: number,
+	/**  units sold / units received, in basis points. */
+	sell_through_bp: number,
+};
+
+/**  Batch sell-through (§1.4 chart): units received, sold, written off and left per received batch. */
+export type BatchSellThrough = {
+	batch_id: string,
+	code: string,
+	name: string,
+	status: string,
+	received: number,
+	sold: number,
+	written_off: number,
+	on_hand: number,
+	/**  `sold / received` in basis points. */
+	sell_through_bp: number,
+};
+
 export type BatchStatus = "draft" | "received" | "closed";
 
 export type Batch_Deserialize = {
@@ -361,6 +532,9 @@ export type Batch_Deserialize = {
 	received_at?: string | null,
 	total_cost: number,
 	extra_costs: number,
+	/**  total_cost + extra_costs. */
+	landed_cost: number,
+	allocation_method: AllocationMethod,
 	allocation_variance: number,
 	status: BatchStatus,
 	is_system: boolean,
@@ -382,6 +556,9 @@ export type Batch_Serialize = {
 	received_at: string | null,
 	total_cost: number,
 	extra_costs: number,
+	/**  total_cost + extra_costs. */
+	landed_cost: number,
+	allocation_method: AllocationMethod,
 	allocation_variance: number,
 	status: BatchStatus,
 	is_system: boolean,
@@ -463,6 +640,13 @@ export type CategoryInput_Deserialize = {
 export type CategoryInput_Serialize = {
 	name: string,
 	parent_id: string | null,
+};
+
+export type CategoryTotal = {
+	category_id: string,
+	name: string,
+	amount: number,
+	count: number,
 };
 
 export type Category_Deserialize = {
@@ -605,6 +789,83 @@ export type CodeChoice = { mode: "none" } | { mode: "generate" } | { mode: "manu
 
 export type CodePage = "pc437" | "wpc1252";
 
+export type CountInput = CountInput_Serialize | CountInput_Deserialize;
+
+export type CountInput_Deserialize = {
+	lines: CountLine[],
+	note?: string | null,
+};
+
+export type CountInput_Serialize = {
+	lines: CountLine[],
+	note: string | null,
+};
+
+export type CountLine = {
+	product_id: string,
+	counted: number,
+};
+
+export type CountResult = {
+	changes: StockChange[],
+	/**  Lines whose count matched the system: nothing written for them. */
+	unchanged: number,
+};
+
+export type CounterSales = {
+	device_code: string,
+	times_sold: number,
+	units: number,
+};
+
+/**
+ *  Customer analytics for a §5 period (doc §3.8): top customers by spend, new vs returning per week or
+ *  month, and the share of sales with a customer attached. Completed orders only.
+ */
+export type CustomerAnalytics = CustomerAnalytics_Serialize | CustomerAnalytics_Deserialize;
+
+/**
+ *  Customer analytics for a §5 period (doc §3.8): top customers by spend, new vs returning per week or
+ *  month, and the share of sales with a customer attached. Completed orders only.
+ */
+export type CustomerAnalytics_Deserialize = {
+	range: DateRange_Deserialize,
+	top: TopCustomer_Deserialize[],
+	trend: NewReturning[],
+	sales_count: number,
+	customer_orders: number,
+	/**  `customer_orders / sales_count` in basis points. */
+	attached_bp: number,
+};
+
+/**
+ *  Customer analytics for a §5 period (doc §3.8): top customers by spend, new vs returning per week or
+ *  month, and the share of sales with a customer attached. Completed orders only.
+ */
+export type CustomerAnalytics_Serialize = {
+	range: DateRange_Serialize,
+	top: TopCustomer_Serialize[],
+	trend: NewReturning[],
+	sales_count: number,
+	customer_orders: number,
+	/**  `customer_orders / sales_count` in basis points. */
+	attached_bp: number,
+};
+
+export type CustomerList = CustomerList_Serialize | CustomerList_Deserialize;
+
+export type CustomerList_Deserialize = {
+	rows: CustomerRow_Deserialize[],
+	/**  More customers match than were returned: narrow the search. */
+	truncated: boolean,
+};
+
+export type CustomerList_Serialize = {
+	rows: CustomerRow_Serialize[],
+	/**  More customers match than were returned: narrow the search. */
+	truncated: boolean,
+};
+
 /**  What the till sees after 9–10 digits (doc §3.8): no history without `CUSTOMER_VIEW`. */
 export type CustomerLookup = CustomerLookup_Serialize | CustomerLookup_Deserialize;
 
@@ -636,7 +897,109 @@ export type CustomerLookup_Serialize = {
 	visit_count: number,
 };
 
+export type CustomerProfile = CustomerProfile_Serialize | CustomerProfile_Deserialize;
+
+export type CustomerProfile_Deserialize = {
+	customer: CustomerRow_Deserialize,
+	note?: string | null,
+	first_seen_at: string,
+	erased_at?: string | null,
+	top_products: TopItem_Deserialize[],
+	top_categories: TopItem_Deserialize[],
+};
+
+export type CustomerProfile_Serialize = {
+	customer: CustomerRow_Serialize,
+	note: string | null,
+	first_seen_at: string,
+	erased_at: string | null,
+	top_products: TopItem_Serialize[],
+	top_categories: TopItem_Serialize[],
+};
+
+/**  One customer in the back-office list (figures from `customer_stats`: completed orders only). */
+export type CustomerRow = CustomerRow_Serialize | CustomerRow_Deserialize;
+
+/**  One customer in the back-office list (figures from `customer_stats`: completed orders only). */
+export type CustomerRow_Deserialize = {
+	id: string,
+	phone_e164?: string | null,
+	/**  `077 123 4567`. */
+	phone_display?: string | null,
+	display_name?: string | null,
+	visit_count: number,
+	total_spend: number,
+	total_net: number,
+	/**  `total_spend / visit_count`, rounded down; 0 with no visits. */
+	avg_basket: number,
+	first_visit_date?: string | null,
+	last_visit_date?: string | null,
+};
+
+/**  One customer in the back-office list (figures from `customer_stats`: completed orders only). */
+export type CustomerRow_Serialize = {
+	id: string,
+	phone_e164: string | null,
+	/**  `077 123 4567`. */
+	phone_display: string | null,
+	display_name: string | null,
+	visit_count: number,
+	total_spend: number,
+	total_net: number,
+	/**  `total_spend / visit_count`, rounded down; 0 with no visits. */
+	avg_basket: number,
+	first_visit_date: string | null,
+	last_visit_date: string | null,
+};
+
+export type CustomerSort = "spend" | "visits" | "last_visit" | "name";
+
+export type CustomerUpdate = CustomerUpdate_Serialize | CustomerUpdate_Deserialize;
+
+export type CustomerUpdate_Deserialize = {
+	display_name?: string | null,
+	note?: string | null,
+};
+
+export type CustomerUpdate_Serialize = {
+	display_name: string | null,
+	note: string | null,
+};
+
 export type CutMode = "full" | "partial" | "none";
+
+export type DamageInput = DamageInput_Serialize | DamageInput_Deserialize;
+
+export type DamageInput_Deserialize = {
+	product_id: string,
+	qty: number,
+	reason: DamageReason,
+	note?: string | null,
+};
+
+export type DamageInput_Serialize = {
+	product_id: string,
+	qty: number,
+	reason: DamageReason,
+	note: string | null,
+};
+
+export type DamageReason = "broken" | "expired" | "stolen" | "faulty" | "other";
+
+/**  Inclusive business-date bounds; `None` on both sides = all time. */
+export type DateRange = DateRange_Serialize | DateRange_Deserialize;
+
+/**  Inclusive business-date bounds; `None` on both sides = all time. */
+export type DateRange_Deserialize = {
+	from?: string | null,
+	to?: string | null,
+};
+
+/**  Inclusive business-date bounds; `None` on both sides = all time. */
+export type DateRange_Serialize = {
+	from: string | null,
+	to: string | null,
+};
 
 export type DenominationCount = {
 	/**  Face value in cents (one of `LKR_DENOMINATIONS`). */
@@ -683,6 +1046,188 @@ export type DrawerMovement_Serialize = {
 /**  Which drawer pin the kick pulses (`ESC p m`): pin 2 by default, pin 5 for drawers wired that way. */
 export type DrawerPin = "pin2" | "pin5";
 
+export type ElementKind = "store_name" | "product_name" | "attributes" | "price" | "barcode";
+
+export type ExpenseCategory = {
+	id: string,
+	name: string,
+	is_active: boolean,
+	/**  Expenses recorded against it (not deleted): a used category can be retired, never removed. */
+	used: number,
+};
+
+export type ExpenseCategoryInput = {
+	name: string,
+	is_active: boolean,
+};
+
+export type ExpenseInput = ExpenseInput_Serialize | ExpenseInput_Deserialize;
+
+export type ExpenseInput_Deserialize = {
+	category_id: string,
+	amount: number,
+	/**  The expense's business date; `None` = today. Never in the future. */
+	business_date?: string | null,
+	payment_method: PaymentMethod,
+	/**  Cash taken from this counter's drawer now (a `pay_out` in the open session). */
+	paid_from_drawer: boolean,
+	payee?: string | null,
+	note?: string | null,
+};
+
+export type ExpenseInput_Serialize = {
+	category_id: string,
+	amount: number,
+	/**  The expense's business date; `None` = today. Never in the future. */
+	business_date: string | null,
+	payment_method: PaymentMethod,
+	/**  Cash taken from this counter's drawer now (a `pay_out` in the open session). */
+	paid_from_drawer: boolean,
+	payee: string | null,
+	note: string | null,
+};
+
+/**  Expenses in a §5 period (newest first) with totals by category — the P&L's operating expenses. */
+export type ExpenseList = ExpenseList_Serialize | ExpenseList_Deserialize;
+
+/**  Expenses in a §5 period (newest first) with totals by category — the P&L's operating expenses. */
+export type ExpenseList_Deserialize = {
+	range: DateRange_Deserialize,
+	rows: ExpenseRow_Deserialize[],
+	by_category: CategoryTotal[],
+	total: number,
+	from_drawer: number,
+};
+
+/**  Expenses in a §5 period (newest first) with totals by category — the P&L's operating expenses. */
+export type ExpenseList_Serialize = {
+	range: DateRange_Serialize,
+	rows: ExpenseRow_Serialize[],
+	by_category: CategoryTotal[],
+	total: number,
+	from_drawer: number,
+};
+
+export type ExpenseRow = ExpenseRow_Serialize | ExpenseRow_Deserialize;
+
+export type ExpenseRow_Deserialize = {
+	id: string,
+	category_id: string,
+	category_name: string,
+	amount: number,
+	business_date: string,
+	payment_method: string,
+	paid_from_drawer: boolean,
+	cash_session_id?: string | null,
+	payee?: string | null,
+	note?: string | null,
+	recorded_by_name?: string | null,
+	created_at: string,
+};
+
+export type ExpenseRow_Serialize = {
+	id: string,
+	category_id: string,
+	category_name: string,
+	amount: number,
+	business_date: string,
+	payment_method: string,
+	paid_from_drawer: boolean,
+	cash_session_id: string | null,
+	payee: string | null,
+	note: string | null,
+	recorded_by_name: string | null,
+	created_at: string,
+};
+
+export type ExportKind = "orders" | "order_lines" | "products" | "customers" | "expenses" | "stock_movements" | "sales_by_product";
+
+export type ExportOutcome = {
+	path: string,
+	rows: number,
+};
+
+/**
+ *  The §5.1 metrics for one period. Cost-derived fields are `None` when the viewer may not see costs
+ *  (`REPORT_FINANCIAL` + `VIEW_COST`; see [`FinancialSummary::without_costs`]).
+ */
+export type FinancialSummary = FinancialSummary_Serialize | FinancialSummary_Deserialize;
+
+/**
+ *  The §5.1 metrics for one period. Cost-derived fields are `None` when the viewer may not see costs
+ *  (`REPORT_FINANCIAL` + `VIEW_COST`; see [`FinancialSummary::without_costs`]).
+ */
+export type FinancialSummary_Deserialize = {
+	range: DateRange_Deserialize,
+	/**  `None` = the whole store. */
+	device_id?: string | null,
+	sales_count: number,
+	void_count: number,
+	void_value: number,
+	gross_sales: number,
+	discounts: number,
+	/**  Total revenue, ex tax, completed orders only. */
+	net_sales: number,
+	tax_collected: number,
+	customer_orders: number,
+	customer_attached_bp: number,
+	/**  `net_sales / sales_count`, rounded down. */
+	avg_basket: number,
+	quick_sale_net: number,
+	unknown_cost_net: number,
+	payments: MethodTotal[],
+	/**  Sale-slice cost of the period's sales (before allocation variance). */
+	sales_cost?: number | null,
+	/**  Σ `allocation_variance` of batches received in the period (store-wide). */
+	allocation_variance?: number | null,
+	/**  `sales_cost + allocation_variance`. */
+	cogs?: number | null,
+	gross_profit?: number | null,
+	gross_margin_bp?: number | null,
+	stock_write_offs?: number | null,
+	operating_expenses?: number | null,
+	net_profit?: number | null,
+};
+
+/**
+ *  The §5.1 metrics for one period. Cost-derived fields are `None` when the viewer may not see costs
+ *  (`REPORT_FINANCIAL` + `VIEW_COST`; see [`FinancialSummary::without_costs`]).
+ */
+export type FinancialSummary_Serialize = {
+	range: DateRange_Serialize,
+	/**  `None` = the whole store. */
+	device_id: string | null,
+	sales_count: number,
+	void_count: number,
+	void_value: number,
+	gross_sales: number,
+	discounts: number,
+	/**  Total revenue, ex tax, completed orders only. */
+	net_sales: number,
+	tax_collected: number,
+	customer_orders: number,
+	customer_attached_bp: number,
+	/**  `net_sales / sales_count`, rounded down. */
+	avg_basket: number,
+	quick_sale_net: number,
+	unknown_cost_net: number,
+	payments: MethodTotal[],
+	/**  Sale-slice cost of the period's sales (before allocation variance). */
+	sales_cost: number | null,
+	/**  Σ `allocation_variance` of batches received in the period (store-wide). */
+	allocation_variance: number | null,
+	/**  `sales_cost + allocation_variance`. */
+	cogs: number | null,
+	gross_profit: number | null,
+	gross_margin_bp: number | null,
+	stock_write_offs: number | null,
+	operating_expenses: number | null,
+	net_profit: number | null,
+};
+
+/**  Trend-chart buckets. */
+export type Granularity = "day" | "week" | "month";
+
 export type HeldCart = HeldCart_Serialize | HeldCart_Deserialize;
 
 export type HeldCart_Deserialize = {
@@ -705,6 +1250,48 @@ export type HeldCart_Serialize = {
 	updated_at: string,
 };
 
+export type HistoryCursor = {
+	business_date: string,
+	id: string,
+};
+
+/**  One order in a customer's purchase history (completed or voided; voids carry no spend). */
+export type HistoryOrder = HistoryOrder_Serialize | HistoryOrder_Deserialize;
+
+/**  One order in a customer's purchase history (completed or voided; voids carry no spend). */
+export type HistoryOrder_Deserialize = {
+	id: string,
+	receipt_no: string,
+	business_date: string,
+	completed_at?: string | null,
+	status: string,
+	item_count: number,
+	grand_total: number,
+};
+
+/**  One order in a customer's purchase history (completed or voided; voids carry no spend). */
+export type HistoryOrder_Serialize = {
+	id: string,
+	receipt_no: string,
+	business_date: string,
+	completed_at: string | null,
+	status: string,
+	item_count: number,
+	grand_total: number,
+};
+
+export type HistoryPage = HistoryPage_Serialize | HistoryPage_Deserialize;
+
+export type HistoryPage_Deserialize = {
+	rows: HistoryOrder_Deserialize[],
+	next_cursor?: HistoryCursor | null,
+};
+
+export type HistoryPage_Serialize = {
+	rows: HistoryOrder_Serialize[],
+	next_cursor: HistoryCursor | null,
+};
+
 export type IntegrityReport = {
 	/**  `"ok"` when SQLite's quick_check found nothing; otherwise its first message. */
 	quick_check: string,
@@ -714,6 +1301,163 @@ export type IntegrityReport = {
 	unreversed_voids: number,
 	/**  `sync_ctx.applying` left at 1 outside a pull transaction. */
 	stale_sync_flag: boolean,
+};
+
+export type LabelElement = LabelElement_Serialize | LabelElement_Deserialize;
+
+export type LabelElement_Deserialize = {
+	kind: ElementKind,
+	x_mm: number,
+	y_mm: number,
+	w_mm: number,
+	h_mm: number,
+	/**  Printer built-in font step 1–4. */
+	font_size: number,
+	bold?: boolean,
+	align?: Align,
+	max_lines?: number | null,
+};
+
+export type LabelElement_Serialize = {
+	kind: ElementKind,
+	x_mm: number,
+	y_mm: number,
+	w_mm: number,
+	h_mm: number,
+	/**  Printer built-in font step 1–4. */
+	font_size: number,
+	bold: boolean,
+	align: Align,
+	max_lines: number | null,
+};
+
+/**  What a label job prints (also the `print_jobs` payload, re-laid out from the database at print time). */
+export type LabelJob = LabelJob_Serialize | LabelJob_Deserialize;
+
+export type LabelJobItem = {
+	product_id: string,
+	copies: number,
+};
+
+/**  What a label job prints (also the `print_jobs` payload, re-laid out from the database at print time). */
+export type LabelJob_Deserialize = {
+	template_id: string,
+	items: LabelJobItem[],
+	/**  Fill a partial last row with copies of the last label instead of leaving it blank. */
+	fill_last_row?: boolean,
+};
+
+/**  What a label job prints (also the `print_jobs` payload, re-laid out from the database at print time). */
+export type LabelJob_Serialize = {
+	template_id: string,
+	items: LabelJobItem[],
+	/**  Fill a partial last row with copies of the last label instead of leaving it blank. */
+	fill_last_row: boolean,
+};
+
+export type LabelLanguage = "tspl" | "zpl";
+
+export type LabelPreview = LabelPreview_Serialize | LabelPreview_Deserialize;
+
+export type LabelPreview_Deserialize = {
+	template_id: string,
+	dpi: number,
+	columns: number,
+	rows: number,
+	roll_width_mm: number,
+	label_w_mm: number,
+	label_h_mm: number,
+	row_gap_mm: number,
+	labels: PlacedLabel_Deserialize[],
+	warnings: LabelWarning[],
+};
+
+export type LabelPreview_Serialize = {
+	template_id: string,
+	dpi: number,
+	columns: number,
+	rows: number,
+	roll_width_mm: number,
+	label_w_mm: number,
+	label_h_mm: number,
+	row_gap_mm: number,
+	labels: PlacedLabel_Serialize[],
+	warnings: LabelWarning[],
+};
+
+export type LabelPrinterProfile = {
+	transport: TransportConfig,
+	language: LabelLanguage,
+	/**  203 or 300. */
+	dpi: number,
+	/**  TSPL `DENSITY` 0–15 / ZPL darkness. */
+	darkness: number,
+	/**  Inches per second, 1–6. */
+	speed: number,
+	/**  Calibration: shift everything right / down, mm. */
+	offset_x_mm: number,
+	offset_y_mm: number,
+};
+
+export type LabelTemplate = LabelTemplate_Serialize | LabelTemplate_Deserialize;
+
+export type LabelTemplate_Deserialize = {
+	id: string,
+	name: string,
+	/**  Labels per row on the roll. */
+	columns: number,
+	label_w_mm: number,
+	label_h_mm: number,
+	col_gap_mm: number,
+	/**  The die-cut gap between rows. */
+	row_gap_mm: number,
+	left_margin_mm: number,
+	dpi: number,
+	language: LabelLanguage,
+	symbology: SymbologyRule,
+	elements: LabelElement_Deserialize[],
+};
+
+export type LabelTemplate_Serialize = {
+	id: string,
+	name: string,
+	/**  Labels per row on the roll. */
+	columns: number,
+	label_w_mm: number,
+	label_h_mm: number,
+	col_gap_mm: number,
+	/**  The die-cut gap between rows. */
+	row_gap_mm: number,
+	left_margin_mm: number,
+	dpi: number,
+	language: LabelLanguage,
+	symbology: SymbologyRule,
+	elements: LabelElement_Serialize[],
+};
+
+export type LabelWarning = {
+	/**  `BARCODE_TOO_LONG`, `NO_CODE`, `TEXT_NOT_PRINTABLE`, `TEXT_TRUNCATED`. */
+	code: string,
+	product_id: string,
+};
+
+/**  A product forgotten at intake, added to a received batch (unit cost 0). */
+export type LateItemInput = LateItemInput_Serialize | LateItemInput_Deserialize;
+
+/**  A product forgotten at intake, added to a received batch (unit cost 0). */
+export type LateItemInput_Deserialize = {
+	product_id: string,
+	qty: number,
+	/**  `None` = the product's current price. */
+	retail_price?: number | null,
+};
+
+/**  A product forgotten at intake, added to a received batch (unit cost 0). */
+export type LateItemInput_Serialize = {
+	product_id: string,
+	qty: number,
+	/**  `None` = the product's current price. */
+	retail_price: number | null,
 };
 
 /**  One layer of a product's stock, for the product and batch screens. */
@@ -749,6 +1493,73 @@ export type LoginStaff = {
 	role_name: string,
 };
 
+export type MethodTotal = {
+	method: string,
+	amount: number,
+	count: number,
+};
+
+export type MovementCursor = {
+	created_at: string,
+	id: string,
+};
+
+export type MovementPage = MovementPage_Serialize | MovementPage_Deserialize;
+
+export type MovementPage_Deserialize = {
+	rows: MovementRow_Deserialize[],
+	next_cursor?: [string, string] | null,
+};
+
+export type MovementPage_Serialize = {
+	rows: MovementRow_Serialize[],
+	next_cursor: [string, string] | null,
+};
+
+/**  One ledger row, for a product's (or one layer's) movement history. */
+export type MovementRow = MovementRow_Serialize | MovementRow_Deserialize;
+
+/**  One ledger row, for a product's (or one layer's) movement history. */
+export type MovementRow_Deserialize = {
+	id: string,
+	created_at: string,
+	business_date: string,
+	reason: string,
+	qty_delta: number,
+	unit_cost: number,
+	batch_item_id: string,
+	batch_code: string,
+	ref_type?: string | null,
+	ref_id?: string | null,
+	note?: string | null,
+	staff_name?: string | null,
+	approved_by_name?: string | null,
+};
+
+/**  One ledger row, for a product's (or one layer's) movement history. */
+export type MovementRow_Serialize = {
+	id: string,
+	created_at: string,
+	business_date: string,
+	reason: string,
+	qty_delta: number,
+	unit_cost: number,
+	batch_item_id: string,
+	batch_code: string,
+	ref_type: string | null,
+	ref_id: string | null,
+	note: string | null,
+	staff_name: string | null,
+	approved_by_name: string | null,
+};
+
+export type NewReturning = {
+	/**  The week's first day or `YYYY-MM`. */
+	bucket: string,
+	new_customers: number,
+	returning_customers: number,
+};
+
 export type NewStaff = NewStaff_Serialize | NewStaff_Deserialize;
 
 export type NewStaff_Deserialize = {
@@ -763,6 +1574,82 @@ export type NewStaff_Serialize = {
 
 export type OpenSessionInput = {
 	opening_float: number,
+};
+
+export type OrderCursor = {
+	completed_at: string,
+	id: string,
+};
+
+export type OrderFilter = OrderFilter_Serialize | OrderFilter_Deserialize;
+
+export type OrderFilter_Deserialize = {
+	period: Period,
+	device_id?: string | null,
+	status?: OrderStatusFilter | null,
+	/**  A receipt number, or the start of one (`T01-2611`). */
+	receipt?: string | null,
+};
+
+export type OrderFilter_Serialize = {
+	period: Period,
+	device_id: string | null,
+	status: OrderStatusFilter | null,
+	/**  A receipt number, or the start of one (`T01-2611`). */
+	receipt: string | null,
+};
+
+export type OrderPage = OrderPage_Serialize | OrderPage_Deserialize;
+
+export type OrderPage_Deserialize = {
+	rows: OrderRow_Deserialize[],
+	next_cursor?: OrderCursor | null,
+};
+
+export type OrderPage_Serialize = {
+	rows: OrderRow_Serialize[],
+	next_cursor: OrderCursor | null,
+};
+
+export type OrderRow = OrderRow_Serialize | OrderRow_Deserialize;
+
+export type OrderRow_Deserialize = {
+	id: string,
+	receipt_no: string,
+	business_date: string,
+	completed_at: string,
+	status: string,
+	cashier?: string | null,
+	item_count: number,
+	grand_total: number,
+	has_customer: boolean,
+	void_reason?: string | null,
+};
+
+export type OrderRow_Serialize = {
+	id: string,
+	receipt_no: string,
+	business_date: string,
+	completed_at: string,
+	status: string,
+	cashier: string | null,
+	item_count: number,
+	grand_total: number,
+	has_customer: boolean,
+	void_reason: string | null,
+};
+
+export type OrderStatusFilter = "completed" | "voided";
+
+/**  A layer that sold more than it held (offline counters draining the same layer, or a sale before intake). */
+export type OversoldLayer = {
+	batch_item_id: string,
+	product_id: string,
+	product_name: string,
+	batch_id: string,
+	batch_code: string,
+	on_hand: number,
+	unit_cost: number,
 };
 
 export type PaperWidth = 
@@ -799,8 +1686,80 @@ export type PaymentTotal = {
 	amount: number,
 };
 
+export type Period = { kind: "day"; date: string } | 
+/**  The store week (`week_start`) containing `any_date`. */
+{ kind: "week"; any_date: string } | { kind: "month"; year: number; month: number } | { kind: "year"; year: number } | { kind: "all_time" } | 
+/**  Inclusive `from..=to`. */
+{ kind: "custom"; from: string; to: string };
+
+/**  A period's report and, on request, the previous equivalent period's (§5.2 comparison). */
+export type PeriodReport = PeriodReport_Serialize | PeriodReport_Deserialize;
+
+/**  A period's report and, on request, the previous equivalent period's (§5.2 comparison). */
+export type PeriodReport_Deserialize = {
+	current: FinancialSummary_Deserialize,
+	previous?: FinancialSummary_Deserialize | null,
+};
+
+/**  A period's report and, on request, the previous equivalent period's (§5.2 comparison). */
+export type PeriodReport_Serialize = {
+	current: FinancialSummary_Serialize,
+	previous: FinancialSummary_Serialize | null,
+};
+
 /**  Permission key as seen by the UI and stored in audit metadata. */
 export type Perm = "SALE_CREATE" | "QUICK_SALE" | "PRICE_OVERRIDE" | "LINE_DISCOUNT" | "ORDER_DISCOUNT" | "VOID_ORDER" | "DRAWER_NO_SALE" | "CASH_PAY_IN_OUT" | "CASH_SESSION_MANAGE" | "CASH_SESSION_FORCE_CLOSE" | "REPRINT_RECEIPT" | "STOCK_ADJUST" | "STOCK_DAMAGE" | "BATCH_MANAGE" | "PRODUCT_MANAGE" | "QUICK_SALE_PROMOTE" | "LABEL_PRINT" | "VIEW_COST" | "REPORT_SALES" | "REPORT_FINANCIAL" | "EXPENSE_MANAGE" | "SETTINGS_MANAGE" | "USER_MANAGE" | "AUDIT_VIEW" | "SYNC_MANAGE" | "BACKUP_RESTORE" | "DATA_EXPORT" | "CUSTOMER_VIEW" | "BACKUP_CREATE";
+
+export type PlacedBarcode = {
+	symbology: Symbology,
+	data: string,
+	x_mm: number,
+	y_mm: number,
+	/**  Bars only (the human-readable line sits under them, inside the element box). */
+	bar_h_mm: number,
+	module_dots: number,
+	module_mm: number,
+	/**  Alternating bar / space widths in modules, starting with a bar (for the SVG preview). */
+	widths: number[],
+	/**  Bars plus quiet zones fit the element box. */
+	fits: boolean,
+};
+
+export type PlacedLabel = PlacedLabel_Serialize | PlacedLabel_Deserialize;
+
+export type PlacedLabel_Deserialize = {
+	row: number,
+	col: number,
+	product_id: string,
+	/**  Top-left of the label on the roll, mm. */
+	x_mm: number,
+	texts: PlacedText[],
+	barcode?: PlacedBarcode | null,
+};
+
+export type PlacedLabel_Serialize = {
+	row: number,
+	col: number,
+	product_id: string,
+	/**  Top-left of the label on the roll, mm. */
+	x_mm: number,
+	texts: PlacedText[],
+	barcode: PlacedBarcode | null,
+};
+
+export type PlacedText = {
+	kind: ElementKind,
+	/**  Absolute position on the roll, mm (calibration offset included). */
+	x_mm: number,
+	y_mm: number,
+	w_mm: number,
+	h_mm: number,
+	font_size: number,
+	bold: boolean,
+	align: Align,
+	/**  One entry per printed line, already fitted (wrapped, truncated, unprintable characters as `?`). */
+	lines: string[],
+};
 
 export type PrinterHealth = 
 /**  No profile in `device_settings` yet: jobs wait, selling continues. */
@@ -950,6 +1909,191 @@ export type Product_Serialize = {
 	version: number,
 };
 
+export type PromoteInput = PromoteInput_Serialize | PromoteInput_Deserialize;
+
+export type PromoteInput_Deserialize = {
+	custom_key: string,
+	/**  The product name (defaults in the UI to the latest spelling; editable). */
+	name: string,
+	price: number,
+	default_cost: number,
+	category_id?: string | null,
+	/**  Give the new product an in-store barcode (for labels) as well as its SKU. */
+	generate_barcode: boolean,
+	/**  Units on the shelf right now (`None` = none counted). */
+	shelf_qty?: number | null,
+	/**  A received batch the shelf stock belongs to; `None` = the `ADJUSTMENTS` batch at `default_cost`. */
+	batch_id?: string | null,
+};
+
+export type PromoteInput_Serialize = {
+	custom_key: string,
+	/**  The product name (defaults in the UI to the latest spelling; editable). */
+	name: string,
+	price: number,
+	default_cost: number,
+	category_id: string | null,
+	/**  Give the new product an in-store barcode (for labels) as well as its SKU. */
+	generate_barcode: boolean,
+	/**  Units on the shelf right now (`None` = none counted). */
+	shelf_qty: number | null,
+	/**  A received batch the shelf stock belongs to; `None` = the `ADJUSTMENTS` batch at `default_cost`. */
+	batch_id: string | null,
+};
+
+export type PromoteResult = PromoteResult_Serialize | PromoteResult_Deserialize;
+
+export type PromoteResult_Deserialize = {
+	product: Product_Deserialize,
+	shelf_qty: number,
+};
+
+export type PromoteResult_Serialize = {
+	product: Product_Serialize,
+	shelf_qty: number,
+};
+
+/**  What the till's Quick Sale bar shows when the typed name is a promoted key: "Now a product: …". */
+export type PromotedHint = PromotedHint_Serialize | PromotedHint_Deserialize;
+
+/**  What the till's Quick Sale bar shows when the typed name is a promoted key: "Now a product: …". */
+export type PromotedHint_Deserialize = {
+	product: ProductSummary_Deserialize,
+};
+
+/**  What the till's Quick Sale bar shows when the typed name is a promoted key: "Now a product: …". */
+export type PromotedHint_Serialize = {
+	product: ProductSummary_Serialize,
+};
+
+export type QuickSaleDetail = {
+	custom_key: string,
+	/**  Median unit price over the completed sales of this key. */
+	median_price: number,
+	counters: CounterSales[],
+	/**  Every spelling typed for it, most recent first. */
+	spellings: string[],
+};
+
+export type QuickSaleRow = QuickSaleRow_Serialize | QuickSaleRow_Deserialize;
+
+export type QuickSaleRow_Deserialize = {
+	custom_key: string,
+	/**  The latest spelling typed at the till. */
+	display_name: string,
+	times_sold: number,
+	units_sold: number,
+	revenue_net: number,
+	last_price: number,
+	min_price: number,
+	max_price: number,
+	first_sold_at: string,
+	last_sold_at: string,
+	status: QuickSaleStatus,
+	/**  The product it became, when promoted. */
+	product_id?: string | null,
+};
+
+export type QuickSaleRow_Serialize = {
+	custom_key: string,
+	/**  The latest spelling typed at the till. */
+	display_name: string,
+	times_sold: number,
+	units_sold: number,
+	revenue_net: number,
+	last_price: number,
+	min_price: number,
+	max_price: number,
+	first_sold_at: string,
+	last_sold_at: string,
+	status: QuickSaleStatus,
+	/**  The product it became, when promoted. */
+	product_id: string | null,
+};
+
+export type QuickSaleStatus = "new" | "promoted" | "ignored";
+
+/**  Rows written per derived table by [`rebuild_derived`]. */
+export type RebuildReport = {
+	daily_sales_summary: number,
+	daily_payment_summary: number,
+	customer_stats: number,
+	quick_sale_stats: number,
+	stock_levels: number,
+	batch_item_stock: number,
+	products_fts: number,
+};
+
+export type ReceiptData = ReceiptData_Serialize | ReceiptData_Deserialize;
+
+export type ReceiptData_Deserialize = {
+	order_id: string,
+	store_name: string,
+	receipt_no: string,
+	/**  `completed` or `voided` (a voided order's reprint carries a VOID banner). */
+	status: string,
+	business_date: string,
+	completed_at: string,
+	cashier: string,
+	lines: ReceiptLine[],
+	item_count: number,
+	gross_sales: number,
+	discount_total: number,
+	grand_total: number,
+	payments: ReceiptPayment_Deserialize[],
+	change_due: number,
+	/**  `07X XXX X123`, or `None` when no customer was attached (or the profile was erased). */
+	customer_masked?: string | null,
+	footer: string,
+};
+
+export type ReceiptData_Serialize = {
+	order_id: string,
+	store_name: string,
+	receipt_no: string,
+	/**  `completed` or `voided` (a voided order's reprint carries a VOID banner). */
+	status: string,
+	business_date: string,
+	completed_at: string,
+	cashier: string,
+	lines: ReceiptLine[],
+	item_count: number,
+	gross_sales: number,
+	discount_total: number,
+	grand_total: number,
+	payments: ReceiptPayment_Serialize[],
+	change_due: number,
+	/**  `07X XXX X123`, or `None` when no customer was attached (or the profile was erased). */
+	customer_masked: string | null,
+	footer: string,
+};
+
+export type ReceiptLine = {
+	name: string,
+	qty: number,
+	list_price: number,
+	unit_price: number,
+	line_gross: number,
+	line_discount: number,
+	line_total: number,
+};
+
+export type ReceiptPayment = ReceiptPayment_Serialize | ReceiptPayment_Deserialize;
+
+export type ReceiptPayment_Deserialize = {
+	method: string,
+	amount: number,
+	tendered?: number | null,
+	reference?: string | null,
+};
+
+export type ReceiptPayment_Serialize = {
+	method: string,
+	amount: number,
+	tendered: number | null,
+	reference: string | null,
+};
+
 /**  This counter's receipt printer (and the drawer on its RJ11 port). Device-local, not synced. */
 export type ReceiptPrinterProfile = {
 	transport: TransportConfig,
@@ -959,6 +2103,13 @@ export type ReceiptPrinterProfile = {
 	feed_lines: number,
 	qr: boolean,
 	drawer_pin: DrawerPin,
+};
+
+/**  A counter for the report's counter filter. */
+export type ReportDevice = {
+	device_id: string,
+	/**  `T01`…, from its receipt numbers. */
+	device_code: string,
 };
 
 export type Role = {
@@ -971,6 +2122,37 @@ export type Role = {
 	/**  Minimum PIN length for this role (6 for Manager and Owner, else 4). */
 	min_pin_len: number,
 };
+
+/**  One row of "sales by product / category / batch". */
+export type SalesByRow = SalesByRow_Serialize | SalesByRow_Deserialize;
+
+/**  One row of "sales by product / category / batch". */
+export type SalesByRow_Deserialize = {
+	/**
+	 *  Product, category or batch id. `None` = quick sales (by product), uncategorised (by category), or
+	 *  sales from no batch layer (by batch: untracked products and untagged quick sales).
+	 */
+	id?: string | null,
+	label?: string | null,
+	qty: number,
+	net: number,
+	cost?: number | null,
+};
+
+/**  One row of "sales by product / category / batch". */
+export type SalesByRow_Serialize = {
+	/**
+	 *  Product, category or batch id. `None` = quick sales (by product), uncategorised (by category), or
+	 *  sales from no batch layer (by batch: untracked products and untagged quick sales).
+	 */
+	id: string | null,
+	label: string | null,
+	qty: number,
+	net: number,
+	cost: number | null,
+};
+
+export type SalesDimension = "product" | "category" | "batch";
 
 /**  What the UI receives — never the PIN hash; permissions as keys, not a mask. */
 export type SessionInfo = {
@@ -1077,6 +2259,96 @@ export type StaffMember_Serialize = {
 	last_owner: boolean,
 };
 
+/**  What a write did: the units and their cost, per layer touched. */
+export type StockChange = {
+	product_id: string,
+	qty_delta: number,
+	/**  Σ qty × layer cost (negative for a write-off). */
+	cost_delta: number,
+	on_hand_after: number,
+};
+
+/**  What the stock is worth (doc §5): Σ max(on_hand, 0) × layer cost, and × today's price at retail. */
+export type StockValuation = StockValuation_Serialize | StockValuation_Deserialize;
+
+/**  What the stock is worth (doc §5): Σ max(on_hand, 0) × layer cost, and × today's price at retail. */
+export type StockValuation_Deserialize = {
+	/**  `None` = now. */
+	as_of?: string | null,
+	total_units: number,
+	value_at_cost: number,
+	value_at_retail: number,
+	by_batch: ValuationGroup_Deserialize[],
+	by_category: ValuationGroup_Deserialize[],
+	/**  Oversold layers needing attention (excluded from the totals). */
+	negative_layers: number,
+};
+
+/**  What the stock is worth (doc §5): Σ max(on_hand, 0) × layer cost, and × today's price at retail. */
+export type StockValuation_Serialize = {
+	/**  `None` = now. */
+	as_of: string | null,
+	total_units: number,
+	value_at_cost: number,
+	value_at_retail: number,
+	by_batch: ValuationGroup_Serialize[],
+	by_category: ValuationGroup_Serialize[],
+	/**  Oversold layers needing attention (excluded from the totals). */
+	negative_layers: number,
+};
+
+export type Symbology = "code128" | "ean13";
+
+export type SymbologyRule = "auto" | "code128" | "ean13";
+
+/**  Calibration of a template (Settings → Labels): roll geometry only; the element boxes are the built-ins'. */
+export type TemplateCalibration = {
+	col_gap_mm: number,
+	row_gap_mm: number,
+	left_margin_mm: number,
+};
+
+export type TopCustomer = TopCustomer_Serialize | TopCustomer_Deserialize;
+
+export type TopCustomer_Deserialize = {
+	customer_id: string,
+	/**  `None` once erased (shown as an anonymous customer). */
+	display_name?: string | null,
+	phone_display?: string | null,
+	visits: number,
+	spend: number,
+};
+
+export type TopCustomer_Serialize = {
+	customer_id: string,
+	/**  `None` once erased (shown as an anonymous customer). */
+	display_name: string | null,
+	phone_display: string | null,
+	visits: number,
+	spend: number,
+};
+
+/**  A product or category in a customer's top list (completed orders only). */
+export type TopItem = TopItem_Serialize | TopItem_Deserialize;
+
+/**  A product or category in a customer's top list (completed orders only). */
+export type TopItem_Deserialize = {
+	/**  Product or category id; `None` = quick sales (top products) or uncategorised (top categories). */
+	id?: string | null,
+	name?: string | null,
+	qty: number,
+	net: number,
+};
+
+/**  A product or category in a customer's top list (completed orders only). */
+export type TopItem_Serialize = {
+	/**  Product or category id; `None` = quick sales (top products) or uncategorised (top categories). */
+	id: string | null,
+	name: string | null,
+	qty: number,
+	net: number,
+};
+
 export type TransportConfig = 
 /**  A Windows printer queue, written with the RAW datatype (USB printers with a vendor/generic driver). */
 { kind: "spooler"; printer_name: string } | 
@@ -1085,9 +2357,87 @@ export type TransportConfig =
 /**  `COM3` at the printer's baud rate. */
 { kind: "serial"; port: string; baud: number };
 
+/**  One bucket of the trend charts (revenue vs expenses, sales trend). */
+export type TrendPoint = TrendPoint_Serialize | TrendPoint_Deserialize;
+
+/**  One bucket of the trend charts (revenue vs expenses, sales trend). */
+export type TrendPoint_Deserialize = {
+	/**  The date, the week's first day, or `YYYY-MM`. */
+	bucket: string,
+	sales_count: number,
+	net_sales: number,
+	/**  Sale-slice cost (allocation variance is a batch-level figure and stays in the summary). */
+	sales_cost?: number | null,
+	expenses?: number | null,
+};
+
+/**  One bucket of the trend charts (revenue vs expenses, sales trend). */
+export type TrendPoint_Serialize = {
+	/**  The date, the week's first day, or `YYYY-MM`. */
+	bucket: string,
+	sales_count: number,
+	net_sales: number,
+	/**  Sale-slice cost (allocation variance is a batch-level figure and stays in the summary). */
+	sales_cost: number | null,
+	expenses: number | null,
+};
+
+/**  The trend and, on request, the previous equivalent period's, aligned bucket by bucket. */
+export type TrendSeries = TrendSeries_Serialize | TrendSeries_Deserialize;
+
+/**  The trend and, on request, the previous equivalent period's, aligned bucket by bucket. */
+export type TrendSeries_Deserialize = {
+	current: TrendPoint_Deserialize[],
+	previous?: TrendPoint_Deserialize[] | null,
+};
+
+/**  The trend and, on request, the previous equivalent period's, aligned bucket by bucket. */
+export type TrendSeries_Serialize = {
+	current: TrendPoint_Serialize[],
+	previous: TrendPoint_Serialize[] | null,
+};
+
 export type UiLanguage = "en" | "si";
 
 export type UiTheme = "light" | "dark";
+
+export type ValuationGroup = ValuationGroup_Serialize | ValuationGroup_Deserialize;
+
+export type ValuationGroup_Deserialize = {
+	/**  Batch id, or category id (`None` = uncategorised). */
+	id?: string | null,
+	label: string,
+	units: number,
+	value_at_cost: number,
+	value_at_retail: number,
+};
+
+export type ValuationGroup_Serialize = {
+	/**  Batch id, or category id (`None` = uncategorised). */
+	id: string | null,
+	label: string,
+	units: number,
+	value_at_cost: number,
+	value_at_retail: number,
+};
+
+export type VoidGroup = VoidGroup_Serialize | VoidGroup_Deserialize;
+
+export type VoidGroup_Deserialize = {
+	/**  The void reason code, or the approving staff id. */
+	key: string,
+	label?: string | null,
+	count: number,
+	value: number,
+};
+
+export type VoidGroup_Serialize = {
+	/**  The void reason code, or the approving staff id. */
+	key: string,
+	label: string | null,
+	count: number,
+	value: number,
+};
 
 export type VoidInput = VoidInput_Serialize | VoidInput_Deserialize;
 
@@ -1139,6 +2489,27 @@ export type VoidReasonTotal = {
 	reason: string,
 	count: number,
 	value: number,
+};
+
+/**  Voids for control (§5.1): shown, never counted in revenue. */
+export type VoidReport = VoidReport_Serialize | VoidReport_Deserialize;
+
+/**  Voids for control (§5.1): shown, never counted in revenue. */
+export type VoidReport_Deserialize = {
+	count: number,
+	value: number,
+	by_reason: VoidGroup_Deserialize[],
+	/**  By the supervisor who approved (or the voider, when their own role holds `VOID_ORDER`). */
+	by_approver: VoidGroup_Deserialize[],
+};
+
+/**  Voids for control (§5.1): shown, never counted in revenue. */
+export type VoidReport_Serialize = {
+	count: number,
+	value: number,
+	by_reason: VoidGroup_Serialize[],
+	/**  By the supervisor who approved (or the voider, when their own role holds `VOID_ORDER`). */
+	by_approver: VoidGroup_Serialize[],
 };
 
 export type VoidResult = {

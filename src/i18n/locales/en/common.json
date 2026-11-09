@@ -1,5 +1,7 @@
 {
-  "app": { "name": "GayanShop POS" },
+  "app": {
+    "name": "GayanShop POS"
+  },
   "actions": {
     "ok": "OK",
     "cancel": "Cancel",
@@ -9,13 +11,68 @@
     "retry": "Retry",
     "close": "Close"
   },
-  "language": { "label": "Language", "en": "English", "si": "සිංහල" },
-  "theme": { "label": "Theme", "light": "Light", "dark": "Dark" },
+  "language": {
+    "label": "Language",
+    "en": "English",
+    "si": "සිංහල"
+  },
+  "theme": {
+    "label": "Theme",
+    "light": "Light",
+    "dark": "Dark"
+  },
   "table": {
     "empty": "Nothing to show yet",
     "loading": "Loading…",
     "rowCount_one": "{{count}} row",
     "rowCount_other": "{{count}} rows"
   },
-  "nav": { "till": "Till", "backOffice": "Back office" }
+  "nav": {
+    "till": "Till",
+    "backOffice": "Back office"
+  },
+  "period": {
+    "label": "Period",
+    "day": "Day",
+    "week": "Week",
+    "month": "Month",
+    "year": "Year",
+    "all_time": "All time",
+    "custom": "Custom",
+    "date": "Date",
+    "weekOf": "Any day in the week",
+    "from": "From",
+    "to": "To"
+  },
+  "receipt": {
+    "title": "Receipt {{no}}",
+    "item": "Item",
+    "qty": "Qty",
+    "total": "Total",
+    "discount": "Discount",
+    "grandTotal": "Total paid",
+    "change": "Change",
+    "voided": "Voided",
+    "methods": {
+      "cash": "Cash",
+      "card": "Card",
+      "bank_transfer": "Bank transfer",
+      "qr": "QR",
+      "other": "Other"
+    }
+  },
+  "export": {
+    "kinds": {
+      "orders": "Export orders",
+      "order_lines": "Export order lines",
+      "products": "Export products",
+      "customers": "Export customers",
+      "expenses": "Export expenses",
+      "stock_movements": "Export stock movements",
+      "sales_by_product": "Export sales by product"
+    },
+    "done_one": "Exported {{count}} row to {{path}}",
+    "done_other": "Exported {{count}} rows to {{path}}",
+    "failed": "The export failed."
+  }
 }
