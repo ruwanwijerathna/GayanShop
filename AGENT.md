@@ -439,7 +439,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
 - [x] **3.1 Supabase schema**: done 2026-11-09 (local stack; live deploy is the owner's step)
   - **Deliverables:** `supabase/migrations` (mirror of §4.3 + `server_seq`, `processed_ops`, `devices`, RLS incl. no-UPDATE/DELETE policies), pgTAP tests.
   - **Gate:** `supabase test db` + `pnpm verify`
-- [ ] **3.2 Sync RPCs**
+- [x] **3.2 Sync RPCs**: done 2026-11-09
   - **Deliverables:** `sync_push` (advisory lock, idempotency, invariants: owner, cost lock, order state machine, audit chain), `sync_pull` (global cursor, parent closure).
   - **Gate:** `supabase test db` + `pnpm verify`
 - [ ] **3.3 Device registration**

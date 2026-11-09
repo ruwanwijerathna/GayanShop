@@ -2404,18 +2404,21 @@ GROUP BY b.id;
    - At 2–3 counters, the lock costs milliseconds.
    - Any other server-side writer, such as a future dashboard, must take the same lock. If writer volume ever grows, switch to a "safe watermark" pull.
 
-   For each op:
-   - If the `op_id` is already in `processed_ops`, return `ok`. This is a replay.
-   - Otherwise validate it: run the table's merge rule (§6.3) and the invariants (owner invariant, batch cost lock, order immutability, audit chain continuity). Then apply it, record the `op_id`, and return `ok` or `rejected{reason}`.
-4. The client deletes `ok` ops. A `rejected` op becomes `dead`, gets a `sync_logs` entry, and is surfaced in Settings → Sync (`SYNC_MANAGE`). A network or 5xx failure makes the op `failed` with `attempts+1` and a backoff.
+   For each op (each in its own subtransaction, so one bad op never undoes the batch):
+   - If the `op_id` is already in `processed_ops`, return its recorded result. This is a replay.
+   - Otherwise validate it: run the table's merge rule (§6.3) and the invariants (owner invariant, batch cost lock, order immutability, audit chain continuity). Then apply it, record the `op_id`, and return `ok` or `rejected{reason}`. Rejections are recorded too, so a replayed rejected op is rejected again.
+   - A row whose parent hasn't reached the cloud yet (a foreign-key miss) returns `retry`. It isn't recorded, so it can succeed later.
+   - Only `upsert` ops exist: deletes are soft (`deleted_at`).
+4. The client deletes `ok` ops. A `rejected` op becomes `dead`, gets a `sync_logs` entry, and is surfaced in Settings → Sync (`SYNC_MANAGE`). A `retry`, a network failure or a 5xx makes the op `failed` with `attempts+1` and a backoff.
 5. Parents go before children, by enqueue order within each transaction.
 
 ### 6.2 Pull
-- `rpc/sync_pull({ cursor, limit, include_own: false })` uses **one global cursor**. `server_seq` is a single store-wide sequence, so per-table cursors would add nothing but ordering hazards. It returns rows across all tables with `server_seq > cursor`, ordered by `server_seq`, **excluding this device's own writes**, which it already has:
+- `rpc/sync_pull({ cursor, max_rows, include_own: false })` uses **one global cursor**. It returns `{ rows: [{ seq, table, row }], cursor, has_more, watermark }`. `server_seq` is a single store-wide sequence, so per-table cursors would add nothing but ordering hazards. It returns rows across all tables with `server_seq > cursor`, ordered by `server_seq`, **excluding this device's own writes**, which it already has:
   - Mutable tables and `orders`: `updated_by_device = me`.
   - Insert-only tables: `device_id = me`.
 
   Rows the server modified carry the SYSTEM device ID, so they always come back.
+- **Cursor and watermark.** Before reading, the server takes the store's newest `server_seq` (the watermark) and reads only up to it. Every row at or below it is committed, because pushes are serialised per store. A full page's cursor is its last row's seq. The last page's cursor jumps to the watermark, past this device's own newest rows, which it never receives.
 - **Parent closure.** Ordering by `server_seq` alone can't guarantee parents arrive before children:
   - A page limit can cut between a parent and its child.
   - A mutable parent gets a *new* `server_seq` on every edit. A `batch_item` created at seq 100 and edited at seq 200 sorts after the movement at seq 150 that references it.
@@ -2443,7 +2446,7 @@ GROUP BY b.id;
 | `cash_sessions` | Only the originating device writes, except `CASH_SESSION_FORCE_CLOSE` from another terminal (audited). LWW. |
 | `products`, `categories`, `roles`, `staff`, `expenses`, `expense_categories`, `store_settings`, `quick_sale_links` | **Last-write-wins on the whole row** by `(updated_at, updated_by_device)`. |
 | `batches`, `batch_items` | LWW while `draft`. Once received, the server **rejects** any change to `unit_cost` or `qty_received` (dead op). Status moves forward only, except an audited reopen when there's been no movement. |
-| `staff` / `roles` owner invariant | A merged change that would leave no active Owner is rejected (`INVARIANT`) and surfaced to the owner. |
+| `staff` / `roles` owner invariant | A merged change that would leave no active Owner is rejected (`OWNER_INVARIANT`) and surfaced to the owner. Only a change that *removes* the last active Owner counts: while a store's seeds are first arriving there is none yet. |
 | `audit_logs` chain | The server checks `prev_hash` against the device's `last_audit_hash`. A mismatch is still **accepted**, but flagged (`devices.chain_broken_at`) and shown on the Audit screen. Losing audit rows would be worse than storing a broken chain. |
 | Barcode collision (two devices registered the same barcode offline) | It's never a rejection, because a sale must never fail over this. **Server:** before upserting an active product, check for another live, active product with that barcode. If one exists, store the incoming row with `is_active=false`, `barcode_conflict=true`, `updated_at=now()` and `updated_by_device=SYSTEM`, and return `ok`. **Client pull:** before applying a pulled active product, deactivate any *other* local active product with that barcode in the same transaction (`barcode_conflict=1` plus an outbox upsert). The partial unique index can't fail the pull. The owner resolves it in "Barcode conflicts" (`BARCODE_CONFLICT_RESOLVE`). |
 | `quick_sale_links` | The deterministic ID means concurrent promotions of the same key converge on one row. If two managers created *different* products for it, the loser's product stays, and the review screen flags "duplicate product from promotion". |
