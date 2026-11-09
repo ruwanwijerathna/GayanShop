@@ -51,6 +51,8 @@ Found earlier in the phase:
 1. **Log in with the Supabase CLI.** Run `pnpm exec supabase login` (it opens the browser), then `pnpm exec supabase link --project-ref tqfoinnftjxlueutlufq`. Linking asks for the database password.
 2. **Push the schema.** `pnpm exec supabase db push` applies `supabase/migrations` to the live project. Review the plan it prints first.
 3. **Deploy the function.** `pnpm exec supabase functions deploy register-device`. The function reads `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY`, which Supabase provides to functions automatically. The service-role key never goes into the app.
+   - If registering a counter then fails with "The server's registration service isn't set up yet" (`FUNCTION_NOT_CONFIGURED`), those variables are missing in the project's function settings.
+   - Before `db push`, check that the project's Postgres major version is 17, the same as `supabase/config.toml`.
 4. **Turn sign-ups off.** In the dashboard's Authentication settings, turn off "Allow new users to sign up" (decision #19). The local stack already has `enable_signup = false`.
 5. **Create the owner account.** Dashboard → Authentication → Users → Add user, with your email and a strong password. Tick "Auto confirm".
 6. **Register T01.** On T01: Settings → Cloud sync → Register this counter.

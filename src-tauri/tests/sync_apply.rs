@@ -497,3 +497,27 @@ async fn a_change_the_cloud_refuses_gives_way_to_the_cloud_version() {
     assert_eq!(b.count("SELECT COUNT(*) FROM sync_outbox WHERE status = 'dead'").await, 1, "shown as refused");
     assert_eq!(b.count(&price).await, 45_000, "and the cloud's version replaced the refused edit");
 }
+
+#[tokio::test]
+async fn a_newer_local_edit_after_a_refusal_is_not_overwritten() {
+    let a = t01().await;
+    let p = a.product("Bucket", 45_000, None, None).await;
+    let hub = hub_for(&a).await;
+    a.round(&hub).await;
+    let b = joined(&hub, &a.store_id, "T02").await;
+    b.edit_price(&p, 99_000).await;
+    hub.reject_tables.lock().unwrap().insert("products".into());
+    b.round(&hub).await;
+    hub.reject_tables.lock().unwrap().clear();
+    // A new, legitimate edit on T02 that hasn't been pushed yet when the cloud's row comes round again.
+    b.edit_price(&p, 50_000).await;
+    hub.put("products", hub.row("products", &p).unwrap());
+    let opts = PullOptions { page_size: 500, max_pages: 10, include_own: false };
+    engine::pull(&b.db, &hub.client(&b.device_id), &b.clock, &b.device_id, opts, &|_| {}).await.unwrap();
+    let price = format!("SELECT price FROM products WHERE id = '{p}'");
+    assert_eq!(b.count(&price).await, 50_000, "the newer local edit stays");
+    b.round(&hub).await;
+    assert_eq!(hub.row("products", &p).unwrap()["price"], 50_000, "and reaches the cloud");
+    a.round(&hub).await;
+    assert_eq!(a.count(&price).await, 50_000, "and the other counters");
+}

@@ -237,17 +237,18 @@ impl Applier<'_> {
             }
             erasure = erasing && erased.is_none();
         }
-        // A local change the cloud refused (its op is dead) gives way to the cloud's version, which the
-        // server re-sends when it refuses a change: this counter must not keep a row the cloud rejected.
+        // A local change the cloud refused gives way to the cloud's version, which the server re-sends when it
+        // refuses a change: this counter must not keep a row the cloud rejected. Only while that refused op
+        // is the row's latest one: a newer local edit still waiting to be pushed stays, by last-write-wins.
         let refused = local.is_some() && {
-            let n: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM sync_outbox WHERE table_name = ?1 AND row_id = ?2 AND status = 'dead'",
+            let latest: Option<String> = sqlx::query_scalar(
+                "SELECT status FROM sync_outbox WHERE table_name = ?1 AND row_id = ?2 ORDER BY seq DESC LIMIT 1",
             )
             .bind(table)
             .bind(id)
-            .fetch_one(&mut *self.conn)
+            .fetch_optional(&mut *self.conn)
             .await?;
-            n > 0
+            latest.as_deref() == Some("dead")
         };
         if !erasure
             && !refused
