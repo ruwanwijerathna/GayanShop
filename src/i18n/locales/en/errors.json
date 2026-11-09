@@ -117,7 +117,15 @@
     "DATE_INVALID": "That date isn't valid.",
     "QUICK_SALE_ALREADY_PROMOTED": "This quick sale is already a product.",
     "CUSTOMER_NOTE_INVALID": "The note can have at most 500 characters.",
-    "PERIOD_INVALID": "That period isn't valid: check the dates."
+    "PERIOD_INVALID": "That period isn't valid: check the dates.",
+    "EXPENSE_CATEGORY_NAME_INVALID": "A category name needs 1–60 characters.",
+    "EXPENSE_CATEGORY_EXISTS": "A category with that name already exists.",
+    "EXPENSE_CATEGORY_INACTIVE": "That category is retired. Restore it or pick another.",
+    "EXPENSE_DATE_INVALID": "Pick a valid date, not in the future.",
+    "EXPENSE_DRAWER_CASH_ONLY": "Only cash can be paid from the drawer.",
+    "EXPENSE_DRAWER_TODAY_ONLY": "Drawer payments are for today only.",
+    "EXPENSE_DRAWER_LOCKED": "This expense moved drawer cash: its amount, date and method are fixed, and it can only be deleted while its shift is open.",
+    "EXPENSE_TEXT_TOO_LONG": "Paid to and note can have at most 200 characters."
   },
   "INVARIANT": {
     "_": "This change isn't allowed.",

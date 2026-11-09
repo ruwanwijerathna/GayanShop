@@ -13,6 +13,7 @@ pub mod batches;
 pub mod cash;
 pub mod checkout;
 pub mod customers;
+pub mod expenses;
 pub mod hardware;
 pub mod inventory;
 pub mod labels;

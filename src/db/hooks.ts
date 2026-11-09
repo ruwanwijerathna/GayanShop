@@ -17,6 +17,8 @@ import {
   type CloseInput,
   type CustomerSort,
   type CustomerUpdate,
+  type ExpenseCategoryInput,
+  type ExpenseInput,
   type Granularity,
   type HistoryCursor,
   type Period,
@@ -61,6 +63,9 @@ export const queryKeys = {
   customerAnalytics: (period: Period, g: Granularity) =>
     ["customers", "analytics", JSON.stringify(period), g] as const,
   businessToday: ["app", "today"] as const,
+  expenseCategories: ["expenses", "categories"] as const,
+  expenseList: (period: Period, categoryId: string | null) =>
+    ["expenses", "list", JSON.stringify(period), categoryId ?? "all"] as const,
   sessionOrders: ["orders", "session"] as const,
   heldCarts: ["pos", "held"] as const,
   currentCart: ["pos", "current"] as const,
@@ -745,4 +750,56 @@ export function useUpdateCustomer() {
 
 export function useEraseCustomer() {
   return useCustomerMutation((id: string) => unwrap(commands.eraseCustomer(id)));
+}
+
+// ───────── expenses (doc §5.1, EXPENSE_MANAGE) ─────────
+
+export function useExpenseCategories() {
+  return useQuery({
+    queryKey: queryKeys.expenseCategories,
+    queryFn: () => unwrap(commands.expenseCategories()),
+  });
+}
+
+export function useExpenseList(period: Period, categoryId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.expenseList(period, categoryId),
+    queryFn: () => unwrap(commands.expenseList(period, categoryId)),
+  });
+}
+
+function useExpenseMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["expenses"] });
+      await qc.invalidateQueries({ queryKey: ["cash"] });
+      await qc.invalidateQueries({ queryKey: queryKeys.audit });
+    },
+  });
+}
+
+export function useSaveExpenseCategory() {
+  return useExpenseMutation(({ id, input }: { id: string | null; input: ExpenseCategoryInput }) =>
+    unwrap(commands.saveExpenseCategory(id, input)),
+  );
+}
+
+export function useRecordExpense() {
+  return useExpenseMutation(({ input, approvalId }: { input: ExpenseInput; approvalId: string | null }) =>
+    unwrap(commands.recordExpense(input, approvalId)),
+  );
+}
+
+export function useUpdateExpense() {
+  return useExpenseMutation(({ id, input }: { id: string; input: ExpenseInput }) =>
+    unwrap(commands.updateExpense(id, input)),
+  );
+}
+
+export function useDeleteExpense() {
+  return useExpenseMutation(({ id, approvalId }: { id: string; approvalId: string | null }) =>
+    unwrap(commands.deleteExpense(id, approvalId)),
+  );
 }

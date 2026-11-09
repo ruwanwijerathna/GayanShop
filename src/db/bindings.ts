@@ -125,6 +125,12 @@ export const commands = {
 	updateCustomer: (id: string, input: CustomerUpdate_Deserialize) => typedError<null, AppError>(__TAURI_INVOKE("update_customer", { id, input })),
 	/**  PDPA erasure on request (doc §3.8). */
 	eraseCustomer: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("erase_customer", { id })),
+	expenseCategories: () => typedError<ExpenseCategory[], AppError>(__TAURI_INVOKE("expense_categories")),
+	saveExpenseCategory: (id: string | null, input: ExpenseCategoryInput) => typedError<string, AppError>(__TAURI_INVOKE("save_expense_category", { id, input })),
+	expenseList: (period: Period, categoryId: string | null) => typedError<ExpenseList_Serialize, AppError>(__TAURI_INVOKE("expense_list", { period, categoryId })),
+	recordExpense: (input: ExpenseInput_Deserialize, approvalId: string | null) => typedError<ExpenseRow_Serialize, AppError>(__TAURI_INVOKE("record_expense", { input, approvalId })),
+	updateExpense: (id: string, input: ExpenseInput_Deserialize) => typedError<ExpenseRow_Serialize, AppError>(__TAURI_INVOKE("update_expense", { id, input })),
+	deleteExpense: (id: string, approvalId: string | null) => typedError<null, AppError>(__TAURI_INVOKE("delete_expense", { id, approvalId })),
 	printerStatus: () => typedError<PrinterStatusView_Serialize, AppError>(__TAURI_INVOKE("printer_status")),
 	printerProfile: () => typedError<ReceiptPrinterProfile | null, AppError>(__TAURI_INVOKE("printer_profile")),
 	setPrinterProfile: (profile: ReceiptPrinterProfile) => typedError<null, AppError>(__TAURI_INVOKE("set_printer_profile", { profile })),
@@ -608,6 +614,13 @@ export type CategoryInput_Serialize = {
 	parent_id: string | null,
 };
 
+export type CategoryTotal = {
+	category_id: string,
+	name: string,
+	amount: number,
+	count: number,
+};
+
 export type Category_Deserialize = {
 	id: string,
 	name: string,
@@ -1006,6 +1019,98 @@ export type DrawerMovement_Serialize = {
 export type DrawerPin = "pin2" | "pin5";
 
 export type ElementKind = "store_name" | "product_name" | "attributes" | "price" | "barcode";
+
+export type ExpenseCategory = {
+	id: string,
+	name: string,
+	is_active: boolean,
+	/**  Expenses recorded against it (not deleted): a used category can be retired, never removed. */
+	used: number,
+};
+
+export type ExpenseCategoryInput = {
+	name: string,
+	is_active: boolean,
+};
+
+export type ExpenseInput = ExpenseInput_Serialize | ExpenseInput_Deserialize;
+
+export type ExpenseInput_Deserialize = {
+	category_id: string,
+	amount: number,
+	/**  The expense's business date; `None` = today. Never in the future. */
+	business_date?: string | null,
+	payment_method: PaymentMethod,
+	/**  Cash taken from this counter's drawer now (a `pay_out` in the open session). */
+	paid_from_drawer: boolean,
+	payee?: string | null,
+	note?: string | null,
+};
+
+export type ExpenseInput_Serialize = {
+	category_id: string,
+	amount: number,
+	/**  The expense's business date; `None` = today. Never in the future. */
+	business_date: string | null,
+	payment_method: PaymentMethod,
+	/**  Cash taken from this counter's drawer now (a `pay_out` in the open session). */
+	paid_from_drawer: boolean,
+	payee: string | null,
+	note: string | null,
+};
+
+/**  Expenses in a §5 period (newest first) with totals by category — the P&L's operating expenses. */
+export type ExpenseList = ExpenseList_Serialize | ExpenseList_Deserialize;
+
+/**  Expenses in a §5 period (newest first) with totals by category — the P&L's operating expenses. */
+export type ExpenseList_Deserialize = {
+	range: DateRange_Deserialize,
+	rows: ExpenseRow_Deserialize[],
+	by_category: CategoryTotal[],
+	total: number,
+	from_drawer: number,
+};
+
+/**  Expenses in a §5 period (newest first) with totals by category — the P&L's operating expenses. */
+export type ExpenseList_Serialize = {
+	range: DateRange_Serialize,
+	rows: ExpenseRow_Serialize[],
+	by_category: CategoryTotal[],
+	total: number,
+	from_drawer: number,
+};
+
+export type ExpenseRow = ExpenseRow_Serialize | ExpenseRow_Deserialize;
+
+export type ExpenseRow_Deserialize = {
+	id: string,
+	category_id: string,
+	category_name: string,
+	amount: number,
+	business_date: string,
+	payment_method: string,
+	paid_from_drawer: boolean,
+	cash_session_id?: string | null,
+	payee?: string | null,
+	note?: string | null,
+	recorded_by_name?: string | null,
+	created_at: string,
+};
+
+export type ExpenseRow_Serialize = {
+	id: string,
+	category_id: string,
+	category_name: string,
+	amount: number,
+	business_date: string,
+	payment_method: string,
+	paid_from_drawer: boolean,
+	cash_session_id: string | null,
+	payee: string | null,
+	note: string | null,
+	recorded_by_name: string | null,
+	created_at: string,
+};
 
 /**  Trend-chart buckets. */
 export type Granularity = "day" | "week" | "month";

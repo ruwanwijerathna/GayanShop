@@ -23,6 +23,8 @@ const TABLE_KEYS: Record<string, readonly string[] | readonly (readonly string[]
   customers: ["customers"],
   staff: ["staff"],
   quick_sale_links: ["quickSales"],
+  expenses: ["expenses"],
+  expense_categories: ["expenses"],
 };
 
 export function keysForTables(tables: string[]): (readonly string[])[] {

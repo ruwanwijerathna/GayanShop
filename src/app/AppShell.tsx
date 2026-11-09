@@ -12,6 +12,7 @@ import {
   Warehouse,
   Zap,
   Contact,
+  Receipt,
 } from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
@@ -118,6 +119,12 @@ export function AppShell() {
             <Link to="/customers" className={NAV_LINK} aria-label={t("nav.customers")}>
               <Contact aria-hidden className="size-5 shrink-0" />
               <span className="hidden xl:inline">{t("nav.customers")}</span>
+            </Link>
+          </Can>
+          <Can perm="EXPENSE_MANAGE">
+            <Link to="/expenses" className={NAV_LINK} aria-label={t("nav.expenses")}>
+              <Receipt aria-hidden className="size-5 shrink-0" />
+              <span className="hidden xl:inline">{t("nav.expenses")}</span>
             </Link>
           </Can>
           <Can perm="AUDIT_VIEW">

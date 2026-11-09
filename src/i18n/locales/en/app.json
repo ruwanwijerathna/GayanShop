@@ -10,7 +10,8 @@
     "staff": "Staff",
     "inventory": "Stock",
     "quickSales": "Quick sales",
-    "customers": "Customers"
+    "customers": "Customers",
+    "expenses": "Expenses"
   },
   "status": {
     "title": "Counter status",

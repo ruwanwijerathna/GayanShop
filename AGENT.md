@@ -7,7 +7,7 @@
 >
 > Never change an architectural decision silently. Propose the doc change to the owner first.
 
-**Current state (2026-11-09): Phase 2 in progress on branch `feat/phase-2-batches-reports`.** Phase 1 is complete, accepted and merged to `main` (the manual hardware, touch and pull-the-plug checks in `docs/qa/phase1-acceptance.md` are pending the owner). Blocks 2.1–2.5 are committed and green; the next block is 2.6. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
+**Current state (2026-11-09): Phase 2 in progress on branch `feat/phase-2-batches-reports`.** Phase 1 is complete, accepted and merged to `main` (the manual hardware, touch and pull-the-plug checks in `docs/qa/phase1-acceptance.md` are pending the owner). Blocks 2.1–2.6 are committed and green; the next block is 2.7. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
 
 ---
 
@@ -414,7 +414,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
 - [x] **2.5 Customer back office**: done 2026-11-09
   - **Deliverables:** list, profile, history, analytics, erasure.
   - **Gate:** `--test customer_backoffice` + `pnpm verify`
-- [ ] **2.6 Expenses**
+- [x] **2.6 Expenses**: done 2026-11-09
   - **Deliverables:** categories, entry, drawer pay-out integration.
   - **Gate:** `--test expenses` + `pnpm verify`
 - [ ] **2.7 Reports engine**

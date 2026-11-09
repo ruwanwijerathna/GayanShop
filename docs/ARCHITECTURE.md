@@ -654,6 +654,8 @@ Each device has at most **one open `cash_session`**. Sales, cash movements and d
 
 A **daily store report** aggregates all devices for a business date. The Z-report is per device per session.
 
+**Expenses and the drawer (Block 2.6).** Expenses need `EXPENSE_MANAGE`. An expense marked **paid from the drawer** must be cash, dated today, and needs this counter's open session. In the same transaction it writes a `pay_out` cash movement (reason `Expense: <category> – <payee>`, audited `CASH_PAY_OUT`, with a drawer kick) and stores `cash_session_id`, so expected cash and the Z-report's pay-outs include it. Moving drawer cash also needs `CASH_PAY_IN_OUT`, which a supervisor PIN can lend (target `cash_drawer`). Because cash movements are append-only, a drawer-paid expense keeps its amount, date and method (`EXPENSE_DRAWER_LOCKED`); only the category, payee and note change. Deleting one is allowed only while its session is still open on this counter, and appends a matching `pay_in` ("Expense deleted: …"), so the cash goes back. After the session closes it is final. Other expenses can be back-dated (never into the future), edited and soft-deleted freely, and never move cash. Categories can be added, renamed and retired (`SETTINGS_CHANGE`), never removed; names are unique case-insensitively, and a retired category takes no new expenses.
+
 ### 3.5 Role-based access control
 
 **Model.**
