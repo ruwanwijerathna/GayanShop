@@ -4,7 +4,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(60);
+SELECT plan(63);
 
 -- ─── tenancy fixtures: store A with counters T01, T02, T03; store B with T01 ───
 INSERT INTO pos.stores (id, name, owner_user_id) VALUES
@@ -198,6 +198,19 @@ SELECT is(pg_temp.statuses(sync_push('a0000000-0000-0000-0000-0000000000d2', jso
 RESET ROLE;
 SELECT ok((SELECT erased_at IS NOT NULL AND phone_e164 IS NULL AND display_name IS NULL FROM pos.customers
            WHERE id = 'a0000000-0000-0000-0000-0000000000cc'), 'but does not re-populate the erased customer');
+-- The other order: a newer edit is in the cloud, then an older erasure arrives. The erasure still wins.
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.as_device('a0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-0000000000d2');
+SELECT is(pg_temp.statuses(sync_push('a0000000-0000-0000-0000-0000000000d2', jsonb_build_array(
+  pg_temp.op('customers', '{"id":"a0000000-0000-0000-0000-0000000000ce","store_id":"a0000000-0000-0000-0000-000000000001","phone_e164":"+94771234568","display_name":"Sunil","note":null,"first_seen_at":"2026-11-08T04:00:00.000Z","erased_at":null,"created_at":"2026-11-08T04:00:00.000Z","updated_at":"2026-11-08T10:00:00.000Z","updated_by_device":"a0000000-0000-0000-0000-0000000000d2","deleted_at":null,"version":2}')))),
+  'ok', 'a customer edited late on T02');
+SELECT pg_temp.as_device('a0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-0000000000d1');
+SELECT is(pg_temp.statuses(sync_push('a0000000-0000-0000-0000-0000000000d1', jsonb_build_array(
+  pg_temp.op('customers', '{"id":"a0000000-0000-0000-0000-0000000000ce","store_id":"a0000000-0000-0000-0000-000000000001","phone_e164":null,"display_name":null,"note":null,"first_seen_at":"2026-11-08T04:00:00.000Z","erased_at":"2026-11-08T09:00:00.000Z","created_at":"2026-11-08T04:00:00.000Z","updated_at":"2026-11-08T09:00:00.000Z","updated_by_device":"a0000000-0000-0000-0000-0000000000d1","deleted_at":null,"version":2}')))),
+  'ok', 'and erased earlier on T01, arriving after');
+RESET ROLE;
+SELECT ok((SELECT erased_at IS NOT NULL AND phone_e164 IS NULL AND display_name IS NULL FROM pos.customers
+           WHERE id = 'a0000000-0000-0000-0000-0000000000ce'), 'the older erasure still wins over the newer edit');
 
 -- ─── audit chain: a gap is stored but flagged ───
 SET LOCAL ROLE authenticated;
