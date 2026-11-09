@@ -20,6 +20,8 @@ pub struct AppState {
     identity: RwLock<Option<Identity>>,
     /// The receipt printer's worker (doc §7.5); commands ping it after committing a print job.
     pub printer: PrintHub,
+    /// The barcode label printer's worker (doc §7.4): its own queue, so labels never hold up receipts.
+    pub label_printer: PrintHub,
 }
 
 impl AppState {
@@ -30,8 +32,9 @@ impl AppState {
         auth: Auth,
         identity: Option<Identity>,
         printer: PrintHub,
+        label_printer: PrintHub,
     ) -> Self {
-        Self { db, clock, data_dir, auth, identity: RwLock::new(identity), printer }
+        Self { db, clock, data_dir, auth, identity: RwLock::new(identity), printer, label_printer }
     }
 
     pub fn identity(&self) -> AppResult<Option<Identity>> {

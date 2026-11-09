@@ -101,6 +101,7 @@
     "closeConfirm": "Close this batch? It becomes read-only and its profit is final. Only possible when no stock is left.",
     "confirmReopen": "Yes, reopen",
     "confirmClose": "Yes, close",
-    "closed": "This batch is closed: its figures are final."
+    "closed": "This batch is closed: its figures are final.",
+    "printLabels": "Print labels"
   }
 }

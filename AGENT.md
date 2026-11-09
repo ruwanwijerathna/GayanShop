@@ -7,7 +7,7 @@
 >
 > Never change an architectural decision silently. Propose the doc change to the owner first.
 
-**Current state (2026-11-09): Phase 2 in progress on branch `feat/phase-2-batches-reports`.** Phase 1 is complete, accepted and merged to `main` (the manual hardware, touch and pull-the-plug checks in `docs/qa/phase1-acceptance.md` are pending the owner). Block 2.1 is committed and green; the next block is 2.2. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
+**Current state (2026-11-09): Phase 2 in progress on branch `feat/phase-2-batches-reports`.** Phase 1 is complete, accepted and merged to `main` (the manual hardware, touch and pull-the-plug checks in `docs/qa/phase1-acceptance.md` are pending the owner). Blocks 2.1–2.2 are committed and green; the next block is 2.3. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
 
 ---
 
@@ -402,7 +402,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
 - [x] **2.1 Batch intake wizard and lifecycle**: done 2026-11-09
   - **Deliverables:** allocation methods with live variance, receive, reopen, late items, close.
   - **Gate:** `--test batches` + `pnpm verify`
-- [ ] **2.2 Label engine**
+- [x] **2.2 Label engine**: done 2026-11-09
   - **Deliverables:** `label/{layout,templates,tspl,zpl}.rs` (2-up 2″×1″, 3-up 1″×1″, 203 dpi, 2 mm gap), barcode-fit rules, the SVG preview, the alignment test and calibration.
   - **Gate:** `--test labels` (golden TSPL/ZPL byte snapshots, barcode-fit cases) + `pnpm verify`
 - [ ] **2.3 Stock operations**

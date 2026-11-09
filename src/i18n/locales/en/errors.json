@@ -103,7 +103,13 @@
     "BATCH_NOT_RECEIVED": "Only a received batch can do that.",
     "BATCH_SYSTEM": "The opening-stock and adjustment batches can't be reopened or closed.",
     "BATCH_ITEM_EXISTS": "That product is already in this batch.",
-    "BATCH_HAS_STOCK": "{{detail}} unit(s) are still on hand: sell or write them off before closing."
+    "BATCH_HAS_STOCK": "{{detail}} unit(s) are still on hand: sell or write them off before closing.",
+    "LABEL_PROFILE_INVALID": "Check the label printer settings (dpi 203 or 300, darkness 0–15, speed 1–6, shifts within 10 mm).",
+    "LABEL_CALIBRATION_INVALID": "Gaps and margins must be between 0 and 10 mm.",
+    "LABEL_JOB_EMPTY": "Choose at least one product.",
+    "LABEL_COPIES_INVALID": "Copies must be 1 to 999.",
+    "LABEL_JOB_TOO_LARGE": "That's more than 5,000 labels in one go.",
+    "LABEL_PRODUCT_INVALID": "One of the products no longer exists."
   },
   "INVARIANT": {
     "_": "This change isn't allowed.",

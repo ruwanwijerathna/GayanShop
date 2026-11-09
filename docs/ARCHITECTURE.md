@@ -2521,6 +2521,15 @@ Sinhala/Tamil text: most printers lack those code pages. Render such lines as a 
   - Product list → select rows → "Print labels".
   - Each job is audited once as `LABEL_PRINT` (template, product count, label count) and requires `LABEL_PRINT`.
 
+**Block 2.2 implementation notes (`hardware/label/`).**
+- `barcode.rs` encodes Code128 (subset C for all-digit codes, with a final CODE B for an odd last digit; else B) and EAN-13, so the fit rules count real modules and the SVG preview draws the real bars. `layout.rs` is the only module allowed float arithmetic (mm geometry and `dots = round(mm × dpi / 25.4)`); it never sees money.
+- Code choice per label: the first candidate (barcode, then SKU) that fits the box with ≥ 10 quiet modules each side at a 2–4-dot module (the largest that fits). If none fits, the first is printed at 2 dots with a `BARCODE_TOO_LONG` warning. Other warnings: `NO_CODE`, `TEXT_NOT_PRINTABLE` (anything outside printable ASCII prints as `?`; `"` becomes `'` and `^` / `~` become `?` because they are TSPL / ZPL syntax) and `TEXT_TRUNCATED`.
+- Attributes are joined with ` - ` rather than ` · `, because the printers' built-in fonts have no middle dot.
+- TSPL has no bold attribute, so a bold line is drawn twice, one dot apart. ZPL sets the darkness with `~SD` (0–30, twice the stored TSPL `DENSITY` 0–15).
+- The label printer has its own `print_jobs` queue (`printer_key = 'label'`) and its own print worker, so a jammed label printer never holds up receipts. The worker never sends it ESC/POS `DLE EOT`. Its profile lives in `device_settings` `printer.label`; templates live in `label.templates` and are calibrated per counter (gaps and margin; "Reset to default" restores the built-in).
+- `LABEL_PRINT` is approvable, so the print dialog asks for a supervisor's approval bound to the target `labels`. The preview itself needs only a login. The last template used is remembered per counter rather than per category (batch lines carry no category).
+- Golden TSPL / ZPL byte snapshots live in `src-tauri/tests/fixtures/labels/` (`UPDATE_FIXTURES=1 cargo test --test labels`, then review the bytes).
+
 ### 7.5 Hardware abstraction
 ```rust
 pub trait PrinterTransport: Send + Sync { fn send(&self, bytes: &[u8]) -> Result<(), AppError>; }

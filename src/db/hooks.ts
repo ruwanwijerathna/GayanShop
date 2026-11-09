@@ -7,6 +7,8 @@ import {
   type BatchItemInput,
   type CartInput_Deserialize as CartInput,
   type CategoryInput,
+  type LabelJob,
+  type LabelPrinterProfile,
   type LateItemInput,
   type CheckoutInput_Deserialize as CheckoutInput,
   type CloseInput,
@@ -17,6 +19,7 @@ import {
   type ReceiptPrinterProfile,
   type SetupInput,
   type StaffInput_Deserialize as StaffInput,
+  type TemplateCalibration,
   type UiLanguage,
   type UiTheme,
   type VoidInput_Deserialize as VoidInput,
@@ -45,6 +48,9 @@ export const queryKeys = {
   currentCart: ["pos", "current"] as const,
   backupStatus: ["backup", "status"] as const,
   staff: ["staff", "list"] as const,
+  labelTemplates: ["labels", "templates"] as const,
+  labelProfile: ["labels", "profile"] as const,
+  labelPreview: (job: LabelJob) => ["labels", "preview", JSON.stringify(job)] as const,
   roles: ["staff", "roles"] as const,
 };
 
@@ -480,5 +486,53 @@ export function useUpdateStaff() {
 export function useResetStaffPin() {
   return useStaffMutation(({ id, pin }: { id: string; pin: string }) =>
     unwrap(commands.resetStaffPin(id, pin)),
+  );
+}
+
+// ───────── barcode labels (doc §7.4) ─────────
+
+export function useLabelTemplates() {
+  return useQuery({ queryKey: queryKeys.labelTemplates, queryFn: () => unwrap(commands.labelTemplates()) });
+}
+
+export function useLabelPrinterProfile() {
+  return useQuery({
+    queryKey: queryKeys.labelProfile,
+    queryFn: () => unwrap(commands.labelPrinterProfile()),
+  });
+}
+
+function useLabelMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: fn, onSuccess: () => qc.invalidateQueries({ queryKey: ["labels"] }) });
+}
+
+export function useSetLabelPrinterProfile() {
+  return useLabelMutation((profile: LabelPrinterProfile) => unwrap(commands.setLabelPrinterProfile(profile)));
+}
+
+export function useCalibrateLabelTemplate() {
+  return useLabelMutation(({ id, calibration }: { id: string; calibration: TemplateCalibration | null }) =>
+    unwrap(commands.calibrateLabelTemplate(id, calibration)),
+  );
+}
+
+export function useLabelAlignmentTest() {
+  return useLabelMutation((templateId: string) => unwrap(commands.labelAlignmentTest(templateId)));
+}
+
+/** The Rust-computed layout of a job (what will print), for the SVG preview. */
+export function useLabelPreview(job: LabelJob | null) {
+  return useQuery({
+    queryKey: queryKeys.labelPreview(job ?? { template_id: "", items: [], fill_last_row: false }),
+    queryFn: () => unwrap(commands.labelPreview(job ?? { template_id: "", items: [], fill_last_row: false })),
+    enabled: job !== null && job.items.length > 0,
+    retry: false,
+  });
+}
+
+export function usePrintLabels() {
+  return useLabelMutation(({ job, approvalId }: { job: LabelJob; approvalId: string | null }) =>
+    unwrap(commands.printLabels(job, approvalId)),
   );
 }

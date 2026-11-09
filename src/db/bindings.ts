@@ -74,6 +74,17 @@ export const commands = {
 	addLateBatchItem: (batchId: string, input: LateItemInput_Deserialize) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("add_late_batch_item", { batchId, input })),
 	/**  Close an empty batch: read-only afterwards, final P&L (audited `BATCH_CLOSE`). */
 	closeBatch: (id: string) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("close_batch", { id })),
+	labelTemplates: () => typedError<LabelTemplate_Serialize[], AppError>(__TAURI_INVOKE("label_templates")),
+	labelPrinterProfile: () => typedError<LabelPrinterProfile | null, AppError>(__TAURI_INVOKE("label_printer_profile")),
+	setLabelPrinterProfile: (profile: LabelPrinterProfile) => typedError<null, AppError>(__TAURI_INVOKE("set_label_printer_profile", { profile })),
+	/**  Correct a template's column gap, row gap and left margin for this counter's roll; `None` = reset to default. */
+	calibrateLabelTemplate: (id: string, calibration: TemplateCalibration | null) => typedError<LabelTemplate_Serialize, AppError>(__TAURI_INVOKE("calibrate_label_template", { id, calibration })),
+	/**  The Rust-computed layout the UI draws as SVG: exactly what will print, with warnings. */
+	labelPreview: (job: LabelJob_Deserialize) => typedError<LabelPreview_Serialize, AppError>(__TAURI_INVOKE("label_preview", { job })),
+	/**  Queue a label job for the label printer (audited `LABEL_PRINT`: template, products, labels). */
+	printLabels: (job: LabelJob_Deserialize, approvalId: string | null) => typedError<LabelPreview_Serialize, AppError>(__TAURI_INVOKE("print_labels", { job, approvalId })),
+	/**  Settings → Labels "Alignment test": every cell's outline, for calibrating gaps and margins. */
+	labelAlignmentTest: (templateId: string) => typedError<null, AppError>(__TAURI_INVOKE("label_alignment_test", { templateId })),
 	/**  This counter's open session, if any (any logged-in staff member: the till needs it). */
 	currentCashSession: () => typedError<CashSession_Serialize | null, AppError>(__TAURI_INVOKE("current_cash_session")),
 	openCashSession: (input: OpenSessionInput) => typedError<CashSession_Serialize, AppError>(__TAURI_INVOKE("open_cash_session", { input })),
@@ -142,6 +153,8 @@ export type AdHocPurchase_Serialize = {
 	supplier_name: string | null,
 	note: string | null,
 };
+
+export type Align = "left" | "center" | "right";
 
 /**  How a batch's landed cost is spread over its layers (doc §3.1). */
 export type AllocationMethod = 
@@ -780,6 +793,8 @@ export type DrawerMovement_Serialize = {
 /**  Which drawer pin the kick pulses (`ESC p m`): pin 2 by default, pin 5 for drawers wired that way. */
 export type DrawerPin = "pin2" | "pin5";
 
+export type ElementKind = "store_name" | "product_name" | "attributes" | "price" | "barcode";
+
 export type HeldCart = HeldCart_Serialize | HeldCart_Deserialize;
 
 export type HeldCart_Deserialize = {
@@ -811,6 +826,144 @@ export type IntegrityReport = {
 	unreversed_voids: number,
 	/**  `sync_ctx.applying` left at 1 outside a pull transaction. */
 	stale_sync_flag: boolean,
+};
+
+export type LabelElement = LabelElement_Serialize | LabelElement_Deserialize;
+
+export type LabelElement_Deserialize = {
+	kind: ElementKind,
+	x_mm: number,
+	y_mm: number,
+	w_mm: number,
+	h_mm: number,
+	/**  Printer built-in font step 1–4. */
+	font_size: number,
+	bold?: boolean,
+	align?: Align,
+	max_lines?: number | null,
+};
+
+export type LabelElement_Serialize = {
+	kind: ElementKind,
+	x_mm: number,
+	y_mm: number,
+	w_mm: number,
+	h_mm: number,
+	/**  Printer built-in font step 1–4. */
+	font_size: number,
+	bold: boolean,
+	align: Align,
+	max_lines: number | null,
+};
+
+/**  What a label job prints (also the `print_jobs` payload, re-laid out from the database at print time). */
+export type LabelJob = LabelJob_Serialize | LabelJob_Deserialize;
+
+export type LabelJobItem = {
+	product_id: string,
+	copies: number,
+};
+
+/**  What a label job prints (also the `print_jobs` payload, re-laid out from the database at print time). */
+export type LabelJob_Deserialize = {
+	template_id: string,
+	items: LabelJobItem[],
+	/**  Fill a partial last row with copies of the last label instead of leaving it blank. */
+	fill_last_row?: boolean,
+};
+
+/**  What a label job prints (also the `print_jobs` payload, re-laid out from the database at print time). */
+export type LabelJob_Serialize = {
+	template_id: string,
+	items: LabelJobItem[],
+	/**  Fill a partial last row with copies of the last label instead of leaving it blank. */
+	fill_last_row: boolean,
+};
+
+export type LabelLanguage = "tspl" | "zpl";
+
+export type LabelPreview = LabelPreview_Serialize | LabelPreview_Deserialize;
+
+export type LabelPreview_Deserialize = {
+	template_id: string,
+	dpi: number,
+	columns: number,
+	rows: number,
+	roll_width_mm: number,
+	label_w_mm: number,
+	label_h_mm: number,
+	row_gap_mm: number,
+	labels: PlacedLabel_Deserialize[],
+	warnings: LabelWarning[],
+};
+
+export type LabelPreview_Serialize = {
+	template_id: string,
+	dpi: number,
+	columns: number,
+	rows: number,
+	roll_width_mm: number,
+	label_w_mm: number,
+	label_h_mm: number,
+	row_gap_mm: number,
+	labels: PlacedLabel_Serialize[],
+	warnings: LabelWarning[],
+};
+
+export type LabelPrinterProfile = {
+	transport: TransportConfig,
+	language: LabelLanguage,
+	/**  203 or 300. */
+	dpi: number,
+	/**  TSPL `DENSITY` 0–15 / ZPL darkness. */
+	darkness: number,
+	/**  Inches per second, 1–6. */
+	speed: number,
+	/**  Calibration: shift everything right / down, mm. */
+	offset_x_mm: number,
+	offset_y_mm: number,
+};
+
+export type LabelTemplate = LabelTemplate_Serialize | LabelTemplate_Deserialize;
+
+export type LabelTemplate_Deserialize = {
+	id: string,
+	name: string,
+	/**  Labels per row on the roll. */
+	columns: number,
+	label_w_mm: number,
+	label_h_mm: number,
+	col_gap_mm: number,
+	/**  The die-cut gap between rows. */
+	row_gap_mm: number,
+	left_margin_mm: number,
+	dpi: number,
+	language: LabelLanguage,
+	symbology: SymbologyRule,
+	elements: LabelElement_Deserialize[],
+};
+
+export type LabelTemplate_Serialize = {
+	id: string,
+	name: string,
+	/**  Labels per row on the roll. */
+	columns: number,
+	label_w_mm: number,
+	label_h_mm: number,
+	col_gap_mm: number,
+	/**  The die-cut gap between rows. */
+	row_gap_mm: number,
+	left_margin_mm: number,
+	dpi: number,
+	language: LabelLanguage,
+	symbology: SymbologyRule,
+	elements: LabelElement_Serialize[],
+};
+
+export type LabelWarning = {
+	/**  `BARCODE_TOO_LONG`, `NO_CODE`, `TEXT_NOT_PRINTABLE`, `TEXT_TRUNCATED`. */
+	code: string,
+	product_id: string,
 };
 
 /**  A product forgotten at intake, added to a received batch (unit cost 0). */
@@ -917,6 +1070,57 @@ export type PaymentTotal = {
 
 /**  Permission key as seen by the UI and stored in audit metadata. */
 export type Perm = "SALE_CREATE" | "QUICK_SALE" | "PRICE_OVERRIDE" | "LINE_DISCOUNT" | "ORDER_DISCOUNT" | "VOID_ORDER" | "DRAWER_NO_SALE" | "CASH_PAY_IN_OUT" | "CASH_SESSION_MANAGE" | "CASH_SESSION_FORCE_CLOSE" | "REPRINT_RECEIPT" | "STOCK_ADJUST" | "STOCK_DAMAGE" | "BATCH_MANAGE" | "PRODUCT_MANAGE" | "QUICK_SALE_PROMOTE" | "LABEL_PRINT" | "VIEW_COST" | "REPORT_SALES" | "REPORT_FINANCIAL" | "EXPENSE_MANAGE" | "SETTINGS_MANAGE" | "USER_MANAGE" | "AUDIT_VIEW" | "SYNC_MANAGE" | "BACKUP_RESTORE" | "DATA_EXPORT" | "CUSTOMER_VIEW" | "BACKUP_CREATE";
+
+export type PlacedBarcode = {
+	symbology: Symbology,
+	data: string,
+	x_mm: number,
+	y_mm: number,
+	/**  Bars only (the human-readable line sits under them, inside the element box). */
+	bar_h_mm: number,
+	module_dots: number,
+	module_mm: number,
+	/**  Alternating bar / space widths in modules, starting with a bar (for the SVG preview). */
+	widths: number[],
+	/**  Bars plus quiet zones fit the element box. */
+	fits: boolean,
+};
+
+export type PlacedLabel = PlacedLabel_Serialize | PlacedLabel_Deserialize;
+
+export type PlacedLabel_Deserialize = {
+	row: number,
+	col: number,
+	product_id: string,
+	/**  Top-left of the label on the roll, mm. */
+	x_mm: number,
+	texts: PlacedText[],
+	barcode?: PlacedBarcode | null,
+};
+
+export type PlacedLabel_Serialize = {
+	row: number,
+	col: number,
+	product_id: string,
+	/**  Top-left of the label on the roll, mm. */
+	x_mm: number,
+	texts: PlacedText[],
+	barcode: PlacedBarcode | null,
+};
+
+export type PlacedText = {
+	kind: ElementKind,
+	/**  Absolute position on the roll, mm (calibration offset included). */
+	x_mm: number,
+	y_mm: number,
+	w_mm: number,
+	h_mm: number,
+	font_size: number,
+	bold: boolean,
+	align: Align,
+	/**  One entry per printed line, already fitted (wrapped, truncated, unprintable characters as `?`). */
+	lines: string[],
+};
 
 export type PrinterHealth = 
 /**  No profile in `device_settings` yet: jobs wait, selling continues. */
@@ -1191,6 +1395,17 @@ export type StaffMember_Serialize = {
 	effective: Perm[],
 	/**  The only active Owner: can't be disabled or moved to another role (owner invariant). */
 	last_owner: boolean,
+};
+
+export type Symbology = "code128" | "ean13";
+
+export type SymbologyRule = "auto" | "code128" | "ean13";
+
+/**  Calibration of a template (Settings → Labels): roll geometry only; the element boxes are the built-ins'. */
+export type TemplateCalibration = {
+	col_gap_mm: number,
+	row_gap_mm: number,
+	left_margin_mm: number,
 };
 
 export type TransportConfig = 

@@ -1,4 +1,4 @@
-import { PackagePlus, Plus, Trash2, Truck } from "lucide-react";
+import { PackagePlus, Plus, Tag, Trash2, Truck } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { translateError } from "@/i18n";
 import { playCue } from "@/lib/audio";
 import { formatMoney, parseMajor } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { PrintLabelsDialog } from "@/components/labels/PrintLabelsDialog";
 import { NewBatchDialog, QuickPurchaseDialog } from "./BatchDialogs";
 import { AllocationReview, ClosedNote, HeaderStep, PnlCard, ReceivedActions, Step } from "./IntakeWizard";
 import { parseQty } from "./batchForm";
@@ -132,6 +133,7 @@ function Detail({ detail }: { detail: BatchDetail }) {
   const receive = useReceiveBatch();
   const remove = useRemoveBatchItem();
   const [confirming, setConfirming] = useState(false);
+  const [labels, setLabels] = useState(false);
   const { batch, items } = detail;
   const draft = batch.status === "draft";
   const failure = receive.error ?? remove.error;
@@ -242,6 +244,30 @@ function Detail({ detail }: { detail: BatchDetail }) {
         <Step n={3} title={t("wizard.review")}>
           <AllocationReview batchId={batch.id} />
         </Step>
+      )}
+      {!draft && items.length > 0 && (
+        <Button
+          type="button"
+          size="pos"
+          variant="outline"
+          className="self-start"
+          onClick={() => setLabels(true)}
+        >
+          <Tag aria-hidden />
+          {t("lifecycle.printLabels")}
+        </Button>
+      )}
+      {labels && (
+        <PrintLabelsDialog
+          items={items
+            .filter((i) => i.qty_received > 0)
+            .map((i) => ({
+              product_id: i.product_id,
+              name: i.product_name,
+              copies: Math.min(i.qty_received, 999),
+            }))}
+          onClose={() => setLabels(false)}
+        />
       )}
       {batch.status === "received" && <ReceivedActions batch={batch} />}
       {batch.status === "closed" && <ClosedNote />}

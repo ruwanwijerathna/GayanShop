@@ -1,0 +1,59 @@
+{
+  "templates": {
+    "two_up_2x1": "2 across, 2\" x 1\"",
+    "three_up_1x1": "3 across, 1\" x 1\""
+  },
+  "print": {
+    "title": "Print labels",
+    "count": "{{count}} label(s)",
+    "template": "Label roll",
+    "fill": "Fill the last row with copies",
+    "copiesFor": "Copies of {{name}}",
+    "preview": "Label preview",
+    "warnings": "Warnings",
+    "submit": "Print {{count}} label(s)",
+    "queued": "{{count}} label(s) sent to the label printer.",
+    "open": "Print labels"
+  },
+  "warnings": {
+    "BARCODE_TOO_LONG": "{{name}}: the code is too long for this label. Assign a short SKU or use the 2\" x 1\" roll.",
+    "NO_CODE": "{{name}} has no barcode or SKU: the label has no bars.",
+    "TEXT_NOT_PRINTABLE": "{{name}}: some letters can't be printed (labels are English only) and show as ?.",
+    "TEXT_TRUNCATED": "{{name}}: the price doesn't fit and was shortened."
+  },
+  "settings": {
+    "printerTitle": "Label printer",
+    "connection": "Connection",
+    "kinds": {
+      "spooler": "Windows printer (USB)",
+      "network": "Network (TCP 9100)",
+      "serial": "Serial (COM port)"
+    },
+    "printerName": "Windows printer name",
+    "host": "IP address or host name",
+    "comPort": "COM port",
+    "port": "Port",
+    "baud": "Baud rate",
+    "language": "Printer language",
+    "languages": {
+      "tspl": "TSPL (Xprinter, TSC, most)",
+      "zpl": "ZPL (Zebra)"
+    },
+    "dpi": "Resolution",
+    "darkness": "Darkness (0–15)",
+    "speed": "Speed (1–6)",
+    "offsetX": "Shift right (mm)",
+    "offsetY": "Shift down (mm)",
+    "save": "Save label printer",
+    "saved": "Label printer saved.",
+    "invalid": "Check the numbers: whole numbers for darkness and speed, mm like 1.5.",
+    "templateHint": "{{cols}} labels per row at {{dpi}} dpi. Correct the gaps for your roll, then print the alignment test.",
+    "colGap": "Gap between labels (mm)",
+    "rowGap": "Gap between rows (mm)",
+    "margin": "Left margin (mm)",
+    "saveCalibration": "Save",
+    "alignmentTest": "Print alignment test",
+    "reset": "Reset to default",
+    "alignQueued": "Alignment test sent to the label printer."
+  }
+}

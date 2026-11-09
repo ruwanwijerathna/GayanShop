@@ -85,6 +85,13 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::batches::reopen_batch,
         commands::batches::add_late_batch_item,
         commands::batches::close_batch,
+        commands::labels::label_templates,
+        commands::labels::label_printer_profile,
+        commands::labels::set_label_printer_profile,
+        commands::labels::calibrate_label_template,
+        commands::labels::label_preview,
+        commands::labels::print_labels,
+        commands::labels::label_alignment_test,
         commands::cash::current_cash_session,
         commands::cash::open_cash_session,
         commands::cash::cash_drawer_movement,
@@ -149,17 +156,21 @@ pub fn run() -> Result<(), tauri::Error> {
             let auth = Auth::new(PinHasher::production());
             let clock: Arc<dyn clock::Clock> = Arc::new(SystemClock);
             let tz = identity.as_ref().map_or(chrono_tz::Asia::Colombo, |i| i.calendar.timezone);
-            let handle = app.handle().clone();
-            let printer = tauri::async_runtime::block_on(PrintHub::start(
-                db.clone(),
-                RECEIPT_PRINTER,
-                Arc::new(|c: &TransportConfig| printer::connect(c)),
-                clock.clone(),
-                tz,
-                WorkerConfig::default(),
-                Arc::new(move || commands::emit_changed(&handle, &["print_jobs"])),
-            ))?;
-            app.manage(AppState::new(db, clock, data_dir, auth, identity, printer));
+            let hub = |key: &'static str| {
+                let handle = app.handle().clone();
+                tauri::async_runtime::block_on(PrintHub::start(
+                    db.clone(),
+                    key,
+                    Arc::new(|c: &TransportConfig| printer::connect(c)),
+                    clock.clone(),
+                    tz,
+                    WorkerConfig::default(),
+                    Arc::new(move || commands::emit_changed(&handle, &["print_jobs"])),
+                ))
+            };
+            let printer = hub(RECEIPT_PRINTER)?;
+            let label_printer = hub(hardware::label::LABEL_PRINTER)?;
+            app.manage(AppState::new(db, clock, data_dir, auth, identity, printer, label_printer));
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -219,6 +230,13 @@ mod tests {
             "reopenBatch",
             "addLateBatchItem",
             "closeBatch",
+            "labelTemplates",
+            "labelPrinterProfile",
+            "setLabelPrinterProfile",
+            "calibrateLabelTemplate",
+            "labelPreview",
+            "printLabels",
+            "labelAlignmentTest",
             "currentCashSession",
             "openCashSession",
             "cashDrawerMovement",
