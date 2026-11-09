@@ -837,6 +837,13 @@ line_net              = inclusive ? line_total − tax_amount : line_total   (ex
   - The UUIDv5 id is derived from the phone. If the same person returns later and gives their number, the lookup finds the erased row by id. In that case, Rust **re-activates the same id** with a fresh profile. Visit history before the erasure stays anonymous, because it's still linked by id. Tell the customer this is how erasure works.
 - Exporting customer data needs `DATA_EXPORT` and is audited.
 
+**Block 2.5 implementation notes (back office):**
+- **Permissions.** The list, profile, history, receipt drill-down, analytics, name/note edits and erasure all need `CUSTOMER_VIEW` (not approvable). There are no separate `CUSTOMER_UPDATE` / `CUSTOMER_ERASE` permission bits, and the bit table is frozen; `CUSTOMER_VIEW` is held by exactly the Manager and Owner roles that erasure names. Edits are audited as `CUSTOMER_UPDATE` with the changed *field names* only, never the values.
+- **List.** Erased profiles are left out. Searching digits matches the phone: a number typed from its start (`07…`, `+94…`, `94…`) matches the start of the 9 national digits, while bare digits (`4567`) match anywhere. Anything else matches the name, case-insensitively. Sorting is by spend, visits, last visit or name, and at most 500 rows come back (the UI says to narrow the search when there are more).
+- **Profile.** Top products and categories (5 each, by net revenue) come from completed orders. All quick sales count as one "Quick sales" row, and products without a category as "Uncategorised".
+- **History.** Completed *and* voided orders appear (voids flagged, never counted in spend), newest first, keyset-paged on `(business_date, id)`. A row drills down to the receipt, with the phone masked as on paper.
+- **Analytics.** Periods are the §5.2 ones (`domain::period`, shared with the reports engine). Top customers for a bounded period sum that period's completed orders; all time reads `customer_stats`. A customer counts as **new** in the week or month holding their first completed visit (`customer_stats.first_visit_date`) and as **returning** in every later one. The attached share is `Σ customer_orders / Σ sales_count` from `daily_sales_summary`.
+
 ### 3.9 Manual database backup ("Backup Database Now")
 
 **Who and where:**

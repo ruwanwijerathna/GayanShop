@@ -4,32 +4,41 @@
 //! `customers` row in full.
 
 use serde::Serialize;
+use specta::Type;
 use sqlx::{FromRow, SqlitePool};
 
 use crate::db::settings;
 use crate::domain::phone;
 use crate::error::{AppError, AppResult};
 
-#[derive(Debug, Clone, Serialize, FromRow, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, FromRow, PartialEq, Eq, Type)]
 pub struct ReceiptLine {
     pub name: String,
+    #[specta(type = specta_typescript::Number)]
     pub qty: i64,
+    #[specta(type = specta_typescript::Number)]
     pub list_price: i64,
+    #[specta(type = specta_typescript::Number)]
     pub unit_price: i64,
+    #[specta(type = specta_typescript::Number)]
     pub line_gross: i64,
+    #[specta(type = specta_typescript::Number)]
     pub line_discount: i64,
+    #[specta(type = specta_typescript::Number)]
     pub line_total: i64,
 }
 
-#[derive(Debug, Clone, Serialize, FromRow, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, FromRow, PartialEq, Eq, Type)]
 pub struct ReceiptPayment {
     pub method: String,
+    #[specta(type = specta_typescript::Number)]
     pub amount: i64,
+    #[specta(type = Option<specta_typescript::Number>)]
     pub tendered: Option<i64>,
     pub reference: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, Type)]
 pub struct ReceiptData {
     pub order_id: String,
     pub store_name: String,
@@ -40,11 +49,16 @@ pub struct ReceiptData {
     pub completed_at: String,
     pub cashier: String,
     pub lines: Vec<ReceiptLine>,
+    #[specta(type = specta_typescript::Number)]
     pub item_count: i64,
+    #[specta(type = specta_typescript::Number)]
     pub gross_sales: i64,
+    #[specta(type = specta_typescript::Number)]
     pub discount_total: i64,
+    #[specta(type = specta_typescript::Number)]
     pub grand_total: i64,
     pub payments: Vec<ReceiptPayment>,
+    #[specta(type = specta_typescript::Number)]
     pub change_due: i64,
     /// `07X XXX X123`, or `None` when no customer was attached (or the profile was erased).
     pub customer_masked: Option<String>,

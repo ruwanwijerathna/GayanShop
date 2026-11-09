@@ -1,0 +1,89 @@
+{
+  "title": "Customers",
+  "tabs": {
+    "list": "Customers",
+    "analytics": "Analytics"
+  },
+  "search": "Search by phone or name",
+  "sortBy": "Sort by",
+  "sorts": {
+    "spend": "Total spend",
+    "visits": "Visits",
+    "last_visit": "Last visit",
+    "name": "Name"
+  },
+  "columns": {
+    "name": "Name",
+    "phone": "Phone",
+    "visits": "Visits",
+    "spend": "Total spend",
+    "avg": "Average basket",
+    "lastVisit": "Last visit"
+  },
+  "unnamed": "No name",
+  "erased": "Erased customer",
+  "empty": "No customers yet.",
+  "truncated": "Showing the first 500. Search to narrow the list.",
+  "erasedNote": "This customer's details were erased on request. Their past visits stay in the totals, anonymously.",
+  "profile": {
+    "title": "Customer profile",
+    "edit": "Edit customer",
+    "name": "Name (optional)",
+    "note": "Note (optional)",
+    "saved": "Customer saved.",
+    "firstVisit": "First visit",
+    "topProducts": "Top products",
+    "topCategories": "Top categories",
+    "quickSales": "Quick sales",
+    "uncategorised": "Uncategorised",
+    "nothingYet": "Nothing bought yet."
+  },
+  "history": {
+    "title": "Purchase history",
+    "date": "Date",
+    "receipt": "Receipt",
+    "items": "Items",
+    "total": "Total",
+    "voided": "Voided",
+    "empty": "No purchases yet."
+  },
+  "receipt": {
+    "title": "Receipt {{no}}",
+    "item": "Item",
+    "qty": "Qty",
+    "total": "Total",
+    "discount": "Discount",
+    "grandTotal": "Total paid",
+    "methods": {
+      "cash": "Cash",
+      "card": "Card",
+      "transfer": "Bank transfer",
+      "qr": "QR",
+      "other": "Other"
+    }
+  },
+  "erase": {
+    "action": "Erase personal data",
+    "title": "Erase this customer's details?",
+    "explain": "The phone number, name and note are removed for good. Past purchases stay in the store's totals without them. If the customer gives the same number again later, a fresh profile starts and the old visits stay anonymous.",
+    "confirm": "Erase",
+    "done": "Customer details erased."
+  },
+  "analytics": {
+    "title": "Customer analytics",
+    "attached": "{{share}} of sales had a customer ({{orders}} of {{sales}}).",
+    "top": "Top customers by spend",
+    "newVsReturning": "New and returning customers",
+    "by": {
+      "week": "By week",
+      "month": "By month"
+    },
+    "bucket": {
+      "day": "Week starting",
+      "week": "Week starting",
+      "month": "Month"
+    },
+    "new": "New",
+    "returning": "Returning"
+  }
+}

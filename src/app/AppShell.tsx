@@ -11,6 +11,7 @@ import {
   Users,
   Warehouse,
   Zap,
+  Contact,
 } from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
@@ -111,6 +112,12 @@ export function AppShell() {
             <Link to="/quick-sales" className={NAV_LINK} aria-label={t("nav.quickSales")}>
               <Zap aria-hidden className="size-5 shrink-0" />
               <span className="hidden xl:inline">{t("nav.quickSales")}</span>
+            </Link>
+          </Can>
+          <Can perm="CUSTOMER_VIEW">
+            <Link to="/customers" className={NAV_LINK} aria-label={t("nav.customers")}>
+              <Contact aria-hidden className="size-5 shrink-0" />
+              <span className="hidden xl:inline">{t("nav.customers")}</span>
             </Link>
           </Can>
           <Can perm="AUDIT_VIEW">

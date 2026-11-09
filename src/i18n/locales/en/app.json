@@ -9,7 +9,8 @@
     "pos": "Till",
     "staff": "Staff",
     "inventory": "Stock",
-    "quickSales": "Quick sales"
+    "quickSales": "Quick sales",
+    "customers": "Customers"
   },
   "status": {
     "title": "Counter status",

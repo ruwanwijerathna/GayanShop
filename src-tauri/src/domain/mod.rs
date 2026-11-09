@@ -6,6 +6,7 @@ pub mod discount;
 pub mod fifo;
 pub mod money;
 pub mod payments;
+pub mod period;
 pub mod permissions;
 pub mod phone;
 pub mod pricing;

@@ -12,6 +12,8 @@ export const commands = {
 	appStatus: () => typedError<AppStatus_Serialize, AppError>(__TAURI_INVOKE("app_status")),
 	/**  SQLite quick_check plus the schema's integrity probes (ARCHITECTURE §13.2). */
 	integrityCheck: () => typedError<IntegrityReport, AppError>(__TAURI_INVOKE("integrity_check")),
+	/**  Today's business date on this counter (store calendar, day cutoff), the default for report periods. */
+	businessToday: () => typedError<string, AppError>(__TAURI_INVOKE("business_today")),
 	/**  Create this store/terminal: identity, roles, the Owner and every seed, in one transaction. */
 	firstRunSetup: (input: SetupInput) => typedError<SetupResult, AppError>(__TAURI_INVOKE("first_run_setup", { input })),
 	/**  Active staff for the login picker (names and roles only). */
@@ -115,6 +117,14 @@ export const commands = {
 	cashSessionReport: (sessionId: string) => typedError<ZReport_Serialize, AppError>(__TAURI_INVOKE("cash_session_report", { sessionId })),
 	checkoutOrder: (input: CheckoutInput_Deserialize) => typedError<CheckoutResult_Serialize, AppError>(__TAURI_INVOKE("checkout_order", { input })),
 	customerLookup: (input: CustomerLookupInput) => typedError<CustomerLookup_Serialize, AppError>(__TAURI_INVOKE("customer_lookup", { input })),
+	customerList: (search: string | null, sort: CustomerSort | null) => typedError<CustomerList_Serialize, AppError>(__TAURI_INVOKE("customer_list", { search, sort })),
+	customerProfile: (id: string) => typedError<CustomerProfile_Serialize, AppError>(__TAURI_INVOKE("customer_profile", { id })),
+	customerHistory: (id: string, cursor: HistoryCursor | null, limit: number) => typedError<HistoryPage_Serialize, AppError>(__TAURI_INVOKE("customer_history", { id, cursor, limit })),
+	customerOrderReceipt: (customerId: string, orderId: string) => typedError<ReceiptData_Serialize, AppError>(__TAURI_INVOKE("customer_order_receipt", { customerId, orderId })),
+	customerAnalytics: (period: Period, granularity: Granularity, topN: number) => typedError<CustomerAnalytics_Serialize, AppError>(__TAURI_INVOKE("customer_analytics", { period, granularity, topN })),
+	updateCustomer: (id: string, input: CustomerUpdate_Deserialize) => typedError<null, AppError>(__TAURI_INVOKE("update_customer", { id, input })),
+	/**  PDPA erasure on request (doc §3.8). */
+	eraseCustomer: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("erase_customer", { id })),
 	printerStatus: () => typedError<PrinterStatusView_Serialize, AppError>(__TAURI_INVOKE("printer_status")),
 	printerProfile: () => typedError<ReceiptPrinterProfile | null, AppError>(__TAURI_INVOKE("printer_profile")),
 	setPrinterProfile: (profile: ReceiptPrinterProfile) => typedError<null, AppError>(__TAURI_INVOKE("set_printer_profile", { profile })),
@@ -767,6 +777,54 @@ export type CounterSales = {
 	units: number,
 };
 
+/**
+ *  Customer analytics for a §5 period (doc §3.8): top customers by spend, new vs returning per week or
+ *  month, and the share of sales with a customer attached. Completed orders only.
+ */
+export type CustomerAnalytics = CustomerAnalytics_Serialize | CustomerAnalytics_Deserialize;
+
+/**
+ *  Customer analytics for a §5 period (doc §3.8): top customers by spend, new vs returning per week or
+ *  month, and the share of sales with a customer attached. Completed orders only.
+ */
+export type CustomerAnalytics_Deserialize = {
+	range: DateRange_Deserialize,
+	top: TopCustomer_Deserialize[],
+	trend: NewReturning[],
+	sales_count: number,
+	customer_orders: number,
+	/**  `customer_orders / sales_count` in basis points. */
+	attached_bp: number,
+};
+
+/**
+ *  Customer analytics for a §5 period (doc §3.8): top customers by spend, new vs returning per week or
+ *  month, and the share of sales with a customer attached. Completed orders only.
+ */
+export type CustomerAnalytics_Serialize = {
+	range: DateRange_Serialize,
+	top: TopCustomer_Serialize[],
+	trend: NewReturning[],
+	sales_count: number,
+	customer_orders: number,
+	/**  `customer_orders / sales_count` in basis points. */
+	attached_bp: number,
+};
+
+export type CustomerList = CustomerList_Serialize | CustomerList_Deserialize;
+
+export type CustomerList_Deserialize = {
+	rows: CustomerRow_Deserialize[],
+	/**  More customers match than were returned: narrow the search. */
+	truncated: boolean,
+};
+
+export type CustomerList_Serialize = {
+	rows: CustomerRow_Serialize[],
+	/**  More customers match than were returned: narrow the search. */
+	truncated: boolean,
+};
+
 /**  What the till sees after 9–10 digits (doc §3.8): no history without `CUSTOMER_VIEW`. */
 export type CustomerLookup = CustomerLookup_Serialize | CustomerLookup_Deserialize;
 
@@ -798,6 +856,75 @@ export type CustomerLookup_Serialize = {
 	visit_count: number,
 };
 
+export type CustomerProfile = CustomerProfile_Serialize | CustomerProfile_Deserialize;
+
+export type CustomerProfile_Deserialize = {
+	customer: CustomerRow_Deserialize,
+	note?: string | null,
+	first_seen_at: string,
+	erased_at?: string | null,
+	top_products: TopItem_Deserialize[],
+	top_categories: TopItem_Deserialize[],
+};
+
+export type CustomerProfile_Serialize = {
+	customer: CustomerRow_Serialize,
+	note: string | null,
+	first_seen_at: string,
+	erased_at: string | null,
+	top_products: TopItem_Serialize[],
+	top_categories: TopItem_Serialize[],
+};
+
+/**  One customer in the back-office list (figures from `customer_stats`: completed orders only). */
+export type CustomerRow = CustomerRow_Serialize | CustomerRow_Deserialize;
+
+/**  One customer in the back-office list (figures from `customer_stats`: completed orders only). */
+export type CustomerRow_Deserialize = {
+	id: string,
+	phone_e164?: string | null,
+	/**  `077 123 4567`. */
+	phone_display?: string | null,
+	display_name?: string | null,
+	visit_count: number,
+	total_spend: number,
+	total_net: number,
+	/**  `total_spend / visit_count`, rounded down; 0 with no visits. */
+	avg_basket: number,
+	first_visit_date?: string | null,
+	last_visit_date?: string | null,
+};
+
+/**  One customer in the back-office list (figures from `customer_stats`: completed orders only). */
+export type CustomerRow_Serialize = {
+	id: string,
+	phone_e164: string | null,
+	/**  `077 123 4567`. */
+	phone_display: string | null,
+	display_name: string | null,
+	visit_count: number,
+	total_spend: number,
+	total_net: number,
+	/**  `total_spend / visit_count`, rounded down; 0 with no visits. */
+	avg_basket: number,
+	first_visit_date: string | null,
+	last_visit_date: string | null,
+};
+
+export type CustomerSort = "spend" | "visits" | "last_visit" | "name";
+
+export type CustomerUpdate = CustomerUpdate_Serialize | CustomerUpdate_Deserialize;
+
+export type CustomerUpdate_Deserialize = {
+	display_name?: string | null,
+	note?: string | null,
+};
+
+export type CustomerUpdate_Serialize = {
+	display_name: string | null,
+	note: string | null,
+};
+
 export type CutMode = "full" | "partial" | "none";
 
 export type DamageInput = DamageInput_Serialize | DamageInput_Deserialize;
@@ -817,6 +944,21 @@ export type DamageInput_Serialize = {
 };
 
 export type DamageReason = "broken" | "expired" | "stolen" | "faulty" | "other";
+
+/**  Inclusive business-date bounds; `None` on both sides = all time. */
+export type DateRange = DateRange_Serialize | DateRange_Deserialize;
+
+/**  Inclusive business-date bounds; `None` on both sides = all time. */
+export type DateRange_Deserialize = {
+	from?: string | null,
+	to?: string | null,
+};
+
+/**  Inclusive business-date bounds; `None` on both sides = all time. */
+export type DateRange_Serialize = {
+	from: string | null,
+	to: string | null,
+};
 
 export type DenominationCount = {
 	/**  Face value in cents (one of `LKR_DENOMINATIONS`). */
@@ -865,6 +1007,9 @@ export type DrawerPin = "pin2" | "pin5";
 
 export type ElementKind = "store_name" | "product_name" | "attributes" | "price" | "barcode";
 
+/**  Trend-chart buckets. */
+export type Granularity = "day" | "week" | "month";
+
 export type HeldCart = HeldCart_Serialize | HeldCart_Deserialize;
 
 export type HeldCart_Deserialize = {
@@ -885,6 +1030,48 @@ export type HeldCart_Serialize = {
 	checkout_token: string | null,
 	created_at: string,
 	updated_at: string,
+};
+
+export type HistoryCursor = {
+	business_date: string,
+	id: string,
+};
+
+/**  One order in a customer's purchase history (completed or voided; voids carry no spend). */
+export type HistoryOrder = HistoryOrder_Serialize | HistoryOrder_Deserialize;
+
+/**  One order in a customer's purchase history (completed or voided; voids carry no spend). */
+export type HistoryOrder_Deserialize = {
+	id: string,
+	receipt_no: string,
+	business_date: string,
+	completed_at?: string | null,
+	status: string,
+	item_count: number,
+	grand_total: number,
+};
+
+/**  One order in a customer's purchase history (completed or voided; voids carry no spend). */
+export type HistoryOrder_Serialize = {
+	id: string,
+	receipt_no: string,
+	business_date: string,
+	completed_at: string | null,
+	status: string,
+	item_count: number,
+	grand_total: number,
+};
+
+export type HistoryPage = HistoryPage_Serialize | HistoryPage_Deserialize;
+
+export type HistoryPage_Deserialize = {
+	rows: HistoryOrder_Deserialize[],
+	next_cursor?: HistoryCursor | null,
+};
+
+export type HistoryPage_Serialize = {
+	rows: HistoryOrder_Serialize[],
+	next_cursor: HistoryCursor | null,
 };
 
 export type IntegrityReport = {
@@ -1142,6 +1329,13 @@ export type MovementRow_Serialize = {
 	approved_by_name: string | null,
 };
 
+export type NewReturning = {
+	/**  The week's first day or `YYYY-MM`. */
+	bucket: string,
+	new_customers: number,
+	returning_customers: number,
+};
+
 export type NewStaff = NewStaff_Serialize | NewStaff_Deserialize;
 
 export type NewStaff_Deserialize = {
@@ -1202,6 +1396,12 @@ export type PaymentTotal = {
 	count: number,
 	amount: number,
 };
+
+export type Period = { kind: "day"; date: string } | 
+/**  The store week (`week_start`) containing `any_date`. */
+{ kind: "week"; any_date: string } | { kind: "month"; year: number; month: number } | { kind: "year"; year: number } | { kind: "all_time" } | 
+/**  Inclusive `from..=to`. */
+{ kind: "custom"; from: string; to: string };
 
 /**  Permission key as seen by the UI and stored in audit metadata. */
 export type Perm = "SALE_CREATE" | "QUICK_SALE" | "PRICE_OVERRIDE" | "LINE_DISCOUNT" | "ORDER_DISCOUNT" | "VOID_ORDER" | "DRAWER_NO_SALE" | "CASH_PAY_IN_OUT" | "CASH_SESSION_MANAGE" | "CASH_SESSION_FORCE_CLOSE" | "REPRINT_RECEIPT" | "STOCK_ADJUST" | "STOCK_DAMAGE" | "BATCH_MANAGE" | "PRODUCT_MANAGE" | "QUICK_SALE_PROMOTE" | "LABEL_PRINT" | "VIEW_COST" | "REPORT_SALES" | "REPORT_FINANCIAL" | "EXPENSE_MANAGE" | "SETTINGS_MANAGE" | "USER_MANAGE" | "AUDIT_VIEW" | "SYNC_MANAGE" | "BACKUP_RESTORE" | "DATA_EXPORT" | "CUSTOMER_VIEW" | "BACKUP_CREATE";
@@ -1509,6 +1709,76 @@ export type QuickSaleRow_Serialize = {
 
 export type QuickSaleStatus = "new" | "promoted" | "ignored";
 
+export type ReceiptData = ReceiptData_Serialize | ReceiptData_Deserialize;
+
+export type ReceiptData_Deserialize = {
+	order_id: string,
+	store_name: string,
+	receipt_no: string,
+	/**  `completed` or `voided` (a voided order's reprint carries a VOID banner). */
+	status: string,
+	business_date: string,
+	completed_at: string,
+	cashier: string,
+	lines: ReceiptLine[],
+	item_count: number,
+	gross_sales: number,
+	discount_total: number,
+	grand_total: number,
+	payments: ReceiptPayment_Deserialize[],
+	change_due: number,
+	/**  `07X XXX X123`, or `None` when no customer was attached (or the profile was erased). */
+	customer_masked?: string | null,
+	footer: string,
+};
+
+export type ReceiptData_Serialize = {
+	order_id: string,
+	store_name: string,
+	receipt_no: string,
+	/**  `completed` or `voided` (a voided order's reprint carries a VOID banner). */
+	status: string,
+	business_date: string,
+	completed_at: string,
+	cashier: string,
+	lines: ReceiptLine[],
+	item_count: number,
+	gross_sales: number,
+	discount_total: number,
+	grand_total: number,
+	payments: ReceiptPayment_Serialize[],
+	change_due: number,
+	/**  `07X XXX X123`, or `None` when no customer was attached (or the profile was erased). */
+	customer_masked: string | null,
+	footer: string,
+};
+
+export type ReceiptLine = {
+	name: string,
+	qty: number,
+	list_price: number,
+	unit_price: number,
+	line_gross: number,
+	line_discount: number,
+	line_total: number,
+};
+
+export type ReceiptPayment = ReceiptPayment_Serialize | ReceiptPayment_Deserialize;
+
+export type ReceiptPayment_Deserialize = {
+	method: string,
+	amount: number,
+	tendered?: number | null,
+	reference?: string | null,
+};
+
+export type ReceiptPayment_Serialize = {
+	method: string,
+	amount: number,
+	tendered: number | null,
+	reference: string | null,
+};
+
 /**  This counter's receipt printer (and the drawer on its RJ11 port). Device-local, not synced. */
 export type ReceiptPrinterProfile = {
 	transport: TransportConfig,
@@ -1683,6 +1953,47 @@ export type TemplateCalibration = {
 	col_gap_mm: number,
 	row_gap_mm: number,
 	left_margin_mm: number,
+};
+
+export type TopCustomer = TopCustomer_Serialize | TopCustomer_Deserialize;
+
+export type TopCustomer_Deserialize = {
+	customer_id: string,
+	/**  `None` once erased (shown as an anonymous customer). */
+	display_name?: string | null,
+	phone_display?: string | null,
+	visits: number,
+	spend: number,
+};
+
+export type TopCustomer_Serialize = {
+	customer_id: string,
+	/**  `None` once erased (shown as an anonymous customer). */
+	display_name: string | null,
+	phone_display: string | null,
+	visits: number,
+	spend: number,
+};
+
+/**  A product or category in a customer's top list (completed orders only). */
+export type TopItem = TopItem_Serialize | TopItem_Deserialize;
+
+/**  A product or category in a customer's top list (completed orders only). */
+export type TopItem_Deserialize = {
+	/**  Product or category id; `None` = quick sales (top products) or uncategorised (top categories). */
+	id?: string | null,
+	name?: string | null,
+	qty: number,
+	net: number,
+};
+
+/**  A product or category in a customer's top list (completed orders only). */
+export type TopItem_Serialize = {
+	/**  Product or category id; `None` = quick sales (top products) or uncategorised (top categories). */
+	id: string | null,
+	name: string | null,
+	qty: number,
+	net: number,
 };
 
 export type TransportConfig = 

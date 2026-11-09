@@ -1,5 +1,7 @@
 {
-  "app": { "name": "GayanShop POS" },
+  "app": {
+    "name": "GayanShop POS"
+  },
   "actions": {
     "ok": "OK",
     "cancel": "Cancel",
@@ -9,13 +11,37 @@
     "retry": "Retry",
     "close": "Close"
   },
-  "language": { "label": "Language", "en": "English", "si": "සිංහල" },
-  "theme": { "label": "Theme", "light": "Light", "dark": "Dark" },
+  "language": {
+    "label": "Language",
+    "en": "English",
+    "si": "සිංහල"
+  },
+  "theme": {
+    "label": "Theme",
+    "light": "Light",
+    "dark": "Dark"
+  },
   "table": {
     "empty": "Nothing to show yet",
     "loading": "Loading…",
     "rowCount_one": "{{count}} row",
     "rowCount_other": "{{count}} rows"
   },
-  "nav": { "till": "Till", "backOffice": "Back office" }
+  "nav": {
+    "till": "Till",
+    "backOffice": "Back office"
+  },
+  "period": {
+    "label": "Period",
+    "day": "Day",
+    "week": "Week",
+    "month": "Month",
+    "year": "Year",
+    "all_time": "All time",
+    "custom": "Custom",
+    "date": "Date",
+    "weekOf": "Any day in the week",
+    "from": "From",
+    "to": "To"
+  }
 }

@@ -87,6 +87,12 @@ impl From<sqlx::migrate::MigrateError> for AppError {
     }
 }
 
+impl From<crate::domain::period::PeriodError> for AppError {
+    fn from(e: crate::domain::period::PeriodError) -> Self {
+        AppError::validation("PERIOD_INVALID", e.to_string())
+    }
+}
+
 impl From<serde_json::Error> for AppError {
     fn from(e: serde_json::Error) -> Self {
         AppError::internal(format!("json: {e}"))

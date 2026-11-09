@@ -14,6 +14,10 @@ describe("db://changed → query invalidation", () => {
     expect(keysForTables(["stock_movements", "batches"])).toEqual([["batches"], ["inventory"]]);
   });
 
+  it("refreshes customer figures after a sale or void", () => {
+    expect(keysForTables(["orders"])).toEqual([["orders"], ["quickSales"], ["customers"]]);
+  });
+
   it("ignores tables no screen shows yet", () => {
     expect(keysForTables(["sync_outbox", "sku_counters"])).toEqual([]);
   });

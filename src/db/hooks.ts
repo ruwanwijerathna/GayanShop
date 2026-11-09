@@ -15,6 +15,11 @@ import {
   type LateItemInput,
   type CheckoutInput_Deserialize as CheckoutInput,
   type CloseInput,
+  type CustomerSort,
+  type CustomerUpdate,
+  type Granularity,
+  type HistoryCursor,
+  type Period,
   type DrawerMovementInput,
   type Perm,
   type NewStaff_Deserialize as NewStaff,
@@ -48,6 +53,14 @@ export const queryKeys = {
   printerStatus: ["printer", "status"] as const,
   printerProfile: ["printer", "profile"] as const,
   customer: (phone: string) => ["customers", "lookup", phone] as const,
+  customerList: (search: string, sort: CustomerSort) => ["customers", "list", search, sort] as const,
+  customerProfile: (id: string) => ["customers", "profile", id] as const,
+  customerHistory: (id: string) => ["customers", "history", id] as const,
+  customerReceipt: (customerId: string, orderId: string) =>
+    ["customers", "receipt", customerId, orderId] as const,
+  customerAnalytics: (period: Period, g: Granularity) =>
+    ["customers", "analytics", JSON.stringify(period), g] as const,
+  businessToday: ["app", "today"] as const,
   sessionOrders: ["orders", "session"] as const,
   heldCarts: ["pos", "held"] as const,
   currentCart: ["pos", "current"] as const,
@@ -654,4 +667,82 @@ export function useQuickSaleHint(name: string | null) {
     enabled: name !== null && name.trim() !== "",
     staleTime: 30_000,
   });
+}
+
+/** Today's business date on this counter (the default for report periods). */
+export function useBusinessToday() {
+  return useQuery({
+    queryKey: queryKeys.businessToday,
+    queryFn: () => unwrap(commands.businessToday()),
+    staleTime: 60_000,
+  });
+}
+
+// ───────── customer back office (doc §3.8, CUSTOMER_VIEW) ─────────
+
+export function useCustomerList(search: string, sort: CustomerSort) {
+  return useQuery({
+    queryKey: queryKeys.customerList(search, sort),
+    queryFn: () => unwrap(commands.customerList(search.trim() === "" ? null : search, sort)),
+  });
+}
+
+export function useCustomerProfile(id: string | null) {
+  return useQuery({
+    queryKey: queryKeys.customerProfile(id ?? ""),
+    queryFn: () => unwrap(commands.customerProfile(id ?? "")),
+    enabled: id !== null,
+  });
+}
+
+const HISTORY_PAGE = 100;
+
+export function useCustomerHistory(id: string | null) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.customerHistory(id ?? ""),
+    initialPageParam: null as HistoryCursor | null,
+    queryFn: ({ pageParam }) => unwrap(commands.customerHistory(id ?? "", pageParam, HISTORY_PAGE)),
+    getNextPageParam: (last) => last.next_cursor ?? null,
+    enabled: id !== null,
+  });
+}
+
+export function useCustomerReceipt(customerId: string, orderId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.customerReceipt(customerId, orderId ?? ""),
+    queryFn: () => unwrap(commands.customerOrderReceipt(customerId, orderId ?? "")),
+    enabled: orderId !== null,
+  });
+}
+
+const TOP_CUSTOMERS = 10;
+
+export function useCustomerAnalytics(period: Period | null, granularity: Granularity) {
+  return useQuery({
+    queryKey: queryKeys.customerAnalytics(period ?? { kind: "all_time" }, granularity),
+    queryFn: () =>
+      unwrap(commands.customerAnalytics(period ?? { kind: "all_time" }, granularity, TOP_CUSTOMERS)),
+    enabled: period !== null,
+  });
+}
+
+function useCustomerMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["customers"] });
+      await qc.invalidateQueries({ queryKey: queryKeys.audit });
+    },
+  });
+}
+
+export function useUpdateCustomer() {
+  return useCustomerMutation(({ id, input }: { id: string; input: CustomerUpdate }) =>
+    unwrap(commands.updateCustomer(id, input)),
+  );
+}
+
+export function useEraseCustomer() {
+  return useCustomerMutation((id: string) => unwrap(commands.eraseCustomer(id)));
 }

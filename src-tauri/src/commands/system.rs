@@ -57,3 +57,11 @@ pub async fn app_status(state: State<'_, AppState>) -> AppResult<AppStatus> {
         session: session.as_ref().map(SessionInfo::from),
     })
 }
+
+/// Today's business date on this counter (store calendar, day cutoff), the default for report periods.
+#[tauri::command]
+#[specta::specta]
+pub async fn business_today(state: State<'_, AppState>) -> AppResult<String> {
+    super::session(&state)?;
+    Ok(super::write_ctx(&state)?.business_date)
+}
