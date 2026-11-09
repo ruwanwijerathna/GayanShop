@@ -280,7 +280,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
       - A supervisor approval works once.
       - The chain verifies.
 
-- [x] **0.10 Continuous integration**: done 2026-11-08 (workflow committed and local gate green; **CI pending remote**, since no GitHub remote is configured)
+- [x] **0.10 Continuous integration**: done 2026-11-08 (workflow committed and local gate green; **CI pending remote**, since no GitHub remote is configured. Note for the first CI run: `tests/registration.rs` round-trips a secret through the real Windows Credential Manager, which needs a logged-on user session on the runner)
   - **Deliverables:** `.github/workflows/ci.yml` (`windows-latest`: pnpm + Rust cache, `pnpm verify`, `pnpm tauri build --no-bundle`).
   - **Gate:**
     - `pnpm verify` locally.
@@ -448,7 +448,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
 - [x] **3.4 Rust sync worker**: done 2026-11-09
   - **Deliverables:** outbox push, pull apply (`sync_ctx` + topological order + apply rules), barcode-conflict handling, `sync_logs`.
   - **Gate:** `--test sync_apply` + `pnpm verify`
-- [ ] **3.5 Bootstrap and sync UI**
+- [x] **3.5 Bootstrap and sync UI**: done 2026-11-09
   - **Deliverables:** full-history bootstrap with progress, the status pill, and Settings → Sync.
   - **Gate:** `--test bootstrap` (limit=7, parents edited after children) + `pnpm verify`
 - [ ] **3.6 Chaos suite**

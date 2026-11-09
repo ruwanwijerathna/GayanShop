@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { LanguageToggle } from "@/components/common/LanguageToggle";
 import { ThemeToggle, type Theme } from "@/components/common/ThemeToggle";
@@ -10,10 +11,12 @@ export interface TopBarProps {
   theme: Theme;
   onThemeChange: (theme: Theme) => void;
   onLanguageChange?: (lng: UiLanguage) => void;
+  /** The cloud sync status pill (Phase 3). */
+  sync?: ReactNode;
 }
 
-/** 56 px top bar (doc §1.9 layout): store · counter · staff · language · theme. */
-export function TopBar({ storeName, deviceCode, theme, onThemeChange, onLanguageChange }: TopBarProps) {
+/** 56 px top bar (doc §1.9 layout): store · counter · sync · staff · language · theme. */
+export function TopBar({ storeName, deviceCode, theme, onThemeChange, onLanguageChange, sync }: TopBarProps) {
   const { t } = useTranslation();
   const { session } = useSession();
   return (
@@ -21,6 +24,7 @@ export function TopBar({ storeName, deviceCode, theme, onThemeChange, onLanguage
       <span className="text-lg font-semibold">{storeName ?? t("app.name")}</span>
       {deviceCode && <span className="rounded border border-input px-2 font-mono text-sm">{deviceCode}</span>}
       <span className="flex-1" />
+      {sync}
       {session && (
         <span className="text-sm text-muted-foreground">
           {session.display_name} · {session.role_name}

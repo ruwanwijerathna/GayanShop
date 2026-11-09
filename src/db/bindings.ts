@@ -185,6 +185,20 @@ export const commands = {
 	syncStatus: () => typedError<SyncStatus_Serialize, AppError>(__TAURI_INVOKE("sync_status")),
 	/**  "Sync now": run a round at once. */
 	syncNow: () => typedError<null, AppError>(__TAURI_INVOKE("sync_now")),
+	/**
+	 *  First-run "Join existing store" (decision #18): register this new counter into the owner's store, then
+	 *  pull the store's whole history. If the bootstrap is interrupted, the registration stands and
+	 *  `sync_bootstrap` resumes it.
+	 */
+	setupJoinStore: (input: JoinInput_Deserialize) => typedError<BootstrapProgress, AppError>(__TAURI_INVOKE("setup_join_store", { input })),
+	/**  Resume an interrupted bootstrap. Allowed before anyone can log in, but only while one is pending. */
+	syncBootstrap: () => typedError<BootstrapProgress, AppError>(__TAURI_INVOKE("sync_bootstrap")),
+	/**  The ops the cloud rejected (Settings → Sync). */
+	syncDeadOps: () => typedError<DeadOp_Serialize[], AppError>(__TAURI_INVOKE("sync_dead_ops")),
+	/**  Retry (a fresh snapshot under a new op id) or discard a dead op; audited. */
+	syncResolveDeadOp: (input: ResolveDeadOp) => typedError<null, AppError>(__TAURI_INVOKE("sync_resolve_dead_op", { input })),
+	/**  The latest sync log entries (pushes and pulls), newest first. */
+	syncLogs: (limit: number) => typedError<SyncLogRow_Serialize[], AppError>(__TAURI_INVOKE("sync_logs", { limit })),
 };
 
 /* Types */
@@ -287,6 +301,8 @@ export type AppStatus_Deserialize = {
 	store_name?: string | null,
 	device_code?: string | null,
 	session?: SessionInfo | null,
+	/**  A counter that joined the store and hasn't pulled its history yet (doc §6.2): the till stays closed. */
+	bootstrap_pending: boolean,
 };
 
 export type AppStatus_Serialize = {
@@ -294,6 +310,8 @@ export type AppStatus_Serialize = {
 	store_name: string | null,
 	device_code: string | null,
 	session: SessionInfo | null,
+	/**  A counter that joined the store and hasn't pulled its history yet (doc §6.2): the till stays closed. */
+	bootstrap_pending: boolean,
 };
 
 export type ApprovalGrant = {
@@ -578,6 +596,15 @@ export type Batch_Serialize = {
 	/**  Σ unit_cost × qty over the layers (manual costs while still a draft). */
 	items_cost: number,
 	version: number,
+};
+
+/**  Progress of a bootstrap, for the first-run screen's progress bar. */
+export type BootstrapProgress = {
+	pages: number,
+	rows: number,
+	/**  0–1000: how far the cursor is towards the store's newest change. */
+	permille: number,
+	done: boolean,
 };
 
 export type CartInput = CartInput_Serialize | CartInput_Deserialize;
@@ -1025,6 +1052,30 @@ export type DateRange_Serialize = {
 	to: string | null,
 };
 
+export type DeadOp = DeadOp_Serialize | DeadOp_Deserialize;
+
+export type DeadOpAction = "retry" | "discard";
+
+export type DeadOp_Deserialize = {
+	seq: number,
+	table_name: string,
+	row_id: string,
+	/**  The cloud's reason, e.g. `COST_LOCKED: …` or `OWNER_INVARIANT: …`. */
+	last_error?: string | null,
+	attempts: number,
+	created_at: string,
+};
+
+export type DeadOp_Serialize = {
+	seq: number,
+	table_name: string,
+	row_id: string,
+	/**  The cloud's reason, e.g. `COST_LOCKED: …` or `OWNER_INVARIANT: …`. */
+	last_error: string | null,
+	attempts: number,
+	created_at: string,
+};
+
 export type DenominationCount = {
 	/**  Face value in cents (one of `LKR_DENOMINATIONS`). */
 	value: number,
@@ -1325,6 +1376,23 @@ export type IntegrityReport = {
 	unreversed_voids: number,
 	/**  `sync_ctx.applying` left at 1 outside a pull transaction. */
 	stale_sync_flag: boolean,
+};
+
+/**  What the first-run "Join existing store" screen sends. */
+export type JoinInput = JoinInput_Serialize | JoinInput_Deserialize;
+
+/**  What the first-run "Join existing store" screen sends. */
+export type JoinInput_Deserialize = {
+	register: RegisterInput_Deserialize,
+	/**  `en` or `si`, this counter's default. */
+	ui_language: string,
+};
+
+/**  What the first-run "Join existing store" screen sends. */
+export type JoinInput_Serialize = {
+	register: RegisterInput_Serialize,
+	/**  `en` or `si`, this counter's default. */
+	ui_language: string,
 };
 
 export type LabelElement = LabelElement_Serialize | LabelElement_Deserialize;
@@ -2167,6 +2235,11 @@ export type ReportDevice = {
 	device_code: string,
 };
 
+export type ResolveDeadOp = {
+	seq: number,
+	action: DeadOpAction,
+};
+
 export type Role = {
 	id: string,
 	name: string,
@@ -2372,6 +2445,32 @@ export type SyncInfo_Serialize = {
 	server_url: string | null,
 	registered_at: string | null,
 	device_code: string | null,
+};
+
+export type SyncLogRow = SyncLogRow_Serialize | SyncLogRow_Deserialize;
+
+export type SyncLogRow_Deserialize = {
+	id: string,
+	direction: string,
+	started_at: string,
+	finished_at?: string | null,
+	result: string,
+	rows_sent: number,
+	rows_received: number,
+	rows_rejected: number,
+	error_code?: string | null,
+};
+
+export type SyncLogRow_Serialize = {
+	id: string,
+	direction: string,
+	started_at: string,
+	finished_at: string | null,
+	result: string,
+	rows_sent: number,
+	rows_received: number,
+	rows_rejected: number,
+	error_code: string | null,
 };
 
 export type SyncState = 

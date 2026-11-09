@@ -70,6 +70,8 @@ pub struct Hub {
     pub fail_pulls: AtomicUsize,
     /// Reject every op on these tables (to exercise dead ops).
     pub reject_tables: Mutex<HashSet<String>>,
+    /// Leave out the parent closure (to prove a test needs it).
+    pub no_closure: std::sync::atomic::AtomicBool,
 }
 
 fn kind_of(table: &str) -> Option<(Kind, &'static str)> {
@@ -96,6 +98,7 @@ impl Hub {
             lose_push_answers: AtomicUsize::new(0),
             fail_pulls: AtomicUsize::new(0),
             reject_tables: Mutex::new(HashSet::new()),
+            no_closure: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -230,7 +233,7 @@ impl Hub {
 
         // Parent closure: every ancestor newer than the cursor, until nothing new turns up.
         let mut page: HashMap<(String, String), i64> = primary.iter().map(|(k, r)| ((*k).clone(), r.seq)).collect();
-        loop {
+        while !self.no_closure.load(Ordering::SeqCst) {
             let mut found = Vec::new();
             for (t, id) in page.keys() {
                 let row = &st.rows[&(t.clone(), id.clone())].row;

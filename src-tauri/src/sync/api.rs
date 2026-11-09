@@ -156,6 +156,11 @@ pub async fn register(
     }
 }
 
+/// One refresh at a time in this process. GoTrue rotates refresh tokens and treats a reused one as theft, so
+/// two connections (the worker, a bootstrap) must never refresh from the same token: the second waits here
+/// and then reads the already rotated token from the keyring.
+static REFRESH_LOCK: Mutex<()> = Mutex::const_new(());
+
 /// The device identity's access token, refreshed from the keyring's refresh token when it nears expiry.
 /// GoTrue rotates refresh tokens: the new one is written to the keyring before the access token is used.
 struct Tokens {
@@ -172,6 +177,7 @@ impl Tokens {
         {
             return Ok(token.clone());
         }
+        let _one_at_a_time = REFRESH_LOCK.lock().await;
         let refresh = self
             .secrets
             .get(&self.account)

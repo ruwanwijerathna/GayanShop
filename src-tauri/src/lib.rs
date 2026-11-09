@@ -169,6 +169,11 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::sync::sync_register,
         commands::sync::sync_status,
         commands::sync::sync_now,
+        commands::sync::setup_join_store,
+        commands::sync::sync_bootstrap,
+        commands::sync::sync_dead_ops,
+        commands::sync::sync_resolve_dead_op,
+        commands::sync::sync_logs,
     ])
 }
 
@@ -358,6 +363,11 @@ mod tests {
             "syncRegister",
             "syncStatus",
             "syncNow",
+            "setupJoinStore",
+            "syncBootstrap",
+            "syncDeadOps",
+            "syncResolveDeadOp",
+            "syncLogs",
             "customerLookup",
             "printerStatus",
             "printerProfile",

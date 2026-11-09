@@ -154,6 +154,31 @@ impl Term {
         products::update(&self.db, &self.ctx(), &self.actor(), id, &input, true).await.unwrap();
     }
 
+    /// A batch received, then reopened and re-costed, then received again: its layers end up edited after the
+    /// intake movements that reference them (newer server_seqs than their children). Returns the batch id.
+    pub async fn reworked_batch(&self, product: &str, qty: i64, unit_cost: i64) -> String {
+        use gayanshop_lib::db::repo::batches::{AllocationMethod, BatchInput, BatchItemInput};
+        let header = BatchInput {
+            name: "Reworked batch".into(),
+            supplier_name: None,
+            supplier_ref: None,
+            purchased_at: None,
+            total_cost: 0,
+            extra_costs: 0,
+            allocation_method: Some(AllocationMethod::Manual),
+            notes: None,
+        };
+        let b = batches::create(&self.db, &self.ctx(), &self.actor(), &header).await.unwrap().batch.id;
+        let item = |cost| BatchItemInput { product_id: product.into(), qty, unit_cost: cost, retail_price: None };
+        batches::set_item(&self.db, &self.ctx(), &b, &item(unit_cost)).await.unwrap();
+        batches::receive(&self.db, &self.ctx(), &self.actor(), &b).await.unwrap();
+        self.tick(60);
+        batches::reopen(&self.db, &self.ctx(), &self.actor(), &b).await.unwrap();
+        batches::set_item(&self.db, &self.ctx(), &b, &item(unit_cost + 500)).await.unwrap();
+        batches::receive(&self.db, &self.ctx(), &self.actor(), &b).await.unwrap();
+        b
+    }
+
     /// An empty terminal with a fresh device id and no identity yet.
     pub async fn empty() -> Term {
         let dir = tempfile::tempdir().unwrap();

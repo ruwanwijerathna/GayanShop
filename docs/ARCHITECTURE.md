@@ -2435,7 +2435,10 @@ GROUP BY b.id;
   - `orders` uses `INSERT OR IGNORE`, then `UPDATE … SET status='voided', …` **only if** local is `completed` and remote is `voided`.
   - Mutable tables use an upsert guarded by LWW (`WHERE excluded.updated_at > updated_at OR (= AND excluded.updated_by_device > updated_by_device)`).
 - Applying pulled rows **never** enqueues to the outbox (no echo loop) and **never** writes audit rows. Pulled audit rows are inserted as they are.
-- **Bootstrap** of a new or recovered terminal is the same pull with `cursor = 0`, repeated until it's caught up. It ends with `rebuild_derived` as cheap insurance.
+- **Bootstrap** of a new or recovered terminal is the same pull with `cursor = 0` and `include_own = true` (a recovered terminal needs its own past writes back), repeated until it's caught up. It ends with `rebuild_derived` as cheap insurance (Block 3.5).
+  - Every page commits with its cursor, so an interrupted bootstrap resumes where it stopped.
+  - A joined counter carries `sync.bootstrap_pending` until the pull completes. Until then the app shows "Finishing setup" instead of the login screen, and the worker leaves the pull to the bootstrap.
+  - Progress (`sync://bootstrap`) is the cursor's way towards the page's `watermark`.
 - **Every terminal pulls everything**, all history included. Store-wide reports and customer history at any counter depend on it. Bootstrapping a new terminal pulls the full dataset in pages, with a progress UI. At ~1,000 lines a day across three counters, that's roughly 1M rows over three years, which SQLite handles comfortably.
 
 ### 6.3 Merge rules per table

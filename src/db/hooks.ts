@@ -39,8 +39,15 @@ import {
   type UiLanguage,
   type UiTheme,
   type VoidInput_Deserialize as VoidInput,
+  type BootstrapProgress,
+  type JoinInput_Deserialize as JoinInput,
+  type RegisterInput_Deserialize as RegisterInput,
+  type ResolveDeadOp,
+  type SyncStatus_Serialize as SyncStatus,
 } from "./bindings";
 import { unwrap } from "./client";
+import { listen } from "@tauri-apps/api/event";
+import { useEffect, useState } from "react";
 
 export const queryKeys = {
   status: ["app", "status"] as const,
@@ -86,6 +93,10 @@ export const queryKeys = {
   heldCarts: ["pos", "held"] as const,
   currentCart: ["pos", "current"] as const,
   backupStatus: ["backup", "status"] as const,
+  syncStatus: ["sync", "status"] as const,
+  syncInfo: ["sync", "info"] as const,
+  syncDeadOps: ["sync", "dead"] as const,
+  syncLogs: ["sync", "logs"] as const,
   staff: ["staff", "list"] as const,
   labelTemplates: ["labels", "templates"] as const,
   valuation: (asOf: string | null) => ["inventory", "valuation", asOf ?? "now"] as const,
@@ -906,5 +917,101 @@ export function useExportCsv() {
     mutationFn: ({ kind, period, dir }: { kind: ExportKind; period: Period; dir: string }) =>
       unwrap(commands.exportCsv(kind, period, dir)),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.audit }),
+  });
+}
+
+// ───────── cloud sync (doc §1.3, §6) ─────────
+
+/** Run `onEvent` for each payload of a Rust event. Outside Tauri (tests, a plain browser) there is no bus. */
+function useRustEvent<T>(name: string, onEvent: (payload: T) => void) {
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let cancelled = false;
+    listen<T>(name, (event) => onEvent(event.payload))
+      .then((fn) => {
+        if (cancelled) fn();
+        else unlisten = fn;
+      })
+      .catch(() => {
+        // Not running inside Tauri.
+      });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [name, onEvent]);
+}
+
+/** The sync worker's status: read once, then kept current by `sync://status`. */
+export function useSyncStatus() {
+  const qc = useQueryClient();
+  const [onStatus] = useState(() => (status: SyncStatus) => qc.setQueryData(queryKeys.syncStatus, status));
+  useRustEvent("sync://status", onStatus);
+  return useQuery({
+    queryKey: queryKeys.syncStatus,
+    queryFn: () => unwrap(commands.syncStatus()),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useSyncInfo() {
+  return useQuery({ queryKey: queryKeys.syncInfo, queryFn: () => unwrap(commands.syncInfo()) });
+}
+
+export function useSyncNow() {
+  return useMutation({ mutationFn: () => unwrap(commands.syncNow()) });
+}
+
+export function useSyncRegister() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RegisterInput) => unwrap(commands.syncRegister(input)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sync"] }),
+  });
+}
+
+/** Only mounted for `SYNC_MANAGE` (Rust refuses anyone else). */
+export function useSyncDeadOps() {
+  return useQuery({ queryKey: queryKeys.syncDeadOps, queryFn: () => unwrap(commands.syncDeadOps()) });
+}
+
+export function useResolveDeadOp() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ResolveDeadOp) => unwrap(commands.syncResolveDeadOp(input)),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["sync"] }),
+  });
+}
+
+export function useSyncLogs(limit: number) {
+  return useQuery({
+    queryKey: [...queryKeys.syncLogs, limit],
+    queryFn: () => unwrap(commands.syncLogs(limit)),
+  });
+}
+
+/** The latest `sync://bootstrap` progress while a bootstrap runs. */
+export function useBootstrapProgress(): BootstrapProgress | null {
+  const [progress, setProgress] = useState<BootstrapProgress | null>(null);
+  const [onProgress] = useState(() => (p: BootstrapProgress) => setProgress(p));
+  useRustEvent("sync://bootstrap", onProgress);
+  return progress;
+}
+
+/** First-run "Join existing store": register, then pull the store's history. */
+export function useJoinStore() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: JoinInput) => unwrap(commands.setupJoinStore(input)),
+    onSettled: () => qc.invalidateQueries({ queryKey: queryKeys.status }),
+  });
+}
+
+/** Resume an interrupted bootstrap. */
+export function useResumeBootstrap() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => unwrap(commands.syncBootstrap()),
+    onSettled: () => qc.invalidateQueries({ queryKey: queryKeys.status }),
   });
 }

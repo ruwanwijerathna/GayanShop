@@ -34,6 +34,15 @@ pub enum RoundError {
     Remote(#[from] SyncError),
 }
 
+impl From<RoundError> for AppError {
+    fn from(e: RoundError) -> Self {
+        match e {
+            RoundError::Local(e) => e,
+            RoundError::Remote(e) => e.into(),
+        }
+    }
+}
+
 impl From<sqlx::Error> for RoundError {
     fn from(e: sqlx::Error) -> Self {
         RoundError::Local(e.into())
