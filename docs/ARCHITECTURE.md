@@ -117,6 +117,7 @@ DB file location: `%APPDATA%\com.gayanshop.pos\pos.db` (Tauri `app_data_dir()`).
 └──────────────────────────────────────────────────────────┘          └──────────────────────────┘
 ```
 
+- **The worker** (`sync::worker`, Block 3.4) runs one round per wake-up: the health probe, then push batches until nothing is ready, then pull pages until caught up. It never holds the writer lock across a network call. Its states, for the pill: unregistered, bootstrap pending, syncing, synced, pending N (queued or dead ops), offline, unauthorized (re-register the counter), error. In-flight ops left by a crash go back to the queue at start.
 - **Connectivity detection:** don't trust `navigator.onLine`. The worker sends a health RPC every 15 s when idle, and runs immediately after any local write. Failures back off exponentially (5 s → 5 min max, with jitter). A `sync://status` event drives the UI's status pill (🟢 synced / 🟡 pending N / 🔴 offline).
 - **The business write, audit row and outbox entry go in one transaction.** It's impossible to record a sale, or an override, without it being audited and queued for sync.
 - **Never ship the Supabase `service_role` key in the binary.** Each terminal has its own device identity: a Supabase Auth user with `app_metadata.store_id` / `device_id`. Its refresh token is kept in the Windows Credential Manager (`keyring` crate). All tables are protected by RLS on `store_id`.
@@ -2410,7 +2411,7 @@ GROUP BY b.id;
    - A row whose parent hasn't reached the cloud yet (a foreign-key miss) returns `retry`. It isn't recorded, so it can succeed later.
    - Only `upsert` ops exist: deletes are soft (`deleted_at`).
 4. The client deletes `ok` ops. A `rejected` op becomes `dead`, gets a `sync_logs` entry, and is surfaced in Settings → Sync (`SYNC_MANAGE`). A `retry`, a network failure or a 5xx makes the op `failed` with `attempts+1` and a backoff.
-5. Parents go before children, by enqueue order within each transaction.
+5. Parents go before children. A transaction may enqueue a child first (checkout snapshots the sealed order after its lines), so each batch is sent in table apply order, then outbox order within a table. A batch boundary can still split a parent from its child; the child is answered `retry` and goes in the next round.
 
 ### 6.2 Pull
 - `rpc/sync_pull({ cursor, max_rows, include_own: false })` uses **one global cursor**. It returns `{ rows: [{ seq, table, row }], cursor, has_more, watermark }`. `server_seq` is a single store-wide sequence, so per-table cursors would add nothing but ordering hazards. It returns rows across all tables with `server_seq > cursor`, ordered by `server_seq`, **excluding this device's own writes**, which it already has:

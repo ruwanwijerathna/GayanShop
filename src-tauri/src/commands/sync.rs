@@ -1,5 +1,6 @@
-//! Settings → Sync (doc §1.3, §6): register this counter with the cloud (`SYNC_MANAGE`), and what it is
-//! registered with. The owner's cloud password passes through once, to the auth server, and is never kept.
+//! Settings → Sync (doc §1.3, §6): register this counter with the cloud (`SYNC_MANAGE`), what it is
+//! registered with, the worker's status, and "Sync now". The owner's cloud password passes through once, to
+//! the auth server, and is never kept.
 
 use serde::Serialize;
 use specta::Type;
@@ -12,6 +13,7 @@ use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::sync::config;
 use crate::sync::registration::{self, RegisterInput, Registered};
+use crate::sync::worker::{self, SyncStatus};
 
 #[derive(Debug, Clone, Serialize, Type)]
 pub struct SyncInfo {
@@ -52,4 +54,26 @@ pub async fn sync_register(app: AppHandle, state: State<'_, AppState>, input: Re
     .await?;
     emit_changed(&app, &["audit_logs", "device_settings"]);
     Ok(registered)
+}
+
+/// The sync worker's latest status, with fresh outbox counts (the status pill reads it at start, then
+/// follows `sync://status`).
+#[tauri::command]
+#[specta::specta]
+pub async fn sync_status(state: State<'_, AppState>) -> AppResult<SyncStatus> {
+    session(&state)?;
+    let mut status = state.sync.status();
+    let (pending, dead) = worker::outbox_counts(&state.db).await?;
+    status.pending = pending;
+    status.dead = dead;
+    Ok(status)
+}
+
+/// "Sync now": run a round at once.
+#[tauri::command]
+#[specta::specta]
+pub async fn sync_now(state: State<'_, AppState>) -> AppResult<()> {
+    session(&state)?;
+    state.sync.poke();
+    Ok(())
 }

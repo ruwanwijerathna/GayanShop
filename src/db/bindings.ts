@@ -178,6 +178,13 @@ export const commands = {
 	syncInfo: () => typedError<SyncInfo_Serialize, AppError>(__TAURI_INVOKE("sync_info")),
 	/**  Register (or re-register) this counter, adopting its store, device id and code. */
 	syncRegister: (input: RegisterInput_Deserialize) => typedError<Registered, AppError>(__TAURI_INVOKE("sync_register", { input })),
+	/**
+	 *  The sync worker's latest status, with fresh outbox counts (the status pill reads it at start, then
+	 *  follows `sync://status`).
+	 */
+	syncStatus: () => typedError<SyncStatus_Serialize, AppError>(__TAURI_INVOKE("sync_status")),
+	/**  "Sync now": run a round at once. */
+	syncNow: () => typedError<null, AppError>(__TAURI_INVOKE("sync_now")),
 };
 
 /* Types */
@@ -674,6 +681,20 @@ export type ChainBreak = {
 };
 
 export type ChainBreakReason = "SEQUENCE_GAP" | "PREV_HASH_MISMATCH" | "CONTENT_MISMATCH";
+
+export type ChainBreakView = ChainBreakView_Serialize | ChainBreakView_Deserialize;
+
+export type ChainBreakView_Deserialize = {
+	device_code: string,
+	at?: string | null,
+	seq?: number | null,
+};
+
+export type ChainBreakView_Serialize = {
+	device_code: string,
+	at: string | null,
+	seq: number | null,
+};
 
 export type ChainReport = ChainReport_Serialize | ChainReport_Deserialize;
 
@@ -2351,6 +2372,48 @@ export type SyncInfo_Serialize = {
 	server_url: string | null,
 	registered_at: string | null,
 	device_code: string | null,
+};
+
+export type SyncState = 
+/**  No server or device identity yet (Settings → Sync → Register). */
+"unregistered" | 
+/**  A joined counter that hasn't pulled the store's history yet. */
+"bootstrap_pending" | "syncing" | 
+/**  Everything this counter wrote is in the cloud and it has everything the cloud has. */
+"synced" | 
+/**  Local writes are still queued (the server asked for a retry, or ops are dead). */
+"pending" | 
+/**  The server can't be reached; sales carry on and queue. */
+"offline" | 
+/**  The device identity was refused: the owner must re-register this counter. */
+"unauthorized" | 
+/**  Something unexpected; see `last_error`. */
+"error";
+
+export type SyncStatus = SyncStatus_Serialize | SyncStatus_Deserialize;
+
+export type SyncStatus_Deserialize = {
+	state: SyncState,
+	/**  Outbox ops not yet accepted by the cloud (pending, retrying or in flight). */
+	pending: number,
+	/**  Ops the cloud rejected (Settings → Sync). */
+	dead: number,
+	last_success_at?: string | null,
+	last_error?: string | null,
+	/**  Devices whose audit chain the server flagged. */
+	chain_broken: ChainBreakView_Deserialize[],
+};
+
+export type SyncStatus_Serialize = {
+	state: SyncState,
+	/**  Outbox ops not yet accepted by the cloud (pending, retrying or in flight). */
+	pending: number,
+	/**  Ops the cloud rejected (Settings → Sync). */
+	dead: number,
+	last_success_at: string | null,
+	last_error: string | null,
+	/**  Devices whose audit chain the server flagged. */
+	chain_broken: ChainBreakView_Serialize[],
 };
 
 /**  Calibration of a template (Settings → Labels): roll geometry only; the element boxes are the built-ins'. */

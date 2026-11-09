@@ -165,7 +165,27 @@ pub async fn join_store(
     crate::domain::receipt_no::device_digit(&res.device_code)
         .map_err(|_| AppError::invariant("SYNC_IDENTITY_MISMATCH", format!("device code {}", res.device_code)))?;
     secrets.set(&refresh_token_account(&device_id), &res.refresh_token)?;
+    record_joined_identity(db, clock, &res.store_id, &device_id, &res.device_code, &cfg, ui_language).await?;
+    Ok(Registered {
+        store_id: res.store_id,
+        store_name: res.store_name,
+        device_id: res.device_id,
+        device_code: res.device_code,
+    })
+}
 
+/// Record the identity the server confirmed for a joining counter: its ids, local preferences, the server,
+/// `sync.bootstrap_pending`, and a `DEVICE_REGISTER` audit row that starts its hash chain. The store's own
+/// data, staff included, arrives by bootstrap.
+pub async fn record_joined_identity(
+    db: &Db,
+    clock: &dyn Clock,
+    store_id: &str,
+    device_id: &str,
+    device_code: &str,
+    cfg: &ServerConfig,
+    ui_language: &str,
+) -> AppResult<()> {
     let now_dt = clock.now();
     let now = iso(now_dt);
     let bd = format_date(StoreCalendar::colombo_default().business_date(now_dt));
@@ -175,31 +195,25 @@ pub async fn join_store(
     }
     let c = tx.conn();
     settings::device_set(c, keys::DEVICE_ID, &device_id).await?;
-    settings::device_set(c, keys::DEVICE_CODE, &res.device_code).await?;
-    settings::device_set(c, keys::STORE_ID, &res.store_id).await?;
+    settings::device_set(c, keys::DEVICE_CODE, &device_code).await?;
+    settings::device_set(c, keys::STORE_ID, &store_id).await?;
     setup::write_device_defaults(c, ui_language).await?;
     settings::device_set(c, BOOTSTRAP_PENDING_KEY, &true).await?;
-    config::save(c, &cfg, &now).await?;
+    config::save(c, cfg, &now).await?;
     audit::record(
         c,
-        &AuditCtx { store_id: &res.store_id, device_id: &device_id, business_date: &bd, now: &now },
+        &AuditCtx { store_id, device_id, business_date: &bd, now: &now },
         AuditEntry {
             action: AuditAction::DEVICE_REGISTER,
             staff_id: None,
             approved_by: None,
             entity_type: Some("device"),
-            entity_id: Some(&device_id),
-            metadata: json!({ "mode": "join", "device_code": res.device_code, "server": cfg.url }),
+            entity_id: Some(device_id),
+            metadata: json!({ "mode": "join", "device_code": device_code, "server": cfg.url }),
         },
     )
     .await?;
-    tx.commit().await?;
-    Ok(Registered {
-        store_id: res.store_id,
-        store_name: res.store_name,
-        device_id: res.device_id,
-        device_code: res.device_code,
-    })
+    tx.commit().await
 }
 
 /// Whether this counter has a server and a device identity to sync with.

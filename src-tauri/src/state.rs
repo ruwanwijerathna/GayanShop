@@ -10,6 +10,7 @@ use crate::error::{AppError, AppResult};
 use crate::hardware::printer::worker::PrintHub;
 use crate::setup::Identity;
 use crate::sync::credentials::SecretStore;
+use crate::sync::worker::SyncHandle;
 
 pub struct AppState {
     pub db: Db,
@@ -25,6 +26,8 @@ pub struct AppState {
     pub label_printer: PrintHub,
     /// Where the device identity's refresh token lives (Windows Credential Manager; doc §1.3).
     pub secrets: Arc<dyn SecretStore>,
+    /// The sync worker's status and wake-up (doc §1.3).
+    pub sync: SyncHandle,
 }
 
 /// The long-lived services the app starts beside the database.
@@ -32,6 +35,7 @@ pub struct Services {
     pub printer: PrintHub,
     pub label_printer: PrintHub,
     pub secrets: Arc<dyn SecretStore>,
+    pub sync: SyncHandle,
 }
 
 impl AppState {
@@ -43,8 +47,8 @@ impl AppState {
         identity: Option<Identity>,
         services: Services,
     ) -> Self {
-        let Services { printer, label_printer, secrets } = services;
-        Self { db, clock, data_dir, auth, identity: RwLock::new(identity), printer, label_printer, secrets }
+        let Services { printer, label_printer, secrets, sync } = services;
+        Self { db, clock, data_dir, auth, identity: RwLock::new(identity), printer, label_printer, secrets, sync }
     }
 
     pub fn identity(&self) -> AppResult<Option<Identity>> {

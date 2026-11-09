@@ -445,7 +445,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
 - [x] **3.3 Device registration**: done 2026-11-09
   - **Deliverables:** an edge function that adopts the existing ids, with the token stored in the Windows keyring.
   - **Gate:** `--test registration` + `pnpm verify`
-- [ ] **3.4 Rust sync worker**
+- [x] **3.4 Rust sync worker**: done 2026-11-09
   - **Deliverables:** outbox push, pull apply (`sync_ctx` + topological order + apply rules), barcode-conflict handling, `sync_logs`.
   - **Gate:** `--test sync_apply` + `pnpm verify`
 - [ ] **3.5 Bootstrap and sync UI**
