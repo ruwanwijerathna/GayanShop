@@ -135,6 +135,15 @@ pub async fn load_identity(pool: &SqlitePool) -> AppResult<Option<Identity>> {
 
 const META_COLS: &str = "created_at, updated_at, updated_by_device";
 
+/// This terminal's local preferences at setup: language, theme, idle lock and the label templates (203 dpi,
+/// 2 mm gap). Shared by first run and by a counter joining an existing store (Block 3.3).
+pub async fn write_device_defaults(c: &mut sqlx::SqliteConnection, ui_language: &str) -> AppResult<()> {
+    settings::device_set(c, "ui.default_language", &ui_language).await?;
+    settings::device_set(c, "ui.theme", &"light").await?;
+    settings::device_set(c, keys::IDLE_LOCK_MINUTES, &5).await?;
+    settings::device_set(c, "label.templates", &builtin_label_templates()).await
+}
+
 /// Run first-run setup. Fails with `AlreadyInitialized` if this terminal already has an identity.
 pub async fn first_run(db: &Db, hasher: &PinHasher, clock: &dyn Clock, input: &SetupInput) -> AppResult<SetupResult> {
     let store_name = clean_name(&input.store_name, "STORE_NAME_INVALID", 80)?;
@@ -164,10 +173,7 @@ pub async fn first_run(db: &Db, hasher: &PinHasher, clock: &dyn Clock, input: &S
     settings::device_set(c, keys::DEVICE_ID, &device_id).await?;
     settings::device_set(c, keys::DEVICE_CODE, &device_code).await?;
     settings::device_set(c, keys::STORE_ID, &store_id).await?;
-    settings::device_set(c, "ui.default_language", &input.ui_language).await?;
-    settings::device_set(c, "ui.theme", &"light").await?;
-    settings::device_set(c, keys::IDLE_LOCK_MINUTES, &5).await?;
-    settings::device_set(c, "label.templates", &builtin_label_templates()).await?;
+    write_device_defaults(c, &input.ui_language).await?;
 
     // Synced store settings.
     for (key, value) in store_setting_seeds(&store_name) {

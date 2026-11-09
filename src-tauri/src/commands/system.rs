@@ -42,6 +42,8 @@ pub struct AppStatus {
     pub store_name: Option<String>,
     pub device_code: Option<String>,
     pub session: Option<SessionInfo>,
+    /// A counter that joined the store and hasn't pulled its history yet (doc §6.2): the till stays closed.
+    pub bootstrap_pending: bool,
 }
 
 /// What the shell needs to route: first-run wizard, login, or the app.
@@ -55,6 +57,7 @@ pub async fn app_status(state: State<'_, AppState>) -> AppResult<AppStatus> {
         store_name: identity.as_ref().map(|i| i.store_name.clone()),
         device_code: identity.as_ref().map(|i| i.device_code.clone()),
         session: session.as_ref().map(SessionInfo::from),
+        bootstrap_pending: crate::sync::bootstrap::is_pending(&state.db).await?,
     })
 }
 

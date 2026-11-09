@@ -26,11 +26,12 @@ pub mod quick_sales;
 pub mod reports;
 pub mod setup;
 pub mod staff;
+pub mod sync;
 pub mod system;
 pub mod void;
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::auth::session::Session;
 use crate::clock::iso;
@@ -72,5 +73,9 @@ pub struct DbChanged {
 pub fn emit_changed(app: &AppHandle, tables: &[&'static str]) {
     if let Err(e) = app.emit("db://changed", DbChanged { tables: tables.to_vec() }) {
         log::warn!("db://changed emit failed: {e}");
+    }
+    // A local write queued outbox rows: sync them now rather than at the next idle probe (doc §1.3).
+    if let Some(state) = app.try_state::<AppState>() {
+        state.sync.poke();
     }
 }

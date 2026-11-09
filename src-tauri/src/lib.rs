@@ -27,6 +27,7 @@ pub mod hardware;
 pub mod prefs;
 pub mod setup;
 pub mod state;
+pub mod sync;
 
 use std::sync::Arc;
 
@@ -39,7 +40,9 @@ use crate::db::Db;
 use crate::db::repo::print_jobs::RECEIPT_PRINTER;
 use crate::hardware::printer::worker::{PrintHub, WorkerConfig};
 use crate::hardware::printer::{self, TransportConfig};
-use crate::state::AppState;
+use crate::state::{AppState, Services};
+use crate::sync::credentials::{KEYRING_SERVICE, KeyringStore, SecretStore};
+use crate::sync::worker::{SyncEvents, SyncHandle, SyncStatus, Worker, http_connector};
 
 /// Environment override for the data folder (holds `pos.db` and `backups\`).
 pub const DATA_DIR_ENV: &str = "GAYANSHOP_DATA_DIR";
@@ -162,7 +165,54 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::staff::reset_staff_pin,
         commands::void::void_order,
         commands::void::session_orders,
+        commands::sync::sync_info,
+        commands::sync::sync_register,
+        commands::sync::sync_status,
+        commands::sync::sync_now,
+        commands::sync::setup_join_store,
+        commands::sync::sync_bootstrap,
+        commands::sync::sync_dead_ops,
+        commands::sync::sync_resolve_dead_op,
+        commands::sync::sync_logs,
     ])
+}
+
+/// The sync worker's events, into the app: `sync://status` for the status pill, and `db://changed` for
+/// the tables a pull changed (a pulled store setting also refreshes this counter's identity: store name,
+/// calendar).
+struct AppSyncEvents {
+    app: tauri::AppHandle,
+}
+
+impl SyncEvents for AppSyncEvents {
+    fn status(&self, status: &SyncStatus) {
+        if let Err(e) = tauri::Emitter::emit(&self.app, "sync://status", status) {
+            log::warn!("sync://status emit failed: {e}");
+        }
+    }
+
+    fn applied(&self, tables: &[&'static str]) {
+        if tables.contains(&"store_settings") {
+            let app = self.app.clone();
+            tauri::async_runtime::spawn(async move {
+                let Some(state) = app.try_state::<AppState>() else { return };
+                match setup::load_identity(&state.db.pool).await {
+                    Ok(Some(identity)) => {
+                        if let Err(e) = state.set_identity(identity) {
+                            log::warn!("sync: identity refresh failed: {e}");
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(e) => log::warn!("sync: identity reload failed: {e}"),
+                }
+            });
+        }
+        // Straight to the UI: going through emit_changed would wake the worker for nothing.
+        if let Err(e) = tauri::Emitter::emit(&self.app, "db://changed", commands::DbChanged { tables: tables.to_vec() })
+        {
+            log::warn!("db://changed emit failed: {e}");
+        }
+    }
 }
 
 /// Builds and runs the Tauri application. Errors are returned to `main`, never panicked.
@@ -208,7 +258,19 @@ pub fn run() -> Result<(), tauri::Error> {
             };
             let printer = hub(RECEIPT_PRINTER)?;
             let label_printer = hub(hardware::label::LABEL_PRINTER)?;
-            app.manage(AppState::new(db, clock, data_dir, auth, identity, printer, label_printer));
+            let secrets: Arc<dyn SecretStore> = Arc::new(KeyringStore::new(KEYRING_SERVICE));
+            let sync = SyncHandle::new();
+            let worker = Worker {
+                db: db.clone(),
+                clock: clock.clone(),
+                secrets: secrets.clone(),
+                events: Arc::new(AppSyncEvents { app: app.handle().clone() }),
+                handle: sync.clone(),
+                connect: http_connector(),
+            };
+            let services = Services { printer, label_printer, secrets, sync };
+            app.manage(AppState::new(db, clock, data_dir, auth, identity, services));
+            tauri::async_runtime::spawn(worker.run());
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -297,6 +359,15 @@ mod tests {
             "checkoutOrder",
             "voidOrder",
             "sessionOrders",
+            "syncInfo",
+            "syncRegister",
+            "syncStatus",
+            "syncNow",
+            "setupJoinStore",
+            "syncBootstrap",
+            "syncDeadOps",
+            "syncResolveDeadOp",
+            "syncLogs",
             "customerLookup",
             "printerStatus",
             "printerProfile",

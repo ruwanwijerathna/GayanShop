@@ -4,3 +4,5 @@
 *.ico binary
 *.icns binary
 *.wav binary
+# Label golden files are exact printer bytes (TSPL/ZPL lines end in CRLF): never convert them.
+src-tauri/tests/fixtures/labels/** -text

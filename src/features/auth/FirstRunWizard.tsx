@@ -7,12 +7,18 @@ import type { UiLanguage } from "@/db/bindings";
 import { CommandError } from "@/db/client";
 import { useFirstRunSetup } from "@/db/hooks";
 import { LANGUAGES, translateError } from "@/i18n";
+import { JoinStore } from "./JoinStore";
 
 const STEPS = 3;
 
-/** First-run setup (doc §8 Phase 0): language → store + counter → owner account. One Rust transaction. */
+/**
+ * First-run setup (doc §8 Phase 0): language → store + counter → owner account, in one Rust transaction. Or,
+ * from the first step, "Join an existing store" (decision #18) for a further counter.
+ */
 export function FirstRunWizard() {
-  const { t, i18n } = useTranslation(["auth", "common"]);
+  const { t, i18n } = useTranslation(["auth", "common", "sync"]);
+  const [mode, setMode] = useState<"new" | "join">("new");
+  const [joining, setJoining] = useState(false);
   const setup = useFirstRunSetup();
   const [step, setStep] = useState(1);
   const [language, setLanguage] = useState<UiLanguage>("en");
@@ -46,6 +52,13 @@ export function FirstRunWizard() {
     });
   };
 
+  if (joining) return <JoinStore language={language} onBack={() => setJoining(false)} />;
+
+  const next = () => {
+    if (step === 1 && mode === "join") setJoining(true);
+    else setStep((s) => s + 1);
+  };
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-6">
       <section className="flex w-full max-w-xl flex-col gap-6 rounded-xl border border-border bg-card p-8">
@@ -73,6 +86,28 @@ export function FirstRunWizard() {
                 </Button>
               ))}
             </div>
+          </fieldset>
+        )}
+
+        {step === 1 && (
+          <fieldset className="flex flex-col gap-3">
+            <legend className="mb-2 text-lg font-semibold">{t("sync:join.choose")}</legend>
+            {(["new", "join"] as const).map((m) => (
+              <Button
+                key={m}
+                type="button"
+                size="pos-lg"
+                variant={mode === m ? "default" : "outline"}
+                aria-pressed={mode === m}
+                className="h-auto flex-col items-start py-3 text-left"
+                onClick={() => setMode(m)}
+              >
+                <span>{t(m === "new" ? "sync:join.newStore" : "sync:join.joinStore")}</span>
+                <span className="text-sm font-normal opacity-90">
+                  {t(m === "new" ? "sync:join.newStoreHint" : "sync:join.joinStoreHint")}
+                </span>
+              </Button>
+            ))}
           </fieldset>
         )}
 
@@ -163,7 +198,7 @@ export function FirstRunWizard() {
             {t("common:actions.back")}
           </Button>
           {step < STEPS ? (
-            <Button type="button" size="pos" onClick={() => setStep((s) => s + 1)}>
+            <Button type="button" size="pos" onClick={next}>
               {t("common:actions.continue")}
             </Button>
           ) : (

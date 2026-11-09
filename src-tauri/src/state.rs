@@ -9,6 +9,8 @@ use crate::db::Db;
 use crate::error::{AppError, AppResult};
 use crate::hardware::printer::worker::PrintHub;
 use crate::setup::Identity;
+use crate::sync::credentials::SecretStore;
+use crate::sync::worker::SyncHandle;
 
 pub struct AppState {
     pub db: Db,
@@ -22,6 +24,18 @@ pub struct AppState {
     pub printer: PrintHub,
     /// The barcode label printer's worker (doc §7.4): its own queue, so labels never hold up receipts.
     pub label_printer: PrintHub,
+    /// Where the device identity's refresh token lives (Windows Credential Manager; doc §1.3).
+    pub secrets: Arc<dyn SecretStore>,
+    /// The sync worker's status and wake-up (doc §1.3).
+    pub sync: SyncHandle,
+}
+
+/// The long-lived services the app starts beside the database.
+pub struct Services {
+    pub printer: PrintHub,
+    pub label_printer: PrintHub,
+    pub secrets: Arc<dyn SecretStore>,
+    pub sync: SyncHandle,
 }
 
 impl AppState {
@@ -31,10 +45,10 @@ impl AppState {
         data_dir: PathBuf,
         auth: Auth,
         identity: Option<Identity>,
-        printer: PrintHub,
-        label_printer: PrintHub,
+        services: Services,
     ) -> Self {
-        Self { db, clock, data_dir, auth, identity: RwLock::new(identity), printer, label_printer }
+        let Services { printer, label_printer, secrets, sync } = services;
+        Self { db, clock, data_dir, auth, identity: RwLock::new(identity), printer, label_printer, secrets, sync }
     }
 
     pub fn identity(&self) -> AppResult<Option<Identity>> {

@@ -8,10 +8,12 @@ import { useApplyTheme } from "@/components/common/ThemeToggle";
 import { CommandError } from "@/db/client";
 import { useAppStatus, useDevicePrefs } from "@/db/hooks";
 import { FirstRunWizard } from "@/features/auth/FirstRunWizard";
+import { BootstrapResume } from "@/features/auth/JoinStore";
 import { LoginScreen } from "@/features/auth/LoginScreen";
 import { isUiLanguage, translateError } from "@/i18n";
 
-/** Routes the app: first-run wizard → login (PIN) → logged-in shell. Rust is the source of truth. */
+/** Routes the app: first-run wizard (or joining a store and pulling its history) → login (PIN) → logged-in
+ * shell. Rust is the source of truth. */
 function App() {
   const { t, i18n } = useTranslation();
   const status = useAppStatus();
@@ -69,6 +71,7 @@ function App() {
     );
   }
   if (!status.data.initialized) return <FirstRunWizard />;
+  if (status.data.bootstrap_pending) return <BootstrapResume />;
   if (!rustSession) return <LoginScreen storeName={status.data.store_name ?? null} wasLocked={wasLocked} />;
   return (
     <ExplicitLockContext.Provider value={markExplicitLock}>

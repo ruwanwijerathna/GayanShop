@@ -127,11 +127,31 @@
     "EXPENSE_DRAWER_LOCKED": "This expense moved drawer cash: its amount, date and method are fixed, and it can only be deleted while its shift is open.",
     "EXPENSE_TEXT_TOO_LONG": "Paid to and note can have at most 200 characters.",
     "EXPORT_DIR_INVALID": "That folder isn't available. Check the drive and pick it again.",
-    "EXPORT_WRITE_FAILED": "The file couldn't be written. Check the drive has space."
+    "EXPORT_WRITE_FAILED": "The file couldn't be written. Check the drive has space.",
+    "SYNC_OFFLINE": "The sync server can't be reached. Check the internet connection and try again.",
+    "SYNC_UNAUTHORIZED": "This counter's cloud identity was refused. Register the counter again.",
+    "SYNC_PROTOCOL": "The sync server sent an unexpected answer.",
+    "SYNC_URL_INVALID": "Enter the server address, starting with https://.",
+    "SYNC_KEY_INVALID": "Enter the project key exactly as shown in the Supabase dashboard.",
+    "SYNC_EMAIL_INVALID": "Enter the owner's cloud account email.",
+    "SYNC_PASSWORD_REQUIRED": "Enter the owner's cloud account password.",
+    "SYNC_INVALID_CREDENTIALS": "The email or password is wrong.",
+    "SYNC_STORE_OWNED_BY_ANOTHER_ACCOUNT": "This store is registered to a different cloud account.",
+    "SYNC_ACCOUNT_OWNS_ANOTHER_STORE": "This cloud account already has a different store.",
+    "SYNC_NO_STORE_FOR_ACCOUNT": "This cloud account has no store yet. Register the first counter from its Settings → Sync.",
+    "SYNC_DEVICE_IN_ANOTHER_STORE": "This counter is registered to a different store.",
+    "SYNC_DEVICE_CODE_TAKEN": "Another counter in the store already uses this counter code.",
+    "SYNC_DEVICE_CODE_MISMATCH": "The cloud knows this counter under a different code.",
+    "SYNC_NO_FREE_DEVICE_CODE": "The store already has nine counters.",
+    "SYNC_DEVICE_CANNOT_REGISTER": "Sign in with the owner's account, not a counter's.",
+    "SYNC_OWNER_NOT_SIGNED_IN": "The owner's sign-in expired. Try again.",
+    "SYNC_FUNCTION_NOT_CONFIGURED": "The server's registration service isn't set up yet.",
+    "SYNC_SERVER_ERROR": "The sync server had a problem. Try again shortly."
   },
   "INVARIANT": {
     "_": "This change isn't allowed.",
     "LAST_OWNER": "At least one active Owner must remain.",
-    "BAD_CALENDAR_SETTINGS": "The store's time settings are invalid."
+    "BAD_CALENDAR_SETTINGS": "The store's time settings are invalid.",
+    "SYNC_IDENTITY_MISMATCH": "The server answered for a different counter. Nothing was changed."
   }
 }

@@ -175,6 +175,30 @@ export const commands = {
 	voidOrder: (input: VoidInput_Deserialize) => typedError<VoidResult, AppError>(__TAURI_INVOKE("void_order", { input })),
 	/**  The open session's orders on this counter (the void list). */
 	sessionOrders: () => typedError<SessionOrder[], AppError>(__TAURI_INVOKE("session_orders")),
+	syncInfo: () => typedError<SyncInfo_Serialize, AppError>(__TAURI_INVOKE("sync_info")),
+	/**  Register (or re-register) this counter, adopting its store, device id and code. */
+	syncRegister: (input: RegisterInput_Deserialize) => typedError<Registered, AppError>(__TAURI_INVOKE("sync_register", { input })),
+	/**
+	 *  The sync worker's latest status, with fresh outbox counts (the status pill reads it at start, then
+	 *  follows `sync://status`).
+	 */
+	syncStatus: () => typedError<SyncStatus_Serialize, AppError>(__TAURI_INVOKE("sync_status")),
+	/**  "Sync now": run a round at once. */
+	syncNow: () => typedError<null, AppError>(__TAURI_INVOKE("sync_now")),
+	/**
+	 *  First-run "Join existing store" (decision #18): register this new counter into the owner's store, then
+	 *  pull the store's whole history. If the bootstrap is interrupted, the registration stands and
+	 *  `sync_bootstrap` resumes it.
+	 */
+	setupJoinStore: (input: JoinInput_Deserialize) => typedError<BootstrapProgress, AppError>(__TAURI_INVOKE("setup_join_store", { input })),
+	/**  Resume an interrupted bootstrap. Allowed before anyone can log in, but only while one is pending. */
+	syncBootstrap: () => typedError<BootstrapProgress, AppError>(__TAURI_INVOKE("sync_bootstrap")),
+	/**  The ops the cloud rejected (Settings → Sync). */
+	syncDeadOps: () => typedError<DeadOp_Serialize[], AppError>(__TAURI_INVOKE("sync_dead_ops")),
+	/**  Retry (a fresh snapshot under a new op id) or discard a dead op; audited. */
+	syncResolveDeadOp: (input: ResolveDeadOp) => typedError<null, AppError>(__TAURI_INVOKE("sync_resolve_dead_op", { input })),
+	/**  The latest sync log entries (pushes and pulls), newest first. */
+	syncLogs: (limit: number) => typedError<SyncLogRow_Serialize[], AppError>(__TAURI_INVOKE("sync_logs", { limit })),
 };
 
 /* Types */
@@ -277,6 +301,8 @@ export type AppStatus_Deserialize = {
 	store_name?: string | null,
 	device_code?: string | null,
 	session?: SessionInfo | null,
+	/**  A counter that joined the store and hasn't pulled its history yet (doc §6.2): the till stays closed. */
+	bootstrap_pending: boolean,
 };
 
 export type AppStatus_Serialize = {
@@ -284,6 +310,8 @@ export type AppStatus_Serialize = {
 	store_name: string | null,
 	device_code: string | null,
 	session: SessionInfo | null,
+	/**  A counter that joined the store and hasn't pulled its history yet (doc §6.2): the till stays closed. */
+	bootstrap_pending: boolean,
 };
 
 export type ApprovalGrant = {
@@ -570,6 +598,15 @@ export type Batch_Serialize = {
 	version: number,
 };
 
+/**  Progress of a bootstrap, for the first-run screen's progress bar. */
+export type BootstrapProgress = {
+	pages: number,
+	rows: number,
+	/**  0–1000: how far the cursor is towards the store's newest change. */
+	permille: number,
+	done: boolean,
+};
+
 export type CartInput = CartInput_Serialize | CartInput_Deserialize;
 
 export type CartInput_Deserialize = {
@@ -671,6 +708,20 @@ export type ChainBreak = {
 };
 
 export type ChainBreakReason = "SEQUENCE_GAP" | "PREV_HASH_MISMATCH" | "CONTENT_MISMATCH";
+
+export type ChainBreakView = ChainBreakView_Serialize | ChainBreakView_Deserialize;
+
+export type ChainBreakView_Deserialize = {
+	device_code: string,
+	at?: string | null,
+	seq?: number | null,
+};
+
+export type ChainBreakView_Serialize = {
+	device_code: string,
+	at: string | null,
+	seq: number | null,
+};
 
 export type ChainReport = ChainReport_Serialize | ChainReport_Deserialize;
 
@@ -1001,6 +1052,30 @@ export type DateRange_Serialize = {
 	to: string | null,
 };
 
+export type DeadOp = DeadOp_Serialize | DeadOp_Deserialize;
+
+export type DeadOpAction = "retry" | "discard";
+
+export type DeadOp_Deserialize = {
+	seq: number,
+	table_name: string,
+	row_id: string,
+	/**  The cloud's reason, e.g. `COST_LOCKED: …` or `OWNER_INVARIANT: …`. */
+	last_error?: string | null,
+	attempts: number,
+	created_at: string,
+};
+
+export type DeadOp_Serialize = {
+	seq: number,
+	table_name: string,
+	row_id: string,
+	/**  The cloud's reason, e.g. `COST_LOCKED: …` or `OWNER_INVARIANT: …`. */
+	last_error: string | null,
+	attempts: number,
+	created_at: string,
+};
+
 export type DenominationCount = {
 	/**  Face value in cents (one of `LKR_DENOMINATIONS`). */
 	value: number,
@@ -1301,6 +1376,23 @@ export type IntegrityReport = {
 	unreversed_voids: number,
 	/**  `sync_ctx.applying` left at 1 outside a pull transaction. */
 	stale_sync_flag: boolean,
+};
+
+/**  What the first-run "Join existing store" screen sends. */
+export type JoinInput = JoinInput_Serialize | JoinInput_Deserialize;
+
+/**  What the first-run "Join existing store" screen sends. */
+export type JoinInput_Deserialize = {
+	register: RegisterInput_Deserialize,
+	/**  `en` or `si`, this counter's default. */
+	ui_language: string,
+};
+
+/**  What the first-run "Join existing store" screen sends. */
+export type JoinInput_Serialize = {
+	register: RegisterInput_Serialize,
+	/**  `en` or `si`, this counter's default. */
+	ui_language: string,
 };
 
 export type LabelElement = LabelElement_Serialize | LabelElement_Deserialize;
@@ -2105,11 +2197,47 @@ export type ReceiptPrinterProfile = {
 	drawer_pin: DrawerPin,
 };
 
+export type RegisterInput = RegisterInput_Serialize | RegisterInput_Deserialize;
+
+export type RegisterInput_Deserialize = {
+	/**  The server's base URL, e.g. `https://<project>.supabase.co`. */
+	server_url: string,
+	/**  The project's public (anon) key. */
+	anon_key: string,
+	owner_email: string,
+	owner_password: string,
+	/**  Shown in the cloud's device list; defaults to "Counter T0n". */
+	device_name?: string | null,
+};
+
+export type RegisterInput_Serialize = {
+	/**  The server's base URL, e.g. `https://<project>.supabase.co`. */
+	server_url: string,
+	/**  The project's public (anon) key. */
+	anon_key: string,
+	owner_email: string,
+	owner_password: string,
+	/**  Shown in the cloud's device list; defaults to "Counter T0n". */
+	device_name: string | null,
+};
+
+export type Registered = {
+	store_id: string,
+	store_name: string,
+	device_id: string,
+	device_code: string,
+};
+
 /**  A counter for the report's counter filter. */
 export type ReportDevice = {
 	device_id: string,
 	/**  `T01`…, from its receipt numbers. */
 	device_code: string,
+};
+
+export type ResolveDeadOp = {
+	seq: number,
+	action: DeadOpAction,
 };
 
 export type Role = {
@@ -2300,6 +2428,92 @@ export type StockValuation_Serialize = {
 export type Symbology = "code128" | "ean13";
 
 export type SymbologyRule = "auto" | "code128" | "ean13";
+
+export type SyncInfo = SyncInfo_Serialize | SyncInfo_Deserialize;
+
+export type SyncInfo_Deserialize = {
+	/**  A server and a device identity are configured. */
+	registered: boolean,
+	server_url?: string | null,
+	registered_at?: string | null,
+	device_code?: string | null,
+};
+
+export type SyncInfo_Serialize = {
+	/**  A server and a device identity are configured. */
+	registered: boolean,
+	server_url: string | null,
+	registered_at: string | null,
+	device_code: string | null,
+};
+
+export type SyncLogRow = SyncLogRow_Serialize | SyncLogRow_Deserialize;
+
+export type SyncLogRow_Deserialize = {
+	id: string,
+	direction: string,
+	started_at: string,
+	finished_at?: string | null,
+	result: string,
+	rows_sent: number,
+	rows_received: number,
+	rows_rejected: number,
+	error_code?: string | null,
+};
+
+export type SyncLogRow_Serialize = {
+	id: string,
+	direction: string,
+	started_at: string,
+	finished_at: string | null,
+	result: string,
+	rows_sent: number,
+	rows_received: number,
+	rows_rejected: number,
+	error_code: string | null,
+};
+
+export type SyncState = 
+/**  No server or device identity yet (Settings → Sync → Register). */
+"unregistered" | 
+/**  A joined counter that hasn't pulled the store's history yet. */
+"bootstrap_pending" | "syncing" | 
+/**  Everything this counter wrote is in the cloud and it has everything the cloud has. */
+"synced" | 
+/**  Local writes are still queued (the server asked for a retry, or ops are dead). */
+"pending" | 
+/**  The server can't be reached; sales carry on and queue. */
+"offline" | 
+/**  The device identity was refused: the owner must re-register this counter. */
+"unauthorized" | 
+/**  Something unexpected; see `last_error`. */
+"error";
+
+export type SyncStatus = SyncStatus_Serialize | SyncStatus_Deserialize;
+
+export type SyncStatus_Deserialize = {
+	state: SyncState,
+	/**  Outbox ops not yet accepted by the cloud (pending, retrying or in flight). */
+	pending: number,
+	/**  Ops the cloud rejected (Settings → Sync). */
+	dead: number,
+	last_success_at?: string | null,
+	last_error?: string | null,
+	/**  Devices whose audit chain the server flagged. */
+	chain_broken: ChainBreakView_Deserialize[],
+};
+
+export type SyncStatus_Serialize = {
+	state: SyncState,
+	/**  Outbox ops not yet accepted by the cloud (pending, retrying or in flight). */
+	pending: number,
+	/**  Ops the cloud rejected (Settings → Sync). */
+	dead: number,
+	last_success_at: string | null,
+	last_error: string | null,
+	/**  Devices whose audit chain the server flagged. */
+	chain_broken: ChainBreakView_Serialize[],
+};
 
 /**  Calibration of a template (Settings → Labels): roll geometry only; the element boxes are the built-ins'. */
 export type TemplateCalibration = {

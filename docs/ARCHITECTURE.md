@@ -117,6 +117,7 @@ DB file location: `%APPDATA%\com.gayanshop.pos\pos.db` (Tauri `app_data_dir()`).
 └──────────────────────────────────────────────────────────┘          └──────────────────────────┘
 ```
 
+- **The worker** (`sync::worker`, Block 3.4) runs one round per wake-up: the health probe, then push batches until nothing is ready, then pull pages until caught up. It never holds the writer lock across a network call. Its states, for the pill: unregistered, bootstrap pending, syncing, synced, pending N (queued or dead ops), offline, unauthorized (re-register the counter), error. In-flight ops left by a crash go back to the queue at start.
 - **Connectivity detection:** don't trust `navigator.onLine`. The worker sends a health RPC every 15 s when idle, and runs immediately after any local write. Failures back off exponentially (5 s → 5 min max, with jitter). A `sync://status` event drives the UI's status pill (🟢 synced / 🟡 pending N / 🔴 offline).
 - **The business write, audit row and outbox entry go in one transaction.** It's impossible to record a sale, or an override, without it being audited and queued for sync.
 - **Never ship the Supabase `service_role` key in the binary.** Each terminal has its own device identity: a Supabase Auth user with `app_metadata.store_id` / `device_id`. Its refresh token is kept in the Windows Credential Manager (`keyring` crate). All tables are protected by RLS on `store_id`.
@@ -2271,11 +2272,16 @@ CREATE INDEX ix_sync_logs_started ON sync_logs(started_at);
 
 ### 4.4 Cloud (Postgres) deltas
 
-- Types become `uuid`, `timestamptz`, `bigint` money and masks, `jsonb`, `boolean` and `date` (business_date).
-- Every synced table gets `server_seq bigint NOT NULL` (one global sequence, set by a `BEFORE INSERT OR UPDATE` trigger) and `received_at timestamptz DEFAULT now()`. This cursor is only safe because `sync_push` serialises writers per store (§6.1).
-- `processed_ops(op_id uuid PRIMARY KEY, device_id uuid, processed_at timestamptz)` is the idempotency ledger.
-- `stores(id, name, …)` and `devices(id, store_id, code, name, last_seen_at, app_version, last_audit_seq, last_audit_hash)`.
-- RLS on every table: `store_id = (auth.jwt() -> 'app_metadata' ->> 'store_id')::uuid`.
+- **Layout** (`supabase/migrations`, Block 3.1). The business tables live in schema `pos`, which PostgREST doesn't expose, and the API roles (`anon`, `authenticated`) have no privilege on anything in it. Devices only call the RPCs in `public` (`sync_push`, `sync_pull`, `sync_health`). Those are `SECURITY DEFINER` functions owned by the `NOLOGIN` role `pos_sync`, which has no `BYPASSRLS`, so every row they read or write still passes the RLS policies below.
+- Types become `uuid`, `timestamptz`, `bigint` money and masks, `boolean` and `date` (business_date).
+  - **JSON-in-text columns stay `text`** (`store_settings.value`, `products.attributes`, `cash_sessions.denominations`, `audit_logs.metadata`), with a JSON-validity check. `jsonb` would reorder keys and drop whitespace, so a pulled row would no longer be byte-identical to what its origin wrote, and `audit_logs.metadata` feeds the hash chain. A dashboard casts them to `jsonb` when it reads them.
+  - `sync_pull` renders rows back in the terminal's wire format exactly: flags as 0/1, timestamps as `YYYY-MM-DDTHH:MM:SS.mmmZ` (`pos.ts()`, the same format as `clock::iso`), so text comparison for last-write-wins keeps working on every terminal.
+- Every synced table gets `server_seq bigint NOT NULL` (one global sequence, set by a `BEFORE INSERT OR UPDATE` trigger) and `server_received_at timestamptz` (`batches` already has a business `received_at`). This cursor is only safe because `sync_push` serialises writers per store (§6.1).
+- `orders.checkout_token` is unique per store (`ux_orders_checkout_token (store_id, checkout_token)`).
+- `processed_ops(op_id uuid PRIMARY KEY, store_id, device_id, table_name, result, reason, processed_at)` is the idempotency ledger. A replayed op returns its first result, rejections included.
+- `stores(id, name, owner_user_id, created_at)` and `devices(id, store_id, code, name, auth_user_id, app_version, registered_at, last_seen_at, last_audit_seq, last_audit_hash, chain_broken_at, chain_broken_seq)`. `pos.synced_tables` lists the eighteen synced tables with their merge kind (insert-only, order, last-write-wins) and apply order.
+- Rows the server itself changes carry the SYSTEM device id `00000000-0000-0000-0000-000000000000`.
+- RLS on every table: `store_id = pos.claim_store_id()`. The claims are read from `request.jwt.claims` (which PostgREST sets from the verified JWT), not from Supabase's `auth.jwt()`, so the same schema runs behind a bare PostgREST on a self-hosted server. Only a device identity (`app_metadata.role = 'device'`) has a store claim; any other signed-in user sees no rows.
   - **`audit_logs`, `stock_movements`, `order_items`, `order_payments` and `cash_movements` get no UPDATE or DELETE policy.**
   - On `orders`, UPDATE is allowed only for the void transition, enforced by a trigger.
 - `staff.pin_hash` is only readable by device identities, never by a future web dashboard role. `customers.phone_e164` is readable by device identities, and by dashboard roles only with an explicit customer-data grant.
@@ -2400,18 +2406,21 @@ GROUP BY b.id;
    - At 2–3 counters, the lock costs milliseconds.
    - Any other server-side writer, such as a future dashboard, must take the same lock. If writer volume ever grows, switch to a "safe watermark" pull.
 
-   For each op:
-   - If the `op_id` is already in `processed_ops`, return `ok`. This is a replay.
-   - Otherwise validate it: run the table's merge rule (§6.3) and the invariants (owner invariant, batch cost lock, order immutability, audit chain continuity). Then apply it, record the `op_id`, and return `ok` or `rejected{reason}`.
-4. The client deletes `ok` ops. A `rejected` op becomes `dead`, gets a `sync_logs` entry, and is surfaced in Settings → Sync (`SYNC_MANAGE`). A network or 5xx failure makes the op `failed` with `attempts+1` and a backoff.
-5. Parents go before children, by enqueue order within each transaction.
+   For each op (each in its own subtransaction, so one bad op never undoes the batch):
+   - If the `op_id` is already in `processed_ops`, return its recorded result. This is a replay.
+   - Otherwise validate it: run the table's merge rule (§6.3) and the invariants (owner invariant, batch cost lock, order immutability, audit chain continuity). Then apply it, record the `op_id`, and return `ok` or `rejected{reason}`. Rejections are recorded too, so a replayed rejected op is rejected again.
+   - A row whose parent hasn't reached the cloud yet (a foreign-key miss) returns `retry`. It isn't recorded, so it can succeed later.
+   - Only `upsert` ops exist: deletes are soft (`deleted_at`).
+4. The client deletes `ok` ops. A `rejected` op becomes `dead`, gets a `sync_logs` entry, and is surfaced in Settings → Sync (`SYNC_MANAGE`). A `retry`, a network failure or a 5xx makes the op `failed` with `attempts+1` and a backoff.
+5. Parents go before children, by enqueue order, which also keeps one device's changes in causal order: a layer's cost is set before its batch is marked received. Checkout writes an order's lines, payments and slices before it can seal the order, so after sealing it moves their queued ops behind the sealed order's (same snapshots, new op ids). A batch boundary can still split a parent from its child; the child is answered `retry` and goes in the next round.
 
 ### 6.2 Pull
-- `rpc/sync_pull({ cursor, limit, include_own: false })` uses **one global cursor**. `server_seq` is a single store-wide sequence, so per-table cursors would add nothing but ordering hazards. It returns rows across all tables with `server_seq > cursor`, ordered by `server_seq`, **excluding this device's own writes**, which it already has:
+- `rpc/sync_pull({ cursor, max_rows, include_own: false })` uses **one global cursor**. It returns `{ rows: [{ seq, table, row }], cursor, has_more, watermark }`. `server_seq` is a single store-wide sequence, so per-table cursors would add nothing but ordering hazards. It returns rows across all tables with `server_seq > cursor`, ordered by `server_seq`, **excluding this device's own writes**, which it already has:
   - Mutable tables and `orders`: `updated_by_device = me`.
   - Insert-only tables: `device_id = me`.
 
   Rows the server modified carry the SYSTEM device ID, so they always come back.
+- **Cursor and watermark.** Before reading, the server takes the store's newest `server_seq` (the watermark) and reads only up to it. Every row at or below it is committed, because pushes are serialised per store. A full page's cursor is its last row's seq. The last page's cursor jumps to the watermark, past this device's own newest rows, which it never receives.
 - **Parent closure.** Ordering by `server_seq` alone can't guarantee parents arrive before children:
   - A page limit can cut between a parent and its child.
   - A mutable parent gets a *new* `server_seq` on every edit. A `batch_item` created at seq 100 and edited at seq 200 sorts after the movement at seq 150 that references it.
@@ -2427,7 +2436,10 @@ GROUP BY b.id;
   - `orders` uses `INSERT OR IGNORE`, then `UPDATE … SET status='voided', …` **only if** local is `completed` and remote is `voided`.
   - Mutable tables use an upsert guarded by LWW (`WHERE excluded.updated_at > updated_at OR (= AND excluded.updated_by_device > updated_by_device)`).
 - Applying pulled rows **never** enqueues to the outbox (no echo loop) and **never** writes audit rows. Pulled audit rows are inserted as they are.
-- **Bootstrap** of a new or recovered terminal is the same pull with `cursor = 0`, repeated until it's caught up. It ends with `rebuild_derived` as cheap insurance.
+- **Bootstrap** of a new or recovered terminal is the same pull with `cursor = 0` and `include_own = true` (a recovered terminal needs its own past writes back), repeated until it's caught up. It ends with `rebuild_derived` as cheap insurance (Block 3.5).
+  - Every page commits with its cursor, so an interrupted bootstrap resumes where it stopped.
+  - A joined counter carries `sync.bootstrap_pending` until the pull completes. Until then the app shows "Finishing setup" instead of the login screen, and the worker leaves the pull to the bootstrap.
+  - Progress (`sync://bootstrap`) is the cursor's way towards the page's `watermark`.
 - **Every terminal pulls everything**, all history included. Store-wide reports and customer history at any counter depend on it. Bootstrapping a new terminal pulls the full dataset in pages, with a progress UI. At ~1,000 lines a day across three counters, that's roughly 1M rows over three years, which SQLite handles comfortably.
 
 ### 6.3 Merge rules per table
@@ -2437,9 +2449,10 @@ GROUP BY b.id;
 | `order_items`, `order_payments`, `stock_movements`, `cash_movements`, `audit_logs` | **Insert-only.** Same `id` ⇒ no-op. Conflicts are impossible by construction. |
 | `orders` | Insert-only. The only update is `completed → voided`, which only the originating device can make (voids are same-session). |
 | `cash_sessions` | Only the originating device writes, except `CASH_SESSION_FORCE_CLOSE` from another terminal (audited). LWW. |
-| `products`, `categories`, `roles`, `staff`, `expenses`, `expense_categories`, `store_settings`, `quick_sale_links` | **Last-write-wins on the whole row** by `(updated_at, updated_by_device)`. |
+| `products`, `categories`, `roles`, `staff`, `expenses`, `expense_categories`, `store_settings`, `quick_sale_links` | **Last-write-wins on the whole row** by `(updated_at, updated_by_device)`. On an exact tie from the *same* device (a row written twice within one millisecond, e.g. a batch created and received in one transaction), the later snapshot wins: one device's changes always arrive in order. |
 | `batches`, `batch_items` | LWW while `draft`. Once received, the server **rejects** any change to `unit_cost` or `qty_received` (dead op). Status moves forward only, except an audited reopen when there's been no movement. |
-| `staff` / `roles` owner invariant | A merged change that would leave no active Owner is rejected (`INVARIANT`) and surfaced to the owner. |
+| Any refused change to a mutable row | The server re-stamps its own current row (new `server_seq`), so every counter pulls it, and the counter whose change was refused lets the cloud's version replace it. The refused op stays `dead` in Settings → Sync. A counter never keeps a row the cloud rejected (Block 3.6). |
+| `staff` / `roles` owner invariant | A merged change that would leave no active Owner is rejected (`OWNER_INVARIANT`) and surfaced to the owner. Only a change that *removes* the last active Owner counts: while a store's seeds are first arriving there is none yet. |
 | `audit_logs` chain | The server checks `prev_hash` against the device's `last_audit_hash`. A mismatch is still **accepted**, but flagged (`devices.chain_broken_at`) and shown on the Audit screen. Losing audit rows would be worse than storing a broken chain. |
 | Barcode collision (two devices registered the same barcode offline) | It's never a rejection, because a sale must never fail over this. **Server:** before upserting an active product, check for another live, active product with that barcode. If one exists, store the incoming row with `is_active=false`, `barcode_conflict=true`, `updated_at=now()` and `updated_by_device=SYSTEM`, and return `ok`. **Client pull:** before applying a pulled active product, deactivate any *other* local active product with that barcode in the same transaction (`barcode_conflict=1` plus an outbox upsert). The partial unique index can't fail the pull. The owner resolves it in "Barcode conflicts" (`BARCODE_CONFLICT_RESOLVE`). |
 | `quick_sale_links` | The deterministic ID means concurrent promotions of the same key converge on one row. If two managers created *different* products for it, the loser's product stays, and the review screen flags "duplicate product from promotion". |
@@ -2448,6 +2461,20 @@ GROUP BY b.id;
 
 ### 6.4 Receipt numbers offline
 The format is `{device_code}-{YYYYMMDD}-{seq:04}`, e.g. `T01-20261108-0042`. The date is the business date. `device_code` (T01–T03) is assigned at first run or registration. `seq` comes from `receipt_counters` and is incremented inside the checkout transaction. Receipts print a QR code of the order `id` (for reprint and void lookup during the session), plus the `receipt.footer` policy text.
+
+
+### 6.5 Device registration (Block 3.3)
+- **The owner's cloud account** is one email + password user created in the Supabase dashboard (Authentication → Users). Public sign-up is off (decision #19). It owns at most one store (`stores.owner_user_id`).
+- **Registering a counter.** In Settings → Sync (`SYNC_MANAGE`), the owner enters the server address, the project's public (anon) key, and their cloud email and password.
+  - The counter signs the owner in directly with GoTrue's password grant. The password goes nowhere else and is never stored.
+  - The counter calls `POST /functions/v1/register-device` with the owner's short-lived token. The function verifies the token, refuses device identities, and calls `admin_claim_device`:
+    - **Adopt** (the counter already has a store from first run): it sends its `store_id`, `device_id` and code. The first registration claims the store for the account. Another account can't claim it, and an account can't claim a second store.
+    - **Join** (decision #18): a new counter sends only its fresh `device_id` and gets the next free code, T01–T09.
+    - Re-registering keeps the device row and code, and replaces the identity's credentials.
+  - The function creates (or re-keys) the counter's **device identity**: an auth user `{device_id}@devices.gayanshop.invalid` with `app_metadata = {role: 'device', store_id, device_id, device_code}`. It then signs that identity in and returns its tokens. The random password never leaves the function.
+  - The counter checks that the server answered for **its own** ids (`SYNC_IDENTITY_MISMATCH` otherwise; ids are never reassigned). It stores the refresh token in the Windows Credential Manager (service `com.gayanshop.pos`, account `sync.refresh_token.{device_id}`), saves the server address and anon key in `device_settings` (`sync.server`), and audits `DEVICE_REGISTER`.
+- **Tokens.** The worker refreshes the access token with the refresh-token grant a minute before it expires. GoTrue rotates refresh tokens, so the new one is written to the keyring before the access token is used.
+- **Portability.** The function speaks plain HTTP to GoTrue (`/auth/v1`) and PostgREST (`/rest/v1`), with no client library. The service-role key exists only in the function's environment, never in the desktop binary.
 
 ---
 
@@ -2960,6 +2987,9 @@ cargo add --dev proptest
 | 15 | **`synchronous = FULL`** | `NORMAL` (faster) | Under WAL, `NORMAL` can lose the last committed sale on a power cut after its receipt has printed. `FULL` costs one fsync (~1–5 ms) per commit (§13.2). |
 | 16 | **Seal pattern** (`pending → completed`) with SQL-verified totals | Inserting orders as `completed` | It closes the "add a line or payment to a sold order later" hole and makes SQL re-check every total (§13.5). |
 | 17 | **Negative stock layers are flagged, never auto-rebalanced** | Automatic layer rebalancing | Rebalancing would rewrite COGS on past sales, and the system can't know physical truth. Only a stock count can (§13.1). |
+| 18 | **A new counter joins the store from the first-run wizard** ("Join existing store"): the owner signs in with the store's cloud owner account, the counter gets the next free code (T02, T03), pulls the full history, and staff log in with their existing PINs (owner-confirmed 2026-11-09) | A pairing code generated on T01 | One flow for the first counter (adopting its offline ids) and for later ones. The owner's password never stays on a counter; each counter has its own device identity. |
+| 19 | **The owner's cloud account is one email + password user created in the Supabase dashboard.** The first counter that registers with it claims the store; later counters must use the same account. Public sign-up is off (owner-confirmed 2026-11-09) | A shared registration secret | Whoever holds a shared secret could join a counter to the store. |
+| 20 | **JSON-in-text columns stay `text` in the cloud** (§4.4) | `jsonb` | Byte-identical round trips. The audit hash chain depends on them. |
 
 
 ---

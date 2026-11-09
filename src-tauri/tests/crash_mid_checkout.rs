@@ -144,7 +144,13 @@ async fn every_await_point() {
                 interrupted += 1;
                 // Taking the writer lock proves the aborted transaction has been rolled back and released.
                 drop(t.t.db.write().await.unwrap());
-                assert_eq!(snapshot(&t).await, before, "partial writes after {budget} polls");
+                if snapshot(&t).await != before {
+                    // Cut at the very poll where COMMIT had already reached SQLite: the checkout is durable.
+                    // That is "everything", never a part of it, which assert_everything_written checks exactly.
+                    assert!(interrupted > 20, "only {interrupted} await points were cut");
+                    assert_everything_written(&t, &before).await;
+                    return;
+                }
             }
             Some(result) => {
                 assert!(!result.unwrap().replayed);

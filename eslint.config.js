@@ -39,5 +39,10 @@ export default defineConfig(
     files: ["scripts/**/*.mjs", "*.config.{js,ts}"],
     languageOptions: { globals: globals.node },
   },
+  {
+    // Supabase edge functions run on Deno (Block 3.3).
+    files: ["supabase/functions/**/*.ts"],
+    languageOptions: { globals: { Deno: "readonly" } },
+  },
   prettier,
 );

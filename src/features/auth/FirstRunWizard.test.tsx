@@ -4,7 +4,7 @@ import { commands } from "@/db/bindings";
 import { err, ok, renderWithProviders } from "@/test/render";
 import { FirstRunWizard } from "./FirstRunWizard";
 
-vi.mock("@/db/bindings", () => ({ commands: { firstRunSetup: vi.fn() } }));
+vi.mock("@/db/bindings", () => ({ commands: { firstRunSetup: vi.fn(), setupJoinStore: vi.fn() } }));
 
 const setup = vi.mocked(commands.firstRunSetup);
 
@@ -60,5 +60,45 @@ describe("FirstRunWizard", () => {
     fillOwner("1234", "1234");
     fireEvent.click(screen.getByRole("button", { name: "Finish setup" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("The PIN is too short.");
+  });
+});
+
+describe("FirstRunWizard → join an existing store", () => {
+  it("registers into the owner's store and pulls its history", async () => {
+    vi.mocked(commands.setupJoinStore).mockImplementation(() =>
+      ok({ pages: 3, rows: 1200, permille: 1000, done: true }),
+    );
+    renderWithProviders(<FirstRunWizard />);
+    fireEvent.click(screen.getByRole("button", { name: /Join an existing store/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.getByRole("heading", { name: "Join an existing store" })).toBeInTheDocument();
+    const type = (label: string, value: string) =>
+      fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    type("Server address", "https://example.supabase.co");
+    type("Project key (anon / public)", "anon-key");
+    type("Owner's cloud email", "owner@gayanshop.lk");
+    type("Owner's cloud password", "secret-1");
+    type("Counter name (optional)", "Back counter");
+    fireEvent.click(screen.getByRole("button", { name: "Join store" }));
+    await waitFor(() => expect(commands.setupJoinStore).toHaveBeenCalledOnce());
+    expect(commands.setupJoinStore).toHaveBeenCalledWith({
+      register: {
+        server_url: "https://example.supabase.co",
+        anon_key: "anon-key",
+        owner_email: "owner@gayanshop.lk",
+        owner_password: "secret-1",
+        device_name: "Back counter",
+      },
+      ui_language: "en",
+    });
+    expect(setup).not.toHaveBeenCalled();
+  });
+
+  it("goes back to the choice", () => {
+    renderWithProviders(<FirstRunWizard />);
+    fireEvent.click(screen.getByRole("button", { name: /Join an existing store/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByRole("heading", { name: "Set up this counter" })).toBeInTheDocument();
   });
 });

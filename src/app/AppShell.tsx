@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { useDbChangedInvalidation } from "@/db/events";
 import { BackupReminder } from "@/features/backup/BackupSettings";
 import { PrinterBanner } from "@/features/printing/PrinterBanner";
+import { SyncStatusPill } from "@/features/sync/SyncStatusPill";
 import { useAppStatus, useDevicePrefs, useLogout, useSetDeviceTheme, useSetUiLanguage } from "@/db/hooks";
 import type { UiLanguage } from "@/i18n";
 import { BackOfficeLayout } from "./layouts/BackOfficeLayout";
@@ -77,6 +78,7 @@ export function AppShell() {
           theme={prefs.data?.theme ?? "light"}
           onThemeChange={(theme) => setTheme.mutate(theme)}
           onLanguageChange={changeLanguage}
+          sync={<SyncStatusPill />}
         />
       }
       nav={

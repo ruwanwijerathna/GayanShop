@@ -466,11 +466,13 @@ fn clean_header(input: &BatchInput, now: &str) -> AppResult<CleanHeader> {
         ));
     }
     let purchased_at = match input.purchased_at.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-        Some(at) => {
+        // Stored in the one canonical form (`clock::iso`, UTC milliseconds): every terminal and the cloud
+        // must hold the same bytes for the same row (doc §4.4).
+        Some(at) => crate::clock::iso(
             chrono::DateTime::parse_from_rfc3339(at)
-                .map_err(|_| AppError::validation("BATCH_DATE_INVALID", at.to_owned()))?;
-            at.to_owned()
-        }
+                .map_err(|_| AppError::validation("BATCH_DATE_INVALID", at.to_owned()))?
+                .with_timezone(&chrono::Utc),
+        ),
         None => now.to_owned(),
     };
     Ok(CleanHeader {

@@ -22,6 +22,7 @@ import enProducts from "./locales/en/products.json";
 import enQuickSales from "./locales/en/quickSales.json";
 import enReports from "./locales/en/reports.json";
 import enStaff from "./locales/en/staff.json";
+import enSync from "./locales/en/sync.json";
 import siApp from "./locales/si/app.json";
 import siAuth from "./locales/si/auth.json";
 import siBackup from "./locales/si/backup.json";
@@ -41,6 +42,7 @@ import siProducts from "./locales/si/products.json";
 import siQuickSales from "./locales/si/quickSales.json";
 import siReports from "./locales/si/reports.json";
 import siStaff from "./locales/si/staff.json";
+import siSync from "./locales/si/sync.json";
 
 export const LANGUAGES = ["en", "si"] as const;
 export type UiLanguage = (typeof LANGUAGES)[number];
@@ -65,6 +67,7 @@ export const NAMESPACES = [
   "reports",
   "charts",
   "orders",
+  "sync",
 ] as const;
 
 export const resources = {
@@ -88,6 +91,7 @@ export const resources = {
     reports: enReports,
     charts: enCharts,
     orders: enOrders,
+    sync: enSync,
   },
   si: {
     common: siCommon,
@@ -109,6 +113,7 @@ export const resources = {
     reports: siReports,
     charts: siCharts,
     orders: siOrders,
+    sync: siSync,
   },
 } as const;
 

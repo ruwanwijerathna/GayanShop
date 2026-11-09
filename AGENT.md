@@ -7,7 +7,7 @@
 >
 > Never change an architectural decision silently. Propose the doc change to the owner first.
 
-**Current state (2026-11-09): Phase 2 complete on branch `feat/phase-2-batches-reports`, awaiting the owner's acceptance and merge.** Phase 1 is complete, accepted and merged to `main` (the manual hardware, touch and pull-the-plug checks in `docs/qa/phase1-acceptance.md` are pending the owner). Blocks 2.1–2.10 are committed and green (the manual label-printer, scanner, counter-PC and Sinhala checks in `docs/qa/phase2-acceptance.md` are pending the owner); Phase 3 needs the owner's go and a Supabase project. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
+**Current state (2026-11-09): Phase 3 (cloud sync) complete on branch `feat/phase-3-cloud-sync`, awaiting the owner's acceptance and merge.** Blocks 3.1–3.6 are committed and green against the local Supabase stack. Deploying to the live project (link, `db push`, `functions deploy`, turning sign-up off, creating the owner account) and registering the counters are the owner's steps in `docs/qa/phase3-acceptance.md`. Phases 0–2 are merged to `main` (owner hardware, touch and Sinhala checks pending in `docs/qa/phase1-acceptance.md` and `docs/qa/phase2-acceptance.md`). Phase 4 needs the owner's go. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
 
 ---
 
@@ -280,7 +280,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
       - A supervisor approval works once.
       - The chain verifies.
 
-- [x] **0.10 Continuous integration**: done 2026-11-08 (workflow committed and local gate green; **CI pending remote**, since no GitHub remote is configured)
+- [x] **0.10 Continuous integration**: done 2026-11-08 (workflow committed and local gate green; **CI pending remote**, since no GitHub remote is configured. Note for the first CI run: `tests/registration.rs` round-trips a secret through the real Windows Credential Manager, which needs a logged-on user session on the runner)
   - **Deliverables:** `.github/workflows/ci.yml` (`windows-latest`: pnpm + Rust cache, `pnpm verify`, `pnpm tauri build --no-bundle`).
   - **Gate:**
     - `pnpm verify` locally.
@@ -436,22 +436,22 @@ Each block's **gate = its specific commands + `pnpm verify`**.
 (`--test X` means `cargo test --manifest-path src-tauri/Cargo.toml --test X`.)
 
 ### Phase 3: Cloud sync (needs a Supabase project, Supabase CLI and Docker Desktop, so **ask the owner first**)
-- [ ] **3.1 Supabase schema**
+- [x] **3.1 Supabase schema**: done 2026-11-09 (local stack; live deploy is the owner's step)
   - **Deliverables:** `supabase/migrations` (mirror of §4.3 + `server_seq`, `processed_ops`, `devices`, RLS incl. no-UPDATE/DELETE policies), pgTAP tests.
   - **Gate:** `supabase test db` + `pnpm verify`
-- [ ] **3.2 Sync RPCs**
+- [x] **3.2 Sync RPCs**: done 2026-11-09
   - **Deliverables:** `sync_push` (advisory lock, idempotency, invariants: owner, cost lock, order state machine, audit chain), `sync_pull` (global cursor, parent closure).
   - **Gate:** `supabase test db` + `pnpm verify`
-- [ ] **3.3 Device registration**
+- [x] **3.3 Device registration**: done 2026-11-09
   - **Deliverables:** an edge function that adopts the existing ids, with the token stored in the Windows keyring.
   - **Gate:** `--test registration` + `pnpm verify`
-- [ ] **3.4 Rust sync worker**
+- [x] **3.4 Rust sync worker**: done 2026-11-09
   - **Deliverables:** outbox push, pull apply (`sync_ctx` + topological order + apply rules), barcode-conflict handling, `sync_logs`.
   - **Gate:** `--test sync_apply` + `pnpm verify`
-- [ ] **3.5 Bootstrap and sync UI**
+- [x] **3.5 Bootstrap and sync UI**: done 2026-11-09
   - **Deliverables:** full-history bootstrap with progress, the status pill, and Settings → Sync.
   - **Gate:** `--test bootstrap` (limit=7, parents edited after children) + `pnpm verify`
-- [ ] **3.6 Chaos suite**
+- [x] **3.6 Chaos suite**: done 2026-11-09 (local stack; owner deploy steps and counter-PC checks in docs/qa/phase3-acceptance.md)
   - **Deliverables:** a three-terminal harness with toxiproxy covering the doc §8 Phase 3 exit list, including `three_counters_oversell_last_units`.
   - **Gate:** `cargo test --manifest-path src-tauri/Cargo.toml --test chaos -- --ignored` + `pnpm verify`
 
@@ -494,6 +494,11 @@ cargo test   --manifest-path src-tauri/Cargo.toml --test <name>         # one in
 cargo test   --manifest-path src-tauri/Cargo.toml --release --test perf_budgets -- --ignored
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo fmt    --manifest-path src-tauri/Cargo.toml --all -- --check
+
+# Phase 3: the local Supabase stack (Docker Desktop must be running). Never link or push to the live project.
+pnpm exec supabase db start       # Postgres only: enough for pgTAP
+pnpm exec supabase db reset       # re-apply supabase/migrations to the local database
+pnpm exec supabase test db        # pgTAP (supabase/tests)
 ```
 
 **Environment notes:**
