@@ -7,7 +7,8 @@ use tauri::{AppHandle, State};
 use super::{emit_changed, session, write_ctx};
 use crate::auth::guard::require;
 use crate::db::repo::reports::{
-    self, PeriodReport, RebuildReport, ReportDevice, SalesByRow, SalesDimension, TrendPoint, VoidReport,
+    self, BatchSellThrough, PeriodReport, RebuildReport, ReportDevice, SalesByRow, SalesDimension, TrendPoint,
+    TrendSeries, VoidReport,
 };
 use crate::domain::period::{Granularity, Period};
 use crate::domain::permissions::Perm;
@@ -46,18 +47,35 @@ pub async fn report_trend(
     period: Period,
     device_id: Option<String>,
     granularity: Granularity,
-) -> AppResult<Vec<TrendPoint>> {
+    compare: bool,
+) -> AppResult<TrendSeries> {
     let costs = viewer(&state)?;
     let identity = state.identity()?.ok_or(AppError::NotInitialized)?;
-    let mut rows =
-        reports::trend(&state.db.pool, &identity.calendar, &period, device_id.as_deref(), granularity).await?;
+    let mut s =
+        reports::trend_series(&state.db.pool, &identity.calendar, &period, device_id.as_deref(), granularity, compare)
+            .await?;
     if !costs {
-        for r in &mut rows {
-            r.sales_cost = None;
-            r.expenses = None;
+        let hide = |rows: &mut Vec<TrendPoint>| {
+            for r in rows {
+                r.sales_cost = None;
+                r.expenses = None;
+            }
+        };
+        hide(&mut s.current);
+        if let Some(p) = s.previous.as_mut() {
+            hide(p);
         }
     }
-    Ok(rows)
+    Ok(s)
+}
+
+/// Units only (no cost), so `REPORT_SALES` is enough.
+#[tauri::command]
+#[specta::specta]
+pub async fn report_batch_sell_through(state: State<'_, AppState>) -> AppResult<Vec<BatchSellThrough>> {
+    viewer(&state)?;
+    let identity = state.identity()?.ok_or(AppError::NotInitialized)?;
+    reports::batch_sell_through(&state.db.pool, &identity.store_id, 12).await
 }
 
 #[tauri::command]

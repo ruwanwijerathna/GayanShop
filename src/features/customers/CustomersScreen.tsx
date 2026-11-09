@@ -6,6 +6,7 @@ import { BarChart3, Eraser, Save, Users } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { TopCustomersBar } from "@/components/charts/TopCustomersBar";
 import { DataTable } from "@/components/data-table/DataTable";
 import { PeriodPicker, periodFor } from "@/components/period/PeriodPicker";
 import { Badge } from "@/components/ui/badge";
@@ -455,7 +456,14 @@ function Analytics({ today }: { today: string }) {
           </p>
           <div className="grid gap-6 xl:grid-cols-2">
             <div className="flex flex-col gap-2">
-              <h3 className="text-lg font-semibold">{t("analytics.top")}</h3>
+              <TopCustomersBar
+                customers={data.top.map((c) => ({
+                  id: c.customer_id,
+                  label: c.display_name ?? c.phone_display ?? t("erased"),
+                  visits: c.visits,
+                  spend: c.spend,
+                }))}
+              />
               {data.top.length === 0 ? (
                 <p className="text-muted-foreground">{t("empty")}</p>
               ) : (

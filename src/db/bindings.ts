@@ -132,10 +132,12 @@ export const commands = {
 	updateExpense: (id: string, input: ExpenseInput_Deserialize) => typedError<ExpenseRow_Serialize, AppError>(__TAURI_INVOKE("update_expense", { id, input })),
 	deleteExpense: (id: string, approvalId: string | null) => typedError<null, AppError>(__TAURI_INVOKE("delete_expense", { id, approvalId })),
 	reportSummary: (period: Period, deviceId: string | null, compare: boolean) => typedError<PeriodReport_Serialize, AppError>(__TAURI_INVOKE("report_summary", { period, deviceId, compare })),
-	reportTrend: (period: Period, deviceId: string | null, granularity: Granularity) => typedError<TrendPoint_Serialize[], AppError>(__TAURI_INVOKE("report_trend", { period, deviceId, granularity })),
+	reportTrend: (period: Period, deviceId: string | null, granularity: Granularity, compare: boolean) => typedError<TrendSeries_Serialize, AppError>(__TAURI_INVOKE("report_trend", { period, deviceId, granularity, compare })),
 	reportSalesBy: (period: Period, deviceId: string | null, dimension: SalesDimension) => typedError<SalesByRow_Serialize[], AppError>(__TAURI_INVOKE("report_sales_by", { period, deviceId, dimension })),
 	reportVoids: (period: Period, deviceId: string | null) => typedError<VoidReport_Serialize, AppError>(__TAURI_INVOKE("report_voids", { period, deviceId })),
 	reportDevices: () => typedError<ReportDevice[], AppError>(__TAURI_INVOKE("report_devices")),
+	/**  Units only (no cost), so `REPORT_SALES` is enough. */
+	reportBatchSellThrough: () => typedError<BatchSellThrough[], AppError>(__TAURI_INVOKE("report_batch_sell_through")),
 	/**  Settings → Maintenance: recompute every derived table from the base tables. */
 	rebuildDerived: () => typedError<RebuildReport, AppError>(__TAURI_INVOKE("rebuild_derived")),
 	printerStatus: () => typedError<PrinterStatusView_Serialize, AppError>(__TAURI_INVOKE("printer_status")),
@@ -496,6 +498,20 @@ export type BatchPnl = {
 	/**  payback + what the rest would bring at today's prices. */
 	projected_profit: number,
 	/**  units sold / units received, in basis points. */
+	sell_through_bp: number,
+};
+
+/**  Batch sell-through (§1.4 chart): units received, sold, written off and left per received batch. */
+export type BatchSellThrough = {
+	batch_id: string,
+	code: string,
+	name: string,
+	status: string,
+	received: number,
+	sold: number,
+	written_off: number,
+	on_hand: number,
+	/**  `sold / received` in basis points. */
 	sell_through_bp: number,
 };
 
@@ -2287,6 +2303,21 @@ export type TrendPoint_Serialize = {
 	/**  Sale-slice cost (allocation variance is a batch-level figure and stays in the summary). */
 	sales_cost: number | null,
 	expenses: number | null,
+};
+
+/**  The trend and, on request, the previous equivalent period's, aligned bucket by bucket. */
+export type TrendSeries = TrendSeries_Serialize | TrendSeries_Deserialize;
+
+/**  The trend and, on request, the previous equivalent period's, aligned bucket by bucket. */
+export type TrendSeries_Deserialize = {
+	current: TrendPoint_Deserialize[],
+	previous?: TrendPoint_Deserialize[] | null,
+};
+
+/**  The trend and, on request, the previous equivalent period's, aligned bucket by bucket. */
+export type TrendSeries_Serialize = {
+	current: TrendPoint_Serialize[],
+	previous: TrendPoint_Serialize[] | null,
 };
 
 export type UiLanguage = "en" | "si";

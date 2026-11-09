@@ -16,8 +16,8 @@ use super::WriteCtx;
 use crate::audit::{self, AuditAction, AuditCtx, AuditEntry};
 use crate::auth::guard::Actor;
 use crate::db::Db;
-use crate::domain::business_date::StoreCalendar;
-use crate::domain::period::{DateRange, Granularity, Period, bucket_sql};
+use crate::domain::business_date::{StoreCalendar, parse_date};
+use crate::domain::period::{DateRange, Granularity, Period, bucket_of, bucket_sql};
 use crate::error::AppResult;
 
 /// Write-off movements (§5.1 "Stock write-offs"), net of found stock.
@@ -278,7 +278,101 @@ pub async fn trend(
     .bind(device_id)
     .fetch_all(pool)
     .await?;
-    Ok(rows)
+    Ok(densify(rows, &range, granularity, cal))
+}
+
+/// Charts read one point per bucket, so a bounded period gets every bucket from its first day to its last
+/// (empty ones as zeros) and a previous-period overlay lines up point for point. All time stays sparse.
+const DENSE_MAX: usize = 400;
+
+fn densify(rows: Vec<TrendPoint>, range: &DateRange, g: Granularity, cal: &StoreCalendar) -> Vec<TrendPoint> {
+    let (Some(from), Some(to)) = (range.from.as_deref().and_then(parse_date), range.to.as_deref().and_then(parse_date))
+    else {
+        return rows;
+    };
+    let mut buckets: Vec<String> = Vec::new();
+    let mut d = from;
+    while d <= to {
+        let b = bucket_of(d, g, cal);
+        if buckets.last() != Some(&b) {
+            buckets.push(b);
+            if buckets.len() > DENSE_MAX {
+                return rows;
+            }
+        }
+        d += chrono::Duration::days(1);
+    }
+    let zero =
+        |bucket: String| TrendPoint { bucket, sales_count: 0, net_sales: 0, sales_cost: Some(0), expenses: Some(0) };
+    let mut rows = rows.into_iter().peekable();
+    buckets
+        .into_iter()
+        .map(|b| match rows.peek() {
+            Some(r) if r.bucket == b => rows.next().unwrap_or_else(|| zero(b)),
+            _ => zero(b),
+        })
+        .collect()
+}
+
+/// The trend and, on request, the previous equivalent period's, aligned bucket by bucket.
+#[derive(Debug, Clone, Serialize, Type, PartialEq, Eq)]
+pub struct TrendSeries {
+    pub current: Vec<TrendPoint>,
+    pub previous: Option<Vec<TrendPoint>>,
+}
+
+pub async fn trend_series(
+    pool: &SqlitePool,
+    cal: &StoreCalendar,
+    period: &Period,
+    device_id: Option<&str>,
+    granularity: Granularity,
+    compare: bool,
+) -> AppResult<TrendSeries> {
+    let current = trend(pool, cal, period, device_id, granularity).await?;
+    let previous = match (compare, period.previous(cal)?) {
+        (true, Some(prev)) => Some(trend(pool, cal, &prev, device_id, granularity).await?),
+        _ => None,
+    };
+    Ok(TrendSeries { current, previous })
+}
+
+/// Batch sell-through (§1.4 chart): units received, sold, written off and left per received batch.
+#[derive(Debug, Clone, Serialize, Type, PartialEq, Eq, FromRow)]
+pub struct BatchSellThrough {
+    pub batch_id: String,
+    pub code: String,
+    pub name: String,
+    pub status: String,
+    #[specta(type = specta_typescript::Number)]
+    pub received: i64,
+    #[specta(type = specta_typescript::Number)]
+    pub sold: i64,
+    #[specta(type = specta_typescript::Number)]
+    pub written_off: i64,
+    #[specta(type = specta_typescript::Number)]
+    pub on_hand: i64,
+    /// `sold / received` in basis points.
+    #[specta(type = specta_typescript::Number)]
+    pub sell_through_bp: i64,
+}
+
+/// The most recently received batches (system batches left out), newest first, from `batch_item_stock`.
+pub async fn batch_sell_through(pool: &SqlitePool, store_id: &str, limit: u32) -> AppResult<Vec<BatchSellThrough>> {
+    Ok(sqlx::query_as(
+        "SELECT b.id AS batch_id, b.code, b.name, b.status,
+                COALESCE(SUM(bis.received_qty), 0) AS received, COALESCE(SUM(bis.sold_qty), 0) AS sold,
+                COALESCE(SUM(bis.written_off_qty), 0) AS written_off, COALESCE(SUM(bis.on_hand), 0) AS on_hand,
+                CASE WHEN COALESCE(SUM(bis.received_qty), 0) > 0
+                     THEN SUM(bis.sold_qty) * 10000 / SUM(bis.received_qty) ELSE 0 END AS sell_through_bp
+         FROM batches b LEFT JOIN batch_item_stock bis ON bis.batch_id = b.id
+         WHERE b.store_id = ?1 AND b.is_system = 0 AND b.status <> 'draft' AND b.deleted_at IS NULL
+         GROUP BY b.id ORDER BY b.received_at DESC, b.id LIMIT ?2",
+    )
+    .bind(store_id)
+    .bind(i64::from(limit.clamp(1, 50)))
+    .fetch_all(pool)
+    .await?)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Type)]

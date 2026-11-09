@@ -158,6 +158,15 @@ Charts use the official shadcn `chart` component (`ChartContainer`, `ChartToolti
 - Colours come from the shadcn CSS chart tokens (`--chart-1…5`), so light and dark themes both work.
 - Money axes use `formatMoney` (Latin digits, `Rs.` prefix) in both languages.
 - Charts only receive pre-aggregated rows from Rust, never raw orders.
+- **Block 2.8 implementation notes:**
+  - **Library.** `components/ui/chart.tsx` is the shadcn chart component for Recharts **3.8.0**, pinned exactly. Its registry `cn` import is repointed to `@/lib/utils`.
+  - **Charts.** `components/charts/` holds `SalesTrendArea`, `RevenueExpenseBar`, `PaymentDonut`, `TopCustomersBar` and `BatchSellThroughBar`.
+  - **Accessibility.** Each chart renders inside a `ChartFigure`: a titled `<figure>` plus a visually hidden table of the same numbers, in the UI language. Screen readers and the tests read that table.
+  - **Theming.** Colours are only the theme's `--chart-1…5` tokens, so light and dark need no extra work.
+  - **Trend data.** `report_trend` returns a densified series for bounded periods (every day, week or month, empty ones as zeros) and, on request, the previous period. The previous-period overlay therefore lines up point for point.
+  - **Bucketing.** The Reports screen picks day buckets for up to about two months, then weeks up to a year, then months.
+  - **Sell-through.** `report_batch_sell_through` (units only, `REPORT_SALES`) feeds the sell-through bars.
+  - **Dashboard.** Home shows a dashboard to `REPORT_SALES` holders: today against yesterday, the last 30 days against the 30 before, today's payment methods, and this year by month. Holders of `CUSTOMER_VIEW` also see this month's top customers.
 
 **Responsive, touch-first layout**
 

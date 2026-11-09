@@ -66,8 +66,9 @@ export const queryKeys = {
   businessToday: ["app", "today"] as const,
   reportSummary: (period: Period, deviceId: string | null, compare: boolean) =>
     ["reports", "summary", JSON.stringify(period), deviceId ?? "store", compare] as const,
-  reportTrend: (period: Period, deviceId: string | null, g: Granularity) =>
-    ["reports", "trend", JSON.stringify(period), deviceId ?? "store", g] as const,
+  reportTrend: (period: Period, deviceId: string | null, g: Granularity, compare: boolean) =>
+    ["reports", "trend", JSON.stringify(period), deviceId ?? "store", g, compare] as const,
+  reportSellThrough: ["reports", "sellThrough"] as const,
   reportSalesBy: (period: Period, deviceId: string | null, d: SalesDimension) =>
     ["reports", "salesBy", JSON.stringify(period), deviceId ?? "store", d] as const,
   reportVoids: (period: Period, deviceId: string | null) =>
@@ -823,10 +824,22 @@ export function useReportSummary(period: Period, deviceId: string | null, compar
   });
 }
 
-export function useReportTrend(period: Period, deviceId: string | null, granularity: Granularity) {
+export function useReportTrend(
+  period: Period,
+  deviceId: string | null,
+  granularity: Granularity,
+  compare: boolean,
+) {
   return useQuery({
-    queryKey: queryKeys.reportTrend(period, deviceId, granularity),
-    queryFn: () => unwrap(commands.reportTrend(period, deviceId, granularity)),
+    queryKey: queryKeys.reportTrend(period, deviceId, granularity, compare),
+    queryFn: () => unwrap(commands.reportTrend(period, deviceId, granularity, compare)),
+  });
+}
+
+export function useReportSellThrough() {
+  return useQuery({
+    queryKey: queryKeys.reportSellThrough,
+    queryFn: () => unwrap(commands.reportBatchSellThrough()),
   });
 }
 

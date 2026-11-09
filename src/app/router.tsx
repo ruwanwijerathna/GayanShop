@@ -2,7 +2,7 @@ import { createHashHistory, createRootRoute, createRoute, createRouter } from "@
 import { AuditLogScreen } from "@/features/audit/AuditLogScreen";
 import { BatchesScreen } from "@/features/batches/BatchesScreen";
 import { CashScreen } from "@/features/cash/CashScreen";
-import { CounterStatus } from "@/features/home/CounterStatus";
+import { HomePage } from "./HomePage";
 import { InventoryScreen } from "@/features/inventory/InventoryScreen";
 import { PosScreen } from "@/features/pos/PosScreen";
 import { ProductsScreen } from "@/features/products/ProductsScreen";
@@ -20,7 +20,7 @@ const rootRoute = createRootRoute({ component: AppShell });
 export const homeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: CounterStatus,
+  component: HomePage,
 });
 export const auditRoute = createRoute({
   getParentRoute: () => rootRoute,

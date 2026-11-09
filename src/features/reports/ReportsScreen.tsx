@@ -1,18 +1,31 @@
 // Reports (doc §5, REPORT_SALES): any §5.2 period, a counter filter and the previous equivalent period for
 // comparison. The §5.1 metrics (P&L lines need REPORT_FINANCIAL + VIEW_COST; Rust leaves them empty
 // otherwise), payments by method, sales by product / category / batch, and voids by reason and approver.
+// Charts (doc §1.4): sales trend with the previous period, revenue vs expenses, payment methods and batch
+// sell-through.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { BatchSellThroughBar } from "@/components/charts/BatchSellThroughBar";
+import { PaymentDonut } from "@/components/charts/PaymentDonut";
+import { RevenueExpenseBar } from "@/components/charts/RevenueExpenseBar";
+import { SalesTrendArea } from "@/components/charts/SalesTrendArea";
 import { PeriodPicker, periodFor } from "@/components/period/PeriodPicker";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import type { FinancialSummary_Serialize as FinancialSummary, Period, SalesDimension } from "@/db/bindings";
+import type {
+  FinancialSummary_Serialize as FinancialSummary,
+  Granularity,
+  Period,
+  SalesDimension,
+} from "@/db/bindings";
 import { CommandError } from "@/db/client";
 import {
   useBusinessToday,
   useReportDevices,
   useReportSalesBy,
+  useReportSellThrough,
   useReportSummary,
+  useReportTrend,
   useReportVoids,
 } from "@/db/hooks";
 import { translateError } from "@/i18n";
@@ -234,6 +247,52 @@ function Voids({ period, deviceId }: { period: Period; deviceId: string | null }
   );
 }
 
+/** Trend buckets per period: a day has no trend; up to a month by day; longer by month. */
+export function trendGranularity(period: Period): Granularity | null {
+  switch (period.kind) {
+    case "day":
+      return null;
+    case "week":
+    case "month":
+      return "day";
+    case "custom": {
+      const days = (Date.parse(period.to) - Date.parse(period.from)) / 86_400_000;
+      return days <= 62 ? "day" : days <= 366 ? "week" : "month";
+    }
+    case "year":
+    case "all_time":
+      return "month";
+  }
+}
+
+function Charts({
+  period,
+  deviceId,
+  compare,
+  payments,
+}: {
+  period: Period;
+  deviceId: string | null;
+  compare: boolean;
+  payments: FinancialSummary["payments"];
+}) {
+  const granularity = trendGranularity(period);
+  const trend = useReportTrend(period, deviceId, granularity ?? "day", compare && period.kind !== "all_time");
+  const sellThrough = useReportSellThrough();
+  return (
+    <div className="grid gap-6 xl:grid-cols-2">
+      {granularity && trend.data && (
+        <>
+          <SalesTrendArea current={trend.data.current} previous={trend.data.previous} />
+          <RevenueExpenseBar points={trend.data.current} />
+        </>
+      )}
+      <PaymentDonut payments={payments} />
+      {sellThrough.data && <BatchSellThroughBar batches={sellThrough.data} />}
+    </div>
+  );
+}
+
 function Reports({ today }: { today: string }) {
   const { t } = useTranslation("reports");
   const [period, setPeriod] = useState<Period>(() => periodFor("day", today));
@@ -310,6 +369,9 @@ function Reports({ today }: { today: string }) {
             )}
           </section>
         </div>
+      )}
+      {s && (
+        <Charts period={period} deviceId={deviceId || null} compare={compare} payments={s.current.payments} />
       )}
       <SalesBy period={period} deviceId={deviceId || null} />
       <Voids period={period} deviceId={deviceId || null} />

@@ -8,6 +8,7 @@ import enAuth from "./locales/en/auth.json";
 import enBackup from "./locales/en/backup.json";
 import enBatches from "./locales/en/batches.json";
 import enCash from "./locales/en/cash.json";
+import enCharts from "./locales/en/charts.json";
 import enCommon from "./locales/en/common.json";
 import enCustomers from "./locales/en/customers.json";
 import enErrors from "./locales/en/errors.json";
@@ -25,6 +26,7 @@ import siAuth from "./locales/si/auth.json";
 import siBackup from "./locales/si/backup.json";
 import siBatches from "./locales/si/batches.json";
 import siCash from "./locales/si/cash.json";
+import siCharts from "./locales/si/charts.json";
 import siCommon from "./locales/si/common.json";
 import siCustomers from "./locales/si/customers.json";
 import siErrors from "./locales/si/errors.json";
@@ -59,6 +61,7 @@ export const NAMESPACES = [
   "customers",
   "expenses",
   "reports",
+  "charts",
 ] as const;
 
 export const resources = {
@@ -80,6 +83,7 @@ export const resources = {
     customers: enCustomers,
     expenses: enExpenses,
     reports: enReports,
+    charts: enCharts,
   },
   si: {
     common: siCommon,
@@ -99,6 +103,7 @@ export const resources = {
     customers: siCustomers,
     expenses: siExpenses,
     reports: siReports,
+    charts: siCharts,
   },
 } as const;
 

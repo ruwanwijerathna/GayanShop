@@ -499,3 +499,41 @@ async fn sales_by_dimension_and_voids_reconcile() {
     let devices = reports::devices(pool).await.unwrap();
     assert_eq!(devices.iter().map(|d| d.device_code.as_str()).collect::<Vec<_>>(), vec!["T01", "T02"]);
 }
+
+#[tokio::test]
+async fn trends_are_dense_for_charts_and_sell_through_matches_the_layers() {
+    let d = history(0x5EED_0006).await;
+    let pool = d.t.pool();
+    let jan = Period::Month { year: 2026, month: 1 };
+    let s = reports::trend_series(pool, &cal(), &jan, None, Granularity::Day, true).await.unwrap();
+    assert_eq!(s.current.len(), 31, "one point per day, empty days as zeros");
+    assert_eq!(s.current[0].bucket, "2026-01-01");
+    assert_eq!(s.current.iter().map(|p| p.net_sales).sum::<i64>(), summary(pool, jan.clone(), None).await.net_sales);
+    let prev = s.previous.unwrap();
+    assert_eq!((prev.len(), prev[0].bucket.as_str()), (31, "2025-12-01"), "December overlays January");
+    let weeks = reports::trend_series(pool, &cal(), &jan, None, Granularity::Week, false).await.unwrap();
+    assert_eq!(weeks.current.first().map(|p| p.bucket.as_str()), Some("2025-12-29"), "the week holding 1 January");
+    assert!(weeks.previous.is_none());
+    let all = reports::trend_series(pool, &cal(), &Period::AllTime, None, Granularity::Day, true).await.unwrap();
+    assert!(
+        all.previous.is_none()
+            && all.current.iter().all(|p| p.sales_count > 0 || p.expenses.unwrap() > 0 || p.net_sales > 0)
+    );
+
+    let st = reports::batch_sell_through(pool, &d.t.s.store_id, 12).await.unwrap();
+    let raw: Vec<(String, i64, i64)> = sqlx::query_as(
+        "SELECT b.code, SUM(bis.received_qty), SUM(bis.sold_qty) FROM batch_item_stock bis
+         JOIN batches b ON b.id = bis.batch_id WHERE b.is_system = 0 GROUP BY b.id ORDER BY b.code",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap();
+    let mut got: Vec<(String, i64, i64)> = st.iter().map(|b| (b.code.clone(), b.received, b.sold)).collect();
+    got.sort();
+    assert_eq!(got, raw);
+    for b in &st {
+        assert_eq!(b.received - b.sold - b.written_off, b.on_hand, "{}", b.code);
+        assert_eq!(b.sell_through_bp, if b.received > 0 { b.sold * 10_000 / b.received } else { 0 });
+    }
+    assert!(st.iter().any(|b| b.sold > 0));
+}

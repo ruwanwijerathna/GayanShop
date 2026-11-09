@@ -132,6 +132,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::reports::report_sales_by,
         commands::reports::report_voids,
         commands::reports::report_devices,
+        commands::reports::report_batch_sell_through,
         commands::reports::rebuild_derived,
         commands::hardware::printer_status,
         commands::hardware::printer_profile,

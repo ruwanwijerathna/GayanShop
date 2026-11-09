@@ -92,6 +92,11 @@ beforeAll(() => {
   // jsdom has no layout: give the virtualised lists a viewport.
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 480 });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 800 });
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
 });
 
 beforeEach(() => {
@@ -182,7 +187,8 @@ describe("CustomersScreen", () => {
     renderWithProviders(<CustomersScreen />);
     fireEvent.click(await screen.findByRole("tab", { name: "Analytics" }));
     expect(await screen.findByText("75.0% of sales had a customer (3 of 4).")).toBeInTheDocument();
-    expect(screen.getByText("Kamala")).toBeInTheDocument();
+    expect(screen.getAllByText("Kamala").length).toBeGreaterThan(0);
+    expect(screen.getByRole("figure", { name: "Top customers by spend" })).toBeInTheDocument();
     expect(commands.customerAnalytics).toHaveBeenCalledWith(
       { kind: "month", year: 2026, month: 11 },
       "week",

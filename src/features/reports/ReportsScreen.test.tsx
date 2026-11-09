@@ -1,8 +1,8 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { commands, type FinancialSummary_Serialize as FinancialSummary } from "@/db/bindings";
 import { ok, renderWithProviders } from "@/test/render";
-import { ReportsScreen, changeBp, formatBp } from "./ReportsScreen";
+import { ReportsScreen, changeBp, formatBp, trendGranularity } from "./ReportsScreen";
 
 vi.mock("@/db/bindings", () => ({
   commands: {
@@ -11,6 +11,8 @@ vi.mock("@/db/bindings", () => ({
     reportSummary: vi.fn(),
     reportSalesBy: vi.fn(),
     reportVoids: vi.fn(),
+    reportTrend: vi.fn(),
+    reportBatchSellThrough: vi.fn(),
   },
 }));
 
@@ -57,7 +59,42 @@ const NO_COSTS = {
   net_profit: null,
 };
 
+beforeAll(() => {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+});
+
 beforeEach(() => {
+  vi.mocked(commands.reportTrend).mockImplementation(() =>
+    ok({
+      current: [
+        { bucket: "2026-11-02", sales_count: 3, net_sales: 90_000, sales_cost: 50_000, expenses: 10_000 },
+        { bucket: "2026-11-03", sales_count: 0, net_sales: 0, sales_cost: 0, expenses: 0 },
+      ],
+      previous: [
+        { bucket: "2026-10-26", sales_count: 1, net_sales: 30_000, sales_cost: 10_000, expenses: 0 },
+        { bucket: "2026-10-27", sales_count: 0, net_sales: 0, sales_cost: 0, expenses: 0 },
+      ],
+    }),
+  );
+  vi.mocked(commands.reportBatchSellThrough).mockImplementation(() =>
+    ok([
+      {
+        batch_id: "b1",
+        code: "B-2026-1001",
+        name: "Pettah",
+        status: "received",
+        received: 100,
+        sold: 40,
+        written_off: 2,
+        on_hand: 58,
+        sell_through_bp: 4_000,
+      },
+    ]),
+  );
   vi.mocked(commands.businessToday).mockImplementation(() => ok("2026-11-08"));
   vi.mocked(commands.reportDevices).mockImplementation(() =>
     ok([
@@ -156,6 +193,34 @@ describe("ReportsScreen", () => {
     const salesBy = screen.getByRole("region", { name: "Sales by" });
     await within(salesBy).findByText("Bucket");
     expect(within(salesBy).queryByText("Gross profit")).not.toBeInTheDocument();
+  });
+
+  it("charts a week's trend against the week before, with payments and sell-through", async () => {
+    renderWithProviders(<ReportsScreen />);
+    await screen.findByRole("table", { name: "Profit and loss" });
+    expect(screen.queryByRole("figure", { name: "Sales trend" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("figure", { name: "Payment methods" })).toBeInTheDocument();
+    expect(await screen.findByRole("figure", { name: "Batch sell-through" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Week" }));
+    const trend = await screen.findByRole("figure", { name: "Sales trend" });
+    expect(within(trend).getByText("Rs 300.00")).toBeInTheDocument();
+    expect(screen.getByRole("figure", { name: "Revenue and expenses" })).toBeInTheDocument();
+    expect(commands.reportTrend).toHaveBeenLastCalledWith(
+      { kind: "week", any_date: "2026-11-08" },
+      null,
+      "day",
+      true,
+    );
+  });
+
+  it("buckets the trend by the period's length", () => {
+    expect(trendGranularity({ kind: "day", date: "2026-11-08" })).toBeNull();
+    expect(trendGranularity({ kind: "month", year: 2026, month: 11 })).toBe("day");
+    expect(trendGranularity({ kind: "year", year: 2026 })).toBe("month");
+    expect(trendGranularity({ kind: "custom", from: "2026-01-01", to: "2026-02-15" })).toBe("day");
+    expect(trendGranularity({ kind: "custom", from: "2026-01-01", to: "2026-09-30" })).toBe("week");
+    expect(trendGranularity({ kind: "custom", from: "2024-01-01", to: "2026-09-30" })).toBe("month");
+    expect(trendGranularity({ kind: "all_time" })).toBe("month");
   });
 
   it("formats changes and margins", () => {

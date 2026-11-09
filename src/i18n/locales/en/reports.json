@@ -86,5 +86,18 @@
     "running": "Rebuilding…",
     "rebuilt": "Reports rebuilt.",
     "done": "Rebuilt {{days}} day totals, {{customers}} customers and {{layers}} stock layers."
+  },
+  "dashboard": {
+    "title": "Today",
+    "vsYesterday": "vs yesterday",
+    "kpis": {
+      "net_sales": "Net sales",
+      "sales_count": "Sales",
+      "avg_basket": "Average sale",
+      "gross_profit": "Gross profit"
+    },
+    "last30": "Last 30 days",
+    "thisYear": "This year by month",
+    "thisMonth": "This month"
   }
 }
