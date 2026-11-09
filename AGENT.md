@@ -7,7 +7,7 @@
 >
 > Never change an architectural decision silently. Propose the doc change to the owner first.
 
-**Current state (2026-11-08): Phase 1 in progress on branch `feat/phase-1-mvp-till`.** Phase 0 is complete and approved. Blocks 1.1–1.7 are committed and green; the next block is 1.8. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
+**Current state (2026-11-08): Phase 1 in progress on branch `feat/phase-1-mvp-till`.** Phase 0 is complete and approved. Blocks 1.1–1.8 are committed and green; the next block is 1.9. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
 
 ---
 
@@ -357,7 +357,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `cargo test --manifest-path src-tauri/Cargo.toml --test print_pipeline`
     - `pnpm verify`
 
-- [ ] **1.8 Scanner capture and feedback**
+- [x] **1.8 Scanner capture and feedback**: done 2026-11-09
   - **Deliverables:**
     - `ScannerProvider`: prefix capture (F13), the timing fallback with leak removal and replay, `event.code` decoding, `Enter` swallowing, the FIFO queue.
     - Audio cues, plus the unknown-barcode toast and Quick Sale prefill.
