@@ -67,3 +67,16 @@ pub async fn enqueue_upsert(conn: &mut SqliteConnection, table: &str, row_id: &s
     .await?;
     Ok(())
 }
+
+/// Drop the queued (not in-flight) snapshots of one row before enqueueing its newest one. An upsert carries
+/// the whole row, so the newest snapshot supersedes them; used by PDPA erasure so no unsent copy of the
+/// erased personal data stays on disk.
+pub async fn supersede(conn: &mut SqliteConnection, table: &str, row_id: &str) -> AppResult<()> {
+    pk_of(table)?;
+    sqlx::query("DELETE FROM sync_outbox WHERE table_name = ?1 AND row_id = ?2 AND status <> 'in_flight'")
+        .bind(table)
+        .bind(row_id)
+        .execute(&mut *conn)
+        .await?;
+    Ok(())
+}

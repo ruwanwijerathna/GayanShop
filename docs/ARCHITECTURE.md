@@ -810,7 +810,7 @@ line_net              = inclusive ? line_total − tax_amount : line_total   (ex
 - **Consent is verbal at the counter** (owner decision). The cashier asks, "Would you like to add your phone number?", and only types it if the customer agrees.
   - The UI shows **no popup, notice dialog or confirmation step**. The field is simply optional, and Enter or Esc on an empty field moves on.
   - Store only the phone number and an optional name and note.
-- **Erase on request** (`CUSTOMER_ERASE`, Owner and Manager). This clears the phone, name and notes on the `customers` row and sets `erased_at`. The row and its id remain, so past orders keep an anonymous `customer_id` and the store's totals stay correct. Orders are not modified.
+- **Erase on request** (`CUSTOMER_ERASE`, Owner and Manager). This clears the phone, name and notes on the `customers` row and sets `erased_at`. The row and its id remain, so past orders keep an anonymous `customer_id` and the store's totals stay correct. Orders are not modified. The same transaction drops that row's queued, unsent `sync_outbox` snapshots (an upsert carries the whole row, so the new erased snapshot supersedes them), so no unsent copy of the phone stays on disk.
   - The UUIDv5 id is derived from the phone. If the same person returns later and gives their number, the lookup finds the erased row by id. In that case, Rust **re-activates the same id** with a fresh profile. Visit history before the erasure stays anonymous, because it's still linked by id. Tell the customer this is how erasure works.
 - Exporting customer data needs `DATA_EXPORT` and is audited.
 

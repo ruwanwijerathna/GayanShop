@@ -8,6 +8,7 @@ pub mod checkout;
 pub mod customers;
 pub mod print_jobs;
 pub mod products;
+pub mod receipts;
 pub mod stock;
 pub mod void;
 

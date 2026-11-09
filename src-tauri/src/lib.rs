@@ -81,6 +81,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::cash::list_cash_sessions,
         commands::cash::cash_session_report,
         commands::checkout::checkout_order,
+        commands::customers::customer_lookup,
         commands::void::void_order,
         commands::void::session_orders,
     ])
@@ -173,6 +174,7 @@ mod tests {
             "checkoutOrder",
             "voidOrder",
             "sessionOrders",
+            "customerLookup",
         ] {
             assert!(ts.contains(&format!("{cmd}:")), "command {cmd} missing from bindings");
         }

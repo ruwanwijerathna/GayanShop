@@ -2,14 +2,16 @@
 //! row. Orders store only `customer_id`, never the phone. An erased customer who returns is re-activated
 //! under the same id with a fresh profile.
 
+use serde::{Deserialize, Serialize};
 use serde_json::json;
-use sqlx::SqliteConnection;
+use specta::Type;
+use sqlx::{SqliteConnection, SqlitePool};
 
 use super::WriteCtx;
 use crate::audit::{self, AuditAction, AuditCtx, AuditEntry};
 use crate::auth::guard::Actor;
 use crate::clock::stable_id;
-use crate::db::outbox;
+use crate::db::{Db, outbox};
 use crate::domain::phone;
 use crate::error::{AppError, AppResult};
 
@@ -124,4 +126,95 @@ pub async fn resolve_or_create(
         .await?;
     }
     Ok(CustomerRef { id, created })
+}
+
+/// What the till sees after 9–10 digits (doc §3.8): no history without `CUSTOMER_VIEW`.
+#[derive(Debug, Clone, Serialize, Type, PartialEq, Eq)]
+pub struct CustomerLookup {
+    /// `None` ⇒ a new number (or an erased profile): the customer is created at checkout.
+    pub customer_id: Option<String>,
+    pub phone_e164: String,
+    /// `077 123 4567`, for the cart header.
+    pub phone_display: String,
+    pub display_name: Option<String>,
+    /// Completed visits so far (voids excluded); the header shows "Visit #N+1".
+    #[specta(type = specta_typescript::Number)]
+    pub visit_count: i64,
+}
+
+#[derive(Debug, Clone, Deserialize, Type)]
+pub struct CustomerLookupInput {
+    pub phone: String,
+}
+
+/// Look a typed phone up by its UUIDv5 id (a primary-key read, so it is instant and offline). An erased
+/// profile reads as new: its pre-erasure visits stay anonymous.
+pub async fn lookup(pool: &SqlitePool, store_id: &str, phone_input: &str) -> AppResult<CustomerLookup> {
+    let (e164, _) = clean(phone_input, None)?;
+    let id = customer_id(store_id, &e164);
+    let row: Option<(Option<String>, Option<String>, i64)> = sqlx::query_as(
+        "SELECT c.display_name, c.erased_at, COALESCE(cs.visit_count, 0)
+         FROM customers c LEFT JOIN customer_stats cs ON cs.customer_id = c.id
+         WHERE c.id = ?1 AND c.deleted_at IS NULL",
+    )
+    .bind(&id)
+    .fetch_optional(pool)
+    .await?;
+    let phone_display = phone::format_national(&e164).unwrap_or_else(|| e164.clone());
+    Ok(match row {
+        Some((display_name, None, visit_count)) => {
+            CustomerLookup { customer_id: Some(id), phone_e164: e164, phone_display, display_name, visit_count }
+        }
+        _ => CustomerLookup { customer_id: None, phone_e164: e164, phone_display, display_name: None, visit_count: 0 },
+    })
+}
+
+/// PDPA erasure (doc §3.8): clear the phone, name and note and stamp `erased_at`. The row and its id stay, so
+/// past orders keep an anonymous `customer_id` and every total is unchanged; orders are never touched.
+pub async fn erase(db: &Db, ctx: &WriteCtx, actor: &Actor, id: &str) -> AppResult<()> {
+    let mut tx = db.write().await?;
+    let conn = tx.conn();
+    let erased: Option<Option<String>> =
+        sqlx::query_scalar("SELECT erased_at FROM customers WHERE id = ?1 AND store_id = ?2")
+            .bind(id)
+            .bind(&ctx.store_id)
+            .fetch_optional(&mut *conn)
+            .await?;
+    match erased {
+        None => return Err(AppError::not_found("customer")),
+        Some(Some(_)) => return Err(AppError::validation("CUSTOMER_ALREADY_ERASED", id.to_owned())),
+        Some(None) => {}
+    }
+    sqlx::query(
+        "UPDATE customers SET phone_e164 = NULL, display_name = NULL, note = NULL, erased_at = ?1, updated_at = ?1,
+                updated_by_device = ?2, version = version + 1
+         WHERE id = ?3",
+    )
+    .bind(&ctx.now)
+    .bind(&ctx.device_id)
+    .bind(id)
+    .execute(&mut *conn)
+    .await?;
+    audit::record(
+        conn,
+        &AuditCtx {
+            store_id: &ctx.store_id,
+            device_id: &ctx.device_id,
+            business_date: &ctx.business_date,
+            now: &ctx.now,
+        },
+        AuditEntry {
+            action: AuditAction::CUSTOMER_ERASE,
+            staff_id: Some(&actor.staff_id),
+            approved_by: actor.approved_by.as_deref(),
+            entity_type: Some("customer"),
+            entity_id: Some(id),
+            metadata: json!({}),
+        },
+    )
+    .await?;
+    outbox::supersede(conn, "customers", id).await?;
+    outbox::enqueue_upsert(conn, "customers", id, &ctx.now).await?;
+    tx.commit().await?;
+    Ok(())
 }
