@@ -175,6 +175,9 @@ export const commands = {
 	voidOrder: (input: VoidInput_Deserialize) => typedError<VoidResult, AppError>(__TAURI_INVOKE("void_order", { input })),
 	/**  The open session's orders on this counter (the void list). */
 	sessionOrders: () => typedError<SessionOrder[], AppError>(__TAURI_INVOKE("session_orders")),
+	syncInfo: () => typedError<SyncInfo_Serialize, AppError>(__TAURI_INVOKE("sync_info")),
+	/**  Register (or re-register) this counter, adopting its store, device id and code. */
+	syncRegister: (input: RegisterInput_Deserialize) => typedError<Registered, AppError>(__TAURI_INVOKE("sync_register", { input })),
 };
 
 /* Types */
@@ -2105,6 +2108,37 @@ export type ReceiptPrinterProfile = {
 	drawer_pin: DrawerPin,
 };
 
+export type RegisterInput = RegisterInput_Serialize | RegisterInput_Deserialize;
+
+export type RegisterInput_Deserialize = {
+	/**  The server's base URL, e.g. `https://<project>.supabase.co`. */
+	server_url: string,
+	/**  The project's public (anon) key. */
+	anon_key: string,
+	owner_email: string,
+	owner_password: string,
+	/**  Shown in the cloud's device list; defaults to "Counter T0n". */
+	device_name?: string | null,
+};
+
+export type RegisterInput_Serialize = {
+	/**  The server's base URL, e.g. `https://<project>.supabase.co`. */
+	server_url: string,
+	/**  The project's public (anon) key. */
+	anon_key: string,
+	owner_email: string,
+	owner_password: string,
+	/**  Shown in the cloud's device list; defaults to "Counter T0n". */
+	device_name: string | null,
+};
+
+export type Registered = {
+	store_id: string,
+	store_name: string,
+	device_id: string,
+	device_code: string,
+};
+
 /**  A counter for the report's counter filter. */
 export type ReportDevice = {
 	device_id: string,
@@ -2300,6 +2334,24 @@ export type StockValuation_Serialize = {
 export type Symbology = "code128" | "ean13";
 
 export type SymbologyRule = "auto" | "code128" | "ean13";
+
+export type SyncInfo = SyncInfo_Serialize | SyncInfo_Deserialize;
+
+export type SyncInfo_Deserialize = {
+	/**  A server and a device identity are configured. */
+	registered: boolean,
+	server_url?: string | null,
+	registered_at?: string | null,
+	device_code?: string | null,
+};
+
+export type SyncInfo_Serialize = {
+	/**  A server and a device identity are configured. */
+	registered: boolean,
+	server_url: string | null,
+	registered_at: string | null,
+	device_code: string | null,
+};
 
 /**  Calibration of a template (Settings → Labels): roll geometry only; the element boxes are the built-ins'. */
 export type TemplateCalibration = {
