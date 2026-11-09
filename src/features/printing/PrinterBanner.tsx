@@ -17,8 +17,9 @@ const KNOWN_FAULTS = new Set([
   "RENDER_FAILED",
 ]);
 
+// Amber, not red (doc §1.9 "printer or system problem"): the sale is saved, this is a hardware nag.
 const BAR =
-  "flex flex-wrap items-center gap-3 border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-base text-foreground";
+  "flex flex-wrap items-center gap-3 border-b border-warning bg-warning/15 px-4 py-2 text-base text-foreground";
 
 /**
  * The persistent printer banner (doc §7.5): unprinted receipts from before a restart ("Print now / Skip",

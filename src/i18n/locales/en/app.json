@@ -5,7 +5,8 @@
     "products": "Products",
     "batches": "Batches",
     "cash": "Cash",
-    "settings": "Settings"
+    "settings": "Settings",
+    "pos": "Till"
   },
   "status": {
     "title": "Counter status",

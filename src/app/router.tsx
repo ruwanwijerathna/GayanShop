@@ -3,6 +3,7 @@ import { AuditLogScreen } from "@/features/audit/AuditLogScreen";
 import { BatchesScreen } from "@/features/batches/BatchesScreen";
 import { CashScreen } from "@/features/cash/CashScreen";
 import { CounterStatus } from "@/features/home/CounterStatus";
+import { PosScreen } from "@/features/pos/PosScreen";
 import { PrinterSettings } from "@/features/printing/PrinterSettings";
 import { ProductsScreen } from "@/features/products/ProductsScreen";
 import { AppShell } from "./AppShell";
@@ -39,6 +40,12 @@ export const cashRoute = createRoute({
   component: CashScreen,
 });
 
+export const posRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/pos",
+  component: PosScreen,
+});
+
 export const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
@@ -47,6 +54,7 @@ export const settingsRoute = createRoute({
 
 export const routeTree = rootRoute.addChildren([
   homeRoute,
+  posRoute,
   cashRoute,
   productsRoute,
   batchesRoute,

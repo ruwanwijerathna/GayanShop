@@ -19,6 +19,8 @@ const TABLE_KEYS: Record<string, readonly string[]> = {
   cash_sessions: ["cash"],
   cash_movements: ["cash"],
   print_jobs: ["printer"],
+  orders: ["orders"],
+  customers: ["customers"],
 };
 
 export function keysForTables(tables: string[]): (readonly string[])[] {

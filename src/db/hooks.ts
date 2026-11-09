@@ -5,7 +5,9 @@ import {
   type AdHocPurchase,
   type BatchInput,
   type BatchItemInput,
+  type CartInput_Deserialize as CartInput,
   type CategoryInput,
+  type CheckoutInput_Deserialize as CheckoutInput,
   type CloseInput,
   type DrawerMovementInput,
   type Perm,
@@ -14,6 +16,7 @@ import {
   type SetupInput,
   type UiLanguage,
   type UiTheme,
+  type VoidInput_Deserialize as VoidInput,
 } from "./bindings";
 import { unwrap } from "./client";
 
@@ -32,6 +35,10 @@ export const queryKeys = {
   cashSession: ["cash", "current"] as const,
   printerStatus: ["printer", "status"] as const,
   printerProfile: ["printer", "profile"] as const,
+  customer: (phone: string) => ["customers", "lookup", phone] as const,
+  sessionOrders: ["orders", "session"] as const,
+  heldCarts: ["pos", "held"] as const,
+  currentCart: ["pos", "current"] as const,
 };
 
 /** Polled so the shell notices an idle auto-lock done by Rust (doc §3.5). */
@@ -296,4 +303,90 @@ export function usePrintDismissFailed() {
 
 export function usePrintRecoveryResolve() {
   return usePrinterMutation((printNow: boolean) => unwrap(commands.printRecoveryResolve(printNow)));
+}
+
+// ───────── till (doc §1.9) ─────────
+
+/** The cart header after 9–10 digits (a local primary-key read, so it works offline). */
+export function useCustomerLookup(phone: string | null) {
+  return useQuery({
+    queryKey: queryKeys.customer(phone ?? ""),
+    queryFn: () => unwrap(commands.customerLookup({ phone: phone ?? "" })),
+    enabled: phone !== null,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+export function useCheckoutOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CheckoutInput) => unwrap(commands.checkoutOrder(input)),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["orders"] });
+      await qc.invalidateQueries({ queryKey: ["cash"] });
+      await qc.invalidateQueries({ queryKey: ["customers"] });
+    },
+  });
+}
+
+export function useSessionOrders(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.sessionOrders,
+    queryFn: () => unwrap(commands.sessionOrders()),
+    enabled,
+  });
+}
+
+export function useVoidOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: VoidInput) => unwrap(commands.voidOrder(input)),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["orders"] });
+      await qc.invalidateQueries({ queryKey: ["cash"] });
+    },
+  });
+}
+
+/** The crash-recovery cart: written by the till with a debounce, read once on start. */
+export function saveCurrentCart(input: CartInput) {
+  return unwrap(commands.cartSaveCurrent(input));
+}
+
+export function discardCurrentCart() {
+  return unwrap(commands.cartDiscardCurrent());
+}
+
+export function useCurrentCart() {
+  return useQuery({
+    queryKey: queryKeys.currentCart,
+    queryFn: () => unwrap(commands.cartCurrent()),
+    staleTime: Infinity,
+  });
+}
+
+export function useHeldCarts(enabled: boolean) {
+  return useQuery({ queryKey: queryKeys.heldCarts, queryFn: () => unwrap(commands.heldCarts()), enabled });
+}
+
+export function useHoldCart() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CartInput) => unwrap(commands.cartHold(input)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.heldCarts }),
+  });
+}
+
+export function useRecallCart() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => unwrap(commands.cartRecall(id)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.heldCarts }),
+  });
+}
+
+/** A typed barcode or SKU (Enter in the scan field). */
+export function lookupProductCode(code: string) {
+  return unwrap(commands.lookupProductCode(code));
 }

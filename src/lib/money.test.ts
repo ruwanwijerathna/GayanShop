@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatLabelPrice, formatMoney, parseMajor } from "./money";
+import { formatLabelPrice, formatMoney, parseMajor, toMajorInput } from "./money";
 
 describe("formatMoney", () => {
   it("formats LKR cents like the Rust core", () => {
@@ -37,5 +37,12 @@ describe("parseMajor", () => {
     for (const cents of [0, 1, 99, 100, 45_050, 123_456_789]) {
       expect(parseMajor(formatMoney(cents).replace("Rs ", ""))).toBe(cents);
     }
+  });
+});
+
+describe("toMajorInput", () => {
+  it("is the inverse of parseMajor", () => {
+    for (const c of [0, 5, 99, 100, 125_075, 1_000_000_00]) expect(parseMajor(toMajorInput(c))).toBe(c);
+    expect(toMajorInput(125_050)).toBe("1250.50");
   });
 });

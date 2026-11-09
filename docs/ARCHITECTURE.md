@@ -2612,6 +2612,7 @@ Each phase ends with **exit criteria**. Don't start the next phase until they pa
   - Refused once the session is closed.
 - ESC/POS receipt with QR (spooler, network), the "All sales are final" footer, the masked customer phone, the automatic drawer kick, and an audited **no-sale kick**. Printer test page.
 - Hold and recall, and debounced crash recovery of the current cart.
+  - **Block 1.9 notes:** the cart is a Zustand store (`features/pos/store/cart.store.ts`) whose `held_carts` payload is versioned JSON (`v: 1`, validated with zod on recall). Commands `cart_save_current` (500 ms debounce), `cart_current` ("Recover cart?"; never offers a token that was already sold), `cart_hold` (F8, at most 50), `held_carts` and `cart_recall` (F11, holding the cart in progress first). The till previews totals with `features/pos/lib/pricing.ts`, a BigInt-exact port of `domain::pricing`, tested against `pricing_cases.json`.
 - **Manual "Backup Database Now"** (§3.9) to USB or a chosen folder, with an integrity check, manifest and audit. It ships in Phase 1 because, until Phase 3 sync, it's the only off-machine copy.
 - Staff management (create staff, assign role, reset PIN, set UI language) for the Owner.
 - The till's Sinhala translation is complete.

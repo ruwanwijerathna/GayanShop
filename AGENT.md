@@ -7,7 +7,7 @@
 >
 > Never change an architectural decision silently. Propose the doc change to the owner first.
 
-**Current state (2026-11-08): Phase 1 in progress on branch `feat/phase-1-mvp-till`.** Phase 0 is complete and approved. Blocks 1.1–1.8 are committed and green; the next block is 1.9. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
+**Current state (2026-11-08): Phase 1 in progress on branch `feat/phase-1-mvp-till`.** Phase 0 is complete and approved. Blocks 1.1–1.9 are committed and green; the next block is 1.10. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
 
 ---
 
@@ -366,7 +366,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `pnpm exec vitest run src/hardware/scanner`
     - `pnpm verify`
 
-- [ ] **1.9 Till UI**
+- [x] **1.9 Till UI**: done 2026-11-09
   - **Deliverables:**
     - The POS screen per doc §1.9 layout (1024×768 baseline).
     - The cart (virtualised), the Quick Sale bar with `parseQuickSale`, the phone field, the payment dialog (split, cash change), held carts with debounced recovery, the shortcut map with `<Kbd>` badges, and micro-interactions.

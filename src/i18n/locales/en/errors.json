@@ -82,7 +82,10 @@
     "VOID_SESSION_CLOSED": "This sale's cash session is closed. All sales are final.",
     "APPROVER_NOT_AUTHORISED": "The approver isn't allowed to do this.",
     "CUSTOMER_ALREADY_ERASED": "This customer's details have already been erased.",
-    "PRINTER_PROFILE_INVALID": "Check the printer connection details."
+    "PRINTER_PROFILE_INVALID": "Check the printer connection details.",
+    "CART_TOO_LARGE": "This cart is too large to save.",
+    "CART_INVALID": "The saved cart couldn't be read.",
+    "TOO_MANY_HELD": "Too many held sales. Recall or finish one first."
   },
   "INVARIANT": {
     "_": "This change isn't allowed.",

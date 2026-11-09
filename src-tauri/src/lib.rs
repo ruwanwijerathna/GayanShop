@@ -93,6 +93,12 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::hardware::print_retry,
         commands::hardware::print_dismiss_failed,
         commands::hardware::print_recovery_resolve,
+        commands::pos::cart_save_current,
+        commands::pos::cart_discard_current,
+        commands::pos::cart_current,
+        commands::pos::cart_hold,
+        commands::pos::held_carts,
+        commands::pos::cart_recall,
         commands::void::void_order,
         commands::void::session_orders,
     ])
@@ -205,6 +211,12 @@ mod tests {
             "printRetry",
             "printDismissFailed",
             "printRecoveryResolve",
+            "cartSaveCurrent",
+            "cartDiscardCurrent",
+            "cartCurrent",
+            "cartHold",
+            "heldCarts",
+            "cartRecall",
         ] {
             assert!(ts.contains(&format!("{cmd}:")), "command {cmd} missing from bindings");
         }

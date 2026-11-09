@@ -92,6 +92,13 @@ export const commands = {
 	printDismissFailed: () => typedError<null, AppError>(__TAURI_INVOKE("print_dismiss_failed")),
 	/**  The startup prompt: print the jobs left from before the restart, or skip them (abandoned, audited). */
 	printRecoveryResolve: (printNow: boolean) => typedError<null, AppError>(__TAURI_INVOKE("print_recovery_resolve", { printNow })),
+	cartSaveCurrent: (input: CartInput_Deserialize) => typedError<null, AppError>(__TAURI_INVOKE("cart_save_current", { input })),
+	cartDiscardCurrent: () => typedError<null, AppError>(__TAURI_INVOKE("cart_discard_current")),
+	/**  "Recover cart?" after a restart. */
+	cartCurrent: () => typedError<HeldCart_Serialize | null, AppError>(__TAURI_INVOKE("cart_current")),
+	cartHold: (input: CartInput_Deserialize) => typedError<HeldCart_Serialize, AppError>(__TAURI_INVOKE("cart_hold", { input })),
+	heldCarts: () => typedError<HeldCart_Serialize[], AppError>(__TAURI_INVOKE("held_carts")),
+	cartRecall: (id: string) => typedError<HeldCart_Serialize, AppError>(__TAURI_INVOKE("cart_recall", { id })),
 	voidOrder: (input: VoidInput_Deserialize) => typedError<VoidResult, AppError>(__TAURI_INVOKE("void_order", { input })),
 	/**  The open session's orders on this counter (the void list). */
 	sessionOrders: () => typedError<SessionOrder[], AppError>(__TAURI_INVOKE("session_orders")),
@@ -347,6 +354,24 @@ export type Batch_Serialize = {
 	/**  Σ unit_cost × qty over the layers (manual costs while still a draft). */
 	items_cost: number,
 	version: number,
+};
+
+export type CartInput = CartInput_Serialize | CartInput_Deserialize;
+
+export type CartInput_Deserialize = {
+	/**  The till's cart JSON. */
+	payload: string,
+	checkout_token?: string | null,
+	/**  Hold only: a short name such as "Lady in red". */
+	label?: string | null,
+};
+
+export type CartInput_Serialize = {
+	/**  The till's cart JSON. */
+	payload: string,
+	checkout_token: string | null,
+	/**  Hold only: a short name such as "Lady in red". */
+	label: string | null,
 };
 
 export type CashSession = CashSession_Serialize | CashSession_Deserialize;
@@ -620,6 +645,28 @@ export type DrawerMovement_Serialize = {
 
 /**  Which drawer pin the kick pulses (`ESC p m`): pin 2 by default, pin 5 for drawers wired that way. */
 export type DrawerPin = "pin2" | "pin5";
+
+export type HeldCart = HeldCart_Serialize | HeldCart_Deserialize;
+
+export type HeldCart_Deserialize = {
+	id: string,
+	label?: string | null,
+	/**  The till's cart JSON. */
+	payload: string,
+	checkout_token?: string | null,
+	created_at: string,
+	updated_at: string,
+};
+
+export type HeldCart_Serialize = {
+	id: string,
+	label: string | null,
+	/**  The till's cart JSON. */
+	payload: string,
+	checkout_token: string | null,
+	created_at: string,
+	updated_at: string,
+};
 
 export type IntegrityReport = {
 	/**  `"ok"` when SQLite's quick_check found nothing; otherwise its first message. */

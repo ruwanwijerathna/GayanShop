@@ -40,3 +40,11 @@ export function parseMajor(input: string): Money | null {
   const total = wholeCents + fracCents;
   return Number.isSafeInteger(total) && total <= MAX_SAFE_CENTS ? total : null;
 }
+
+/** Cents as plain major-unit text for an input field ("1250.50"), the inverse of `parseMajor`. */
+export function toMajorInput(cents: Money): string {
+  if (!Number.isSafeInteger(cents)) throw new RangeError("money must be an integer number of cents");
+  const sign = cents < 0 ? "-" : "";
+  const abs = Math.abs(cents);
+  return `${sign}${Math.trunc(abs / 100)}.${(abs % 100).toString().padStart(2, "0")}`;
+}
