@@ -442,7 +442,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
 - [x] **3.2 Sync RPCs**: done 2026-11-09
   - **Deliverables:** `sync_push` (advisory lock, idempotency, invariants: owner, cost lock, order state machine, audit chain), `sync_pull` (global cursor, parent closure).
   - **Gate:** `supabase test db` + `pnpm verify`
-- [ ] **3.3 Device registration**
+- [x] **3.3 Device registration**: done 2026-11-09
   - **Deliverables:** an edge function that adopts the existing ids, with the token stored in the Windows keyring.
   - **Gate:** `--test registration` + `pnpm verify`
 - [ ] **3.4 Rust sync worker**

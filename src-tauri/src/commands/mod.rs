@@ -26,6 +26,7 @@ pub mod quick_sales;
 pub mod reports;
 pub mod setup;
 pub mod staff;
+pub mod sync;
 pub mod system;
 pub mod void;
 

@@ -2456,6 +2456,20 @@ GROUP BY b.id;
 ### 6.4 Receipt numbers offline
 The format is `{device_code}-{YYYYMMDD}-{seq:04}`, e.g. `T01-20261108-0042`. The date is the business date. `device_code` (T01–T03) is assigned at first run or registration. `seq` comes from `receipt_counters` and is incremented inside the checkout transaction. Receipts print a QR code of the order `id` (for reprint and void lookup during the session), plus the `receipt.footer` policy text.
 
+
+### 6.5 Device registration (Block 3.3)
+- **The owner's cloud account** is one email + password user created in the Supabase dashboard (Authentication → Users). Public sign-up is off (decision #19). It owns at most one store (`stores.owner_user_id`).
+- **Registering a counter.** In Settings → Sync (`SYNC_MANAGE`), the owner enters the server address, the project's public (anon) key, and their cloud email and password.
+  - The counter signs the owner in directly with GoTrue's password grant. The password goes nowhere else and is never stored.
+  - The counter calls `POST /functions/v1/register-device` with the owner's short-lived token. The function verifies the token, refuses device identities, and calls `admin_claim_device`:
+    - **Adopt** (the counter already has a store from first run): it sends its `store_id`, `device_id` and code. The first registration claims the store for the account. Another account can't claim it, and an account can't claim a second store.
+    - **Join** (decision #18): a new counter sends only its fresh `device_id` and gets the next free code, T01–T09.
+    - Re-registering keeps the device row and code, and replaces the identity's credentials.
+  - The function creates (or re-keys) the counter's **device identity**: an auth user `{device_id}@devices.gayanshop.invalid` with `app_metadata = {role: 'device', store_id, device_id, device_code}`. It then signs that identity in and returns its tokens. The random password never leaves the function.
+  - The counter checks that the server answered for **its own** ids (`SYNC_IDENTITY_MISMATCH` otherwise; ids are never reassigned). It stores the refresh token in the Windows Credential Manager (service `com.gayanshop.pos`, account `sync.refresh_token.{device_id}`), saves the server address and anon key in `device_settings` (`sync.server`), and audits `DEVICE_REGISTER`.
+- **Tokens.** The worker refreshes the access token with the refresh-token grant a minute before it expires. GoTrue rotates refresh tokens, so the new one is written to the keyring before the access token is used.
+- **Portability.** The function speaks plain HTTP to GoTrue (`/auth/v1`) and PostgREST (`/rest/v1`), with no client library. The service-role key exists only in the function's environment, never in the desktop binary.
+
 ---
 
 ## 7. Hardware integration

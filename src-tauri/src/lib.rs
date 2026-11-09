@@ -27,6 +27,7 @@ pub mod hardware;
 pub mod prefs;
 pub mod setup;
 pub mod state;
+pub mod sync;
 
 use std::sync::Arc;
 
@@ -39,7 +40,8 @@ use crate::db::Db;
 use crate::db::repo::print_jobs::RECEIPT_PRINTER;
 use crate::hardware::printer::worker::{PrintHub, WorkerConfig};
 use crate::hardware::printer::{self, TransportConfig};
-use crate::state::AppState;
+use crate::state::{AppState, Services};
+use crate::sync::credentials::{KEYRING_SERVICE, KeyringStore, SecretStore};
 
 /// Environment override for the data folder (holds `pos.db` and `backups\`).
 pub const DATA_DIR_ENV: &str = "GAYANSHOP_DATA_DIR";
@@ -162,6 +164,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::staff::reset_staff_pin,
         commands::void::void_order,
         commands::void::session_orders,
+        commands::sync::sync_info,
+        commands::sync::sync_register,
     ])
 }
 
@@ -208,7 +212,9 @@ pub fn run() -> Result<(), tauri::Error> {
             };
             let printer = hub(RECEIPT_PRINTER)?;
             let label_printer = hub(hardware::label::LABEL_PRINTER)?;
-            app.manage(AppState::new(db, clock, data_dir, auth, identity, printer, label_printer));
+            let secrets: Arc<dyn SecretStore> = Arc::new(KeyringStore::new(KEYRING_SERVICE));
+            let services = Services { printer, label_printer, secrets };
+            app.manage(AppState::new(db, clock, data_dir, auth, identity, services));
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -297,6 +303,8 @@ mod tests {
             "checkoutOrder",
             "voidOrder",
             "sessionOrders",
+            "syncInfo",
+            "syncRegister",
             "customerLookup",
             "printerStatus",
             "printerProfile",
