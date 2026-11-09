@@ -2348,6 +2348,21 @@ GROUP BY b.id;
 -- Rust derives realised_profit, payback, projected_profit, sell_through from these columns.
 ```
 
+**Block 2.7 implementation notes (reports engine, `db::repo::reports`):**
+- **Periods** are `domain::period` (§5.2), each resolved to inclusive business dates, with the previous equivalent period on request (all time has none).
+- **Counter filter.** It narrows the sales and payment metrics. Allocation variance, write-offs and expenses belong to the store, so they stay store-wide on a counter's report.
+- **Permissions.** Every report needs `REPORT_SALES`. COGS, profit, margin, write-offs, expenses and per-row cost come back empty (`null`) unless the viewer also has `REPORT_FINANCIAL` **and** `VIEW_COST`.
+- **Trend** (for the §1.4 charts) buckets the rollups and expenses by day, week (store week start) or month. Its buckets sum to the period. The allocation variance stays in the summary, because it is a batch-level figure.
+- **Sales by product / category / batch.** Each set of rows sums to the period's net sales and sale cost. Quick sales are one "Quick sales" row by product, and products without a category are one "Uncategorised" row. By batch, revenue and cost come from the sale slices (plus quick sales tagged to a batch). Everything else (untracked products, untagged quick sales) is one "No batch layer" row.
+- **Voids** are grouped by reason and by approver: the supervisor who approved, or the voider when their own role holds `VOID_ORDER`.
+- **`rebuild_derived`** (Settings → Maintenance, `SETTINGS_MANAGE`, audited `SETTINGS_CHANGE`) recomputes the tables below in one transaction:
+  - `daily_sales_summary` and `daily_payment_summary`
+  - `customer_stats` and `quick_sale_stats`
+  - `stock_levels` and `batch_item_stock`
+  - both product FTS indexes
+
+  `tests/reports.rs` checks on randomised data that the triggers and a rebuild agree row for row, and that monthly, weekly, yearly, custom and all-time reports equal the sum of their days. The only difference a rebuild makes is to drop all-zero payment-summary rows, left behind when a method's only sale was voided.
+
 **Report permissions:** `REPORT_SALES` shows revenue, payments and Z-reports. `REPORT_FINANCIAL` also shows COGS, profit, valuation and batch P&L. Cost columns anywhere require `VIEW_COST`. Exporting to CSV or PDF needs `DATA_EXPORT` and is audited.
 
 ---

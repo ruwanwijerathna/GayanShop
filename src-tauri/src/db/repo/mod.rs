@@ -13,6 +13,7 @@ pub mod print_jobs;
 pub mod products;
 pub mod quick_sales;
 pub mod receipts;
+pub mod reports;
 pub mod staff;
 pub mod stock;
 pub mod void;

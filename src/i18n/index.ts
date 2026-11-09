@@ -18,6 +18,7 @@ import enInventory from "./locales/en/inventory.json";
 import enLabels from "./locales/en/labels.json";
 import enProducts from "./locales/en/products.json";
 import enQuickSales from "./locales/en/quickSales.json";
+import enReports from "./locales/en/reports.json";
 import enStaff from "./locales/en/staff.json";
 import siApp from "./locales/si/app.json";
 import siAuth from "./locales/si/auth.json";
@@ -34,6 +35,7 @@ import siInventory from "./locales/si/inventory.json";
 import siLabels from "./locales/si/labels.json";
 import siProducts from "./locales/si/products.json";
 import siQuickSales from "./locales/si/quickSales.json";
+import siReports from "./locales/si/reports.json";
 import siStaff from "./locales/si/staff.json";
 
 export const LANGUAGES = ["en", "si"] as const;
@@ -56,6 +58,7 @@ export const NAMESPACES = [
   "quickSales",
   "customers",
   "expenses",
+  "reports",
 ] as const;
 
 export const resources = {
@@ -76,6 +79,7 @@ export const resources = {
     quickSales: enQuickSales,
     customers: enCustomers,
     expenses: enExpenses,
+    reports: enReports,
   },
   si: {
     common: siCommon,
@@ -94,6 +98,7 @@ export const resources = {
     quickSales: siQuickSales,
     customers: siCustomers,
     expenses: siExpenses,
+    reports: siReports,
   },
 } as const;
 

@@ -1,9 +1,11 @@
 import { useTranslation } from "react-i18next";
+import { Can } from "@/components/auth/Can";
 import { BackupSettings } from "@/features/backup/BackupSettings";
 import { LabelSettings } from "@/features/labels/LabelSettings";
 import { PrinterSettings } from "@/features/printing/PrinterSettings";
+import { MaintenanceSettings } from "@/features/reports/MaintenanceSettings";
 
-/** Settings: this counter's receipt printer and drawer, its label printer and rolls, and "Backup Database Now". Composed here, because features
+/** Settings: this counter's receipt printer and drawer, its label printer and rolls, "Backup Database Now", and maintenance. Composed here, because features
  * never import each other. */
 export function SettingsPage() {
   const { t } = useTranslation("app");
@@ -13,6 +15,9 @@ export function SettingsPage() {
       <PrinterSettings />
       <LabelSettings />
       <BackupSettings />
+      <Can perm="SETTINGS_MANAGE">
+        <MaintenanceSettings />
+      </Can>
     </section>
   );
 }

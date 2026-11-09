@@ -22,6 +22,7 @@ import {
   type Granularity,
   type HistoryCursor,
   type Period,
+  type SalesDimension,
   type DrawerMovementInput,
   type Perm,
   type NewStaff_Deserialize as NewStaff,
@@ -63,6 +64,15 @@ export const queryKeys = {
   customerAnalytics: (period: Period, g: Granularity) =>
     ["customers", "analytics", JSON.stringify(period), g] as const,
   businessToday: ["app", "today"] as const,
+  reportSummary: (period: Period, deviceId: string | null, compare: boolean) =>
+    ["reports", "summary", JSON.stringify(period), deviceId ?? "store", compare] as const,
+  reportTrend: (period: Period, deviceId: string | null, g: Granularity) =>
+    ["reports", "trend", JSON.stringify(period), deviceId ?? "store", g] as const,
+  reportSalesBy: (period: Period, deviceId: string | null, d: SalesDimension) =>
+    ["reports", "salesBy", JSON.stringify(period), deviceId ?? "store", d] as const,
+  reportVoids: (period: Period, deviceId: string | null) =>
+    ["reports", "voids", JSON.stringify(period), deviceId ?? "store"] as const,
+  reportDevices: ["reports", "devices"] as const,
   expenseCategories: ["expenses", "categories"] as const,
   expenseList: (period: Period, categoryId: string | null) =>
     ["expenses", "list", JSON.stringify(period), categoryId ?? "all"] as const,
@@ -802,4 +812,47 @@ export function useDeleteExpense() {
   return useExpenseMutation(({ id, approvalId }: { id: string; approvalId: string | null }) =>
     unwrap(commands.deleteExpense(id, approvalId)),
   );
+}
+
+// ───────── reports (doc §5, REPORT_SALES; costs need REPORT_FINANCIAL + VIEW_COST) ─────────
+
+export function useReportSummary(period: Period, deviceId: string | null, compare: boolean) {
+  return useQuery({
+    queryKey: queryKeys.reportSummary(period, deviceId, compare),
+    queryFn: () => unwrap(commands.reportSummary(period, deviceId, compare)),
+  });
+}
+
+export function useReportTrend(period: Period, deviceId: string | null, granularity: Granularity) {
+  return useQuery({
+    queryKey: queryKeys.reportTrend(period, deviceId, granularity),
+    queryFn: () => unwrap(commands.reportTrend(period, deviceId, granularity)),
+  });
+}
+
+export function useReportSalesBy(period: Period, deviceId: string | null, dimension: SalesDimension) {
+  return useQuery({
+    queryKey: queryKeys.reportSalesBy(period, deviceId, dimension),
+    queryFn: () => unwrap(commands.reportSalesBy(period, deviceId, dimension)),
+  });
+}
+
+export function useReportVoids(period: Period, deviceId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.reportVoids(period, deviceId),
+    queryFn: () => unwrap(commands.reportVoids(period, deviceId)),
+  });
+}
+
+export function useReportDevices() {
+  return useQuery({ queryKey: queryKeys.reportDevices, queryFn: () => unwrap(commands.reportDevices()) });
+}
+
+/** Settings → Maintenance: recompute every derived table (then every screen refreshes). */
+export function useRebuildDerived() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => unwrap(commands.rebuildDerived()),
+    onSuccess: () => qc.invalidateQueries(),
+  });
 }

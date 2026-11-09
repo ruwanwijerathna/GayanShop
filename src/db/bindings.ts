@@ -131,6 +131,13 @@ export const commands = {
 	recordExpense: (input: ExpenseInput_Deserialize, approvalId: string | null) => typedError<ExpenseRow_Serialize, AppError>(__TAURI_INVOKE("record_expense", { input, approvalId })),
 	updateExpense: (id: string, input: ExpenseInput_Deserialize) => typedError<ExpenseRow_Serialize, AppError>(__TAURI_INVOKE("update_expense", { id, input })),
 	deleteExpense: (id: string, approvalId: string | null) => typedError<null, AppError>(__TAURI_INVOKE("delete_expense", { id, approvalId })),
+	reportSummary: (period: Period, deviceId: string | null, compare: boolean) => typedError<PeriodReport_Serialize, AppError>(__TAURI_INVOKE("report_summary", { period, deviceId, compare })),
+	reportTrend: (period: Period, deviceId: string | null, granularity: Granularity) => typedError<TrendPoint_Serialize[], AppError>(__TAURI_INVOKE("report_trend", { period, deviceId, granularity })),
+	reportSalesBy: (period: Period, deviceId: string | null, dimension: SalesDimension) => typedError<SalesByRow_Serialize[], AppError>(__TAURI_INVOKE("report_sales_by", { period, deviceId, dimension })),
+	reportVoids: (period: Period, deviceId: string | null) => typedError<VoidReport_Serialize, AppError>(__TAURI_INVOKE("report_voids", { period, deviceId })),
+	reportDevices: () => typedError<ReportDevice[], AppError>(__TAURI_INVOKE("report_devices")),
+	/**  Settings → Maintenance: recompute every derived table from the base tables. */
+	rebuildDerived: () => typedError<RebuildReport, AppError>(__TAURI_INVOKE("rebuild_derived")),
 	printerStatus: () => typedError<PrinterStatusView_Serialize, AppError>(__TAURI_INVOKE("printer_status")),
 	printerProfile: () => typedError<ReceiptPrinterProfile | null, AppError>(__TAURI_INVOKE("printer_profile")),
 	setPrinterProfile: (profile: ReceiptPrinterProfile) => typedError<null, AppError>(__TAURI_INVOKE("set_printer_profile", { profile })),
@@ -1112,6 +1119,84 @@ export type ExpenseRow_Serialize = {
 	created_at: string,
 };
 
+/**
+ *  The §5.1 metrics for one period. Cost-derived fields are `None` when the viewer may not see costs
+ *  (`REPORT_FINANCIAL` + `VIEW_COST`; see [`FinancialSummary::without_costs`]).
+ */
+export type FinancialSummary = FinancialSummary_Serialize | FinancialSummary_Deserialize;
+
+/**
+ *  The §5.1 metrics for one period. Cost-derived fields are `None` when the viewer may not see costs
+ *  (`REPORT_FINANCIAL` + `VIEW_COST`; see [`FinancialSummary::without_costs`]).
+ */
+export type FinancialSummary_Deserialize = {
+	range: DateRange_Deserialize,
+	/**  `None` = the whole store. */
+	device_id?: string | null,
+	sales_count: number,
+	void_count: number,
+	void_value: number,
+	gross_sales: number,
+	discounts: number,
+	/**  Total revenue, ex tax, completed orders only. */
+	net_sales: number,
+	tax_collected: number,
+	customer_orders: number,
+	customer_attached_bp: number,
+	/**  `net_sales / sales_count`, rounded down. */
+	avg_basket: number,
+	quick_sale_net: number,
+	unknown_cost_net: number,
+	payments: MethodTotal[],
+	/**  Sale-slice cost of the period's sales (before allocation variance). */
+	sales_cost?: number | null,
+	/**  Σ `allocation_variance` of batches received in the period (store-wide). */
+	allocation_variance?: number | null,
+	/**  `sales_cost + allocation_variance`. */
+	cogs?: number | null,
+	gross_profit?: number | null,
+	gross_margin_bp?: number | null,
+	stock_write_offs?: number | null,
+	operating_expenses?: number | null,
+	net_profit?: number | null,
+};
+
+/**
+ *  The §5.1 metrics for one period. Cost-derived fields are `None` when the viewer may not see costs
+ *  (`REPORT_FINANCIAL` + `VIEW_COST`; see [`FinancialSummary::without_costs`]).
+ */
+export type FinancialSummary_Serialize = {
+	range: DateRange_Serialize,
+	/**  `None` = the whole store. */
+	device_id: string | null,
+	sales_count: number,
+	void_count: number,
+	void_value: number,
+	gross_sales: number,
+	discounts: number,
+	/**  Total revenue, ex tax, completed orders only. */
+	net_sales: number,
+	tax_collected: number,
+	customer_orders: number,
+	customer_attached_bp: number,
+	/**  `net_sales / sales_count`, rounded down. */
+	avg_basket: number,
+	quick_sale_net: number,
+	unknown_cost_net: number,
+	payments: MethodTotal[],
+	/**  Sale-slice cost of the period's sales (before allocation variance). */
+	sales_cost: number | null,
+	/**  Σ `allocation_variance` of batches received in the period (store-wide). */
+	allocation_variance: number | null,
+	/**  `sales_cost + allocation_variance`. */
+	cogs: number | null,
+	gross_profit: number | null,
+	gross_margin_bp: number | null,
+	stock_write_offs: number | null,
+	operating_expenses: number | null,
+	net_profit: number | null,
+};
+
 /**  Trend-chart buckets. */
 export type Granularity = "day" | "week" | "month";
 
@@ -1380,6 +1465,12 @@ export type LoginStaff = {
 	role_name: string,
 };
 
+export type MethodTotal = {
+	method: string,
+	amount: number,
+	count: number,
+};
+
 export type MovementCursor = {
 	created_at: string,
 	id: string,
@@ -1507,6 +1598,21 @@ export type Period = { kind: "day"; date: string } |
 { kind: "week"; any_date: string } | { kind: "month"; year: number; month: number } | { kind: "year"; year: number } | { kind: "all_time" } | 
 /**  Inclusive `from..=to`. */
 { kind: "custom"; from: string; to: string };
+
+/**  A period's report and, on request, the previous equivalent period's (§5.2 comparison). */
+export type PeriodReport = PeriodReport_Serialize | PeriodReport_Deserialize;
+
+/**  A period's report and, on request, the previous equivalent period's (§5.2 comparison). */
+export type PeriodReport_Deserialize = {
+	current: FinancialSummary_Deserialize,
+	previous?: FinancialSummary_Deserialize | null,
+};
+
+/**  A period's report and, on request, the previous equivalent period's (§5.2 comparison). */
+export type PeriodReport_Serialize = {
+	current: FinancialSummary_Serialize,
+	previous: FinancialSummary_Serialize | null,
+};
 
 /**  Permission key as seen by the UI and stored in audit metadata. */
 export type Perm = "SALE_CREATE" | "QUICK_SALE" | "PRICE_OVERRIDE" | "LINE_DISCOUNT" | "ORDER_DISCOUNT" | "VOID_ORDER" | "DRAWER_NO_SALE" | "CASH_PAY_IN_OUT" | "CASH_SESSION_MANAGE" | "CASH_SESSION_FORCE_CLOSE" | "REPRINT_RECEIPT" | "STOCK_ADJUST" | "STOCK_DAMAGE" | "BATCH_MANAGE" | "PRODUCT_MANAGE" | "QUICK_SALE_PROMOTE" | "LABEL_PRINT" | "VIEW_COST" | "REPORT_SALES" | "REPORT_FINANCIAL" | "EXPENSE_MANAGE" | "SETTINGS_MANAGE" | "USER_MANAGE" | "AUDIT_VIEW" | "SYNC_MANAGE" | "BACKUP_RESTORE" | "DATA_EXPORT" | "CUSTOMER_VIEW" | "BACKUP_CREATE";
@@ -1814,6 +1920,17 @@ export type QuickSaleRow_Serialize = {
 
 export type QuickSaleStatus = "new" | "promoted" | "ignored";
 
+/**  Rows written per derived table by [`rebuild_derived`]. */
+export type RebuildReport = {
+	daily_sales_summary: number,
+	daily_payment_summary: number,
+	customer_stats: number,
+	quick_sale_stats: number,
+	stock_levels: number,
+	batch_item_stock: number,
+	products_fts: number,
+};
+
 export type ReceiptData = ReceiptData_Serialize | ReceiptData_Deserialize;
 
 export type ReceiptData_Deserialize = {
@@ -1895,6 +2012,13 @@ export type ReceiptPrinterProfile = {
 	drawer_pin: DrawerPin,
 };
 
+/**  A counter for the report's counter filter. */
+export type ReportDevice = {
+	device_id: string,
+	/**  `T01`…, from its receipt numbers. */
+	device_code: string,
+};
+
 export type Role = {
 	id: string,
 	name: string,
@@ -1905,6 +2029,37 @@ export type Role = {
 	/**  Minimum PIN length for this role (6 for Manager and Owner, else 4). */
 	min_pin_len: number,
 };
+
+/**  One row of "sales by product / category / batch". */
+export type SalesByRow = SalesByRow_Serialize | SalesByRow_Deserialize;
+
+/**  One row of "sales by product / category / batch". */
+export type SalesByRow_Deserialize = {
+	/**
+	 *  Product, category or batch id. `None` = quick sales (by product), uncategorised (by category), or
+	 *  sales from no batch layer (by batch: untracked products and untagged quick sales).
+	 */
+	id?: string | null,
+	label?: string | null,
+	qty: number,
+	net: number,
+	cost?: number | null,
+};
+
+/**  One row of "sales by product / category / batch". */
+export type SalesByRow_Serialize = {
+	/**
+	 *  Product, category or batch id. `None` = quick sales (by product), uncategorised (by category), or
+	 *  sales from no batch layer (by batch: untracked products and untagged quick sales).
+	 */
+	id: string | null,
+	label: string | null,
+	qty: number,
+	net: number,
+	cost: number | null,
+};
+
+export type SalesDimension = "product" | "category" | "batch";
 
 /**  What the UI receives — never the PIN hash; permissions as keys, not a mask. */
 export type SessionInfo = {
@@ -2109,6 +2264,31 @@ export type TransportConfig =
 /**  `COM3` at the printer's baud rate. */
 { kind: "serial"; port: string; baud: number };
 
+/**  One bucket of the trend charts (revenue vs expenses, sales trend). */
+export type TrendPoint = TrendPoint_Serialize | TrendPoint_Deserialize;
+
+/**  One bucket of the trend charts (revenue vs expenses, sales trend). */
+export type TrendPoint_Deserialize = {
+	/**  The date, the week's first day, or `YYYY-MM`. */
+	bucket: string,
+	sales_count: number,
+	net_sales: number,
+	/**  Sale-slice cost (allocation variance is a batch-level figure and stays in the summary). */
+	sales_cost?: number | null,
+	expenses?: number | null,
+};
+
+/**  One bucket of the trend charts (revenue vs expenses, sales trend). */
+export type TrendPoint_Serialize = {
+	/**  The date, the week's first day, or `YYYY-MM`. */
+	bucket: string,
+	sales_count: number,
+	net_sales: number,
+	/**  Sale-slice cost (allocation variance is a batch-level figure and stays in the summary). */
+	sales_cost: number | null,
+	expenses: number | null,
+};
+
 export type UiLanguage = "en" | "si";
 
 export type UiTheme = "light" | "dark";
@@ -2131,6 +2311,24 @@ export type ValuationGroup_Serialize = {
 	units: number,
 	value_at_cost: number,
 	value_at_retail: number,
+};
+
+export type VoidGroup = VoidGroup_Serialize | VoidGroup_Deserialize;
+
+export type VoidGroup_Deserialize = {
+	/**  The void reason code, or the approving staff id. */
+	key: string,
+	label?: string | null,
+	count: number,
+	value: number,
+};
+
+export type VoidGroup_Serialize = {
+	/**  The void reason code, or the approving staff id. */
+	key: string,
+	label: string | null,
+	count: number,
+	value: number,
 };
 
 export type VoidInput = VoidInput_Serialize | VoidInput_Deserialize;
@@ -2183,6 +2381,27 @@ export type VoidReasonTotal = {
 	reason: string,
 	count: number,
 	value: number,
+};
+
+/**  Voids for control (§5.1): shown, never counted in revenue. */
+export type VoidReport = VoidReport_Serialize | VoidReport_Deserialize;
+
+/**  Voids for control (§5.1): shown, never counted in revenue. */
+export type VoidReport_Deserialize = {
+	count: number,
+	value: number,
+	by_reason: VoidGroup_Deserialize[],
+	/**  By the supervisor who approved (or the voider, when their own role holds `VOID_ORDER`). */
+	by_approver: VoidGroup_Deserialize[],
+};
+
+/**  Voids for control (§5.1): shown, never counted in revenue. */
+export type VoidReport_Serialize = {
+	count: number,
+	value: number,
+	by_reason: VoidGroup_Serialize[],
+	/**  By the supervisor who approved (or the voider, when their own role holds `VOID_ORDER`). */
+	by_approver: VoidGroup_Serialize[],
 };
 
 export type VoidResult = {
