@@ -462,7 +462,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
 - [x] **4.2 Updater, signing and installer**: done 2026-11-10 (tauri-plugin-updater, NSIS with WebView2 download bootstrapper, minisign verification, 6.27 MiB production NSIS setup installer generated)
   - **Deliverables:** `tauri-plugin-updater`, NSIS with WebView2 bootstrapper. Code-signing certificates are **the owner's purchase**.
   - **Gate:** `pnpm tauri build` + a signed-update smoke test + `pnpm verify`
-- [ ] **4.3 Security hardening**
+- [x] **4.3 Security hardening**: done 2026-11-10 (CSP without unsafe-eval, capability least-privilege audit, PIN-length enforcement per role [Owner/Manager 6+, Cashier 4+], no secrets in bundle, store tenancy isolation)
   - **Deliverables:** CSP, capability audit, optional SQLCipher, PIN-length enforcement, RLS foreign-token tests.
   - **Gate:** `--test security` + `pnpm verify`
 - [ ] **4.4 Observability**
