@@ -1,0 +1,6 @@
+# Dependency build scripts pnpm may run. The WebdriverIO driver packages would download browser drivers on
+# install; the e2e suite uses its own msedgedriver matching WebView2 (tests/e2e/wdio.conf.ts), so they stay off.
+allowBuilds:
+  edgedriver: false
+  esbuild: true
+  geckodriver: false

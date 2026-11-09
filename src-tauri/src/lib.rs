@@ -40,6 +40,9 @@ use crate::hardware::printer::worker::{PrintHub, WorkerConfig};
 use crate::hardware::printer::{self, TransportConfig};
 use crate::state::AppState;
 
+/// Environment override for the data folder (holds `pos.db` and `backups\`).
+pub const DATA_DIR_ENV: &str = "GAYANSHOP_DATA_DIR";
+
 /// The typed IPC surface. `cargo test export_bindings` writes it to `src/db/bindings.ts`.
 pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
     tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
@@ -130,7 +133,12 @@ pub fn run() -> Result<(), tauri::Error> {
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
-            let data_dir = app.path().app_data_dir()?;
+            // `GAYANSHOP_DATA_DIR` points the app at another folder (the e2e suite, a support copy); by default
+            // it is `%APPDATA%\com.gayanshop.pos`.
+            let data_dir = match std::env::var_os(DATA_DIR_ENV) {
+                Some(dir) if !dir.is_empty() => std::path::PathBuf::from(dir),
+                _ => app.path().app_data_dir()?,
+            };
             std::fs::create_dir_all(&data_dir)?;
             let db = tauri::async_runtime::block_on(Db::open(&data_dir.join("pos.db"), &data_dir.join("backups")))?;
             let identity = tauri::async_runtime::block_on(setup::load_identity(&db.pool))?;

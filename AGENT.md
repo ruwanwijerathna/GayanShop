@@ -7,7 +7,7 @@
 >
 > Never change an architectural decision silently. Propose the doc change to the owner first.
 
-**Current state (2026-11-08): Phase 1 in progress on branch `feat/phase-1-mvp-till`.** Phase 0 is complete and approved. Blocks 1.1–1.11 are committed and green; the next block is 1.12. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
+**Current state (2026-11-09): Phase 1 complete on branch `feat/phase-1-mvp-till`** (Blocks 1.1–1.12 committed and green; the manual hardware, touch and pull-the-plug checks in `docs/qa/phase1-acceptance.md` are pending the owner). Phase 2 starts only when the owner says so. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
 
 ---
 
@@ -389,7 +389,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `cargo test --manifest-path src-tauri/Cargo.toml --test staff`
     - `pnpm verify`
 
-- [ ] **1.12 Phase 1 acceptance**
+- [x] **1.12 Phase 1 acceptance**: done 2026-11-09 (e2e green; owner hardware/touch items pending in docs/qa/phase1-acceptance.md)
   - **Deliverables:**
     - WebdriverIO + `tauri-driver` e2e suite in `tests/e2e/phase1.e2e.ts`, scripting doc §8 Phase 1 exit criteria.
     - `docs/qa/phase1-acceptance.md`: touch-only and keyboard-only runs in EN and SI, a pull-the-plug drill, and real printer and scanner checks.

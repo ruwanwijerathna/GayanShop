@@ -2537,6 +2537,8 @@ pub fn emit(t: &LabelTemplate, p: &LabelPreview, lang: LabelLanguage, dpi: u16) 
 
 Each of the 2–3 counters has its own printer and drawer profile in `device_settings` (not synced).
 
+**Data folder override.** `GAYANSHOP_DATA_DIR` points the app at another data folder (it holds `pos.db` and `backups\`); the default is `%APPDATA%\com.gayanshop.pos`. The Block 1.12 e2e suite (`pnpm e2e`, WebdriverIO + `tauri-driver`) uses it so a test run never touches the shop's database.
+
 ---
 
 ## 8. Phased execution plan

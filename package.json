@@ -20,7 +20,8 @@
     "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm i18n:check && pnpm contrast:check && pnpm guard && pnpm rust:fmt && pnpm rust:clippy && pnpm rust:test && pnpm bindings:check",
     "bindings:check": "cargo test --manifest-path src-tauri/Cargo.toml --lib export_bindings && git diff --exit-code -- src/db/bindings.ts",
     "contrast:check": "node scripts/contrast-check.mjs",
-    "gen:audio": "node scripts/gen-audio.mjs"
+    "gen:audio": "node scripts/gen-audio.mjs",
+    "e2e": "wdio run tests/e2e/wdio.conf.ts"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",
@@ -59,6 +60,11 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^6.0.2",
+    "@wdio/cli": "^9.33.1",
+    "@wdio/globals": "^9.33.1",
+    "@wdio/local-runner": "^9.33.1",
+    "@wdio/mocha-framework": "^9.33.1",
+    "@wdio/spec-reporter": "^9.33.1",
     "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-jsx-a11y": "^6.10.2",
