@@ -20,7 +20,8 @@
     "product": "Product",
     "qty": "Quantity",
     "unitCost": "Cost per unit (Rs)",
-    "note": "Note (optional)"
+    "note": "Note (optional)",
+    "retail": "Retail price (Rs, optional)"
   },
   "detail": {
     "code": "Code",
@@ -49,5 +50,57 @@
     "change": "Change product"
   },
   "moneyInvalid": "Enter an amount such as 450 or 450.50.",
-  "qtyInvalid": "Enter a whole number of units, 1 or more."
+  "qtyInvalid": "Enter a whole number of units, 1 or more.",
+  "methods": {
+    "even_per_unit": "Same cost for every unit",
+    "by_retail_value": "By retail value",
+    "manual": "Type each cost"
+  },
+  "methodHints": {
+    "even_per_unit": "The invoice and extra costs are shared equally by every unit.",
+    "by_retail_value": "Dearer items carry more of the cost (retail price × quantity).",
+    "manual": "Type the cost of each item; the difference from the invoice is shown."
+  },
+  "wizard": {
+    "details": "Invoice and how to share the cost",
+    "items": "Items",
+    "review": "Check the costs, then receive",
+    "method": "How to share the cost",
+    "saveDetails": "Save details",
+    "landed": "Paid (invoice + extra)",
+    "allocated": "Shared over items",
+    "variance": "Difference",
+    "retail": "Retail",
+    "unitCost": "Cost each",
+    "lineCost": "Line cost"
+  },
+  "pnl": {
+    "title": "Did this batch make money?",
+    "units": "{{received}} received · {{sold}} sold · {{left}} left ({{pct}}% sold)",
+    "landed": "Paid (invoice + extra)",
+    "revenue": "Sales (net)",
+    "cogs": "Cost of what sold",
+    "writtenOff": "Written off",
+    "variance": "Rounding difference",
+    "realised": "Profit so far",
+    "payback": "Paid back so far",
+    "remainingCost": "Stock left at cost",
+    "remainingRetail": "Stock left at today's prices",
+    "projected": "Profit if the rest sells"
+  },
+  "late": {
+    "title": "Add a forgotten item",
+    "hint": "A late item gets cost Rs 0: the batch cost is already shared out, so its sales are pure profit.",
+    "add": "Add late item",
+    "badge": "Late"
+  },
+  "lifecycle": {
+    "reopen": "Reopen to fix",
+    "close": "Close batch",
+    "reopenConfirm": "Reopen this batch? Its stock is taken back until you receive it again. Only possible while nothing from it has sold or moved.",
+    "closeConfirm": "Close this batch? It becomes read-only and its profit is final. Only possible when no stock is left.",
+    "confirmReopen": "Yes, reopen",
+    "confirmClose": "Yes, close",
+    "closed": "This batch is closed: its figures are final."
+  }
 }

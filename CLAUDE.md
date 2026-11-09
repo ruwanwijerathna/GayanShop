@@ -6,7 +6,7 @@ The import above loads the full operating manual: identity, non-negotiable rules
 
 ## Claude Code–specific rules
 
-1. **Phase 0 is complete (Blocks 0.1–0.10). Phase 1 is in progress** on branch `feat/phase-1-mvp-till`.
+1. **Phases 0 and 1 are complete and merged to `main`. Phase 2 is in progress** on branch `feat/phase-2-batches-reports`.
    - Work only on blocks the owner has explicitly named. Don't start the next block or phase until they say so.
    - "Explain", "plan" or "review" is not a start command.
 2. **Work in roadmap order, one block per turn sequence.** Before each block:

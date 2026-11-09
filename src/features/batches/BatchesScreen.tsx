@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { Batch, BatchDetail, ProductSummary } from "@/db/bindings";
+import type { AllocationMethod, Batch, BatchDetail, ProductSummary } from "@/db/bindings";
 import { CommandError } from "@/db/client";
 import { useBatch, useBatches, useReceiveBatch, useRemoveBatchItem, useSetBatchItem } from "@/db/hooks";
 import { translateError } from "@/i18n";
@@ -13,6 +13,7 @@ import { playCue } from "@/lib/audio";
 import { formatMoney, parseMajor } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { NewBatchDialog, QuickPurchaseDialog } from "./BatchDialogs";
+import { AllocationReview, ClosedNote, HeaderStep, PnlCard, ReceivedActions, Step } from "./IntakeWizard";
 import { parseQty } from "./batchForm";
 import { ProductPicker } from "./ProductPicker";
 
@@ -21,35 +22,43 @@ function batchLabel(b: Batch, openingStock: string): string {
   return b.code === "OPENING-STOCK" ? openingStock : b.name;
 }
 
-/** Add a product line to a draft (or replace its quantity and cost). */
-function AddItemForm({ batchId }: { batchId: string }) {
+/** Add a product line to a draft (or replace its quantity and cost). The cost is typed only for manual
+ * allocation; by retail value uses the retail price (the product's price unless typed). */
+function AddItemForm({ batchId, method }: { batchId: string; method: AllocationMethod }) {
   const { t, i18n } = useTranslation(["batches", "common"]);
   const setItem = useSetBatchItem();
   const [product, setProduct] = useState<ProductSummary | null>(null);
   const [qty, setQty] = useState("");
   const [cost, setCost] = useState("");
+  const [retail, setRetail] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
+  const manual = method === "manual";
   const serverError =
     setItem.error instanceof CommandError ? translateError(i18n.t, setItem.error.error) : null;
 
   const submit = () => {
     const units = parseQty(qty);
-    const unitCost = parseMajor(cost);
+    const unitCost = manual ? parseMajor(cost) : 0;
+    const retailPrice = retail.trim() === "" ? null : parseMajor(retail);
     if (!product) {
       setLocalError(t("picker.label"));
     } else if (units === null) {
       setLocalError(t("qtyInvalid"));
-    } else if (unitCost === null) {
+    } else if (unitCost === null || (retail.trim() !== "" && retailPrice === null)) {
       setLocalError(t("moneyInvalid"));
     } else {
       setLocalError(null);
       setItem.mutate(
-        { batchId, input: { product_id: product.id, qty: units, unit_cost: unitCost, retail_price: null } },
+        {
+          batchId,
+          input: { product_id: product.id, qty: units, unit_cost: unitCost, retail_price: retailPrice },
+        },
         {
           onSuccess: () => {
             setProduct(null);
             setQty("");
             setCost("");
+            setRetail("");
           },
           onError: () => playCue("error"),
         },
@@ -79,16 +88,31 @@ function AddItemForm({ batchId }: { batchId: string }) {
             onChange={(e) => setQty(e.target.value)}
           />
         </div>
-        <div className="flex w-44 flex-col gap-1.5">
-          <Label htmlFor="item-cost">{t("fields.unitCost")}</Label>
-          <Input
-            id="item-cost"
-            inputMode="decimal"
-            className="h-12 font-mono text-base"
-            value={cost}
-            onChange={(e) => setCost(e.target.value)}
-          />
-        </div>
+        {manual && (
+          <div className="flex w-44 flex-col gap-1.5">
+            <Label htmlFor="item-cost">{t("fields.unitCost")}</Label>
+            <Input
+              id="item-cost"
+              inputMode="decimal"
+              className="h-12 font-mono text-base"
+              value={cost}
+              onChange={(e) => setCost(e.target.value)}
+            />
+          </div>
+        )}
+        {method === "by_retail_value" && (
+          <div className="flex w-44 flex-col gap-1.5">
+            <Label htmlFor="item-retail">{t("fields.retail")}</Label>
+            <Input
+              id="item-retail"
+              inputMode="decimal"
+              className="h-12 font-mono text-base"
+              placeholder={product ? formatMoney(product.price) : undefined}
+              value={retail}
+              onChange={(e) => setRetail(e.target.value)}
+            />
+          </div>
+        )}
         <Button type="submit" size="pos" disabled={setItem.isPending}>
           <Plus aria-hidden />
           {t("detail.addItem")}
@@ -143,7 +167,17 @@ function Detail({ detail }: { detail: BatchDetail }) {
           </>
         )}
       </dl>
-      {draft && <AddItemForm batchId={batch.id} />}
+      {draft && (
+        <Step n={1} title={t("wizard.details")}>
+          <HeaderStep key={`${batch.id}:${batch.version}`} batch={batch} />
+        </Step>
+      )}
+      {!draft && detail.pnl && <PnlCard pnl={detail.pnl} />}
+      {draft && (
+        <Step n={2} title={t("wizard.items")}>
+          <AddItemForm batchId={batch.id} method={batch.allocation_method} />
+        </Step>
+      )}
       {items.length === 0 ? (
         <p className="text-muted-foreground">{t("detail.noItems")}</p>
       ) : (
@@ -163,6 +197,11 @@ function Detail({ detail }: { detail: BatchDetail }) {
               <tr key={i.id} className="h-12 border-b border-border">
                 <td>
                   {i.product_name}
+                  {i.added_after_receipt && (
+                    <Badge variant="outline" className="ml-2">
+                      {t("late.badge")}
+                    </Badge>
+                  )}
                   {i.product_sku && (
                     <span className="ml-2 font-mono text-sm text-muted-foreground">{i.product_sku}</span>
                   )}
@@ -199,6 +238,13 @@ function Detail({ detail }: { detail: BatchDetail }) {
           {error}
         </p>
       )}
+      {draft && (
+        <Step n={3} title={t("wizard.review")}>
+          <AllocationReview batchId={batch.id} />
+        </Step>
+      )}
+      {batch.status === "received" && <ReceivedActions batch={batch} />}
+      {batch.status === "closed" && <ClosedNote />}
       {draft &&
         (confirming ? (
           <div role="alert" className="flex flex-col gap-3 rounded-md border border-primary p-3">

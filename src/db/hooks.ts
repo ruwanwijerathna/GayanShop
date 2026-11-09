@@ -7,6 +7,7 @@ import {
   type BatchItemInput,
   type CartInput_Deserialize as CartInput,
   type CategoryInput,
+  type LateItemInput,
   type CheckoutInput_Deserialize as CheckoutInput,
   type CloseInput,
   type DrawerMovementInput,
@@ -34,6 +35,7 @@ export const queryKeys = {
   productSearch: (query: string) => ["catalog", "search", query] as const,
   batches: ["batches", "list"] as const,
   batch: (id: string) => ["batches", "detail", id] as const,
+  batchPreview: (id: string) => ["batches", "preview", id] as const,
   cashSession: ["cash", "current"] as const,
   printerStatus: ["printer", "status"] as const,
   printerProfile: ["printer", "profile"] as const,
@@ -231,6 +233,35 @@ export function useRemoveBatchItem() {
 
 export function useReceiveBatch() {
   return useBatchMutation((id: string) => unwrap(commands.receiveBatch(id)));
+}
+
+export function useUpdateBatch() {
+  return useBatchMutation(({ id, input }: { id: string; input: BatchInput }) =>
+    unwrap(commands.updateBatch(id, input)),
+  );
+}
+
+/** What "Receive" would fix right now (refreshed with every batch change). */
+export function useBatchAllocationPreview(id: string | null) {
+  return useQuery({
+    queryKey: queryKeys.batchPreview(id ?? ""),
+    queryFn: () => unwrap(commands.batchAllocationPreview(id ?? "")),
+    enabled: id !== null,
+  });
+}
+
+export function useReopenBatch() {
+  return useBatchMutation((id: string) => unwrap(commands.reopenBatch(id)));
+}
+
+export function useAddLateBatchItem() {
+  return useBatchMutation(({ batchId, input }: { batchId: string; input: LateItemInput }) =>
+    unwrap(commands.addLateBatchItem(batchId, input)),
+  );
+}
+
+export function useCloseBatch() {
+  return useBatchMutation((id: string) => unwrap(commands.closeBatch(id)));
 }
 
 export function useAdHocPurchase() {

@@ -533,6 +533,13 @@ batches (header)  1 ──── n  batch_items (cost layers)  1 ──── n 
 - If a manual-cost batch is received with no invoice total and no extra costs (opening stock, quick purchases), `total_cost` is set to Σ(unit_cost × qty) and the variance is 0. With an invoice total, `allocation_variance = landed − Σ(unit_cost × qty)`, which can be negative in manual mode.
 - A tracked product sold before it has any layer gets one in `ADJUSTMENTS` at its `default_cost` (`added_after_receipt = 1`, `qty_received = 0`), created inside the checkout transaction. The sale is never blocked, and the layer shows as oversold until stock is received.
 
+**Block 2.1 implementation notes (`db/repo/batches.rs`, the intake wizard).**
+- The method is chosen per batch (default `even_per_unit` for a new purchase, `manual` for opening stock and quick purchases) and can change freely while it's a draft. `batch_allocation_preview` returns exactly what Receive would fix (each layer's unit and line cost, the landed cost, the variance) or why it would be refused, so the wizard shows the variance live.
+- `even_per_unit` and `by_retail_value` need an invoice total (`BATCH_TOTAL_REQUIRED`); `by_retail_value` with all retail prices zero has nothing to weigh (`BATCH_NO_WEIGHT`).
+- Reopen writes one `batch_reopen` movement per layer, mirroring its intake. It returns the locked costs as the draft's editable manual costs, and is refused once anything but intake has moved (`BATCH_HAS_MOVEMENTS`). The system batches can't be reopened or closed (`BATCH_SYSTEM`).
+- A late item is received immediately at unit cost 0 (`BATCH_LATE_ITEM`). If the batch is later reopened and received again, it becomes an ordinary layer that shares the cost.
+- Close is refused while any layer has stock (`BATCH_HAS_STOCK`). The batch P&L (`BatchDetail.pnl`) is read from `batch_item_stock` and audited with `BATCH_CLOSE`.
+
 **Layer selection at checkout (FIFO, offline-safe).** For each tracked line of qty *n*:
 1. Take layers of that product ordered by `batches.received_at, batch_items.id`.
 2. Consume from the **oldest layer with positive local `on_hand`**, splitting across layers if needed.

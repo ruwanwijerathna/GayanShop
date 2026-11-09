@@ -96,7 +96,14 @@
     "STAFF_NAME_INVALID": "The name needs 1 to 40 characters.",
     "OWNER_ROLE_OWNER_ONLY": "Only an Owner can give or change Owner powers.",
     "OVERRIDE_CONFLICT": "A permission can't be granted and denied at the same time.",
-    "DISCOUNT_LIMIT_INVALID": "The discount limit must be between 0% and 100%."
+    "DISCOUNT_LIMIT_INVALID": "The discount limit must be between 0% and 100%.",
+    "BATCH_TOTAL_REQUIRED": "Enter the invoice total: the cost can only be shared if it is known.",
+    "BATCH_NO_WEIGHT": "There is nothing to share the cost over (all retail prices are zero).",
+    "BATCH_HAS_MOVEMENTS": "Some of this batch has already sold or moved, so its costs can't change any more.",
+    "BATCH_NOT_RECEIVED": "Only a received batch can do that.",
+    "BATCH_SYSTEM": "The opening-stock and adjustment batches can't be reopened or closed.",
+    "BATCH_ITEM_EXISTS": "That product is already in this batch.",
+    "BATCH_HAS_STOCK": "{{detail}} unit(s) are still on hand: sell or write them off before closing."
   },
   "INVARIANT": {
     "_": "This change isn't allowed.",

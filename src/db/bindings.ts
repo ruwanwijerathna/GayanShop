@@ -66,6 +66,14 @@ export const commands = {
 	adHocPurchase: (input: AdHocPurchase_Deserialize) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("ad_hoc_purchase", { input })),
 	/**  A product's cost layers in FIFO order, with stock on hand per layer. */
 	productLayers: (productId: string) => typedError<LayerStock_Serialize[], AppError>(__TAURI_INVOKE("product_layers", { productId })),
+	/**  What "Receive" would fix right now: each layer's cost and the variance (the wizard shows it live). */
+	batchAllocationPreview: (id: string) => typedError<AllocationPreview_Serialize, AppError>(__TAURI_INVOKE("batch_allocation_preview", { id })),
+	/**  Received → draft, while nothing but intake has moved (audited `BATCH_REOPEN`). */
+	reopenBatch: (id: string) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("reopen_batch", { id })),
+	/**  A product forgotten at intake, at unit cost 0 (audited `BATCH_LATE_ITEM`). */
+	addLateBatchItem: (batchId: string, input: LateItemInput_Deserialize) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("add_late_batch_item", { batchId, input })),
+	/**  Close an empty batch: read-only afterwards, final P&L (audited `BATCH_CLOSE`). */
+	closeBatch: (id: string) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("close_batch", { id })),
 	/**  This counter's open session, if any (any logged-in staff member: the till needs it). */
 	currentCashSession: () => typedError<CashSession_Serialize | null, AppError>(__TAURI_INVOKE("current_cash_session")),
 	openCashSession: (input: OpenSessionInput) => typedError<CashSession_Serialize, AppError>(__TAURI_INVOKE("open_cash_session", { input })),
@@ -133,6 +141,54 @@ export type AdHocPurchase_Serialize = {
 	unit_cost: number,
 	supplier_name: string | null,
 	note: string | null,
+};
+
+/**  How a batch's landed cost is spread over its layers (doc §3.1). */
+export type AllocationMethod = 
+/**  Every unit carries the same cost. */
+"even_per_unit" | 
+/**  Weighted by retail price × qty: expensive items carry more cost. */
+"by_retail_value" | 
+/**  The owner types each unit cost. */
+"manual";
+
+/**  What "Receive" would fix, shown live while the batch is a draft (doc §3.1 "variance is shown live"). */
+export type AllocationPreview = AllocationPreview_Serialize | AllocationPreview_Deserialize;
+
+/**  One layer of the live allocation preview. */
+export type AllocationPreviewLine = {
+	item_id: string,
+	product_name: string,
+	qty: number,
+	retail_price: number,
+	unit_cost: number,
+	line_cost: number,
+};
+
+/**  What "Receive" would fix, shown live while the batch is a draft (doc §3.1 "variance is shown live"). */
+export type AllocationPreview_Deserialize = {
+	method: AllocationMethod,
+	landed_cost: number,
+	/**  Σ unit_cost × qty. */
+	allocated: number,
+	/**  landed − allocated: 0 ≤ v < Σqty for even / by-value; anything for manual. */
+	variance: number,
+	lines: AllocationPreviewLine[],
+	/**  Why Receive would be refused right now (a translatable code), if it would. */
+	problem?: string | null,
+};
+
+/**  What "Receive" would fix, shown live while the batch is a draft (doc §3.1 "variance is shown live"). */
+export type AllocationPreview_Serialize = {
+	method: AllocationMethod,
+	landed_cost: number,
+	/**  Σ unit_cost × qty. */
+	allocated: number,
+	/**  landed − allocated: 0 ≤ v < Σqty for even / by-value; anything for manual. */
+	variance: number,
+	lines: AllocationPreviewLine[],
+	/**  Why Receive would be refused right now (a translatable code), if it would. */
+	problem: string | null,
 };
 
 export type AppError = { kind: "NOT_INITIALIZED" } | { kind: "ALREADY_INITIALIZED" } | { kind: "NOT_LOGGED_IN" } | { kind: "SESSION_LOCKED" } | { kind: "FORBIDDEN"; perm: Perm } | { kind: "APPROVAL_REQUIRED"; perm: Perm } | { kind: "INVALID_APPROVAL" } | { kind: "INVALID_PIN"; attempts_left: number } | { kind: "ACCOUNT_LOCKED"; until: string } | 
@@ -268,11 +324,15 @@ export type BatchDetail = BatchDetail_Serialize | BatchDetail_Deserialize;
 export type BatchDetail_Deserialize = {
 	batch: Batch_Deserialize,
 	items: BatchItem_Deserialize[],
+	/**  `None` for a draft (nothing received yet). */
+	pnl?: BatchPnl | null,
 };
 
 export type BatchDetail_Serialize = {
 	batch: Batch_Serialize,
 	items: BatchItem_Serialize[],
+	/**  `None` for a draft (nothing received yet). */
+	pnl: BatchPnl | null,
 };
 
 export type BatchInput = BatchInput_Serialize | BatchInput_Deserialize;
@@ -286,6 +346,8 @@ export type BatchInput_Deserialize = {
 	/**  Invoice total. 0 with no extra costs ⇒ the batch costs exactly Σ(unit cost × qty). */
 	total_cost: number,
 	extra_costs: number,
+	/**  `None` = manual (the Phase 1 default). */
+	allocation_method?: AllocationMethod | null,
 	notes?: string | null,
 };
 
@@ -298,6 +360,8 @@ export type BatchInput_Serialize = {
 	/**  Invoice total. 0 with no extra costs ⇒ the batch costs exactly Σ(unit cost × qty). */
 	total_cost: number,
 	extra_costs: number,
+	/**  `None` = manual (the Phase 1 default). */
+	allocation_method: AllocationMethod | null,
 	notes: string | null,
 };
 
@@ -349,6 +413,33 @@ export type BatchItem_Serialize = {
 	sold_qty: number,
 };
 
+/**  "Did this batch make money?" (doc §3.1 batch metrics), from the trigger-maintained `batch_item_stock`. */
+export type BatchPnl = {
+	landed_cost: number,
+	units_received: number,
+	units_sold: number,
+	units_remaining: number,
+	/**  Net sales of the batch's units (ex tax, after discounts). */
+	revenue_net: number,
+	/**  What the sold units cost. */
+	cogs: number,
+	written_off_qty: number,
+	written_off_cost: number,
+	allocation_variance: number,
+	/**  Σ on_hand × unit cost (positive layers only). */
+	remaining_value_cost: number,
+	/**  Σ on_hand × the product's current price. */
+	remaining_value_retail: number,
+	/**  revenue − cogs − written-off cost − allocation variance. */
+	realised_profit: number,
+	/**  revenue − landed cost: negative until the batch has paid for itself. */
+	payback: number,
+	/**  payback + what the rest would bring at today's prices. */
+	projected_profit: number,
+	/**  units sold / units received, in basis points. */
+	sell_through_bp: number,
+};
+
 export type BatchStatus = "draft" | "received" | "closed";
 
 export type Batch_Deserialize = {
@@ -361,6 +452,9 @@ export type Batch_Deserialize = {
 	received_at?: string | null,
 	total_cost: number,
 	extra_costs: number,
+	/**  total_cost + extra_costs. */
+	landed_cost: number,
+	allocation_method: AllocationMethod,
 	allocation_variance: number,
 	status: BatchStatus,
 	is_system: boolean,
@@ -382,6 +476,9 @@ export type Batch_Serialize = {
 	received_at: string | null,
 	total_cost: number,
 	extra_costs: number,
+	/**  total_cost + extra_costs. */
+	landed_cost: number,
+	allocation_method: AllocationMethod,
 	allocation_variance: number,
 	status: BatchStatus,
 	is_system: boolean,
@@ -714,6 +811,25 @@ export type IntegrityReport = {
 	unreversed_voids: number,
 	/**  `sync_ctx.applying` left at 1 outside a pull transaction. */
 	stale_sync_flag: boolean,
+};
+
+/**  A product forgotten at intake, added to a received batch (unit cost 0). */
+export type LateItemInput = LateItemInput_Serialize | LateItemInput_Deserialize;
+
+/**  A product forgotten at intake, added to a received batch (unit cost 0). */
+export type LateItemInput_Deserialize = {
+	product_id: string,
+	qty: number,
+	/**  `None` = the product's current price. */
+	retail_price?: number | null,
+};
+
+/**  A product forgotten at intake, added to a received batch (unit cost 0). */
+export type LateItemInput_Serialize = {
+	product_id: string,
+	qty: number,
+	/**  `None` = the product's current price. */
+	retail_price: number | null,
 };
 
 /**  One layer of a product's stock, for the product and batch screens. */

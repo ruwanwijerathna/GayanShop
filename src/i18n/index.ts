@@ -105,6 +105,7 @@ export function translateError(t: TFunction, error: AppError): string {
   const params: Record<string, unknown> = {};
   if (error.kind === "INVALID_PIN") params.attempts_left = error.attempts_left;
   if (error.kind === "ACCOUNT_LOCKED") params.until = new Date(error.until).toLocaleTimeString();
+  if (error.kind === "VALIDATION") params.detail = error.detail;
   const generic = t("INTERNAL", { ns: "errors" });
   const kindFallback = key.includes(".") ? t(`${kind}._`, { ns: "errors", defaultValue: generic }) : generic;
   return t(key, { ns: "errors", ...params, defaultValue: kindFallback });
