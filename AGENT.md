@@ -7,7 +7,7 @@
 >
 > Never change an architectural decision silently. Propose the doc change to the owner first.
 
-**Current state (2026-11-09): Phase 2 in progress on branch `feat/phase-2-batches-reports`.** Phase 1 is complete, accepted and merged to `main` (the manual hardware, touch and pull-the-plug checks in `docs/qa/phase1-acceptance.md` are pending the owner). Blocks 2.1–2.9 are committed and green; the next block is 2.10. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
+**Current state (2026-11-09): Phase 2 complete on branch `feat/phase-2-batches-reports`, awaiting the owner's acceptance and merge.** Phase 1 is complete, accepted and merged to `main` (the manual hardware, touch and pull-the-plug checks in `docs/qa/phase1-acceptance.md` are pending the owner). Blocks 2.1–2.10 are committed and green (the manual label-printer, scanner, counter-PC and Sinhala checks in `docs/qa/phase2-acceptance.md` are pending the owner); Phase 3 needs the owner's go and a Supabase project. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
 
 ---
 
@@ -426,7 +426,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
 - [x] **2.9 Back-office tables and export**: done 2026-11-09
   - **Deliverables:** all lists on keyset DataTables, CSV export (`DATA_EXPORT`, audited).
   - **Gate:** `--test export` + `pnpm verify`
-- [ ] **2.10 Phase 2 acceptance and scale**
+- [x] **2.10 Phase 2 acceptance and scale**: done 2026-11-09 (perf table and headroom green; e2e phase1 + phase2 green; owner hardware items pending in docs/qa/phase2-acceptance.md)
   - **Deliverables:** the full §13.4 budget table, including the 1M-item headroom run, a 60 fps scroll benchmark, `tests/e2e/phase2.e2e.ts`, and `docs/qa/phase2-acceptance.md`.
   - **Gate:**
     - `cargo test --manifest-path src-tauri/Cargo.toml --release --test perf_budgets -- --ignored`

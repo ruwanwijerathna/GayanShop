@@ -183,13 +183,9 @@ pub struct AuditPage {
     pub next_cursor: Option<AuditCursor>,
 }
 
-/// Newest-first keyset paging over `ix_audit_keyset` (ARCHITECTURE §1.4).
-pub async fn page(pool: &SqlitePool, cursor: Option<&AuditCursor>, limit: u32) -> AppResult<AuditPage> {
-    let limit = i64::from(limit.clamp(1, 500));
-    let after_ts = cursor.map(|c| c.created_at.as_str());
-    let after_id = cursor.map(|c| c.id.as_str());
-    let rows: Vec<AuditLogRow> = sqlx::query_as(
-        "SELECT a.id, a.device_id, a.device_seq, a.staff_id, s.display_name AS staff_name, a.approved_by,
+/// One newest-first keyset page (walks `ix_audit_keyset`).
+pub const SQL_PAGE: &str =
+    "SELECT a.id, a.device_id, a.device_seq, a.staff_id, s.display_name AS staff_name, a.approved_by,
                 ap.display_name AS approver_name, a.action, a.entity_type, a.entity_id, a.metadata,
                 a.business_date, a.created_at
          FROM audit_logs a
@@ -197,13 +193,15 @@ pub async fn page(pool: &SqlitePool, cursor: Option<&AuditCursor>, limit: u32) -
          LEFT JOIN staff ap ON ap.id = a.approved_by
          WHERE ?1 IS NULL OR (a.created_at, a.id) < (?1, ?2)
          ORDER BY a.created_at DESC, a.id DESC
-         LIMIT ?3",
-    )
-    .bind(after_ts)
-    .bind(after_id)
-    .bind(limit)
-    .fetch_all(pool)
-    .await?;
+         LIMIT ?3";
+
+/// Newest-first keyset paging over `ix_audit_keyset` (ARCHITECTURE §1.4).
+pub async fn page(pool: &SqlitePool, cursor: Option<&AuditCursor>, limit: u32) -> AppResult<AuditPage> {
+    let limit = i64::from(limit.clamp(1, 500));
+    let after_ts = cursor.map(|c| c.created_at.as_str());
+    let after_id = cursor.map(|c| c.id.as_str());
+    let rows: Vec<AuditLogRow> =
+        sqlx::query_as(SQL_PAGE).bind(after_ts).bind(after_id).bind(limit).fetch_all(pool).await?;
     let next_cursor = if i64::try_from(rows.len()).unwrap_or(i64::MAX) == limit {
         rows.last().map(|r| AuditCursor { created_at: r.created_at.clone(), id: r.id.clone() })
     } else {

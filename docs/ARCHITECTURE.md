@@ -2266,6 +2266,9 @@ CREATE INDEX ix_sync_logs_started ON sync_logs(started_at);
 - Device settings: `ui.default_language = en`, and the two built-in label templates (`two_up_2x1`, `three_up_1x1`).
 - Every seeded row goes to the outbox. One `STORE_INITIALIZED` audit row starts this device's hash chain. `STORE_INITIALIZED` is the first entry in `AuditAction`, and it's appended to the §3.6 System actions.
 
+**Migrations after `0001_init.sql`** (append-only; doc and `rebuild_derived` updated with each):
+- `0002_report_indexes.sql` (Block 2.10): `CREATE INDEX ix_mov_writeoffs ON stock_movements(business_date) WHERE reason IN ('damage','count_correction','adjustment')`. Stock write-offs for the P&L read only write-off movements (§5.3, §13.4). No derived logic changed.
+
 ### 4.4 Cloud (Postgres) deltas
 
 - Types become `uuid`, `timestamptz`, `bigint` money and masks, `jsonb`, `boolean` and `date` (business_date).
@@ -2317,7 +2320,7 @@ Every period supports a `device_id` filter ("Counter 2 only") and comparison wit
 ### 5.3 How reports stay fast
 
 - Sales and payment metrics come from `daily_sales_summary` and `daily_payment_summary`. A yearly report is ~365 × 3 rows, even at millions of order lines.
-- Write-offs come from `stock_movements` via `ix_mov_date_reason`. Expenses use `ix_expenses_bdate`. Batch metrics come from `batch_item_stock`.
+- Write-offs come from `stock_movements` via the partial index `ix_mov_writeoffs` (migration `0002_report_indexes.sql`, Block 2.10; `ix_mov_date_reason` would walk every sale slice of the period). Expenses use `ix_expenses_bdate`. Batch metrics come from `batch_item_stock`. Date filters are plain `BETWEEN` bounds, with sentinels for open ends, so they always use these indexes.
 - Point-in-time stock valuation ("as of 31 Dec") sums the ledger, `WHERE business_date <= :d`, grouped by layer. It's slower but exact, and runs on demand.
 - **`rebuild_derived`** truncates and recomputes every derived table from the base tables. It runs after a restore, after a migration that touches derived logic, and from Settings → Maintenance.
   - A CI test asserts that rollup totals equal a raw `SUM` over orders and payments for randomised data.
@@ -3045,7 +3048,7 @@ Automatically "rebalancing" (moving −2 from L into the next layer) would **rew
 | Sinhala substring search | `products_fts_si` (trigram) | < 25 ms |
 | Phone → customer | `ux_customers_phone` | < 2 ms |
 | Checkout transaction (5 lines, FIFO, seal checks, outbox), `FULL` fsync included | PK and FK indexes; seal subqueries are per-order | < 40 ms |
-| Daily, weekly, monthly or yearly P&L | `daily_sales_summary` (≤ 365 × 3 rows per year) + `ix_expenses_bdate` + `ix_mov_date_reason` | < 20 ms |
+| Daily, weekly, monthly or yearly P&L | `daily_sales_summary` (≤ 365 × 3 rows per year) + `ix_expenses_bdate` + `ix_mov_writeoffs` | < 20 ms |
 | Order history page (500 rows, keyset) | `ix_orders_keyset (completed_at DESC, id DESC)` | < 20 ms |
 | Customer list sorted by spend | **Derived `customer_stats`** + `ix_customer_stats_spend`. A view aggregating `orders` was replaced, because it would scan orders. | < 20 ms |
 | Quick-sale review sorted by frequency | **Derived `quick_sale_stats`** + `ix_qss_frequency`. This replaced a correlated-subquery view. | < 20 ms |
@@ -3062,6 +3065,23 @@ Automatically "rebalancing" (moving −2 from L into the next layer) would **rew
 - **Block 1.1 measurement** (`cargo test --release --test perf_budgets -- --ignored search`, dev machine, 50,000 products / 20,000 customers, p95): barcode scan 0.14 ms, SKU scan 0.25 ms, type-ahead 1.7 ms, Sinhala substring 4.3 ms, phone → customer 0.10 ms. All within budget.
 
 **Proof:** Block 1.1 runs `cargo test --release --test perf_budgets -- --ignored` for the search and lookup rows. Block 2.10 runs the full table above, including the headroom run.
+
+**Block 2.10 measurement** (release build, dev machine, p95; details in `docs/qa/phase2-acceptance.md`). Gate: 50,000 products, 20,000 customers, 33,307 orders and 100,000 order items over a year at three counters. Headroom: 1,000,000 order items, within 2× of every budget.
+
+| Row | Gate | Headroom |
+|---|---|---|
+| Checkout | 21.2 ms | 22.3 ms |
+| P&L day / week / month / year | 0.46 / 0.47 / 0.51 / 1.5 ms | 0.44 / 0.45 / 0.46 / 1.2 ms |
+| Order history page | 5.6 ms | 4.6 ms |
+| Customer list by spend | 4.1 ms | 18.7 ms |
+| Quick-sale review | 2.0 ms | 1.8 ms |
+| Batch report (30 items) | 17.3 ms | 12.2 ms |
+| Audit page | 3.1 ms | 2.3 ms |
+
+- **Customer list.** The unfiltered spend and last-visit lists walk `customer_stats`' indexes.
+- **Order history.** It filters `+o.store_id`, so `ux_orders_receipt` never displaces the keyset index.
+- **Store-wide valuation.** Every layer, by batch and by category, is an on-demand report outside this table. It aggregates in SQL (191 ms at 50,000 layers) and is guarded at < 250 ms.
+- **Scrolling.** The 60 fps criterion is checked in the real WebView2 by `tests/e2e/phase2.e2e.ts`. It scrolls 50,000 products, and the year's orders while pages load, and both keep the display's frame rate.
 
 ### 13.5 Integrity invariants enforced inside SQLite
 

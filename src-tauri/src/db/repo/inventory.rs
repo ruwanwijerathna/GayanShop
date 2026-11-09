@@ -513,15 +513,16 @@ pub struct StockValuation {
 }
 
 #[derive(FromRow)]
-struct LayerValue {
+struct GroupValue {
     batch_id: String,
     batch_code: String,
     batch_name: String,
     category_id: Option<String>,
     category_name: Option<String>,
-    on_hand: i64,
-    unit_cost: i64,
-    price: i64,
+    units: i64,
+    value_at_cost: i64,
+    value_at_retail: i64,
+    negative: i64,
 }
 
 /// Valuation now (from the derived `batch_item_stock`) or as of the end of a business date (summing the
@@ -532,38 +533,43 @@ pub async fn valuation(pool: &SqlitePool, store_id: &str, as_of: Option<&str>) -
     {
         return Err(AppError::validation("DATE_INVALID", d.to_owned()));
     }
+    // One row per (batch, category) with the sums already taken in SQL: the store's layers never cross IPC
+    // or the Rust heap one by one (50,000 layers aggregate in tens of milliseconds).
     let stock_source = if as_of.is_some() {
         "(SELECT batch_item_id, SUM(qty_delta) AS on_hand FROM stock_movements
           WHERE store_id = ?1 AND business_date <= ?2 GROUP BY batch_item_id)"
     } else {
-        "(SELECT batch_item_id, on_hand FROM batch_item_stock WHERE ?2 IS NULL)"
+        "batch_item_stock"
     };
-    let rows: Vec<LayerValue> = sqlx::query_as(&format!(
-        "SELECT b.id AS batch_id, b.code AS batch_code, b.name AS batch_name, p.category_id,
-                c.name AS category_name, s.on_hand, bi.unit_cost, p.price
+    let sql = format!(
+        "SELECT b.id AS batch_id, MAX(b.code) AS batch_code, MAX(b.name) AS batch_name, p.category_id,
+                MAX(c.name) AS category_name,
+                SUM(MAX(s.on_hand, 0)) AS units, SUM(MAX(s.on_hand, 0) * bi.unit_cost) AS value_at_cost,
+                SUM(MAX(s.on_hand, 0) * p.price) AS value_at_retail, SUM(s.on_hand < 0) AS negative
          FROM {stock_source} s
          JOIN batch_items bi ON bi.id = s.batch_item_id
          JOIN batches b ON b.id = bi.batch_id
          JOIN products p ON p.id = bi.product_id
          LEFT JOIN categories c ON c.id = p.category_id
-         WHERE b.store_id = ?1 AND s.on_hand <> 0"
-    ))
-    .bind(store_id)
-    .bind(as_of)
-    .fetch_all(pool)
-    .await?;
+         WHERE b.store_id = ?1 AND s.on_hand <> 0
+         GROUP BY b.id, p.category_id"
+    );
+    let query = sqlx::query_as::<_, GroupValue>(&sql).bind(store_id);
+    let rows = match as_of {
+        Some(d) => query.bind(d).fetch_all(pool).await?,
+        None => query.fetch_all(pool).await?,
+    };
     let mut by_batch: BTreeMap<String, ValuationGroup> = BTreeMap::new();
     let mut by_category: BTreeMap<Option<String>, ValuationGroup> = BTreeMap::new();
     let (mut units, mut cost, mut retail, mut negative) = (0, 0, 0, 0);
     for r in rows {
-        if r.on_hand < 0 {
-            negative += 1;
+        negative += r.negative;
+        if r.units == 0 {
             continue;
         }
-        let (c, p) = (r.on_hand * r.unit_cost, r.on_hand * r.price);
-        units += r.on_hand;
-        cost += c;
-        retail += p;
+        units += r.units;
+        cost += r.value_at_cost;
+        retail += r.value_at_retail;
         let b = by_batch.entry(r.batch_id.clone()).or_insert_with(|| ValuationGroup {
             id: Some(r.batch_id.clone()),
             label: format!("{} · {}", r.batch_code, r.batch_name),
@@ -571,9 +577,9 @@ pub async fn valuation(pool: &SqlitePool, store_id: &str, as_of: Option<&str>) -
             value_at_cost: 0,
             value_at_retail: 0,
         });
-        b.units += r.on_hand;
-        b.value_at_cost += c;
-        b.value_at_retail += p;
+        b.units += r.units;
+        b.value_at_cost += r.value_at_cost;
+        b.value_at_retail += r.value_at_retail;
         let g = by_category.entry(r.category_id.clone()).or_insert_with(|| ValuationGroup {
             id: r.category_id.clone(),
             label: r.category_name.clone().unwrap_or_default(),
@@ -581,9 +587,9 @@ pub async fn valuation(pool: &SqlitePool, store_id: &str, as_of: Option<&str>) -
             value_at_cost: 0,
             value_at_retail: 0,
         });
-        g.units += r.on_hand;
-        g.value_at_cost += c;
-        g.value_at_retail += p;
+        g.units += r.units;
+        g.value_at_cost += r.value_at_cost;
+        g.value_at_retail += r.value_at_retail;
     }
     let sorted = |m: Vec<ValuationGroup>| {
         let mut v = m;

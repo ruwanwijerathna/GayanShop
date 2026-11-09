@@ -54,6 +54,19 @@ pub struct OrderPage {
     pub next_cursor: Option<OrderCursor>,
 }
 
+/// One keyset page, newest first: walks `ix_orders_keyset` and stops after `LIMIT` matching rows. The unary
+/// `+` on `store_id` keeps SQLite from choosing `ux_orders_receipt (store_id, …)` and sorting every order.
+pub const SQL_HISTORY: &str =
+    "SELECT o.id, o.receipt_no, o.business_date, o.completed_at, o.status, s.display_name AS cashier,
+                o.item_count, o.grand_total, o.customer_id IS NOT NULL AS has_customer, o.void_reason
+         FROM orders o LEFT JOIN staff s ON s.id = o.staff_id
+         WHERE +o.store_id = ?1 AND o.status IN ('completed', 'voided')
+           AND (?2 IS NULL OR o.business_date >= ?2) AND (?3 IS NULL OR o.business_date <= ?3)
+           AND (?4 IS NULL OR o.device_id = ?4) AND (?5 IS NULL OR o.status = ?5)
+           AND (?6 IS NULL OR o.receipt_no LIKE ?6 ESCAPE '\\')
+           AND (?7 IS NULL OR (o.completed_at, o.id) < (?7, ?8))
+         ORDER BY o.completed_at DESC, o.id DESC LIMIT ?9";
+
 pub async fn history(
     pool: &SqlitePool,
     store_id: &str,
@@ -74,28 +87,18 @@ pub async fn history(
         .map(str::trim)
         .filter(|r| !r.is_empty())
         .map(|r| format!("{}%", r.to_uppercase().replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")));
-    let mut rows: Vec<OrderRow> = sqlx::query_as(
-        "SELECT o.id, o.receipt_no, o.business_date, o.completed_at, o.status, s.display_name AS cashier,
-                o.item_count, o.grand_total, o.customer_id IS NOT NULL AS has_customer, o.void_reason
-         FROM orders o LEFT JOIN staff s ON s.id = o.staff_id
-         WHERE o.store_id = ?1 AND o.status IN ('completed', 'voided')
-           AND (?2 IS NULL OR o.business_date >= ?2) AND (?3 IS NULL OR o.business_date <= ?3)
-           AND (?4 IS NULL OR o.device_id = ?4) AND (?5 IS NULL OR o.status = ?5)
-           AND (?6 IS NULL OR o.receipt_no LIKE ?6 ESCAPE '\\')
-           AND (?7 IS NULL OR (o.completed_at, o.id) < (?7, ?8))
-         ORDER BY o.completed_at DESC, o.id DESC LIMIT ?9",
-    )
-    .bind(store_id)
-    .bind(range.from.as_deref())
-    .bind(range.to.as_deref())
-    .bind(filter.device_id.as_deref())
-    .bind(status)
-    .bind(receipt.as_deref())
-    .bind(cursor.map(|c| c.completed_at.as_str()))
-    .bind(cursor.map(|c| c.id.as_str()))
-    .bind(limit + 1)
-    .fetch_all(pool)
-    .await?;
+    let mut rows: Vec<OrderRow> = sqlx::query_as(SQL_HISTORY)
+        .bind(store_id)
+        .bind(range.from.as_deref())
+        .bind(range.to.as_deref())
+        .bind(filter.device_id.as_deref())
+        .bind(status)
+        .bind(receipt.as_deref())
+        .bind(cursor.map(|c| c.completed_at.as_str()))
+        .bind(cursor.map(|c| c.id.as_str()))
+        .bind(limit + 1)
+        .fetch_all(pool)
+        .await?;
     let next_cursor = if i64::try_from(rows.len()).unwrap_or(i64::MAX) > limit {
         rows.truncate(usize::try_from(limit).unwrap_or(0));
         rows.last().map(|r| OrderCursor { completed_at: r.completed_at.clone(), id: r.id.clone() })

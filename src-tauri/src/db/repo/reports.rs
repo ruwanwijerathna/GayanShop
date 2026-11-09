@@ -20,8 +20,47 @@ use crate::domain::business_date::{StoreCalendar, parse_date};
 use crate::domain::period::{DateRange, Granularity, Period, bucket_of, bucket_sql};
 use crate::error::AppResult;
 
-/// Write-off movements (§5.1 "Stock write-offs"), net of found stock.
-const WRITE_OFF_REASONS: &str = "('damage','count_correction','adjustment')";
+/// Inclusive business-date bounds for SQL: an open end becomes a sentinel, so every filter is a plain
+/// `BETWEEN` that SQLite serves from the date indexes (`ix_mov_date_reason`, `ix_expenses_bdate`,
+/// `ix_orders_bdate`, the rollups' primary keys) instead of an `?1 IS NULL OR …` scan.
+pub fn bounds(range: &DateRange) -> (&str, &str) {
+    (range.from.as_deref().unwrap_or("0000-01-01"), range.to.as_deref().unwrap_or("9999-12-31"))
+}
+
+/// Sales metrics for a date range and optional counter (rollup rows only).
+pub const SQL_SALES_SUMS: &str =
+    "SELECT COALESCE(SUM(sales_count), 0) AS sales_count, COALESCE(SUM(void_count), 0) AS void_count,
+                COALESCE(SUM(void_value), 0) AS void_value, COALESCE(SUM(gross_sales), 0) AS gross_sales,
+                COALESCE(SUM(discounts), 0) AS discounts, COALESCE(SUM(net_sales), 0) AS net_sales,
+                COALESCE(SUM(tax_total), 0) AS tax_total, COALESCE(SUM(cogs), 0) AS cogs,
+                COALESCE(SUM(quick_sale_net), 0) AS quick_sale_net,
+                COALESCE(SUM(unknown_cost_net), 0) AS unknown_cost_net,
+                COALESCE(SUM(customer_orders), 0) AS customer_orders
+         FROM daily_sales_summary
+         WHERE business_date BETWEEN ?1 AND ?2
+           AND (?3 IS NULL OR device_id = ?3)";
+
+/// Payments by method from the payment rollup.
+pub const SQL_PAYMENTS: &str =
+    "SELECT method, SUM(amount) AS amount, SUM(txn_count) AS count FROM daily_payment_summary
+         WHERE business_date BETWEEN ?1 AND ?2
+           AND (?3 IS NULL OR device_id = ?3)
+         GROUP BY method HAVING SUM(txn_count) > 0 ORDER BY SUM(amount) DESC, method";
+
+/// Allocation variance of batches received in the range.
+pub const SQL_VARIANCE: &str = "SELECT COALESCE(SUM(allocation_variance), 0) FROM batches
+         WHERE status <> 'draft' AND deleted_at IS NULL
+           AND received_business_date BETWEEN ?1 AND ?2";
+
+/// Operating expenses in the range (`ix_expenses_bdate`).
+pub const SQL_OPEX: &str = "SELECT COALESCE(SUM(amount), 0) FROM expenses
+         WHERE deleted_at IS NULL AND business_date BETWEEN ?1 AND ?2";
+
+/// Stock write-offs (§5.1: damage, count corrections and adjustments, net of found stock) in the range
+/// (`ix_mov_date_reason`).
+pub const SQL_WRITE_OFFS: &str = "SELECT COALESCE(SUM(-qty_delta * unit_cost), 0) FROM stock_movements
+         WHERE reason IN ('damage','count_correction','adjustment')
+           AND business_date BETWEEN ?1 AND ?2";
 
 #[derive(Debug, Clone, Serialize, Type, PartialEq, Eq, FromRow)]
 pub struct MethodTotal {
@@ -123,61 +162,13 @@ struct SalesSums {
 
 /// The P&L of doc §5.3 for inclusive bounds (`None` = open-ended) and an optional counter.
 pub async fn summary_for(pool: &SqlitePool, range: &DateRange, device_id: Option<&str>) -> AppResult<FinancialSummary> {
-    let (from, to) = (range.from.as_deref(), range.to.as_deref());
-    let s: SalesSums = sqlx::query_as(
-        "SELECT COALESCE(SUM(sales_count), 0) AS sales_count, COALESCE(SUM(void_count), 0) AS void_count,
-                COALESCE(SUM(void_value), 0) AS void_value, COALESCE(SUM(gross_sales), 0) AS gross_sales,
-                COALESCE(SUM(discounts), 0) AS discounts, COALESCE(SUM(net_sales), 0) AS net_sales,
-                COALESCE(SUM(tax_total), 0) AS tax_total, COALESCE(SUM(cogs), 0) AS cogs,
-                COALESCE(SUM(quick_sale_net), 0) AS quick_sale_net,
-                COALESCE(SUM(unknown_cost_net), 0) AS unknown_cost_net,
-                COALESCE(SUM(customer_orders), 0) AS customer_orders
-         FROM daily_sales_summary
-         WHERE (?1 IS NULL OR business_date >= ?1) AND (?2 IS NULL OR business_date <= ?2)
-           AND (?3 IS NULL OR device_id = ?3)",
-    )
-    .bind(from)
-    .bind(to)
-    .bind(device_id)
-    .fetch_one(pool)
-    .await?;
-    let payments: Vec<MethodTotal> = sqlx::query_as(
-        "SELECT method, SUM(amount) AS amount, SUM(txn_count) AS count FROM daily_payment_summary
-         WHERE (?1 IS NULL OR business_date >= ?1) AND (?2 IS NULL OR business_date <= ?2)
-           AND (?3 IS NULL OR device_id = ?3)
-         GROUP BY method HAVING SUM(txn_count) > 0 ORDER BY SUM(amount) DESC, method",
-    )
-    .bind(from)
-    .bind(to)
-    .bind(device_id)
-    .fetch_all(pool)
-    .await?;
-    let variance: i64 = sqlx::query_scalar(
-        "SELECT COALESCE(SUM(allocation_variance), 0) FROM batches
-         WHERE status <> 'draft' AND deleted_at IS NULL
-           AND (?1 IS NULL OR received_business_date >= ?1) AND (?2 IS NULL OR received_business_date <= ?2)",
-    )
-    .bind(from)
-    .bind(to)
-    .fetch_one(pool)
-    .await?;
-    let write_offs: i64 = sqlx::query_scalar(&format!(
-        "SELECT COALESCE(SUM(-qty_delta * unit_cost), 0) FROM stock_movements
-         WHERE reason IN {WRITE_OFF_REASONS}
-           AND (?1 IS NULL OR business_date >= ?1) AND (?2 IS NULL OR business_date <= ?2)"
-    ))
-    .bind(from)
-    .bind(to)
-    .fetch_one(pool)
-    .await?;
-    let opex: i64 = sqlx::query_scalar(
-        "SELECT COALESCE(SUM(amount), 0) FROM expenses
-         WHERE deleted_at IS NULL AND (?1 IS NULL OR business_date >= ?1) AND (?2 IS NULL OR business_date <= ?2)",
-    )
-    .bind(from)
-    .bind(to)
-    .fetch_one(pool)
-    .await?;
+    let (from, to) = bounds(range);
+    let s: SalesSums = sqlx::query_as(SQL_SALES_SUMS).bind(from).bind(to).bind(device_id).fetch_one(pool).await?;
+    let payments: Vec<MethodTotal> =
+        sqlx::query_as(SQL_PAYMENTS).bind(from).bind(to).bind(device_id).fetch_all(pool).await?;
+    let variance: i64 = sqlx::query_scalar(SQL_VARIANCE).bind(from).bind(to).fetch_one(pool).await?;
+    let write_offs: i64 = sqlx::query_scalar(SQL_WRITE_OFFS).bind(from).bind(to).fetch_one(pool).await?;
+    let opex: i64 = sqlx::query_scalar(SQL_OPEX).bind(from).bind(to).fetch_one(pool).await?;
     let cogs = s.cogs + variance;
     let gross_profit = s.net_sales - cogs;
     Ok(FinancialSummary {
@@ -259,12 +250,12 @@ pub async fn trend(
         "WITH s AS (
            SELECT {sb} AS bucket, SUM(sales_count) AS sales_count, SUM(net_sales) AS net_sales, SUM(cogs) AS cost
            FROM daily_sales_summary
-           WHERE (?1 IS NULL OR business_date >= ?1) AND (?2 IS NULL OR business_date <= ?2)
+           WHERE business_date BETWEEN ?1 AND ?2
              AND (?3 IS NULL OR device_id = ?3)
            GROUP BY bucket),
          e AS (
            SELECT {sb} AS bucket, SUM(amount) AS amount FROM expenses
-           WHERE deleted_at IS NULL AND (?1 IS NULL OR business_date >= ?1) AND (?2 IS NULL OR business_date <= ?2)
+           WHERE deleted_at IS NULL AND business_date BETWEEN ?1 AND ?2
            GROUP BY bucket),
          b AS (SELECT bucket FROM s UNION SELECT bucket FROM e)
          SELECT b.bucket, COALESCE(s.sales_count, 0) AS sales_count, COALESCE(s.net_sales, 0) AS net_sales,
@@ -273,8 +264,8 @@ pub async fn trend(
          WHERE COALESCE(s.sales_count, 0) <> 0 OR COALESCE(e.amount, 0) <> 0 OR COALESCE(s.net_sales, 0) <> 0
          ORDER BY b.bucket"
     ))
-    .bind(range.from.as_deref())
-    .bind(range.to.as_deref())
+    .bind(bounds(&range).0)
+    .bind(bounds(&range).1)
     .bind(device_id)
     .fetch_all(pool)
     .await?;
@@ -409,8 +400,8 @@ pub async fn sales_by(
     dimension: SalesDimension,
 ) -> AppResult<Vec<SalesByRow>> {
     let range = period.resolve(cal)?;
-    const SCOPE: &str = "o.status = 'completed' AND (?1 IS NULL OR o.business_date >= ?1)
-           AND (?2 IS NULL OR o.business_date <= ?2) AND (?3 IS NULL OR o.device_id = ?3)";
+    const SCOPE: &str =
+        "o.status = 'completed' AND o.business_date BETWEEN ?1 AND ?2 AND (?3 IS NULL OR o.device_id = ?3)";
     let sql = match dimension {
         SalesDimension::Product => format!(
             "SELECT oi.product_id AS id, CASE WHEN oi.product_id IS NULL THEN NULL ELSE MAX(p.name) END AS label,
@@ -461,12 +452,7 @@ pub async fn sales_by(
              ORDER BY net DESC, qty DESC, id"
         ),
     };
-    Ok(sqlx::query_as(&sql)
-        .bind(range.from.as_deref())
-        .bind(range.to.as_deref())
-        .bind(device_id)
-        .fetch_all(pool)
-        .await?)
+    Ok(sqlx::query_as(&sql).bind(bounds(&range).0).bind(bounds(&range).1).bind(device_id).fetch_all(pool).await?)
 }
 
 #[derive(Debug, Clone, Serialize, Type, PartialEq, Eq, FromRow)]
@@ -499,14 +485,14 @@ pub async fn voids(
     device_id: Option<&str>,
 ) -> AppResult<VoidReport> {
     let range = period.resolve(cal)?;
-    const SCOPE: &str = "o.status = 'voided' AND (?1 IS NULL OR o.business_date >= ?1)
-           AND (?2 IS NULL OR o.business_date <= ?2) AND (?3 IS NULL OR o.device_id = ?3)";
+    const SCOPE: &str =
+        "o.status = 'voided' AND o.business_date BETWEEN ?1 AND ?2 AND (?3 IS NULL OR o.device_id = ?3)";
     let by_reason: Vec<VoidGroup> = sqlx::query_as(&format!(
         "SELECT o.void_reason AS key, NULL AS label, COUNT(*) AS count, SUM(o.grand_total) AS value
          FROM orders o WHERE {SCOPE} GROUP BY o.void_reason ORDER BY count DESC, value DESC, key"
     ))
-    .bind(range.from.as_deref())
-    .bind(range.to.as_deref())
+    .bind(bounds(&range).0)
+    .bind(bounds(&range).1)
     .bind(device_id)
     .fetch_all(pool)
     .await?;
@@ -516,8 +502,8 @@ pub async fn voids(
          FROM orders o LEFT JOIN staff s ON s.id = COALESCE(o.void_approved_by, o.voided_by)
          WHERE {SCOPE} GROUP BY key ORDER BY count DESC, value DESC, key"
     ))
-    .bind(range.from.as_deref())
-    .bind(range.to.as_deref())
+    .bind(bounds(&range).0)
+    .bind(bounds(&range).1)
     .bind(device_id)
     .fetch_all(pool)
     .await?;

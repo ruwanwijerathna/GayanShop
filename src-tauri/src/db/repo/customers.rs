@@ -346,6 +346,31 @@ pub async fn list(
         CustomerSort::Name => "c.display_name COLLATE NOCASE ASC NULLS LAST, c.id",
     };
     let pattern = search.and_then(search_pattern);
+    // Unfiltered spend and last-visit lists start from `customer_stats` and walk its index, reading one page
+    // instead of sorting every customer (doc §13.4: < 20 ms). Every customer gets a stats row at their first
+    // checkout; anyone without one (never sold to) would have no spend and no visit, so they belong after
+    // the page anyway and appear when searched for.
+    if pattern.is_none() && matches!(sort, CustomerSort::Spend | CustomerSort::LastVisit) {
+        let order = if sort == CustomerSort::Spend {
+            "cs.total_spend DESC, cs.customer_id"
+        } else {
+            "cs.last_visit_date DESC, cs.customer_id"
+        };
+        let rows: Vec<RowDb> = sqlx::query_as(&format!(
+            "SELECT c.id, c.phone_e164, c.display_name, cs.visit_count, cs.total_spend, cs.total_net,
+                    cs.first_visit_date, cs.last_visit_date
+             FROM customer_stats cs JOIN customers c ON c.id = cs.customer_id
+             WHERE c.store_id = ?1 AND c.erased_at IS NULL AND c.deleted_at IS NULL
+             ORDER BY {order} LIMIT ?2"
+        ))
+        .bind(store_id)
+        .bind(limit + 1)
+        .fetch_all(pool)
+        .await?;
+        let truncated = i64::try_from(rows.len()).unwrap_or(i64::MAX) > limit;
+        let rows = rows.into_iter().take(usize::try_from(limit).unwrap_or(0)).map(CustomerRow::from).collect();
+        return Ok(CustomerList { rows, truncated });
+    }
     let filter = match &pattern {
         None => "",
         Some((true, _)) => " AND c.phone_e164 LIKE ?2",
