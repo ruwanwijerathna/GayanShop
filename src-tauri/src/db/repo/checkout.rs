@@ -691,8 +691,22 @@ pub async fn checkout(
     }
     cp.reached("print_jobs")?;
 
-    // 10. The sealed order for sync (lines, payments, slices and customer were queued as written).
+    // 10. The sealed order for sync, then its lines, payments and slices behind it: they were queued as
+    //     written, before the order could be sealed, and the cloud needs the parent first (§6.1).
     outbox::enqueue_upsert(conn, "orders", &order_id, &ctx.now).await?;
+    let children: Vec<i64> = sqlx::query_scalar(
+        "SELECT q.seq FROM sync_outbox q
+         WHERE (q.table_name = 'order_items' AND q.row_id IN (SELECT id FROM order_items WHERE order_id = ?1))
+            OR (q.table_name = 'order_payments' AND q.row_id IN (SELECT id FROM order_payments WHERE order_id = ?1))
+            OR (q.table_name = 'stock_movements' AND q.row_id IN
+                  (SELECT m.id FROM stock_movements m JOIN order_items oi ON oi.id = m.order_item_id
+                   WHERE oi.order_id = ?1))
+         ORDER BY q.seq",
+    )
+    .bind(&order_id)
+    .fetch_all(&mut *conn)
+    .await?;
+    outbox::requeue_after(conn, &children).await?;
     cp.reached("outbox")?;
 
     tx.commit().await?;

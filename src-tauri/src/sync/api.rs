@@ -73,9 +73,14 @@ pub trait SyncApi: Send + Sync {
 }
 
 pub fn http_client() -> Result<reqwest::Client, SyncError> {
+    http_client_with(Duration::from_secs(60))
+}
+
+/// A client whose requests give up after `timeout` (the chaos suite cuts the network mid-push).
+pub fn http_client_with(timeout: Duration) -> Result<reqwest::Client, SyncError> {
     reqwest::Client::builder()
-        .connect_timeout(Duration::from_secs(10))
-        .timeout(Duration::from_secs(60))
+        .connect_timeout(Duration::from_secs(10).min(timeout))
+        .timeout(timeout)
         .user_agent(concat!("GayanShop-POS/", env!("CARGO_PKG_VERSION")))
         .build()
         .map_err(|e| SyncError::Protocol(format!("http client: {e}")))
@@ -216,8 +221,17 @@ pub struct HttpApi {
 
 impl HttpApi {
     pub fn new(cfg: ServerConfig, device_id: &str, secrets: Arc<dyn SecretStore>) -> Result<Self, SyncError> {
+        Self::with_timeout(cfg, device_id, secrets, Duration::from_secs(60))
+    }
+
+    pub fn with_timeout(
+        cfg: ServerConfig,
+        device_id: &str,
+        secrets: Arc<dyn SecretStore>,
+        timeout: Duration,
+    ) -> Result<Self, SyncError> {
         Ok(Self {
-            http: http_client()?,
+            http: http_client_with(timeout)?,
             cfg,
             tokens: Tokens { secrets, account: refresh_token_account(device_id), cached: Mutex::new(None) },
         })

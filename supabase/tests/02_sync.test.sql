@@ -4,7 +4,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(63);
+SELECT plan(66);
 
 -- ─── tenancy fixtures: store A with counters T01, T02, T03; store B with T01 ───
 INSERT INTO pos.stores (id, name, owner_user_id) VALUES
@@ -77,7 +77,8 @@ SELECT is((sync_health() ->> 'device_code'), 'T01', 'sync_health answers for the
 RESET ROLE;
 SELECT ok(EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid() AND granted),
   'sync_push holds the per-store advisory lock until commit');
-SELECT is((SELECT count(*)::int FROM pos.processed_ops WHERE result = 'ok'), 15, 'each op is recorded once');
+SELECT is((SELECT count(*)::int FROM pos.processed_ops
+           WHERE result = 'ok' AND store_id = 'a0000000-0000-0000-0000-000000000001'), 15, 'each op is recorded once');
 SELECT is((SELECT app_version FROM pos.devices WHERE code = 'T01' AND store_id = 'a0000000-0000-0000-0000-000000000001'),
   '0.3.0', 'the device''s last seen version is kept');
 SELECT is((SELECT last_audit_seq FROM pos.devices WHERE id = 'a0000000-0000-0000-0000-0000000000d1'), 2::bigint,
@@ -145,6 +146,14 @@ SELECT is(pg_temp.statuses(sync_push('a0000000-0000-0000-0000-0000000000d3', jso
 RESET ROLE;
 SELECT is((SELECT price FROM pos.products WHERE id = 'a0000000-0000-0000-0000-0000000000a1'), 48000::bigint,
   'a timestamp tie is broken by device id');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.as_device('a0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-0000000000d3');
+SELECT is(pg_temp.statuses(sync_push('a0000000-0000-0000-0000-0000000000d3', jsonb_build_array(
+  pg_temp.op('products', (SELECT r FROM w WHERE k = 'product') || '{"price":48500,"updated_at":"2026-11-08T06:00:00.000Z","updated_by_device":"a0000000-0000-0000-0000-0000000000d3","version":3}'))
+  )), 'ok', 'the same device writes the row again within the same millisecond');
+RESET ROLE;
+SELECT is((SELECT price FROM pos.products WHERE id = 'a0000000-0000-0000-0000-0000000000a1'), 48500::bigint,
+  'its later snapshot wins the tie');
 
 -- ─── invariants ───
 SET LOCAL ROLE authenticated;
@@ -161,6 +170,9 @@ SELECT is(split_part(pg_temp.reason(sync_push('a0000000-0000-0000-0000-000000000
 RESET ROLE;
 SELECT is((SELECT role_id FROM pos.staff WHERE id = 'a0000000-0000-0000-0000-00000000005f'),
   'a0000000-0000-0000-0000-00000000000e'::uuid, 'and the rejected change is not stored');
+SELECT ok((SELECT server_seq FROM pos.staff WHERE id = 'a0000000-0000-0000-0000-00000000005f')
+          > (SELECT max(server_seq) FROM pos.batch_items),
+  'the refused row is re-stamped, so the refusing counter pulls the cloud''s version back');
 -- Two Owners, each demoted offline by a different counter: the second demotion to arrive is rejected.
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.as_device('a0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-0000000000d1');

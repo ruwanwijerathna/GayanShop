@@ -6,7 +6,8 @@
 //! * `PRAGMA defer_foreign_keys = ON`, and tables applied parents-first, so order within a page doesn't
 //!   matter; the server's parent closure guarantees every foreign key resolves by commit.
 //! * Insert-only rows are inserted once; orders are inserted once and may then move completed → voided;
-//!   mutable rows are upserted by last-write-wins on `(updated_at, updated_by_device)`.
+//!   mutable rows are upserted by last-write-wins on `(updated_at, updated_by_device)`, except that an
+//!   erasure always wins and the cloud's version replaces a local change the cloud refused.
 //! * Nothing is enqueued to the outbox (no echo) and no audit row is written; pulled audit rows are stored
 //!   as they are. The one exception is a barcode collision (§6.3): the local product that loses its barcode
 //!   is deactivated, flagged, and pushed like any local edit.
@@ -55,11 +56,6 @@ pub const TABLES: &[(&str, Kind, &str)] = &[
     ("quick_sale_links", Kind::Lww, "id"),
     ("audit_logs", Kind::InsertOnly, "id"),
 ];
-
-/// Where a table sits in the parents-first order (unknown tables last).
-pub fn apply_rank(table: &str) -> usize {
-    TABLES.iter().position(|(t, _, _)| *t == table).unwrap_or(TABLES.len())
-}
 
 fn table_meta(table: &str) -> Option<(usize, Kind, &'static str, &'static str)> {
     TABLES.iter().enumerate().find(|(_, (t, _, _))| *t == table).map(|(i, (t, k, pk))| (i, *k, *t, *pk))
@@ -129,9 +125,11 @@ async fn local_version(
 }
 
 /// Last-write-wins: does `(at, dev)` beat `(cur_at, cur_dev)`? Timestamps share one fixed format
-/// (`clock::iso`, which the server reproduces), so text order is time order.
+/// (`clock::iso`, which the server reproduces), so text order is time order. A row written twice by one
+/// device within the same millisecond (create then receive a batch) arrives as two snapshots with the same
+/// stamp: the later one wins, because one device's changes always arrive in order.
 fn is_newer(at: &str, dev: &str, cur_at: &str, cur_dev: &str) -> bool {
-    at > cur_at || (at == cur_at && dev > cur_dev)
+    at > cur_at || (at == cur_at && dev >= cur_dev)
 }
 
 struct Applier<'c> {
@@ -239,7 +237,20 @@ impl Applier<'_> {
             }
             erasure = erasing && erased.is_none();
         }
+        // A local change the cloud refused (its op is dead) gives way to the cloud's version, which the
+        // server re-sends when it refuses a change: this counter must not keep a row the cloud rejected.
+        let refused = local.is_some() && {
+            let n: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM sync_outbox WHERE table_name = ?1 AND row_id = ?2 AND status = 'dead'",
+            )
+            .bind(table)
+            .bind(id)
+            .fetch_one(&mut *self.conn)
+            .await?;
+            n > 0
+        };
         if !erasure
+            && !refused
             && let Some((cur_at, cur_dev)) = &local
             && !is_newer(&at, &dev, cur_at, cur_dev)
         {
@@ -254,13 +265,13 @@ impl Applier<'_> {
         }
         // Savepoint per row: a collision on another unique key skips this row, not the page.
         sqlx::query("SAVEPOINT lww_row").execute(&mut *self.conn).await?;
-        let tail = if erasure {
+        let tail = if erasure || refused {
             format!("ON CONFLICT(\"{pk}\") DO UPDATE SET {{SET}}")
         } else {
             format!(
                 "ON CONFLICT(\"{pk}\") DO UPDATE SET {{SET}}
                  WHERE excluded.updated_at > \"{table}\".updated_at
-                    OR (excluded.updated_at = \"{table}\".updated_at AND excluded.updated_by_device > \"{table}\".updated_by_device)"
+                    OR (excluded.updated_at = \"{table}\".updated_at AND excluded.updated_by_device >= \"{table}\".updated_by_device)"
             )
         };
         match self.insert(table, row, &tail).await {

@@ -171,11 +171,6 @@ pub async fn push_batch(
     if ready.is_empty() {
         return Ok(PushOutcome::default());
     }
-    // Parents before children (§6.1): a transaction may enqueue a child before its parent (checkout
-    // snapshots the sealed order after its lines), so the batch goes in table apply order, then outbox
-    // order within a table.
-    let mut ready = ready;
-    ready.sort_by_key(|r| (apply::apply_rank(&r.table_name), r.seq));
     for r in &ready {
         sqlx::query("UPDATE sync_outbox SET status = 'in_flight' WHERE seq = ?1")
             .bind(r.seq)

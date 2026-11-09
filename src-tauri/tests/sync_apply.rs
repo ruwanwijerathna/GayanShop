@@ -482,3 +482,18 @@ async fn the_worker_syncs_after_a_sale_and_reports_offline() {
     assert!(events.0.lock().unwrap().iter().any(|s| s.state == SyncState::Syncing));
     task.abort();
 }
+
+#[tokio::test]
+async fn a_change_the_cloud_refuses_gives_way_to_the_cloud_version() {
+    let a = t01().await;
+    let p = a.product("Bucket", 45_000, None, None).await;
+    let hub = hub_for(&a).await;
+    a.round(&hub).await;
+    let b = joined(&hub, &a.store_id, "T02").await;
+    b.edit_price(&p, 99_000).await;
+    hub.reject_tables.lock().unwrap().insert("products".into());
+    b.round(&hub).await;
+    let price = format!("SELECT price FROM products WHERE id = '{p}'");
+    assert_eq!(b.count("SELECT COUNT(*) FROM sync_outbox WHERE status = 'dead'").await, 1, "shown as refused");
+    assert_eq!(b.count(&price).await, 45_000, "and the cloud's version replaced the refused edit");
+}

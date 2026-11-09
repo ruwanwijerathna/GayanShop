@@ -135,6 +135,15 @@ impl Hub {
     fn apply(&self, st: &mut State, op: &PushOp) -> OpStatus {
         let Some((kind, pk)) = kind_of(&op.table) else { return OpStatus::Rejected };
         if self.reject_tables.lock().unwrap().contains(&op.table) {
+            // Like the server: the refused row's cloud copy is re-stamped so its origin pulls it back.
+            let key = (op.table.clone(), s(&op.row, pk).to_owned());
+            if kind == Kind::Lww && st.rows.contains_key(&key) {
+                st.seq += 1;
+                let seq = st.seq;
+                if let Some(r) = st.rows.get_mut(&key) {
+                    r.seq = seq;
+                }
+            }
             return OpStatus::Rejected;
         }
         // A parent that hasn't arrived: retry later, not recorded.
@@ -157,7 +166,7 @@ impl Hub {
             (Kind::Lww, Some(cur)) => {
                 let (at, dev) = (s(&op.row, "updated_at"), s(&op.row, "updated_by_device"));
                 let (cat, cdev) = (s(&cur.row, "updated_at"), s(&cur.row, "updated_by_device"));
-                at > cat || (at == cat && dev > cdev)
+                at > cat || (at == cat && dev >= cdev)
             }
         };
         if store {
