@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Least-privilege capability for the main window. App logic goes through typed custom commands.",
   "windows": ["main"],
-  "permissions": ["core:default", "log:default"]
+  "permissions": ["core:default", "log:default", "updater:default"]
 }

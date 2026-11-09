@@ -146,12 +146,25 @@
     "SYNC_DEVICE_CANNOT_REGISTER": "Sign in with the owner's account, not a counter's.",
     "SYNC_OWNER_NOT_SIGNED_IN": "The owner's sign-in expired. Try again.",
     "SYNC_FUNCTION_NOT_CONFIGURED": "The server's registration service isn't set up yet.",
-    "SYNC_SERVER_ERROR": "The sync server had a problem. Try again shortly."
+    "SYNC_SERVER_ERROR": "The sync server had a problem. Try again shortly.",
+    "RESTORE_PENDING": "This counter is finishing a restore. The Owner must finish it first.",
+    "RESTORE_FILE_MISSING": "The backup file can't be found.",
+    "RESTORE_CORRUPT": "This file is damaged or isn't a GayanShop backup.",
+    "RESTORE_NOT_A_BACKUP": "This file isn't a GayanShop counter backup.",
+    "RESTORE_NEWER_SCHEMA": "This backup was made by a newer version of the app. Update the app first.",
+    "RESTORE_OTHER_STORE": "This backup belongs to a different store.",
+    "RESTORE_OTHER_COUNTER": "This backup belongs to another counter ({{detail}}). Restore it on that counter.",
+    "RESTORE_WRITE_FAILED": "The restore couldn't write its files. Check the disk and try again.",
+    "RESTORE_OWNER_ONLY": "Only the Owner can finish a restore.",
+    "RESTORE_NOT_PENDING": "There is no restore to finish.",
+    "RESTORE_NO_FREE_CODE": "All nine counter codes are in use.",
+    "RESTORE_MODE_UNAVAILABLE": "That way of finishing the restore isn't available on this counter."
   },
   "INVARIANT": {
     "_": "This change isn't allowed.",
     "LAST_OWNER": "At least one active Owner must remain.",
     "BAD_CALENDAR_SETTINGS": "The store's time settings are invalid.",
-    "SYNC_IDENTITY_MISMATCH": "The server answered for a different counter. Nothing was changed."
+    "SYNC_IDENTITY_MISMATCH": "The server answered for a different counter. Nothing was changed.",
+    "RESTORE_CHAIN_MISMATCH": "This counter's audit trail doesn't match the cloud's. Finish the restore as a new counter instead."
   }
 }

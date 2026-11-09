@@ -9,6 +9,7 @@ import { CommandError } from "@/db/client";
 import { useAppStatus, useDevicePrefs } from "@/db/hooks";
 import { FirstRunWizard } from "@/features/auth/FirstRunWizard";
 import { BootstrapResume } from "@/features/auth/JoinStore";
+import { RestoreRecovery } from "@/features/backup/RestoreRecovery";
 import { LoginScreen } from "@/features/auth/LoginScreen";
 import { isUiLanguage, translateError } from "@/i18n";
 
@@ -72,6 +73,7 @@ function App() {
   }
   if (!status.data.initialized) return <FirstRunWizard />;
   if (status.data.bootstrap_pending) return <BootstrapResume />;
+  if (status.data.restore_pending) return <RestoreRecovery />;
   if (!rustSession) return <LoginScreen storeName={status.data.store_name ?? null} wasLocked={wasLocked} />;
   return (
     <ExplicitLockContext.Provider value={markExplicitLock}>

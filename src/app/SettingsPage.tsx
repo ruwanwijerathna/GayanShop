@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Can } from "@/components/auth/Can";
 import { BackupSettings } from "@/features/backup/BackupSettings";
+import { RestoreSettings } from "@/features/backup/RestoreSettings";
 import { LabelSettings } from "@/features/labels/LabelSettings";
 import { PrinterSettings } from "@/features/printing/PrinterSettings";
 import { MaintenanceSettings } from "@/features/reports/MaintenanceSettings";
@@ -17,6 +18,9 @@ export function SettingsPage() {
       <LabelSettings />
       <SyncSettings />
       <BackupSettings />
+      <Can perm="BACKUP_RESTORE">
+        <RestoreSettings />
+      </Can>
       <Can perm="SETTINGS_MANAGE">
         <MaintenanceSettings />
       </Can>

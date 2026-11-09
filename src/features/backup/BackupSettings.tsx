@@ -80,6 +80,18 @@ export function BackupSettings() {
           ? t("last", { when: relativeTime(s.last_at, status.dataUpdatedAt, i18n.resolvedLanguage ?? "en") })
           : t("never")}
       </p>
+      <p className="text-base">
+        {s?.last_auto_at
+          ? t("auto.last", {
+              when: relativeTime(s.last_auto_at, status.dataUpdatedAt, i18n.resolvedLanguage ?? "en"),
+            })
+          : t("auto.never")}
+      </p>
+      {s?.auto_error && (
+        <p role="alert" className="text-base text-destructive">
+          {t("auto.failing", { code: s.auto_error })}
+        </p>
+      )}
       {s?.last_path && (
         <p className="font-mono text-sm break-all text-muted-foreground">
           {t("lastPath", { path: s.last_path })}

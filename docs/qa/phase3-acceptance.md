@@ -49,7 +49,7 @@ Found earlier in the phase:
 ## 3. Owner steps (not done by the agent: they need your accounts)
 
 1. **Log in with the Supabase CLI.** Run `pnpm exec supabase login` (it opens the browser), then `pnpm exec supabase link --project-ref tqfoinnftjxlueutlufq`. Linking asks for the database password.
-2. **Push the schema.** `pnpm exec supabase db push` applies `supabase/migrations` to the live project. Review the plan it prints first.
+2. **Push the schema.** `pnpm exec supabase db push` applies `supabase/migrations` to the live project, including Block 4.1's `20261110000100_health_audit_head.sql` (restore recovery reads the device's audit head from `sync_health`). Review the plan it prints first.
 3. **Deploy the function.** `pnpm exec supabase functions deploy register-device`. The function reads `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY`, which Supabase provides to functions automatically. The service-role key never goes into the app.
    - If registering a counter then fails with "The server's registration service isn't set up yet" (`FUNCTION_NOT_CONFIGURED`), those variables are missing in the project's function settings.
    - Before `db push`, check that the project's Postgres major version is 17, the same as `supabase/config.toml`.

@@ -8,7 +8,8 @@
     "offline": "Offline · {{count}} queued",
     "unauthorized": "Sign-in needed",
     "error": "Sync problem",
-    "label": "Cloud sync: {{state}}. Open Settings → Sync."
+    "label": "Cloud sync: {{state}}. Open Settings → Sync.",
+    "restore_pending": "Finishing a restore"
   },
   "settings": {
     "title": "Cloud sync",
@@ -47,10 +48,6 @@
   },
   "join": {
     "choose": "How is this counter being set up?",
-    "newStore": "Set up a new store",
-    "newStoreHint": "The first counter of a store.",
-    "joinStore": "Join an existing store",
-    "joinStoreHint": "Another counter for a store that is already in the cloud.",
     "title": "Join an existing store",
     "intro": "Sign in with the store owner's cloud account. This counter gets the next counter code and the store's full history.",
     "submit": "Join store",
@@ -60,6 +57,12 @@
     "resumeTitle": "Finishing setup",
     "resumeIntro": "This counter joined the store but hasn't received all of its history yet.",
     "resume": "Continue",
-    "done": "This counter is ready."
+    "done": "This counter is ready.",
+    "newChoice": "Set up a new store",
+    "newChoiceHint": "The first counter of a store.",
+    "joinChoice": "Join an existing store",
+    "joinChoiceHint": "Another counter for a store that is already in the cloud.",
+    "restoreChoice": "Restore this counter from a backup",
+    "restoreChoiceHint": "A new PC or a reinstall: bring back this counter from its backup file."
   }
 }

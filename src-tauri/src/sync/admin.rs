@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use specta::Type;
-use sqlx::FromRow;
+use sqlx::{FromRow, SqlitePool};
 
 use crate::audit::{self, AuditAction, AuditCtx, AuditEntry};
 use crate::auth::guard::Actor;
@@ -69,14 +69,18 @@ pub async fn dead_ops(db: &Db) -> AppResult<Vec<DeadOp>> {
 }
 
 /// The latest sync log entries, newest first.
-pub async fn logs(db: &Db, limit: u32) -> AppResult<Vec<SyncLogRow>> {
+pub async fn logs_pool(pool: &SqlitePool, limit: u32) -> AppResult<Vec<SyncLogRow>> {
     Ok(sqlx::query_as(
         "SELECT id, direction, started_at, finished_at, result, rows_sent, rows_received, rows_rejected, error_code
          FROM sync_logs ORDER BY started_at DESC, id DESC LIMIT ?1",
     )
     .bind(i64::from(limit.clamp(1, 500)))
-    .fetch_all(&db.pool)
+    .fetch_all(pool)
     .await?)
+}
+
+pub async fn logs(db: &Db, limit: u32) -> AppResult<Vec<SyncLogRow>> {
+    logs_pool(&db.pool, limit).await
 }
 
 pub async fn resolve(db: &Db, ctx: &WriteCtx, actor: &Actor, input: &ResolveDeadOp) -> AppResult<()> {

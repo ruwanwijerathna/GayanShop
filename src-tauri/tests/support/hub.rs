@@ -72,6 +72,8 @@ pub struct Hub {
     pub reject_tables: Mutex<HashSet<String>>,
     /// Leave out the parent closure (to prove a test needs it).
     pub no_closure: std::sync::atomic::AtomicBool,
+    /// Report this audit chain head instead of the real one (a chain the cloud disagrees with).
+    pub health_override: Mutex<Option<(i64, String)>>,
 }
 
 fn kind_of(table: &str) -> Option<(Kind, &'static str)> {
@@ -99,6 +101,7 @@ impl Hub {
             fail_pulls: AtomicUsize::new(0),
             reject_tables: Mutex::new(HashSet::new()),
             no_closure: std::sync::atomic::AtomicBool::new(false),
+            health_override: Mutex::new(None),
         }
     }
 
@@ -113,6 +116,17 @@ impl Hub {
 
     pub fn count(&self, table: &str) -> usize {
         self.state.lock().unwrap().rows.keys().filter(|(t, _)| t == table).count()
+    }
+
+    /// A device's audit chain head in the cloud: its highest pushed `device_seq` and that row's hash.
+    pub fn audit_head(&self, device_id: &str) -> (i64, Option<String>) {
+        let st = self.state.lock().unwrap();
+        st.rows
+            .iter()
+            .filter(|((t, _), r)| t == "audit_logs" && s(&r.row, "device_id") == device_id)
+            .map(|(_, r)| (r.row["device_seq"].as_i64().unwrap_or(0), r.row["hash"].as_str().map(str::to_owned)))
+            .max_by_key(|(seq, _)| *seq)
+            .unwrap_or((0, None))
     }
 
     pub fn pushes(&self) -> usize {
@@ -292,10 +306,16 @@ pub struct HubClient {
 impl SyncApi for HubClient {
     fn health(&self) -> BoxFut<'_, Result<Health, SyncError>> {
         Box::pin(async move {
+            let (last_audit_seq, last_audit_hash) = match self.hub.health_override.lock().unwrap().clone() {
+                Some((seq, hash)) => (seq, Some(hash)),
+                None => self.hub.audit_head(&self.device_id),
+            };
             Ok(Health {
                 ok: true,
                 server_time: "2026-11-09T00:00:00.000Z".into(),
                 device_code: String::new(),
+                last_audit_seq,
+                last_audit_hash,
                 chain_broken: vec![],
             })
         })

@@ -11,6 +11,7 @@ const LOOK: Record<SyncState, { tone: string; Icon: typeof Cloud }> = {
   syncing: { tone: "bg-info text-info-foreground", Icon: LoaderCircle },
   pending: { tone: "bg-warning text-warning-foreground", Icon: Cloud },
   bootstrap_pending: { tone: "bg-warning text-warning-foreground", Icon: LoaderCircle },
+  restore_pending: { tone: "bg-warning text-warning-foreground", Icon: LoaderCircle },
   offline: { tone: "bg-destructive text-destructive-foreground", Icon: CloudOff },
   unauthorized: { tone: "bg-destructive text-destructive-foreground", Icon: TriangleAlert },
   error: { tone: "bg-destructive text-destructive-foreground", Icon: TriangleAlert },

@@ -47,8 +47,10 @@ specta = { version = "=2.0.0-rc.26", features = ["derive", "function"] }
 specta-typescript = "0.0.13"
 tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
 tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
 reqwest = { version = "0.12", features = ["json"] }
 keyring = { version = "3", features = ["windows-native"] }
+zip = { version = "9.5", default-features = false, features = ["deflate"] }
 
 [target.'cfg(windows)'.dependencies]
 # Receipt printers: the spooler's RAW datatype and COM-port setup (doc §7.2).
@@ -58,6 +60,8 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphic
 proptest = "1.12.0"
 tempfile = "3"
 wiremock = "0.6.5"
+minisign-verify = "0.3"
+base64 = "0.22"
 
 # argon2/sha2 are painfully slow unoptimised; keep debug builds and tests fast.
 [profile.dev.package.argon2]

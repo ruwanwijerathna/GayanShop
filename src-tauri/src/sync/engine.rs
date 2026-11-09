@@ -146,15 +146,31 @@ pub async fn push_batch(
     clock: &dyn Clock,
     device_id: &str,
 ) -> Result<PushOutcome, RoundError> {
+    push_range(db, api, clock, device_id, (0, i64::MAX)).await
+}
+
+/// Push one batch of the ready ops whose outbox seq is in `(after, upto]`. After an offline restore the ops
+/// up to the retirement belong to the retired identity and go under it (Block 4.1); the rest go under the
+/// counter's current identity.
+pub async fn push_range(
+    db: &Db,
+    api: &dyn SyncApi,
+    clock: &dyn Clock,
+    device_id: &str,
+    (after, upto): (i64, i64),
+) -> Result<PushOutcome, RoundError> {
     let now_dt: DateTime<Utc> = clock.now();
     let now = iso(now_dt);
     let mut tx = db.write().await?;
     let ready: Vec<Ready> = sqlx::query_as::<_, (i64, String, String, String, String, String, i64)>(
         "SELECT seq, op_id, table_name, row_id, op, payload, attempts FROM sync_outbox
-         WHERE status IN ('pending', 'failed') AND next_attempt_at <= ?1 ORDER BY seq LIMIT ?2",
+         WHERE status IN ('pending', 'failed') AND next_attempt_at <= ?1 AND seq > ?3 AND seq <= ?4
+         ORDER BY seq LIMIT ?2",
     )
     .bind(&now)
     .bind(PUSH_BATCH)
+    .bind(after)
+    .bind(upto)
     .fetch_all(tx.conn())
     .await?
     .into_iter()
@@ -372,9 +388,11 @@ pub struct RoundOutcome {
 
 /// One full round: push everything ready (in batches), then pull until caught up.
 pub async fn round(db: &Db, api: &dyn SyncApi, clock: &dyn Clock, device_id: &str) -> Result<RoundOutcome, RoundError> {
+    // Ops queued before an offline restore belong to the retired identity, never to this one.
+    let after = crate::restore::retired(&db.pool).await?.map_or(0, |r| r.upto_seq);
     let mut pushed = PushOutcome::default();
     for _ in 0..50 {
-        let b = push_batch(db, api, clock, device_id).await?;
+        let b = push_range(db, api, clock, device_id, (after, i64::MAX)).await?;
         pushed.sent += b.sent;
         pushed.ok += b.ok;
         pushed.rejected += b.rejected;
@@ -385,4 +403,29 @@ pub async fn round(db: &Db, api: &dyn SyncApi, clock: &dyn Clock, device_id: &st
     }
     let pulled = pull(db, api, clock, device_id, PullOptions::ROUTINE, &|_| {}).await?;
     Ok(RoundOutcome { pushed, pulled })
+}
+
+/// After an offline restore: send the retired identity's queued ops under that identity (its token is still
+/// in the keyring), then forget it. Returns whether anything of it is still waiting.
+pub async fn drain_retired(db: &Db, api: &dyn SyncApi, clock: &dyn Clock) -> Result<bool, RoundError> {
+    let Some(retired) = crate::restore::retired(&db.pool).await? else { return Ok(false) };
+    for _ in 0..50 {
+        let b = push_range(db, api, clock, &retired.device_id, (0, retired.upto_seq)).await?;
+        if b.sent < PUSH_BATCH || b.ok == 0 {
+            break;
+        }
+    }
+    let left: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sync_outbox WHERE seq <= ?1 AND status <> 'dead'")
+        .bind(retired.upto_seq)
+        .fetch_one(&db.pool)
+        .await?;
+    if left == 0 {
+        let mut tx = db.write().await?;
+        sqlx::query("DELETE FROM device_settings WHERE key = ?1")
+            .bind(crate::restore::RETIRED_KEY)
+            .execute(tx.conn())
+            .await?;
+        tx.commit().await?;
+    }
+    Ok(left > 0)
 }

@@ -39,6 +39,8 @@ pub enum SyncState {
     Unregistered,
     /// A joined counter that hasn't pulled the store's history yet.
     BootstrapPending,
+    /// A restored backup awaits recovery: nothing is sent or applied until the Owner finishes it.
+    RestorePending,
     Syncing,
     /// Everything this counter wrote is in the cloud and it has everything the cloud has.
     Synced,
@@ -242,6 +244,28 @@ impl Worker {
                 return Tick::Failed(Duration::from_secs(60));
             }
         };
+        // A pending restore: a routine pull would move the cursor past this counter's own post-backup rows,
+        // which the recovery pull must bring back.
+        if let Ok(Some(_)) = crate::restore::pending(&self.db.pool).await {
+            self.publish(SyncState::RestorePending, None, false, None);
+            return Tick::Idle;
+        }
+        // After an offline restore, the retired identity's queued ops go first, under that identity.
+        if let Ok(Some(retired)) = crate::restore::retired(&self.db.pool).await
+            && let Ok(Some(cfg)) = config::load(&self.db.pool).await
+        {
+            match (self.connect)(&cfg, &retired.device_id, self.secrets.clone()) {
+                Ok(old) => match engine::drain_retired(&self.db, old.as_ref(), self.clock.as_ref()).await {
+                    Ok(_) => {}
+                    Err(RoundError::Remote(SyncError::Offline(m))) => {
+                        self.publish(SyncState::Offline, Some(m), false, None);
+                        return Tick::Failed(Duration::ZERO);
+                    }
+                    Err(e) => log::warn!("sync: retired identity {}: {e}", retired.device_code),
+                },
+                Err(e) => log::warn!("sync: retired identity {}: {e}", retired.device_code),
+            }
+        }
         match registration::is_registered(&self.db, self.secrets.as_ref()).await {
             Ok(true) => {}
             Ok(false) => {
