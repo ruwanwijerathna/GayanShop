@@ -109,7 +109,12 @@
     "LABEL_JOB_EMPTY": "Choose at least one product.",
     "LABEL_COPIES_INVALID": "Copies must be 1 to 999.",
     "LABEL_JOB_TOO_LARGE": "That's more than 5,000 labels in one go.",
-    "LABEL_PRODUCT_INVALID": "One of the products no longer exists."
+    "LABEL_PRODUCT_INVALID": "One of the products no longer exists.",
+    "STOCK_INSUFFICIENT": "Only {{detail}} on hand: you can't remove more than that.",
+    "STOCK_NOTE_REQUIRED": "Say why: a reason is required.",
+    "COUNT_EMPTY": "Add at least one product to the count.",
+    "COUNT_DUPLICATE": "A product appears twice in the count.",
+    "DATE_INVALID": "That date isn't valid."
   },
   "INVARIANT": {
     "_": "This change isn't allowed.",

@@ -14,6 +14,7 @@ import {
   useCloseBatch,
   useReopenBatch,
   useUpdateBatch,
+  useWriteOffBatch,
 } from "@/db/hooks";
 import { translateError } from "@/i18n";
 import { playCue } from "@/lib/audio";
@@ -251,10 +252,11 @@ export function ReceivedActions({ batch }: { batch: Batch }) {
   const reopen = useReopenBatch();
   const close = useCloseBatch();
   const late = useAddLateBatchItem();
-  const [confirm, setConfirm] = useState<"reopen" | "close" | null>(null);
+  const writeOff = useWriteOffBatch();
+  const [confirm, setConfirm] = useState<"reopen" | "close" | "writeOff" | null>(null);
   const [product, setProduct] = useState<ProductSummary | null>(null);
   const [qty, setQty] = useState("");
-  const failure = reopen.error ?? close.error ?? late.error;
+  const failure = reopen.error ?? close.error ?? late.error ?? writeOff.error;
   const error = failure instanceof CommandError ? translateError(i18n.t, failure.error) : null;
 
   if (batch.status !== "received" || batch.is_system) return null;
@@ -283,10 +285,27 @@ export function ReceivedActions({ batch }: { batch: Batch }) {
     reopen.reset();
     close.reset();
     late.reset();
+    writeOff.reset();
   };
 
   const run = () => {
     resetAll();
+    if (confirm === "writeOff") {
+      writeOff.mutate(
+        { batchId: batch.id, note: t("lifecycle.writeOffNote") },
+        {
+          onSuccess: () => {
+            playCue("complete");
+            setConfirm(null);
+          },
+          onError: () => {
+            playCue("error");
+            setConfirm(null);
+          },
+        },
+      );
+      return;
+    }
     const mutation = confirm === "reopen" ? reopen : close;
     mutation.mutate(batch.id, {
       onSuccess: () => {
@@ -332,10 +351,29 @@ export function ReceivedActions({ batch }: { batch: Batch }) {
       <Problem message={error} />
       {confirm ? (
         <div role="alert" className="flex flex-col gap-3 rounded-md border border-primary p-3">
-          <p>{t(confirm === "reopen" ? "lifecycle.reopenConfirm" : "lifecycle.closeConfirm")}</p>
+          <p>
+            {t(
+              confirm === "reopen"
+                ? "lifecycle.reopenConfirm"
+                : confirm === "close"
+                  ? "lifecycle.closeConfirm"
+                  : "lifecycle.writeOffConfirm",
+            )}
+          </p>
           <div className="flex gap-2">
-            <Button type="button" size="pos" onClick={run} disabled={reopen.isPending || close.isPending}>
-              {t(confirm === "reopen" ? "lifecycle.confirmReopen" : "lifecycle.confirmClose")}
+            <Button
+              type="button"
+              size="pos"
+              onClick={run}
+              disabled={reopen.isPending || close.isPending || writeOff.isPending}
+            >
+              {t(
+                confirm === "reopen"
+                  ? "lifecycle.confirmReopen"
+                  : confirm === "close"
+                    ? "lifecycle.confirmClose"
+                    : "lifecycle.confirmWriteOff",
+              )}
             </Button>
             <Button type="button" size="pos" variant="outline" onClick={() => setConfirm(null)}>
               {t("common:actions.cancel")}
@@ -347,6 +385,9 @@ export function ReceivedActions({ batch }: { batch: Batch }) {
           <Button type="button" size="pos" variant="outline" onClick={() => setConfirm("reopen")}>
             <RotateCcw aria-hidden />
             {t("lifecycle.reopen")}
+          </Button>
+          <Button type="button" size="pos" variant="outline" onClick={() => setConfirm("writeOff")}>
+            {t("lifecycle.writeOff")}
           </Button>
           <Button type="button" size="pos" variant="outline" onClick={() => setConfirm("close")}>
             <Lock aria-hidden />

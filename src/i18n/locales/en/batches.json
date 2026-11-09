@@ -102,6 +102,10 @@
     "confirmReopen": "Yes, reopen",
     "confirmClose": "Yes, close",
     "closed": "This batch is closed: its figures are final.",
-    "printLabels": "Print labels"
+    "printLabels": "Print labels",
+    "writeOff": "Write off what's left",
+    "writeOffConfirm": "Write off the remaining stock of this batch (it becomes a loss in its profit), so it can be closed?",
+    "confirmWriteOff": "Yes, write off",
+    "writeOffNote": "Batch closed with stock left"
   }
 }

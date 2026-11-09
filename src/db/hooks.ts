@@ -6,7 +6,10 @@ import {
   type BatchInput,
   type BatchItemInput,
   type CartInput_Deserialize as CartInput,
+  type AdjustmentInput,
   type CategoryInput,
+  type CountInput,
+  type DamageInput,
   type LabelJob,
   type LabelPrinterProfile,
   type LateItemInput,
@@ -49,6 +52,9 @@ export const queryKeys = {
   backupStatus: ["backup", "status"] as const,
   staff: ["staff", "list"] as const,
   labelTemplates: ["labels", "templates"] as const,
+  valuation: (asOf: string | null) => ["inventory", "valuation", asOf ?? "now"] as const,
+  oversold: ["inventory", "oversold"] as const,
+  movements: (productId: string) => ["inventory", "movements", productId] as const,
   labelProfile: ["labels", "profile"] as const,
   labelPreview: (job: LabelJob) => ["labels", "preview", JSON.stringify(job)] as const,
   roles: ["staff", "roles"] as const,
@@ -534,5 +540,67 @@ export function useLabelPreview(job: LabelJob | null) {
 export function usePrintLabels() {
   return useLabelMutation(({ job, approvalId }: { job: LabelJob; approvalId: string | null }) =>
     unwrap(commands.printLabels(job, approvalId)),
+  );
+}
+
+// ───────── stock operations (doc §3.1, §5) ─────────
+
+export function useStockValuation(asOf: string | null) {
+  return useQuery({
+    queryKey: queryKeys.valuation(asOf),
+    queryFn: () => unwrap(commands.stockValuation(asOf)),
+  });
+}
+
+export function useOversoldLayers() {
+  return useQuery({ queryKey: queryKeys.oversold, queryFn: () => unwrap(commands.oversoldLayers()) });
+}
+
+const MOVEMENTS_PAGE = 100;
+
+export function useStockMovements(productId: string | null) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.movements(productId ?? ""),
+    initialPageParam: null as { created_at: string; id: string } | null,
+    queryFn: ({ pageParam }) =>
+      unwrap(commands.stockMovements(productId ?? "", null, pageParam, MOVEMENTS_PAGE)),
+    getNextPageParam: (last) =>
+      last.next_cursor ? { created_at: last.next_cursor[0], id: last.next_cursor[1] } : null,
+    enabled: productId !== null,
+  });
+}
+
+function useStockMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["inventory"] });
+      await qc.invalidateQueries({ queryKey: ["batches"] });
+    },
+  });
+}
+
+export function useRecordDamage() {
+  return useStockMutation(({ input, approvalId }: { input: DamageInput; approvalId: string | null }) =>
+    unwrap(commands.recordDamage(input, approvalId)),
+  );
+}
+
+export function useAdjustStock() {
+  return useStockMutation(({ input, approvalId }: { input: AdjustmentInput; approvalId: string | null }) =>
+    unwrap(commands.adjustStock(input, approvalId)),
+  );
+}
+
+export function useRecordStockCount() {
+  return useStockMutation(({ input, approvalId }: { input: CountInput; approvalId: string | null }) =>
+    unwrap(commands.recordStockCount(input, approvalId)),
+  );
+}
+
+export function useWriteOffBatch() {
+  return useStockMutation(({ batchId, note }: { batchId: string; note: string }) =>
+    unwrap(commands.writeOffBatch(batchId, note)),
   );
 }

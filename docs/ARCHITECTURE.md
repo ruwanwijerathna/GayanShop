@@ -540,6 +540,12 @@ batches (header)  1 ──── n  batch_items (cost layers)  1 ──── n 
 - A late item is received immediately at unit cost 0 (`BATCH_LATE_ITEM`). If the batch is later reopened and received again, it becomes an ordinary layer that shares the cost.
 - Close is refused while any layer has stock (`BATCH_HAS_STOCK`). The batch P&L (`BatchDetail.pnl`) is read from `batch_item_stock` and audited with `BATCH_CLOSE`.
 
+**Block 2.3 implementation notes (`db/repo/inventory.rs`).**
+- Damage (`STOCK_DAMAGE`, reason broken / expired / stolen / faulty / other with a note) and negative adjustments take units FIFO at each layer's cost, and can't remove more than is on hand (`STOCK_INSUFFICIENT`). Positive adjustments and found stock go into the newest layer at its cost, or into `ADJUSTMENTS` at `default_cost`. An adjustment always needs a reason (`STOCK_NOTE_REQUIRED`).
+- A stock count (`STOCK_ADJUST`) sets each counted product to the shelf figure with `count_correction` movements in one transaction, audited once as `STOCK_COUNT` with system and counted figures. Matching lines write nothing; a single bad line refuses the whole count. Counting an oversold product back to its real figure is how a negative layer is fixed.
+- "Write off what's left" (`write_off_batch`, `BATCH_MANAGE` + `STOCK_ADJUST`) turns a received batch's remaining stock into `adjustment` movements on its own layers, so the batch can then be closed. The loss shows in its P&L.
+- Valuation "now" reads `batch_item_stock`; "as of" a business date sums the ledger up to that date. Both use today's prices for retail and list oversold layers separately. History, valuation and oversold layers need `REPORT_FINANCIAL`, because they show cost.
+
 **Layer selection at checkout (FIFO, offline-safe).** For each tracked line of qty *n*:
 1. Take layers of that product ordered by `batches.received_at, batch_items.id`.
 2. Consume from the **oldest layer with positive local `on_hand`**, splitting across layers if needed.

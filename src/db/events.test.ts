@@ -6,6 +6,10 @@ describe("db://changed → query invalidation", () => {
     expect(keysForTables(["products", "categories", "audit_logs"])).toEqual([["catalog"], ["audit"]]);
   });
 
+  it("refreshes every screen that shows a table", () => {
+    expect(keysForTables(["stock_movements", "batches"])).toEqual([["batches"], ["inventory"]]);
+  });
+
   it("ignores tables no screen shows yet", () => {
     expect(keysForTables(["sync_outbox", "sku_counters"])).toEqual([]);
   });

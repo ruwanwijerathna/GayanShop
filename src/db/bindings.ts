@@ -85,6 +85,15 @@ export const commands = {
 	printLabels: (job: LabelJob_Deserialize, approvalId: string | null) => typedError<LabelPreview_Serialize, AppError>(__TAURI_INVOKE("print_labels", { job, approvalId })),
 	/**  Settings → Labels "Alignment test": every cell's outline, for calibrating gaps and margins. */
 	labelAlignmentTest: (templateId: string) => typedError<null, AppError>(__TAURI_INVOKE("label_alignment_test", { templateId })),
+	recordDamage: (input: DamageInput_Deserialize, approvalId: string | null) => typedError<StockChange, AppError>(__TAURI_INVOKE("record_damage", { input, approvalId })),
+	adjustStock: (input: AdjustmentInput, approvalId: string | null) => typedError<StockChange, AppError>(__TAURI_INVOKE("adjust_stock", { input, approvalId })),
+	recordStockCount: (input: CountInput_Deserialize, approvalId: string | null) => typedError<CountResult, AppError>(__TAURI_INVOKE("record_stock_count", { input, approvalId })),
+	/**  Write off what a received batch still holds, so it can be closed (`STOCK_ADJUST` and `BATCH_MANAGE`). */
+	writeOffBatch: (batchId: string, note: string) => typedError<StockChange[], AppError>(__TAURI_INVOKE("write_off_batch", { batchId, note })),
+	stockMovements: (productId: string, batchItemId: string | null, cursor: MovementCursor | null, limit: number) => typedError<MovementPage_Serialize, AppError>(__TAURI_INVOKE("stock_movements", { productId, batchItemId, cursor, limit })),
+	/**  `as_of` = a business date (`YYYY-MM-DD`), or `None` for now. */
+	stockValuation: (asOf: string | null) => typedError<StockValuation_Serialize, AppError>(__TAURI_INVOKE("stock_valuation", { asOf })),
+	oversoldLayers: () => typedError<OversoldLayer[], AppError>(__TAURI_INVOKE("oversold_layers")),
 	/**  This counter's open session, if any (any logged-in staff member: the till needs it). */
 	currentCashSession: () => typedError<CashSession_Serialize | null, AppError>(__TAURI_INVOKE("current_cash_session")),
 	openCashSession: (input: OpenSessionInput) => typedError<CashSession_Serialize, AppError>(__TAURI_INVOKE("open_cash_session", { input })),
@@ -152,6 +161,14 @@ export type AdHocPurchase_Serialize = {
 	unit_cost: number,
 	supplier_name: string | null,
 	note: string | null,
+};
+
+export type AdjustmentInput = {
+	product_id: string,
+	/**  Positive = found / added, negative = removed. */
+	qty_delta: number,
+	/**  Required: an adjustment always says why. */
+	note: string,
 };
 
 export type Align = "left" | "center" | "right";
@@ -715,6 +732,29 @@ export type CodeChoice = { mode: "none" } | { mode: "generate" } | { mode: "manu
 
 export type CodePage = "pc437" | "wpc1252";
 
+export type CountInput = CountInput_Serialize | CountInput_Deserialize;
+
+export type CountInput_Deserialize = {
+	lines: CountLine[],
+	note?: string | null,
+};
+
+export type CountInput_Serialize = {
+	lines: CountLine[],
+	note: string | null,
+};
+
+export type CountLine = {
+	product_id: string,
+	counted: number,
+};
+
+export type CountResult = {
+	changes: StockChange[],
+	/**  Lines whose count matched the system: nothing written for them. */
+	unchanged: number,
+};
+
 /**  What the till sees after 9–10 digits (doc §3.8): no history without `CUSTOMER_VIEW`. */
 export type CustomerLookup = CustomerLookup_Serialize | CustomerLookup_Deserialize;
 
@@ -747,6 +787,24 @@ export type CustomerLookup_Serialize = {
 };
 
 export type CutMode = "full" | "partial" | "none";
+
+export type DamageInput = DamageInput_Serialize | DamageInput_Deserialize;
+
+export type DamageInput_Deserialize = {
+	product_id: string,
+	qty: number,
+	reason: DamageReason,
+	note?: string | null,
+};
+
+export type DamageInput_Serialize = {
+	product_id: string,
+	qty: number,
+	reason: DamageReason,
+	note: string | null,
+};
+
+export type DamageReason = "broken" | "expired" | "stolen" | "faulty" | "other";
 
 export type DenominationCount = {
 	/**  Face value in cents (one of `LKR_DENOMINATIONS`). */
@@ -1018,6 +1076,60 @@ export type LoginStaff = {
 	role_name: string,
 };
 
+export type MovementCursor = {
+	created_at: string,
+	id: string,
+};
+
+export type MovementPage = MovementPage_Serialize | MovementPage_Deserialize;
+
+export type MovementPage_Deserialize = {
+	rows: MovementRow_Deserialize[],
+	next_cursor?: [string, string] | null,
+};
+
+export type MovementPage_Serialize = {
+	rows: MovementRow_Serialize[],
+	next_cursor: [string, string] | null,
+};
+
+/**  One ledger row, for a product's (or one layer's) movement history. */
+export type MovementRow = MovementRow_Serialize | MovementRow_Deserialize;
+
+/**  One ledger row, for a product's (or one layer's) movement history. */
+export type MovementRow_Deserialize = {
+	id: string,
+	created_at: string,
+	business_date: string,
+	reason: string,
+	qty_delta: number,
+	unit_cost: number,
+	batch_item_id: string,
+	batch_code: string,
+	ref_type?: string | null,
+	ref_id?: string | null,
+	note?: string | null,
+	staff_name?: string | null,
+	approved_by_name?: string | null,
+};
+
+/**  One ledger row, for a product's (or one layer's) movement history. */
+export type MovementRow_Serialize = {
+	id: string,
+	created_at: string,
+	business_date: string,
+	reason: string,
+	qty_delta: number,
+	unit_cost: number,
+	batch_item_id: string,
+	batch_code: string,
+	ref_type: string | null,
+	ref_id: string | null,
+	note: string | null,
+	staff_name: string | null,
+	approved_by_name: string | null,
+};
+
 export type NewStaff = NewStaff_Serialize | NewStaff_Deserialize;
 
 export type NewStaff_Deserialize = {
@@ -1032,6 +1144,17 @@ export type NewStaff_Serialize = {
 
 export type OpenSessionInput = {
 	opening_float: number,
+};
+
+/**  A layer that sold more than it held (offline counters draining the same layer, or a sale before intake). */
+export type OversoldLayer = {
+	batch_item_id: string,
+	product_id: string,
+	product_name: string,
+	batch_id: string,
+	batch_code: string,
+	on_hand: number,
+	unit_cost: number,
 };
 
 export type PaperWidth = 
@@ -1397,6 +1520,44 @@ export type StaffMember_Serialize = {
 	last_owner: boolean,
 };
 
+/**  What a write did: the units and their cost, per layer touched. */
+export type StockChange = {
+	product_id: string,
+	qty_delta: number,
+	/**  Σ qty × layer cost (negative for a write-off). */
+	cost_delta: number,
+	on_hand_after: number,
+};
+
+/**  What the stock is worth (doc §5): Σ max(on_hand, 0) × layer cost, and × today's price at retail. */
+export type StockValuation = StockValuation_Serialize | StockValuation_Deserialize;
+
+/**  What the stock is worth (doc §5): Σ max(on_hand, 0) × layer cost, and × today's price at retail. */
+export type StockValuation_Deserialize = {
+	/**  `None` = now. */
+	as_of?: string | null,
+	total_units: number,
+	value_at_cost: number,
+	value_at_retail: number,
+	by_batch: ValuationGroup_Deserialize[],
+	by_category: ValuationGroup_Deserialize[],
+	/**  Oversold layers needing attention (excluded from the totals). */
+	negative_layers: number,
+};
+
+/**  What the stock is worth (doc §5): Σ max(on_hand, 0) × layer cost, and × today's price at retail. */
+export type StockValuation_Serialize = {
+	/**  `None` = now. */
+	as_of: string | null,
+	total_units: number,
+	value_at_cost: number,
+	value_at_retail: number,
+	by_batch: ValuationGroup_Serialize[],
+	by_category: ValuationGroup_Serialize[],
+	/**  Oversold layers needing attention (excluded from the totals). */
+	negative_layers: number,
+};
+
 export type Symbology = "code128" | "ean13";
 
 export type SymbologyRule = "auto" | "code128" | "ean13";
@@ -1419,6 +1580,26 @@ export type TransportConfig =
 export type UiLanguage = "en" | "si";
 
 export type UiTheme = "light" | "dark";
+
+export type ValuationGroup = ValuationGroup_Serialize | ValuationGroup_Deserialize;
+
+export type ValuationGroup_Deserialize = {
+	/**  Batch id, or category id (`None` = uncategorised). */
+	id?: string | null,
+	label: string,
+	units: number,
+	value_at_cost: number,
+	value_at_retail: number,
+};
+
+export type ValuationGroup_Serialize = {
+	/**  Batch id, or category id (`None` = uncategorised). */
+	id: string | null,
+	label: string,
+	units: number,
+	value_at_cost: number,
+	value_at_retail: number,
+};
 
 export type VoidInput = VoidInput_Serialize | VoidInput_Deserialize;
 

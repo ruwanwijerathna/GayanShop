@@ -7,7 +7,8 @@
     "cash": "Cash",
     "settings": "Settings",
     "pos": "Till",
-    "staff": "Staff"
+    "staff": "Staff",
+    "inventory": "Stock"
   },
   "status": {
     "title": "Counter status",

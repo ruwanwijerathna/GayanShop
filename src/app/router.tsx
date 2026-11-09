@@ -3,6 +3,7 @@ import { AuditLogScreen } from "@/features/audit/AuditLogScreen";
 import { BatchesScreen } from "@/features/batches/BatchesScreen";
 import { CashScreen } from "@/features/cash/CashScreen";
 import { CounterStatus } from "@/features/home/CounterStatus";
+import { InventoryScreen } from "@/features/inventory/InventoryScreen";
 import { PosScreen } from "@/features/pos/PosScreen";
 import { ProductsScreen } from "@/features/products/ProductsScreen";
 import { StaffScreen } from "@/features/staff/StaffScreen";
@@ -47,6 +48,12 @@ export const posRoute = createRoute({
   component: PosScreen,
 });
 
+export const inventoryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/inventory",
+  component: InventoryScreen,
+});
+
 export const staffRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/staff",
@@ -66,6 +73,7 @@ export const routeTree = rootRoute.addChildren([
   productsRoute,
   batchesRoute,
   auditRoute,
+  inventoryRoute,
   staffRoute,
   settingsRoute,
 ]);
