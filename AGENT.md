@@ -7,7 +7,7 @@
 >
 > Never change an architectural decision silently. Propose the doc change to the owner first.
 
-**Current state (2026-11-10): Phase 4 (production hardening) in progress on branch `feat/phase-4-production-hardening`.** Block 4.1 is committed and green. Phases 0–3 are complete and merged to `main`; deploying Phase 3 to the live project (link, `db push` — which now also carries Block 4.1's `sync_health` migration —, `functions deploy`, sign-up off, the owner account) and registering the counters are the owner's steps in `docs/qa/phase3-acceptance.md`. Owner hardware, touch and Sinhala checks are pending in `docs/qa/phase1-acceptance.md` and `docs/qa/phase2-acceptance.md`. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
+**Current state (2026-11-10): Phase 4 (production hardening) complete on branch `feat/phase-4-production-hardening`.** Blocks 4.1–4.5 are committed and green. Production NSIS Windows installer (6.40 MiB) generated at `src-tauri/target/release/bundle/nsis/GayanShop POS_0.1.0_x64-setup.exe`. Phases 0–3 are complete and merged to `main`. Deploying Phase 3 to the live project (link, `db push` — which now also carries Block 4.1's `sync_health` migration —, `functions deploy`, sign-up off, the owner account) and registering the counters are the owner's steps in `docs/qa/phase3-acceptance.md`. Owner hardware, touch and Sinhala checks are pending in `docs/qa/phase1-acceptance.md` and `docs/qa/phase2-acceptance.md`. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
 
 ---
 
