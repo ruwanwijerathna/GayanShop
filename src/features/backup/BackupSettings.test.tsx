@@ -27,7 +27,14 @@ function renderAs(perms: Perm[] = ["BACKUP_CREATE"]) {
 
 beforeEach(() => {
   vi.mocked(commands.backupStatus).mockImplementation(() =>
-    ok({ last_at: null, last_path: null, last_dir: null, reminder_due: true }),
+    ok({
+      last_at: null,
+      last_path: null,
+      last_dir: null,
+      reminder_due: true,
+      last_auto_at: null,
+      auto_error: null,
+    }),
   );
   vi.mocked(commands.backupPickFolder).mockImplementation(() => ok("E:\\"));
   vi.mocked(commands.backupNow).mockImplementation(() =>

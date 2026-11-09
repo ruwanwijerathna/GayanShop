@@ -19,12 +19,28 @@ vi.mock("@/db/bindings", () => ({
       ok({ state: "synced", pending: 0, dead: 0, last_success_at: null, last_error: null, chain_broken: [] }),
     ),
     syncBootstrap: vi.fn(() => ok({ pages: 2, rows: 700, permille: 1000, done: true })),
+    restoreStatus: vi.fn(() => ok({ pending: null, modes: ["local"], device_code: "T01" })),
   },
 }));
 
 const status = vi.mocked(commands.appStatus);
 
 describe("App routing", () => {
+  it("shows the restore recovery instead of the login while a restore is pending", async () => {
+    status.mockImplementation(() =>
+      ok({
+        initialized: true,
+        store_name: "GayanShop",
+        device_code: "T01",
+        session: null,
+        bootstrap_pending: false,
+        restore_pending: true,
+      }),
+    );
+    renderWithProviders(<App />);
+    expect(await screen.findByRole("heading", { name: "Finish the restore" })).toBeInTheDocument();
+  });
+
   it("offers to finish an interrupted history pull before anyone can log in", async () => {
     status.mockImplementation(() =>
       ok({
@@ -33,6 +49,7 @@ describe("App routing", () => {
         device_code: "T02",
         session: null,
         bootstrap_pending: true,
+        restore_pending: false,
       }),
     );
     renderWithProviders(<App />);
@@ -49,6 +66,7 @@ describe("App routing", () => {
         device_code: null,
         session: null,
         bootstrap_pending: false,
+        restore_pending: false,
       }),
     );
     renderWithProviders(<App />);
@@ -63,6 +81,7 @@ describe("App routing", () => {
         device_code: null,
         session: null,
         bootstrap_pending: false,
+        restore_pending: false,
       }),
     );
     renderWithProviders(<App />);
@@ -78,6 +97,7 @@ describe("App routing", () => {
         device_code: "T01",
         session: null,
         bootstrap_pending: false,
+        restore_pending: false,
       }),
     );
     renderWithProviders(<App />);
@@ -92,6 +112,7 @@ describe("App routing", () => {
         device_code: "T01",
         session: session(),
         bootstrap_pending: false,
+        restore_pending: false,
       }),
     );
     renderWithProviders(<App />);
@@ -105,6 +126,7 @@ describe("App routing", () => {
       ok({
         initialized: true,
         bootstrap_pending: false,
+        restore_pending: false,
         store_name: "GayanShop",
         device_code: "T01",
         session: session({
@@ -128,6 +150,7 @@ describe("App routing", () => {
         device_code: "T01",
         session: session(),
         bootstrap_pending: false,
+        restore_pending: false,
       }),
     );
     renderWithProviders(<App />);

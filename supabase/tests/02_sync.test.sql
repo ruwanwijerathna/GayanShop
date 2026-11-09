@@ -4,7 +4,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(66);
+SELECT plan(67);
 
 -- ─── tenancy fixtures: store A with counters T01, T02, T03; store B with T01 ───
 INSERT INTO pos.stores (id, name, owner_user_id) VALUES
@@ -74,6 +74,8 @@ INSERT INTO res SELECT 'first', sync_push('a0000000-0000-0000-0000-0000000000d1'
 SELECT is(pg_temp.statuses((SELECT v FROM res WHERE k = 'first')), 'ok,ok,ok,ok,ok,ok,ok,ok,ok,ok,ok,ok,ok,ok,ok',
   'every op of the first batch is applied');
 SELECT is((sync_health() ->> 'device_code'), 'T01', 'sync_health answers for the calling device');
+SELECT is((sync_health() ->> 'last_audit_seq')::bigint, 2::bigint,
+  'and reports its audit chain head as the cloud knows it (restore recovery cross-checks it)');
 RESET ROLE;
 SELECT ok(EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid() AND granted),
   'sync_push holds the per-store advisory lock until commit');

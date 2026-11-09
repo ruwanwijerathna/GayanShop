@@ -25,6 +25,7 @@ pub mod error;
 pub mod export;
 pub mod hardware;
 pub mod prefs;
+pub mod restore;
 pub mod setup;
 pub mod state;
 pub mod sync;
@@ -174,6 +175,12 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::sync::sync_dead_ops,
         commands::sync::sync_resolve_dead_op,
         commands::sync::sync_logs,
+        commands::restore::restore_candidates,
+        commands::restore::restore_pick_file,
+        commands::restore::restore_stage,
+        commands::restore::restore_stage_fresh,
+        commands::restore::restore_status,
+        commands::restore::restore_recover,
     ])
 }
 
@@ -215,6 +222,23 @@ impl SyncEvents for AppSyncEvents {
     }
 }
 
+/// The hourly automatic backup (Block 4.1): checked every five minutes, taken when the last one is an hour
+/// old. It never blocks a sale; a failure is logged, shown in Settings → Backup and audited once.
+async fn automatic_backups(
+    (db, clock, app, version): (Db, Arc<dyn clock::Clock>, tauri::AppHandle, String),
+    backups_dir: std::path::PathBuf,
+) {
+    loop {
+        if let Some(state) = app.try_state::<AppState>()
+            && let Ok(Some(identity)) = state.identity()
+            && let Err(e) = backup::run_auto_if_due(&db, clock.as_ref(), &backups_dir, &identity, &version).await
+        {
+            log::warn!("automatic backup: {e}");
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(300)).await;
+    }
+}
+
 /// Builds and runs the Tauri application. Errors are returned to `main`, never panicked.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> Result<(), tauri::Error> {
@@ -239,7 +263,11 @@ pub fn run() -> Result<(), tauri::Error> {
                 _ => app.path().app_data_dir()?,
             };
             std::fs::create_dir_all(&data_dir)?;
-            let db = tauri::async_runtime::block_on(Db::open(&data_dir.join("pos.db"), &data_dir.join("backups")))?;
+            // A staged restore replaces pos.db before it opens; the recovery screen finishes it (Block 4.1).
+            let db_path = data_dir.join("pos.db");
+            restore::apply_staged(&data_dir, &db_path)?;
+            let db = tauri::async_runtime::block_on(Db::open(&db_path, &data_dir.join("backups")))?;
+            tauri::async_runtime::block_on(restore::finish_swap(&db, &data_dir))?;
             let identity = tauri::async_runtime::block_on(setup::load_identity(&db.pool))?;
             let auth = Auth::new(PinHasher::production());
             let clock: Arc<dyn clock::Clock> = Arc::new(SystemClock);
@@ -269,8 +297,11 @@ pub fn run() -> Result<(), tauri::Error> {
                 connect: http_connector(),
             };
             let services = Services { printer, label_printer, secrets, sync };
+            let backups_dir = data_dir.join("backups");
+            let auto = (db.clone(), clock.clone(), app.handle().clone(), app.package_info().version.to_string());
             app.manage(AppState::new(db, clock, data_dir, auth, identity, services));
             tauri::async_runtime::spawn(worker.run());
+            tauri::async_runtime::spawn(automatic_backups(auto, backups_dir));
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -368,6 +399,12 @@ mod tests {
             "syncDeadOps",
             "syncResolveDeadOp",
             "syncLogs",
+            "restoreCandidates",
+            "restorePickFile",
+            "restoreStage",
+            "restoreStageFresh",
+            "restoreStatus",
+            "restoreRecover",
             "customerLookup",
             "printerStatus",
             "printerProfile",

@@ -4,7 +4,14 @@ import { commands } from "@/db/bindings";
 import { err, ok, renderWithProviders } from "@/test/render";
 import { FirstRunWizard } from "./FirstRunWizard";
 
-vi.mock("@/db/bindings", () => ({ commands: { firstRunSetup: vi.fn(), setupJoinStore: vi.fn() } }));
+vi.mock("@/db/bindings", () => ({
+  commands: {
+    firstRunSetup: vi.fn(),
+    setupJoinStore: vi.fn(),
+    restorePickFile: vi.fn(),
+    restoreStageFresh: vi.fn(),
+  },
+}));
 
 const setup = vi.mocked(commands.firstRunSetup);
 
@@ -100,5 +107,32 @@ describe("FirstRunWizard → join an existing store", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(screen.getByRole("heading", { name: "Set up this counter" })).toBeInTheDocument();
+  });
+});
+
+describe("FirstRunWizard → restore this counter from a backup", () => {
+  it("stages the chosen backup file instead of setting up a store", async () => {
+    vi.mocked(commands.restorePickFile).mockImplementation(() => ok("D:/usb/GayanShop-T01.db"));
+    vi.mocked(commands.restoreStageFresh).mockImplementation(() =>
+      ok({
+        path: "D:/usb/GayanShop-T01.db",
+        store_id: "s",
+        device_id: "d",
+        device_code: "T01",
+        schema_version: 3,
+        taken_at: "2026-11-08T05:00:00.000Z",
+        size_bytes: 1,
+        sha256: "ab",
+      }),
+    );
+    renderWithProviders(<FirstRunWizard />);
+    fireEvent.click(screen.getByRole("button", { name: /Restore this counter from a backup/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose a backup file…" }));
+    expect(await screen.findByText("D:/usb/GayanShop-T01.db")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Restore" }));
+    await waitFor(() => expect(commands.restoreStageFresh).toHaveBeenCalledWith("D:/usb/GayanShop-T01.db"));
+    expect(await screen.findByText("The backup is ready. The app is restarting…")).toBeInTheDocument();
+    expect(setup).not.toHaveBeenCalled();
   });
 });

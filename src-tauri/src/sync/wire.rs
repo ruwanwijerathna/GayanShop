@@ -69,6 +69,11 @@ pub struct Health {
     pub ok: bool,
     pub server_time: String,
     pub device_code: String,
+    /// This device's audit chain head as the cloud knows it (restore recovery checks it).
+    #[serde(default)]
+    pub last_audit_seq: i64,
+    #[serde(default)]
+    pub last_audit_hash: Option<String>,
     #[serde(default)]
     pub chain_broken: Vec<ChainBreak>,
 }

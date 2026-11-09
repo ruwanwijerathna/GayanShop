@@ -10,5 +10,52 @@
   "done": "Backup saved: {{path}}",
   "hash": "SHA-256: {{hash}}",
   "reminder": "Back up today: there has been no backup in the last 7 days, and this shop's only off-machine copy is a USB backup.",
-  "reminderAction": "Back up now"
+  "reminderAction": "Back up now",
+  "auto": {
+    "last": "Last automatic backup: {{when}}",
+    "never": "No automatic backup yet: one is taken every hour.",
+    "failing": "Automatic backups are failing ({{code}}). Check the disk space on this counter."
+  },
+  "restore": {
+    "title": "Restore from a backup",
+    "intro": "Replace this counter's data with a backup. The current data is backed up first, the app restarts, and you finish the restore with your PIN before the till opens again.",
+    "none": "No backups on this counter yet.",
+    "pickFile": "Choose a backup file…",
+    "kind": {
+      "auto": "Automatic",
+      "manual": "Manual",
+      "pre_restore": "Before a restore"
+    },
+    "size": "{{mb}} MB",
+    "confirmTitle": "Restore this backup?",
+    "confirmBody": "Everything recorded after this backup will be replaced. If the counter syncs with the cloud, its own sales are brought back when you finish the restore.",
+    "confirm": "Restore and restart",
+    "staging": "Checking the backup…",
+    "cancel": "Cancel",
+    "restarting": "The backup is ready. The app is restarting…"
+  },
+  "recovery": {
+    "title": "Finish the restore",
+    "intro": "This counter was restored from a backup. Nothing can be sold until the Owner finishes the restore.",
+    "takenAt": "The backup was taken {{when}}.",
+    "chooseMode": "How should this counter continue?",
+    "mode": {
+      "online": "Bring back this counter's sales from the cloud",
+      "offline": "Continue as a new counter",
+      "local": "Continue from the backup"
+    },
+    "modeHint": {
+      "online": "Recommended. Needs the internet: everything this counter sent to the cloud after the backup comes back.",
+      "offline": "When the cloud can't be reached, or on a new PC. This counter gets a new code; its history stays in the cloud and comes back once it is registered again.",
+      "local": "This store doesn't use the cloud, so the sales made after the backup can't be recovered."
+    },
+    "owner": "Owner",
+    "working": "Finishing the restore…"
+  },
+  "fresh": {
+    "title": "Restore this counter from a backup",
+    "intro": "Choose the counter's backup file (a USB drive, or a copy from the old PC). Then finish the restore with the Owner's PIN.",
+    "restore": "Restore",
+    "back": "Back"
+  }
 }

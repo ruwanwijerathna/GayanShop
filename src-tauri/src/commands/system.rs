@@ -44,6 +44,8 @@ pub struct AppStatus {
     pub session: Option<SessionInfo>,
     /// A counter that joined the store and hasn't pulled its history yet (doc §6.2): the till stays closed.
     pub bootstrap_pending: bool,
+    /// A restored backup awaits recovery (Block 4.1): the recovery screen replaces the login.
+    pub restore_pending: bool,
 }
 
 /// What the shell needs to route: first-run wizard, login, or the app.
@@ -58,6 +60,7 @@ pub async fn app_status(state: State<'_, AppState>) -> AppResult<AppStatus> {
         device_code: identity.as_ref().map(|i| i.device_code.clone()),
         session: session.as_ref().map(SessionInfo::from),
         bootstrap_pending: crate::sync::bootstrap::is_pending(&state.db).await?,
+        restore_pending: crate::restore::pending(&state.db.pool).await?.is_some(),
     })
 }
 

@@ -199,6 +199,18 @@ export const commands = {
 	syncResolveDeadOp: (input: ResolveDeadOp) => typedError<null, AppError>(__TAURI_INVOKE("sync_resolve_dead_op", { input })),
 	/**  The latest sync log entries (pushes and pulls), newest first. */
 	syncLogs: (limit: number) => typedError<SyncLogRow_Serialize[], AppError>(__TAURI_INVOKE("sync_logs", { limit })),
+	/**  The automatic backups on this counter and the last manual one, newest first. */
+	restoreCandidates: () => typedError<RestoreCandidate[], AppError>(__TAURI_INVOKE("restore_candidates")),
+	/**  The native file picker for a backup file; `None` when cancelled. */
+	restorePickFile: () => typedError<string | null, AppError>(__TAURI_INVOKE("restore_pick_file")),
+	/**  Check the file, back up the current database, stage the restore and restart. */
+	restoreStage: (path: string) => typedError<Inspected, AppError>(__TAURI_INVOKE("restore_stage", { path })),
+	/**  First run on a new PC (or a reinstall): restore this counter from its backup file instead of setting up. */
+	restoreStageFresh: (path: string) => typedError<Inspected, AppError>(__TAURI_INVOKE("restore_stage_fresh", { path })),
+	/**  Whether a restore awaits recovery (asked before login). */
+	restoreStatus: () => typedError<RestoreStatus_Serialize, AppError>(__TAURI_INVOKE("restore_status")),
+	/**  Finish a restore. Authorised by the Owner's PIN; nothing is audited until the recovery's own last step. */
+	restoreRecover: (input: RecoverInput) => typedError<RecoveryOutcome, AppError>(__TAURI_INVOKE("restore_recover", { input })),
 };
 
 /* Types */
@@ -303,6 +315,8 @@ export type AppStatus_Deserialize = {
 	session?: SessionInfo | null,
 	/**  A counter that joined the store and hasn't pulled its history yet (doc §6.2): the till stays closed. */
 	bootstrap_pending: boolean,
+	/**  A restored backup awaits recovery (Block 4.1): the recovery screen replaces the login. */
+	restore_pending: boolean,
 };
 
 export type AppStatus_Serialize = {
@@ -312,6 +326,8 @@ export type AppStatus_Serialize = {
 	session: SessionInfo | null,
 	/**  A counter that joined the store and hasn't pulled its history yet (doc §6.2): the till stays closed. */
 	bootstrap_pending: boolean,
+	/**  A restored backup awaits recovery (Block 4.1): the recovery screen replaces the login. */
+	restore_pending: boolean,
 };
 
 export type ApprovalGrant = {
@@ -400,6 +416,10 @@ export type BackupStatus_Deserialize = {
 	last_dir?: string | null,
 	/**  No manual backup within `backup.reminder_days` (7) and no cloud sync yet: show "Back up today". */
 	reminder_due: boolean,
+	/**  The latest automatic (hourly) backup. */
+	last_auto_at?: string | null,
+	/**  Why the automatic backups are failing (a `BACKUP_*` code), until one succeeds again. */
+	auto_error?: string | null,
 };
 
 export type BackupStatus_Serialize = {
@@ -409,6 +429,10 @@ export type BackupStatus_Serialize = {
 	last_dir: string | null,
 	/**  No manual backup within `backup.reminder_days` (7) and no cloud sync yet: show "Back up today". */
 	reminder_due: boolean,
+	/**  The latest automatic (hourly) backup. */
+	last_auto_at: string | null,
+	/**  Why the automatic backups are failing (a `BACKUP_*` code), until one succeeds again. */
+	auto_error: string | null,
 };
 
 export type Batch = Batch_Serialize | Batch_Deserialize;
@@ -1367,6 +1391,18 @@ export type HistoryPage_Serialize = {
 	next_cursor: HistoryCursor | null,
 };
 
+/**  A backup file, checked. */
+export type Inspected = {
+	path: string,
+	store_id: string,
+	device_id: string,
+	device_code: string,
+	schema_version: number,
+	taken_at: string,
+	size_bytes: number,
+	sha256: string,
+};
+
 export type IntegrityReport = {
 	/**  `"ok"` when SQLite's quick_check found nothing; otherwise its first message. */
 	quick_check: string,
@@ -2197,6 +2233,21 @@ export type ReceiptPrinterProfile = {
 	drawer_pin: DrawerPin,
 };
 
+export type RecoverInput = {
+	mode: RecoveryMode,
+	staff_id: string,
+	pin: string,
+};
+
+export type RecoveryMode = "online" | "offline" | "local";
+
+export type RecoveryOutcome = {
+	mode: RecoveryMode,
+	device_code: string,
+	/**  Rows the recovery pull brought back (online). */
+	rows_recovered: number,
+};
+
 export type RegisterInput = RegisterInput_Serialize | RegisterInput_Deserialize;
 
 export type RegisterInput_Deserialize = {
@@ -2238,6 +2289,50 @@ export type ReportDevice = {
 export type ResolveDeadOp = {
 	seq: number,
 	action: DeadOpAction,
+};
+
+/**  A backup this counter could be restored from. */
+export type RestoreCandidate = {
+	path: string,
+	taken_at: string,
+	size_bytes: number,
+	/**  `auto` (hourly), `manual` (the last "Backup Database Now") or `pre_restore`. */
+	kind: string,
+};
+
+/**  What a pending restore is: shown on the recovery screen, recorded in the `BACKUP_RESTORE` audit row. */
+export type RestorePending = {
+	/**  The file the owner chose. */
+	source: string,
+	source_sha256: string,
+	/**  When the backup was taken (its manifest, else the file's time). */
+	taken_at: string,
+	/**  The copy of the database as it was just before the restore. */
+	pre_restore: string,
+	requested_by: string,
+	requested_at: string,
+};
+
+export type RestoreStatus = RestoreStatus_Serialize | RestoreStatus_Deserialize;
+
+export type RestoreStatus_Deserialize = {
+	pending?: RestorePending | null,
+	/**
+	 *  The recovery paths open to this counter: online and offline once registered (online needs its
+	 *  sign-in token, which a new PC doesn't have), local for a store that never used the cloud.
+	 */
+	modes: RecoveryMode[],
+	device_code?: string | null,
+};
+
+export type RestoreStatus_Serialize = {
+	pending: RestorePending | null,
+	/**
+	 *  The recovery paths open to this counter: online and offline once registered (online needs its
+	 *  sign-in token, which a new PC doesn't have), local for a store that never used the cloud.
+	 */
+	modes: RecoveryMode[],
+	device_code: string | null,
 };
 
 export type Role = {
@@ -2477,7 +2572,9 @@ export type SyncState =
 /**  No server or device identity yet (Settings → Sync → Register). */
 "unregistered" | 
 /**  A joined counter that hasn't pulled the store's history yet. */
-"bootstrap_pending" | "syncing" | 
+"bootstrap_pending" | 
+/**  A restored backup awaits recovery: nothing is sent or applied until the Owner finishes it. */
+"restore_pending" | "syncing" | 
 /**  Everything this counter wrote is in the cloud and it has everything the cloud has. */
 "synced" | 
 /**  Local writes are still queued (the server asked for a retry, or ops are dead). */

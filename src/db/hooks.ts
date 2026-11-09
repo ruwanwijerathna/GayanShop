@@ -40,6 +40,7 @@ import {
   type UiTheme,
   type VoidInput_Deserialize as VoidInput,
   type BootstrapProgress,
+  type RecoverInput,
   type JoinInput_Deserialize as JoinInput,
   type RegisterInput_Deserialize as RegisterInput,
   type ResolveDeadOp,
@@ -97,6 +98,8 @@ export const queryKeys = {
   syncInfo: ["sync", "info"] as const,
   syncDeadOps: ["sync", "dead"] as const,
   syncLogs: ["sync", "logs"] as const,
+  restoreStatus: ["restore", "status"] as const,
+  restoreCandidates: ["restore", "candidates"] as const,
   staff: ["staff", "list"] as const,
   labelTemplates: ["labels", "templates"] as const,
   valuation: (asOf: string | null) => ["inventory", "valuation", asOf ?? "now"] as const,
@@ -1013,5 +1016,51 @@ export function useResumeBootstrap() {
   return useMutation({
     mutationFn: () => unwrap(commands.syncBootstrap()),
     onSettled: () => qc.invalidateQueries({ queryKey: queryKeys.status }),
+  });
+}
+
+// ───────── restore (doc §8 Phase 4, Block 4.1) ─────────
+
+/** Whether a restored backup awaits recovery, and the recovery paths open to this counter. */
+export function useRestoreStatus(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.restoreStatus,
+    queryFn: () => unwrap(commands.restoreStatus()),
+    enabled,
+  });
+}
+
+/** The automatic, pre-restore and last manual backups on this counter (`BACKUP_RESTORE`). */
+export function useRestoreCandidates() {
+  return useQuery({
+    queryKey: queryKeys.restoreCandidates,
+    queryFn: () => unwrap(commands.restoreCandidates()),
+  });
+}
+
+/** The native file picker for a backup file; `null` when cancelled. */
+export function pickRestoreFile() {
+  return unwrap(commands.restorePickFile());
+}
+
+/** Check the file, back up the current database, stage the restore. The app restarts by itself. */
+export function useRestoreStage() {
+  return useMutation({ mutationFn: (path: string) => unwrap(commands.restoreStage(path)) });
+}
+
+/** First run on a new PC: restore this counter from its backup file. The app restarts by itself. */
+export function useRestoreStageFresh() {
+  return useMutation({ mutationFn: (path: string) => unwrap(commands.restoreStageFresh(path)) });
+}
+
+/** Finish a restore with the Owner's PIN. */
+export function useRestoreRecover() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RecoverInput) => unwrap(commands.restoreRecover(input)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.status });
+      void qc.invalidateQueries({ queryKey: ["restore"] });
+    },
   });
 }

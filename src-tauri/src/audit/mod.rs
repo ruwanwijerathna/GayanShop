@@ -101,6 +101,10 @@ pub struct AuditEntry<'a> {
 /// `Db::write()`); writes are serialised, so reading the chain head here is race-free. The SQL chain guard
 /// re-checks the sequence and link.
 pub async fn record(conn: &mut SqliteConnection, ctx: &AuditCtx<'_>, e: AuditEntry<'_>) -> AppResult<String> {
+    // A pending restore freezes this counter's chain: its head is behind the cloud's (Block 4.1).
+    if crate::restore::frozen(&mut *conn).await? {
+        return Err(crate::restore::frozen_error());
+    }
     let head: Option<(i64, String)> =
         sqlx::query_as("SELECT device_seq, hash FROM audit_logs WHERE device_id = ?1 ORDER BY device_seq DESC LIMIT 1")
             .bind(ctx.device_id)

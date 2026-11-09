@@ -38,6 +38,10 @@ fn pk_of(table: &str) -> AppResult<&'static str> {
 
 /// Snapshot the current row as JSON and append an `upsert` op to the outbox.
 pub async fn enqueue_upsert(conn: &mut SqliteConnection, table: &str, row_id: &str, now: &str) -> AppResult<()> {
+    // Nothing is written under this counter's identity while a restore is pending (Block 4.1).
+    if crate::restore::frozen(&mut *conn).await? {
+        return Err(crate::restore::frozen_error());
+    }
     let pk = pk_of(table)?;
     let cols: Vec<String> = sqlx::query("SELECT name FROM pragma_table_info(?1) ORDER BY cid")
         .bind(table)

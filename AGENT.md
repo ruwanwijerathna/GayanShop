@@ -7,7 +7,7 @@
 >
 > Never change an architectural decision silently. Propose the doc change to the owner first.
 
-**Current state (2026-11-09): Phase 3 (cloud sync) complete on branch `feat/phase-3-cloud-sync`, awaiting the owner's acceptance and merge.** Blocks 3.1–3.6 are committed and green against the local Supabase stack. Deploying to the live project (link, `db push`, `functions deploy`, turning sign-up off, creating the owner account) and registering the counters are the owner's steps in `docs/qa/phase3-acceptance.md`. Phases 0–2 are merged to `main` (owner hardware, touch and Sinhala checks pending in `docs/qa/phase1-acceptance.md` and `docs/qa/phase2-acceptance.md`). Phase 4 needs the owner's go. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
+**Current state (2026-11-10): Phase 4 (production hardening) in progress on branch `feat/phase-4-production-hardening`.** Block 4.1 is committed and green. Phases 0–3 are complete and merged to `main`; deploying Phase 3 to the live project (link, `db push` — which now also carries Block 4.1's `sync_health` migration —, `functions deploy`, sign-up off, the owner account) and registering the counters are the owner's steps in `docs/qa/phase3-acceptance.md`. Owner hardware, touch and Sinhala checks are pending in `docs/qa/phase1-acceptance.md` and `docs/qa/phase2-acceptance.md`. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
 
 ---
 
@@ -456,7 +456,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
   - **Gate:** `cargo test --manifest-path src-tauri/Cargo.toml --test chaos -- --ignored` + `pnpm verify`
 
 ### Phase 4: Production hardening
-- [ ] **4.1 Automatic backups and restore**
+- [x] **4.1 Automatic backups and restore**: done 2026-11-10 (decisions #21–#22 proposed, pending the owner; the optional USB copy and backup encryption are not part of it)
   - **Deliverables:** hourly/daily rotation, restore with recovery (online/offline paths).
   - **Gate:** `--test restore` + `pnpm verify`
 - [ ] **4.2 Updater, signing and installer**

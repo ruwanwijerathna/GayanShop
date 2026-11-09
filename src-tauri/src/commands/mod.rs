@@ -24,6 +24,7 @@ pub mod prefs;
 pub mod products;
 pub mod quick_sales;
 pub mod reports;
+pub mod restore;
 pub mod setup;
 pub mod staff;
 pub mod sync;
