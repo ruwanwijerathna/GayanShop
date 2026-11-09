@@ -8,6 +8,7 @@
 
 pub mod audit;
 pub mod auth;
+pub mod backup;
 pub mod batches;
 pub mod cash;
 pub mod checkout;

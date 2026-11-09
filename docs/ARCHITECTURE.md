@@ -819,7 +819,7 @@ line_net              = inclusive ? line_total − tax_amount : line_total   (ex
 **Who and where:**
 - **Settings → Backup** shows a **"Backup Database Now"** button (`BACKUP_CREATE`: Owner and Manager).
 - The user picks a destination folder with the native folder picker (`tauri-plugin-dialog`), for example a plugged-in USB drive, an external disk or a secondary directory.
-- The last-used folder is remembered per device.
+- The last-used folder is remembered per device (`backup.last_dir`). The picker is opened from Rust (`backup_pick_folder`, `tauri-plugin-dialog`'s Rust API), so the webview needs no dialog permission.
 
 **How (`commands::backup::backup_now(dest_dir)`):**
 1. **Pre-checks:**

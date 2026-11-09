@@ -5,6 +5,7 @@ import type { AppError } from "@/db/bindings";
 import { errorKey } from "@/db/client";
 import enApp from "./locales/en/app.json";
 import enAuth from "./locales/en/auth.json";
+import enBackup from "./locales/en/backup.json";
 import enBatches from "./locales/en/batches.json";
 import enCash from "./locales/en/cash.json";
 import enCommon from "./locales/en/common.json";
@@ -14,6 +15,7 @@ import enPrinting from "./locales/en/printing.json";
 import enProducts from "./locales/en/products.json";
 import siApp from "./locales/si/app.json";
 import siAuth from "./locales/si/auth.json";
+import siBackup from "./locales/si/backup.json";
 import siBatches from "./locales/si/batches.json";
 import siCash from "./locales/si/cash.json";
 import siCommon from "./locales/si/common.json";
@@ -35,6 +37,7 @@ export const NAMESPACES = [
   "cash",
   "printing",
   "pos",
+  "backup",
 ] as const;
 
 export const resources = {
@@ -48,6 +51,7 @@ export const resources = {
     cash: enCash,
     printing: enPrinting,
     pos: enPos,
+    backup: enBackup,
   },
   si: {
     common: siCommon,
@@ -59,6 +63,7 @@ export const resources = {
     cash: siCash,
     printing: siPrinting,
     pos: siPos,
+    backup: siBackup,
   },
 } as const;
 

@@ -85,7 +85,14 @@
     "PRINTER_PROFILE_INVALID": "Check the printer connection details.",
     "CART_TOO_LARGE": "This cart is too large to save.",
     "CART_INVALID": "The saved cart couldn't be read.",
-    "TOO_MANY_HELD": "Too many held sales. Recall or finish one first."
+    "TOO_MANY_HELD": "Too many held sales. Recall or finish one first.",
+    "BACKUP_DEST_MISSING": "That folder can't be found. Is the drive plugged in?",
+    "BACKUP_DEST_READ_ONLY": "That folder can't be written to.",
+    "BACKUP_DISK_FULL": "Not enough free space on that drive.",
+    "BACKUP_EXISTS": "A backup with this name already exists. Try again in a second.",
+    "BACKUP_WRITE_FAILED": "The backup couldn't be written. Was the drive removed?",
+    "BACKUP_VERIFY_FAILED": "The backup copy failed its check and was deleted. Try another drive.",
+    "BACKUP_FAILED": "The backup failed. Sales are not affected."
   },
   "INVARIANT": {
     "_": "This change isn't allowed.",

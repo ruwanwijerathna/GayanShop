@@ -6,6 +6,7 @@ import { Can } from "@/components/auth/Can";
 import { Kbd } from "@/components/common/Kbd";
 import { Button } from "@/components/ui/button";
 import { useDbChangedInvalidation } from "@/db/events";
+import { BackupReminder } from "@/features/backup/BackupSettings";
 import { PrinterBanner } from "@/features/printing/PrinterBanner";
 import { useAppStatus, useDevicePrefs, useLogout, useSetDeviceTheme, useSetUiLanguage } from "@/db/hooks";
 import type { UiLanguage } from "@/i18n";
@@ -94,7 +95,7 @@ export function AppShell() {
               <span className="hidden xl:inline">{t("nav.audit")}</span>
             </Link>
           </Can>
-          <Can perm="SETTINGS_MANAGE">
+          <Can perm={["SETTINGS_MANAGE", "BACKUP_CREATE"]}>
             <Link to="/settings" className={NAV_LINK} aria-label={t("nav.settings")}>
               <Settings aria-hidden className="size-5 shrink-0" />
               <span className="hidden xl:inline">{t("nav.settings")}</span>
@@ -110,6 +111,7 @@ export function AppShell() {
       }
     >
       <PrinterBanner />
+      <BackupReminder />
       <Outlet />
     </BackOfficeLayout>
   );

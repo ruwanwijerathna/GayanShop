@@ -39,6 +39,7 @@ export const queryKeys = {
   sessionOrders: ["orders", "session"] as const,
   heldCarts: ["pos", "held"] as const,
   currentCart: ["pos", "current"] as const,
+  backupStatus: ["backup", "status"] as const,
 };
 
 /** Polled so the shell notices an idle auto-lock done by Rust (doc §3.5). */
@@ -389,4 +390,23 @@ export function useRecallCart() {
 /** A typed barcode or SKU (Enter in the scan field). */
 export function lookupProductCode(code: string) {
   return unwrap(commands.lookupProductCode(code));
+}
+
+// ───────── backup (doc §3.9) ─────────
+
+export function useBackupStatus() {
+  return useQuery({ queryKey: queryKeys.backupStatus, queryFn: () => unwrap(commands.backupStatus()) });
+}
+
+/** The native folder picker; `null` when cancelled. */
+export function pickBackupFolder() {
+  return unwrap(commands.backupPickFolder());
+}
+
+export function useBackupNow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (destDir: string) => unwrap(commands.backupNow(destDir)),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["backup"] }),
+  });
 }

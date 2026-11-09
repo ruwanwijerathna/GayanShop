@@ -16,6 +16,7 @@
 
 pub mod audit;
 pub mod auth;
+pub mod backup;
 pub mod clock;
 pub mod commands;
 pub mod db;
@@ -99,6 +100,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::pos::cart_hold,
         commands::pos::held_carts,
         commands::pos::cart_recall,
+        commands::backup::backup_status,
+        commands::backup::backup_pick_folder,
+        commands::backup::backup_now,
         commands::void::void_order,
         commands::void::session_orders,
     ])
@@ -117,6 +121,7 @@ pub fn run() -> Result<(), tauri::Error> {
             }
         }))
         .plugin(tauri_plugin_log::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
@@ -217,6 +222,9 @@ mod tests {
             "cartHold",
             "heldCarts",
             "cartRecall",
+            "backupStatus",
+            "backupPickFolder",
+            "backupNow",
         ] {
             assert!(ts.contains(&format!("{cmd}:")), "command {cmd} missing from bindings");
         }

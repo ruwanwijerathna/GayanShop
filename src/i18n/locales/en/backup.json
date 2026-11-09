@@ -1,0 +1,14 @@
+{
+  "title": "Backup",
+  "button": "Backup Database Now",
+  "choosing": "Choose a folder…",
+  "running": "Backing up… {{seconds}} s",
+  "warning": "The backup contains staff PIN hashes and customer phone numbers. Keep this drive safe.",
+  "last": "Last backup: {{when}}",
+  "lastPath": "Saved to {{path}}",
+  "never": "No backup has been taken on this counter yet.",
+  "done": "Backup saved: {{path}}",
+  "hash": "SHA-256: {{hash}}",
+  "reminder": "Back up today: there has been no backup in the last 7 days, and this shop's only off-machine copy is a USB backup.",
+  "reminderAction": "Back up now"
+}

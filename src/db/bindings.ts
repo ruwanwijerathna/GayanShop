@@ -99,6 +99,10 @@ export const commands = {
 	cartHold: (input: CartInput_Deserialize) => typedError<HeldCart_Serialize, AppError>(__TAURI_INVOKE("cart_hold", { input })),
 	heldCarts: () => typedError<HeldCart_Serialize[], AppError>(__TAURI_INVOKE("held_carts")),
 	cartRecall: (id: string) => typedError<HeldCart_Serialize, AppError>(__TAURI_INVOKE("cart_recall", { id })),
+	backupStatus: () => typedError<BackupStatus_Serialize, AppError>(__TAURI_INVOKE("backup_status")),
+	/**  The native folder picker, opened at the last-used folder. `None` when the user cancels. */
+	backupPickFolder: () => typedError<string | null, AppError>(__TAURI_INVOKE("backup_pick_folder")),
+	backupNow: (destDir: string) => typedError<BackupOutcome, AppError>(__TAURI_INVOKE("backup_now", { destDir })),
 	voidOrder: (input: VoidInput_Deserialize) => typedError<VoidResult, AppError>(__TAURI_INVOKE("void_order", { input })),
 	/**  The open session's orders on this counter (the void list). */
 	sessionOrders: () => typedError<SessionOrder[], AppError>(__TAURI_INVOKE("session_orders")),
@@ -222,6 +226,34 @@ export type Authorization_Deserialize = {
 export type Authorization_Serialize = {
 	staff_id: string,
 	approved_by: string | null,
+};
+
+export type BackupOutcome = {
+	path: string,
+	manifest_path: string,
+	size_bytes: number,
+	sha256: string,
+	created_at: string,
+};
+
+export type BackupStatus = BackupStatus_Serialize | BackupStatus_Deserialize;
+
+export type BackupStatus_Deserialize = {
+	last_at?: string | null,
+	last_path?: string | null,
+	/**  The folder the picker should open in. */
+	last_dir?: string | null,
+	/**  No manual backup within `backup.reminder_days` (7) and no cloud sync yet: show "Back up today". */
+	reminder_due: boolean,
+};
+
+export type BackupStatus_Serialize = {
+	last_at: string | null,
+	last_path: string | null,
+	/**  The folder the picker should open in. */
+	last_dir: string | null,
+	/**  No manual backup within `backup.reminder_days` (7) and no cloud sync yet: show "Back up today". */
+	reminder_due: boolean,
 };
 
 export type Batch = Batch_Serialize | Batch_Deserialize;

@@ -103,14 +103,8 @@ export function toProfile(f: PrinterForm): ReceiptPrinterProfile {
 
 /** Settings → Printer (doc §7.2): this counter's receipt printer and drawer, plus the test page. */
 export function PrinterSettings() {
-  const { t } = useTranslation("printing");
   const profile = usePrinterProfile();
-  return (
-    <section className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
-      <h1 className="text-2xl font-semibold">{t("settings.title")}</h1>
-      {profile.data !== undefined && <PrinterCard profile={profile.data} />}
-    </section>
-  );
+  return profile.data !== undefined ? <PrinterCard profile={profile.data} /> : null;
 }
 
 function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {

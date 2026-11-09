@@ -4,9 +4,9 @@ import { BatchesScreen } from "@/features/batches/BatchesScreen";
 import { CashScreen } from "@/features/cash/CashScreen";
 import { CounterStatus } from "@/features/home/CounterStatus";
 import { PosScreen } from "@/features/pos/PosScreen";
-import { PrinterSettings } from "@/features/printing/PrinterSettings";
 import { ProductsScreen } from "@/features/products/ProductsScreen";
 import { AppShell } from "./AppShell";
+import { SettingsPage } from "./SettingsPage";
 
 // Hash history: the app is served from Tauri's asset protocol, so routes must not depend on a server.
 const rootRoute = createRootRoute({ component: AppShell });
@@ -49,7 +49,7 @@ export const posRoute = createRoute({
 export const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
-  component: PrinterSettings,
+  component: SettingsPage,
 });
 
 export const routeTree = rootRoute.addChildren([
