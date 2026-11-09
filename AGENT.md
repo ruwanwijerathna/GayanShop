@@ -7,7 +7,7 @@
 >
 > Never change an architectural decision silently. Propose the doc change to the owner first.
 
-**Current state (2026-11-09): Phase 2 complete on branch `feat/phase-2-batches-reports`, awaiting the owner's acceptance and merge.** Phase 1 is complete, accepted and merged to `main` (the manual hardware, touch and pull-the-plug checks in `docs/qa/phase1-acceptance.md` are pending the owner). Blocks 2.1–2.10 are committed and green (the manual label-printer, scanner, counter-PC and Sinhala checks in `docs/qa/phase2-acceptance.md` are pending the owner); Phase 3 needs the owner's go and a Supabase project. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
+**Current state (2026-11-09): Phase 3 (cloud sync) in progress on branch `feat/phase-3-cloud-sync`.** Phases 0–2 are complete and merged to `main` (owner hardware, touch and Sinhala checks in `docs/qa/phase1-acceptance.md` and `docs/qa/phase2-acceptance.md` are pending the owner). The owner's Supabase project exists; every Phase 3 test runs against the local Supabase stack (Docker), and deploying the migrations and edge function to the live project is the owner's step (it needs their access token and database password). Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
 
 ---
 
@@ -436,7 +436,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
 (`--test X` means `cargo test --manifest-path src-tauri/Cargo.toml --test X`.)
 
 ### Phase 3: Cloud sync (needs a Supabase project, Supabase CLI and Docker Desktop, so **ask the owner first**)
-- [ ] **3.1 Supabase schema**
+- [x] **3.1 Supabase schema**: done 2026-11-09 (local stack; live deploy is the owner's step)
   - **Deliverables:** `supabase/migrations` (mirror of §4.3 + `server_seq`, `processed_ops`, `devices`, RLS incl. no-UPDATE/DELETE policies), pgTAP tests.
   - **Gate:** `supabase test db` + `pnpm verify`
 - [ ] **3.2 Sync RPCs**
@@ -494,6 +494,11 @@ cargo test   --manifest-path src-tauri/Cargo.toml --test <name>         # one in
 cargo test   --manifest-path src-tauri/Cargo.toml --release --test perf_budgets -- --ignored
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo fmt    --manifest-path src-tauri/Cargo.toml --all -- --check
+
+# Phase 3: the local Supabase stack (Docker Desktop must be running). Never link or push to the live project.
+pnpm exec supabase db start       # Postgres only: enough for pgTAP
+pnpm exec supabase db reset       # re-apply supabase/migrations to the local database
+pnpm exec supabase test db        # pgTAP (supabase/tests)
 ```
 
 **Environment notes:**

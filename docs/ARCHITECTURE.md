@@ -2271,11 +2271,15 @@ CREATE INDEX ix_sync_logs_started ON sync_logs(started_at);
 
 ### 4.4 Cloud (Postgres) deltas
 
-- Types become `uuid`, `timestamptz`, `bigint` money and masks, `jsonb`, `boolean` and `date` (business_date).
-- Every synced table gets `server_seq bigint NOT NULL` (one global sequence, set by a `BEFORE INSERT OR UPDATE` trigger) and `received_at timestamptz DEFAULT now()`. This cursor is only safe because `sync_push` serialises writers per store (§6.1).
-- `processed_ops(op_id uuid PRIMARY KEY, device_id uuid, processed_at timestamptz)` is the idempotency ledger.
-- `stores(id, name, …)` and `devices(id, store_id, code, name, last_seen_at, app_version, last_audit_seq, last_audit_hash)`.
-- RLS on every table: `store_id = (auth.jwt() -> 'app_metadata' ->> 'store_id')::uuid`.
+- **Layout** (`supabase/migrations`, Block 3.1). The business tables live in schema `pos`, which PostgREST doesn't expose, and the API roles (`anon`, `authenticated`) have no privilege on anything in it. Devices only call the RPCs in `public` (`sync_push`, `sync_pull`, `sync_health`). Those are `SECURITY DEFINER` functions owned by the `NOLOGIN` role `pos_sync`, which has no `BYPASSRLS`, so every row they read or write still passes the RLS policies below.
+- Types become `uuid`, `timestamptz`, `bigint` money and masks, `boolean` and `date` (business_date).
+  - **JSON-in-text columns stay `text`** (`store_settings.value`, `products.attributes`, `cash_sessions.denominations`, `audit_logs.metadata`), with a JSON-validity check. `jsonb` would reorder keys and drop whitespace, so a pulled row would no longer be byte-identical to what its origin wrote, and `audit_logs.metadata` feeds the hash chain. A dashboard casts them to `jsonb` when it reads them.
+  - `sync_pull` renders rows back in the terminal's wire format exactly: flags as 0/1, timestamps as `YYYY-MM-DDTHH:MM:SS.mmmZ` (`pos.ts()`, the same format as `clock::iso`), so text comparison for last-write-wins keeps working on every terminal.
+- Every synced table gets `server_seq bigint NOT NULL` (one global sequence, set by a `BEFORE INSERT OR UPDATE` trigger) and `server_received_at timestamptz` (`batches` already has a business `received_at`). This cursor is only safe because `sync_push` serialises writers per store (§6.1).
+- `processed_ops(op_id uuid PRIMARY KEY, store_id, device_id, table_name, result, reason, processed_at)` is the idempotency ledger. A replayed op returns its first result, rejections included.
+- `stores(id, name, owner_user_id, created_at)` and `devices(id, store_id, code, name, auth_user_id, app_version, registered_at, last_seen_at, last_audit_seq, last_audit_hash, chain_broken_at, chain_broken_seq)`. `pos.synced_tables` lists the eighteen synced tables with their merge kind (insert-only, order, last-write-wins) and apply order.
+- Rows the server itself changes carry the SYSTEM device id `00000000-0000-0000-0000-000000000000`.
+- RLS on every table: `store_id = pos.claim_store_id()`. The claims are read from `request.jwt.claims` (which PostgREST sets from the verified JWT), not from Supabase's `auth.jwt()`, so the same schema runs behind a bare PostgREST on a self-hosted server. Only a device identity (`app_metadata.role = 'device'`) has a store claim; any other signed-in user sees no rows.
   - **`audit_logs`, `stock_movements`, `order_items`, `order_payments` and `cash_movements` get no UPDATE or DELETE policy.**
   - On `orders`, UPDATE is allowed only for the void transition, enforced by a trigger.
 - `staff.pin_hash` is only readable by device identities, never by a future web dashboard role. `customers.phone_e164` is readable by device identities, and by dashboard roles only with an explicit customer-data grant.
@@ -2960,6 +2964,9 @@ cargo add --dev proptest
 | 15 | **`synchronous = FULL`** | `NORMAL` (faster) | Under WAL, `NORMAL` can lose the last committed sale on a power cut after its receipt has printed. `FULL` costs one fsync (~1–5 ms) per commit (§13.2). |
 | 16 | **Seal pattern** (`pending → completed`) with SQL-verified totals | Inserting orders as `completed` | It closes the "add a line or payment to a sold order later" hole and makes SQL re-check every total (§13.5). |
 | 17 | **Negative stock layers are flagged, never auto-rebalanced** | Automatic layer rebalancing | Rebalancing would rewrite COGS on past sales, and the system can't know physical truth. Only a stock count can (§13.1). |
+| 18 | **A new counter joins the store from the first-run wizard** ("Join existing store"): the owner signs in with the store's cloud owner account, the counter gets the next free code (T02, T03), pulls the full history, and staff log in with their existing PINs (owner-confirmed 2026-11-09) | A pairing code generated on T01 | One flow for the first counter (adopting its offline ids) and for later ones. The owner's password never stays on a counter; each counter has its own device identity. |
+| 19 | **The owner's cloud account is one email + password user created in the Supabase dashboard.** The first counter that registers with it claims the store; later counters must use the same account. Public sign-up is off (owner-confirmed 2026-11-09) | A shared registration secret | Whoever holds a shared secret could join a counter to the store. |
+| 20 | **JSON-in-text columns stay `text` in the cloud** (§4.4) | `jsonb` | Byte-identical round trips. The audit hash chain depends on them. |
 
 
 ---

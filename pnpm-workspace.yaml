@@ -4,3 +4,5 @@ allowBuilds:
   edgedriver: false
   esbuild: true
   geckodriver: false
+  # The Supabase CLI downloads its binary on install (pnpm exec supabase …: local stack, pgTAP).
+  supabase: true
