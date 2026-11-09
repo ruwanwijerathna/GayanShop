@@ -301,3 +301,16 @@ async fn every_method_reconciles_to_the_cent_over_many_carts() {
         assert!((0..units).contains(&d.batch.allocation_variance), "round {round}: {}", d.batch.allocation_variance);
     }
 }
+
+#[tokio::test]
+async fn the_purchase_date_is_stored_in_the_one_canonical_form() {
+    let t = till().await;
+    let mut input = header("Dated batch", 0, 0, AllocationMethod::Manual);
+    input.purchased_at = Some("2026-11-08T15:00:00+05:30".into());
+    let b = batches::create(&t.t.db, &t.ctx(), &t.owner(), &input).await.unwrap();
+    // UTC with milliseconds, like every other timestamp: the cloud returns it byte for byte (doc §4.4).
+    assert_eq!(b.batch.purchased_at, "2026-11-08T09:30:00.000Z");
+    input.purchased_at = Some("8 Nov 2026".into());
+    let err = batches::create(&t.t.db, &t.ctx(), &t.owner(), &input).await.unwrap_err();
+    assert_eq!(code(err), "BATCH_DATE_INVALID");
+}
