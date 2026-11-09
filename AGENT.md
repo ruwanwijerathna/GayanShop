@@ -7,7 +7,7 @@
 >
 > Never change an architectural decision silently. Propose the doc change to the owner first.
 
-**Current state (2026-11-08): Phase 1 in progress on branch `feat/phase-1-mvp-till`.** Phase 0 is complete and approved. Blocks 1.1–1.6 are committed and green; the next block is 1.7. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
+**Current state (2026-11-08): Phase 1 in progress on branch `feat/phase-1-mvp-till`.** Phase 0 is complete and approved. Blocks 1.1–1.7 are committed and green; the next block is 1.8. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
 
 ---
 
@@ -346,7 +346,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
     - `cargo test --manifest-path src-tauri/Cargo.toml --test customers`
     - `pnpm verify`
 
-- [ ] **1.7 Printing pipeline**
+- [x] **1.7 Printing pipeline**: done 2026-11-09
   - **Deliverables:**
     - Transports: spooler RAW, TCP 9100 and serial.
     - The ESC/POS builder: footer, QR, cut, drawer kick.

@@ -1,11 +1,12 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { Banknote, Boxes, History, Lock, Package, Store } from "lucide-react";
+import { Banknote, Boxes, History, Lock, Package, Settings, Store } from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Can } from "@/components/auth/Can";
 import { Kbd } from "@/components/common/Kbd";
 import { Button } from "@/components/ui/button";
 import { useDbChangedInvalidation } from "@/db/events";
+import { PrinterBanner } from "@/features/printing/PrinterBanner";
 import { useAppStatus, useDevicePrefs, useLogout, useSetDeviceTheme, useSetUiLanguage } from "@/db/hooks";
 import type { UiLanguage } from "@/i18n";
 import { BackOfficeLayout } from "./layouts/BackOfficeLayout";
@@ -87,6 +88,12 @@ export function AppShell() {
               <span className="hidden xl:inline">{t("nav.audit")}</span>
             </Link>
           </Can>
+          <Can perm="SETTINGS_MANAGE">
+            <Link to="/settings" className={NAV_LINK} aria-label={t("nav.settings")}>
+              <Settings aria-hidden className="size-5 shrink-0" />
+              <span className="hidden xl:inline">{t("nav.settings")}</span>
+            </Link>
+          </Can>
           <span className="flex-1" />
           <Button type="button" size="pos" variant="outline" onClick={lock} className="justify-start">
             <Lock aria-hidden />
@@ -96,6 +103,7 @@ export function AppShell() {
         </>
       }
     >
+      <PrinterBanner />
       <Outlet />
     </BackOfficeLayout>
   );

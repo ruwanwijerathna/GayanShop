@@ -1,0 +1,70 @@
+{
+  "banner": {
+    "recovered": "{{count}} receipt(s) from before the restart were not printed.",
+    "printNow": "Print now",
+    "skip": "Skip",
+    "waiting": "Printer: {{fault}} — {{count}} receipt(s) waiting.",
+    "notResponding": "The printer is not responding. Use the drawer key if needed; sales are saved.",
+    "notConfigured": "No receipt printer is set up — {{count}} receipt(s) waiting.",
+    "retry": "Retry",
+    "later": "Reprint later"
+  },
+  "faults": {
+    "PAPER_OUT": "paper out",
+    "COVER_OPEN": "cover open",
+    "PRINTER_ERROR": "printer error",
+    "TIMEOUT": "not responding",
+    "CONNECT_FAILED": "can't connect",
+    "WRITE_FAILED": "couldn't send",
+    "PRINTER_NOT_FOUND": "not found",
+    "STATUS_FAILED": "no status reply",
+    "UNSUPPORTED": "not supported here",
+    "RENDER_FAILED": "couldn't prepare the receipt",
+    "unknown": "problem"
+  },
+  "settings": {
+    "title": "Settings",
+    "printerTitle": "Receipt printer and cash drawer",
+    "status": "Status",
+    "health": {
+      "not_configured": "Not set up",
+      "ready": "Ready",
+      "fault": "Problem",
+      "unhealthy": "Not responding"
+    },
+    "connection": "Connection",
+    "kinds": {
+      "spooler": "Windows printer (USB)",
+      "network": "Network (TCP 9100)",
+      "serial": "Serial (COM port)"
+    },
+    "printerName": "Windows printer name",
+    "host": "IP address or host name",
+    "port": "Port",
+    "comPort": "COM port",
+    "baud": "Baud rate",
+    "paper": "Paper width",
+    "widths": {
+      "mm58": "58 mm (32 columns)",
+      "mm80": "80 mm (48 columns)"
+    },
+    "codepage": "Code page",
+    "cut": "Cut",
+    "cuts": {
+      "full": "Full",
+      "partial": "Partial",
+      "none": "No cut"
+    },
+    "feed": "Lines fed before the cut",
+    "qr": "Print a QR code (turn off for a Code128 barcode)",
+    "drawerPin": "Cash drawer pin",
+    "pins": {
+      "pin2": "Pin 2 (most drawers)",
+      "pin5": "Pin 5"
+    },
+    "save": "Save",
+    "saved": "Printer settings saved.",
+    "testPage": "Print test page",
+    "testQueued": "Test page sent to the printer."
+  }
+}

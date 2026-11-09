@@ -7,6 +7,7 @@ pub mod settings;
 pub mod sync_ctx;
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 use sqlx::migrate::Migrator;
@@ -18,11 +19,13 @@ use crate::error::{AppError, AppResult};
 
 static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 
+/// Cheap to clone: the pool and the writer lock are shared (the print worker holds its own handle).
+#[derive(Clone)]
 pub struct Db {
     pub pool: SqlitePool,
     /// Every write goes through one transaction at a time. This avoids SQLITE_BUSY on deferred
     /// transaction lock upgrades and keeps the per-device audit sequence gapless.
-    write_lock: Mutex<()>,
+    write_lock: Arc<Mutex<()>>,
     path: PathBuf,
 }
 
@@ -63,7 +66,7 @@ impl Db {
     /// into `backup_dir` first (§13.2), so a failed migration can always be rolled back by hand.
     pub async fn open(path: &Path, backup_dir: &Path) -> AppResult<Self> {
         let pool = SqlitePoolOptions::new().max_connections(4).connect_with(connect_options(path)).await?;
-        let db = Self { pool, write_lock: Mutex::new(()), path: path.to_path_buf() };
+        let db = Self { pool, write_lock: Arc::new(Mutex::new(())), path: path.to_path_buf() };
         if db.has_pending_migrations().await? && db.has_user_tables().await? {
             db.snapshot_before_migration(backup_dir).await?;
         }

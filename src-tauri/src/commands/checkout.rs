@@ -69,6 +69,7 @@ pub async fn checkout_order(
     let ctx = write_ctx(&state)?;
     let result = sell(&state.auth, state.clock.as_ref(), &state.db, &ctx, &input).await?;
     if !result.replayed {
+        state.printer.notify();
         emit_changed(&app, &SALE_TABLES);
     }
     Ok(result)

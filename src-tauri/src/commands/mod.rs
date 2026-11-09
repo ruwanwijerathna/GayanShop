@@ -12,6 +12,7 @@ pub mod batches;
 pub mod cash;
 pub mod checkout;
 pub mod customers;
+pub mod hardware;
 pub mod prefs;
 pub mod products;
 pub mod setup;

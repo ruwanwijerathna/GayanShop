@@ -47,6 +47,10 @@ specta = { version = "=2.0.0-rc.26", features = ["derive", "function"] }
 specta-typescript = "0.0.13"
 tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
 
+[target.'cfg(windows)'.dependencies]
+# Receipt printers: the spooler's RAW datatype and COM-port setup (doc §7.2).
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Printing", "Win32_Devices_Communication"] }
+
 [dev-dependencies]
 proptest = "1.12.0"
 tempfile = "3"

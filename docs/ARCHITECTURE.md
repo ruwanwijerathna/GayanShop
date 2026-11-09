@@ -733,7 +733,7 @@ hash = SHA256( prev_hash ‖ canonical_json(id, store_id, device_id, device_seq,
 |---|---|
 | Authentication | `AUTH_LOGIN`, `AUTH_LOGOUT`, `AUTH_FAILED`, `AUTH_LOCKOUT`, `APPROVAL_GRANTED`, `APPROVAL_DENIED` |
 | Cash | `CASH_SESSION_OPEN`, `CASH_SESSION_CLOSE`, `CASH_SESSION_FORCE_CLOSE`, `DRAWER_KICK` (no-sale), `CASH_PAY_IN`, `CASH_PAY_OUT` |
-| Pricing and orders | `PRICE_OVERRIDE`, `LINE_DISCOUNT`, `ORDER_DISCOUNT` (above the cashier's limit, or any with approval), `VOID_ORDER`, `REPRINT_RECEIPT` |
+| Pricing and orders | `PRICE_OVERRIDE`, `LINE_DISCOUNT`, `ORDER_DISCOUNT` (above the cashier's limit, or any with approval), `VOID_ORDER`, `REPRINT_RECEIPT`, `PRINT_JOB_ABANDON` (unprinted receipts dismissed: "Skip" / "Reprint later") |
 | Customers | `CUSTOMER_CREATE`, `CUSTOMER_UPDATE`, `CUSTOMER_ERASE` (personal data removed on request) |
 | Labels | `LABEL_PRINT` (template, product count, label count) |
 | Stock and batches | `STOCK_ADJUSTMENT`, `STOCK_DAMAGE`, `STOCK_COUNT`, `BATCH_CREATE`, `BATCH_RECEIVE`, `BATCH_REOPEN`, `BATCH_CLOSE`, `BATCH_LATE_ITEM` |
@@ -1237,7 +1237,7 @@ export type AuditAction =
   | 'CASH_SESSION_OPEN' | 'CASH_SESSION_CLOSE' | 'CASH_SESSION_FORCE_CLOSE'
   | 'DRAWER_KICK' | 'CASH_PAY_IN' | 'CASH_PAY_OUT'
   | 'PRICE_OVERRIDE' | 'LINE_DISCOUNT' | 'ORDER_DISCOUNT'
-  | 'VOID_ORDER' | 'REPRINT_RECEIPT'
+  | 'VOID_ORDER' | 'REPRINT_RECEIPT' | 'PRINT_JOB_ABANDON'
   | 'CUSTOMER_CREATE' | 'CUSTOMER_UPDATE' | 'CUSTOMER_ERASE'
   | 'LABEL_PRINT'
   | 'STOCK_ADJUSTMENT' | 'STOCK_DAMAGE' | 'STOCK_COUNT'
@@ -2525,9 +2525,9 @@ pub fn emit(t: &LabelTemplate, p: &LabelPreview, lang: LabelLanguage, dpi: u16) 
 2. **After `COMMIT`**, the command returns to the UI immediately ("Sale complete ✓") and pings the print worker over an in-memory channel. **The sale never awaits the printer.**
 3. **The print worker** is one tokio task per printer, with **at most one in-flight job per printer**.
    - Network or serial I/O uses explicit timeouts: connect 2 s, write 5 s.
-   - The Windows spooler `WritePrinter` can block indefinitely on a frozen spooler, so it runs on `spawn_blocking` under a 5 s `tokio::time::timeout`.
+   - The Windows spooler `WritePrinter` can block indefinitely on a frozen spooler, so every transport call runs on its own OS thread (`std::thread`, not `spawn_blocking`, so an abandoned call can never hold up runtime shutdown when the app exits) under a 5 s `tokio::time::timeout`.
    - On a timeout, the printer is marked **unhealthy**: its blocked thread is abandoned, since it can't be killed, and no new thread is started for that printer until a health probe succeeds. Threads never pile up.
-4. **Paper-out and errors.** Where the transport supports it (network and serial), the worker queries real-time status before each job: `DLE EOT 4` for the paper sensor, `DLE EOT 2` for the error state. Paper-out or cover-open sets the job to `failed`, with a reason code.
+4. **Paper-out and errors.** Where the transport supports it (network and serial), the worker queries real-time status before each job: `DLE EOT 4` for the paper sensor, `DLE EOT 2` for the error state. Paper-out or cover-open sets the job, and every other job waiting for that printer, to `failed` with a reason code (no paper is wasted and nothing is sent), and the worker idles until Retry or a new job.
    - The till shows a **persistent banner**: "Printer: paper out — 2 receipts waiting [Retry] [Reprint later]".
    - Selling continues.
 5. **Retries** re-render from the stored payload, with exponential backoff (2 s → 30 s) up to 5 attempts, then `failed`. A job is `abandoned` only when a user dismisses it, and that's audited.
@@ -2945,7 +2945,7 @@ Automatically "rebalancing" (moving −2 from L into the next layer) would **rew
 **Printer (paper-out, spooler freeze).** The full design is in §7.5. The checkout command returns after `COMMIT` and never awaits I/O.
 - Jobs are persisted in the sale's own transaction.
 - One worker runs per printer, with one in-flight job and hard timeouts.
-- `WritePrinter` runs on `spawn_blocking` under a timeout, and a hung printer is marked unhealthy without piling up threads.
+- `WritePrinter` runs on a dedicated thread under a timeout, and a hung printer is marked unhealthy without piling up threads.
 - Paper-out is detected via `DLE EOT` where the transport supports it, and shown as a persistent banner with Retry.
 
 **Proof:** Block 1.7 tests with a fake transport that blocks forever, errors and reports paper-out. The assertion is "a checkout completes in < 100 ms while the printer is hung; the job ends `failed`; no second thread is spawned".

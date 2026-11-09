@@ -81,7 +81,8 @@
     "VOID_OTHER_DEVICE": "A sale can only be voided on the counter that made it.",
     "VOID_SESSION_CLOSED": "This sale's cash session is closed. All sales are final.",
     "APPROVER_NOT_AUTHORISED": "The approver isn't allowed to do this.",
-    "CUSTOMER_ALREADY_ERASED": "This customer's details have already been erased."
+    "CUSTOMER_ALREADY_ERASED": "This customer's details have already been erased.",
+    "PRINTER_PROFILE_INVALID": "Check the printer connection details."
   },
   "INVARIANT": {
     "_": "This change isn't allowed.",

@@ -41,6 +41,7 @@ pub async fn void(auth: &Auth, clock: &dyn Clock, db: &Db, ctx: &WriteCtx, input
 pub async fn void_order(app: AppHandle, state: State<'_, AppState>, input: VoidInput) -> AppResult<VoidResult> {
     let ctx = write_ctx(&state)?;
     let result = void(&state.auth, state.clock.as_ref(), &state.db, &ctx, &input).await?;
+    state.printer.notify();
     emit_changed(&app, &VOID_TABLES);
     Ok(result)
 }

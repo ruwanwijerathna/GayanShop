@@ -21,6 +21,7 @@ pub mod commands;
 pub mod db;
 pub mod domain;
 pub mod error;
+pub mod hardware;
 pub mod prefs;
 pub mod setup;
 pub mod state;
@@ -33,6 +34,9 @@ use crate::auth::Auth;
 use crate::auth::pin::PinHasher;
 use crate::clock::SystemClock;
 use crate::db::Db;
+use crate::db::repo::print_jobs::RECEIPT_PRINTER;
+use crate::hardware::printer::worker::{PrintHub, WorkerConfig};
+use crate::hardware::printer::{self, TransportConfig};
 use crate::state::AppState;
 
 /// The typed IPC surface. `cargo test export_bindings` writes it to `src/db/bindings.ts`.
@@ -82,6 +86,13 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::cash::cash_session_report,
         commands::checkout::checkout_order,
         commands::customers::customer_lookup,
+        commands::hardware::printer_status,
+        commands::hardware::printer_profile,
+        commands::hardware::set_printer_profile,
+        commands::hardware::print_test_page,
+        commands::hardware::print_retry,
+        commands::hardware::print_dismiss_failed,
+        commands::hardware::print_recovery_resolve,
         commands::void::void_order,
         commands::void::session_orders,
     ])
@@ -108,7 +119,19 @@ pub fn run() -> Result<(), tauri::Error> {
             let db = tauri::async_runtime::block_on(Db::open(&data_dir.join("pos.db"), &data_dir.join("backups")))?;
             let identity = tauri::async_runtime::block_on(setup::load_identity(&db.pool))?;
             let auth = Auth::new(PinHasher::production());
-            app.manage(AppState::new(db, Arc::new(SystemClock), data_dir, auth, identity));
+            let clock: Arc<dyn clock::Clock> = Arc::new(SystemClock);
+            let tz = identity.as_ref().map_or(chrono_tz::Asia::Colombo, |i| i.calendar.timezone);
+            let handle = app.handle().clone();
+            let printer = tauri::async_runtime::block_on(PrintHub::start(
+                db.clone(),
+                RECEIPT_PRINTER,
+                Arc::new(|c: &TransportConfig| printer::connect(c)),
+                clock.clone(),
+                tz,
+                WorkerConfig::default(),
+                Arc::new(move || commands::emit_changed(&handle, &["print_jobs"])),
+            ))?;
+            app.manage(AppState::new(db, clock, data_dir, auth, identity, printer));
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -175,6 +198,13 @@ mod tests {
             "voidOrder",
             "sessionOrders",
             "customerLookup",
+            "printerStatus",
+            "printerProfile",
+            "setPrinterProfile",
+            "printTestPage",
+            "printRetry",
+            "printDismissFailed",
+            "printRecoveryResolve",
         ] {
             assert!(ts.contains(&format!("{cmd}:")), "command {cmd} missing from bindings");
         }

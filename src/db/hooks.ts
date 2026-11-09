@@ -10,6 +10,7 @@ import {
   type DrawerMovementInput,
   type Perm,
   type ProductInput,
+  type ReceiptPrinterProfile,
   type SetupInput,
   type UiLanguage,
   type UiTheme,
@@ -29,6 +30,8 @@ export const queryKeys = {
   batches: ["batches", "list"] as const,
   batch: (id: string) => ["batches", "detail", id] as const,
   cashSession: ["cash", "current"] as const,
+  printerStatus: ["printer", "status"] as const,
+  printerProfile: ["printer", "profile"] as const,
 };
 
 /** Polled so the shell notices an idle auto-lock done by Rust (doc §3.5). */
@@ -253,4 +256,44 @@ export function useNoSale() {
 
 export function useCloseCashSession() {
   return useCashMutation((input: CloseInput) => unwrap(commands.closeCashSession(input)));
+}
+
+// ───────── receipt printer (doc §7.5) ─────────
+
+/** Banner state. Polled as well, because the worker's health changes without a database write. */
+export function usePrinterStatus() {
+  return useQuery({
+    queryKey: queryKeys.printerStatus,
+    queryFn: () => unwrap(commands.printerStatus()),
+    refetchInterval: 5_000,
+  });
+}
+
+export function usePrinterProfile() {
+  return useQuery({ queryKey: queryKeys.printerProfile, queryFn: () => unwrap(commands.printerProfile()) });
+}
+
+function usePrinterMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: fn, onSuccess: () => qc.invalidateQueries({ queryKey: ["printer"] }) });
+}
+
+export function useSetPrinterProfile() {
+  return usePrinterMutation((profile: ReceiptPrinterProfile) => unwrap(commands.setPrinterProfile(profile)));
+}
+
+export function usePrintTestPage() {
+  return usePrinterMutation(() => unwrap(commands.printTestPage()));
+}
+
+export function usePrintRetry() {
+  return usePrinterMutation(() => unwrap(commands.printRetry()));
+}
+
+export function usePrintDismissFailed() {
+  return usePrinterMutation(() => unwrap(commands.printDismissFailed()));
+}
+
+export function usePrintRecoveryResolve() {
+  return usePrinterMutation((printNow: boolean) => unwrap(commands.printRecoveryResolve(printNow)));
 }

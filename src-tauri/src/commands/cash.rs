@@ -52,6 +52,7 @@ pub async fn cash_drawer_movement(
         require(&state.auth, state.clock.as_ref(), Perm::CASH_PAY_IN_OUT, DRAWER_TARGET, approval_id.as_deref())?;
     let ctx = write_ctx(&state)?;
     let report = cash::drawer_movement(&state.db, &ctx, &actor, input.kind, input.amount, &input.reason).await?;
+    state.printer.notify();
     emit_changed(&app, &["cash_sessions", "cash_movements", "audit_logs"]);
     Ok(report)
 }
@@ -68,6 +69,7 @@ pub async fn no_sale(
     let actor =
         require(&state.auth, state.clock.as_ref(), Perm::DRAWER_NO_SALE, DRAWER_TARGET, approval_id.as_deref())?;
     cash::no_sale(&state.db, &write_ctx(&state)?, &actor, &reason).await?;
+    state.printer.notify();
     emit_changed(&app, &["cash_movements", "audit_logs"]);
     Ok(())
 }
@@ -78,6 +80,7 @@ pub async fn no_sale(
 pub async fn close_cash_session(app: AppHandle, state: State<'_, AppState>, input: CloseInput) -> AppResult<ZReport> {
     let actor = require(&state.auth, state.clock.as_ref(), Perm::CASH_SESSION_MANAGE, "cash_session", None)?;
     let report = cash::close(&state.db, &write_ctx(&state)?, &actor, &input).await?;
+    state.printer.notify();
     emit_changed(&app, &["cash_sessions", "audit_logs"]);
     Ok(report)
 }

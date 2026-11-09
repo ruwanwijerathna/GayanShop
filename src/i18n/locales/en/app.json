@@ -4,7 +4,8 @@
     "audit": "Audit log",
     "products": "Products",
     "batches": "Batches",
-    "cash": "Cash"
+    "cash": "Cash",
+    "settings": "Settings"
   },
   "status": {
     "title": "Counter status",
