@@ -2,7 +2,7 @@
   "nav": {
     "home": "Counter",
     "audit": "Audit log",
-    "products": "Products",
+    "products": "Products & Stock",
     "batches": "Batches",
     "cash": "Cash",
     "settings": "Settings",
@@ -13,7 +13,7 @@
     "customers": "Customers",
     "expenses": "Expenses",
     "reports": "Reports",
-    "orders": "Orders",
+    "orders": "Bills",
     "groupSales": "Sales & Counter",
     "groupInventory": "Catalog & Stock",
     "groupManagement": "Management & Reports",

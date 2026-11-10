@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { commands } from "@/db/bindings";
 import { ok, renderWithProviders, session } from "@/test/render";
 import App from "./App";
@@ -21,6 +21,8 @@ vi.mock("@/db/bindings", () => ({
     syncBootstrap: vi.fn(() => ok({ pages: 2, rows: 700, permille: 1000, done: true })),
     restoreStatus: vi.fn(() => ok({ pending: null, modes: ["local"], device_code: "T01" })),
     logout: vi.fn(() => ok(null)),
+    listProducts: vi.fn(() => ok([])),
+    listCategories: vi.fn(() => ok([])),
   },
 }));
 
@@ -202,8 +204,8 @@ describe("App sidebar", () => {
     });
     renderWithProviders(<App />);
     const groups: [string, string[]][] = [
-      ["Sales & Counter", ["Counter", "POS Terminal", "Orders", "Cash", "Customers"]],
-      ["Catalog & Stock", ["Products", "Batches", "Stock", "Unlisted Items"]],
+      ["Sales & Counter", ["Counter", "POS Terminal", "Bills", "Cash", "Customers"]],
+      ["Catalog & Stock", ["Products & Stock", "Batches", "Unlisted Items"]],
       ["Management & Reports", ["Reports", "Expenses", "Audit log"]],
       ["System", ["Staff", "Settings"]],
     ];
@@ -217,7 +219,7 @@ describe("App sidebar", () => {
       expect(names).toEqual(links);
     }
     expect(screen.getByRole("link", { name: "Counter" })).toHaveAttribute("data-active", "true");
-    expect(screen.getByRole("link", { name: "Orders" })).toHaveAttribute("data-active", "false");
+    expect(screen.getByRole("link", { name: "Bills" })).toHaveAttribute("data-active", "false");
     expect(screen.getByRole("button", { name: /Lock/ })).toBeInTheDocument();
     expect(screen.getAllByText("T01").length).toBeGreaterThan(0);
   });
@@ -227,8 +229,17 @@ describe("App sidebar", () => {
     renderWithProviders(<App />);
     expect(await screen.findByRole("link", { name: "POS Terminal" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Cash" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Products" })).toBeInTheDocument();
-    for (const hidden of ["Orders", "Customers", "Batches", "Reports", "Audit log", "Staff", "Settings"]) {
+    expect(screen.getByRole("link", { name: "Products & Stock" })).toBeInTheDocument();
+    for (const hidden of [
+      "Bills",
+      "Customers",
+      "Batches",
+      "Reports",
+      "Audit log",
+      "Staff",
+      "Settings",
+      "Stock",
+    ]) {
       expect(screen.queryByRole("link", { name: hidden })).not.toBeInTheDocument();
     }
     expect(screen.queryByText("Management & Reports")).not.toBeInTheDocument();
@@ -253,5 +264,51 @@ describe("App sidebar", () => {
     renderWithProviders(<App />);
     fireEvent.click(await screen.findByRole("button", { name: /Lock/ }));
     await waitFor(() => expect(commands.logout).toHaveBeenCalled());
+  });
+});
+
+describe("Products & Stock", () => {
+  afterEach(() => {
+    window.location.hash = "";
+  });
+
+  const OWNER_PERMS = ["SALE_CREATE", "REPORT_FINANCIAL", "PRODUCT_MANAGE"] as const;
+
+  it("opens the catalog tab from the sidebar, with every tab the owner may open", async () => {
+    loggedIn({ staff_id: "owner", role_name: "Owner", permissions: [...OWNER_PERMS] });
+    renderWithProviders(<App />);
+    fireEvent.click(await screen.findByRole("link", { name: "Products & Stock" }));
+    expect(await screen.findByRole("heading", { level: 1, name: "Products & Stock" })).toBeInTheDocument();
+    const tabs = within(screen.getByRole("tablist", { name: "Products & Stock sections" }));
+    expect(tabs.getAllByRole("tab").map((x) => x.textContent)).toEqual([
+      "All Products",
+      "Stock Adjustments",
+      "Stock Valuation",
+      "Movement History",
+    ]);
+    expect(tabs.getByRole("tab", { name: "All Products" })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByRole("grid", { name: "Products" })).toBeInTheDocument();
+
+    fireEvent.click(tabs.getByRole("tab", { name: "Stock Valuation" }));
+    await waitFor(() => expect(window.location.hash).toContain("tab=valuation"));
+    expect(tabs.getByRole("tab", { name: "Stock Valuation" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("redirects an old /inventory link to the Stock Adjustments tab", async () => {
+    window.location.hash = "#/inventory";
+    loggedIn({ staff_id: "owner", role_name: "Owner", permissions: [...OWNER_PERMS] });
+    renderWithProviders(<App />);
+    const tab = await screen.findByRole("tab", { name: "Stock Adjustments" });
+    await waitFor(() => expect(tab).toHaveAttribute("aria-selected", "true"));
+    expect(window.location.hash).toContain("#/products");
+  });
+
+  it("gives a cashier the catalog and adjustments only; other tabs in the URL fall back", async () => {
+    window.location.hash = "#/products?tab=valuation";
+    loggedIn();
+    renderWithProviders(<App />);
+    const tabs = within(await screen.findByRole("tablist", { name: "Products & Stock sections" }));
+    expect(tabs.getAllByRole("tab").map((x) => x.textContent)).toEqual(["All Products", "Stock Adjustments"]);
+    expect(tabs.getByRole("tab", { name: "All Products" })).toHaveAttribute("aria-selected", "true");
   });
 });

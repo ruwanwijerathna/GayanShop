@@ -2,7 +2,7 @@
   "nav": {
     "home": "කවුන්ටරය",
     "audit": "විගණන සටහන",
-    "products": "භාණ්ඩ",
+    "products": "භාණ්ඩ සහ තොග",
     "batches": "තොග කාණ්ඩ",
     "cash": "මුදල්",
     "settings": "සැකසුම්",
@@ -13,7 +13,7 @@
     "customers": "පාරිභෝගිකයන්",
     "expenses": "වියදම්",
     "reports": "වාර්තා",
-    "orders": "ඇණවුම්",
+    "orders": "බිල්පත්",
     "groupSales": "විකුණුම් සහ කවුන්ටරය",
     "groupInventory": "භාණ්ඩ සහ තොග",
     "groupManagement": "කළමනාකරණය සහ වාර්තා",

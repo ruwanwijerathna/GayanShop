@@ -2039,6 +2039,11 @@ export type Product_Deserialize = {
 	barcode_conflict: boolean,
 	updated_at: string,
 	version: number,
+	/**
+	 *  Units on hand now (`stock_levels`, derived from the ledger; 0 when nothing was ever stocked).
+	 *  Negative when oversold.
+	 */
+	on_hand: number,
 };
 
 /**  The full product, for the back office. `default_cost` is `None` unless the viewer holds `VIEW_COST`. */
@@ -2060,6 +2065,11 @@ export type Product_Serialize = {
 	barcode_conflict: boolean,
 	updated_at: string,
 	version: number,
+	/**
+	 *  Units on hand now (`stock_levels`, derived from the ledger; 0 when nothing was ever stocked).
+	 *  Negative when oversold.
+	 */
+	on_hand: number,
 };
 
 export type PromoteInput = PromoteInput_Serialize | PromoteInput_Deserialize;

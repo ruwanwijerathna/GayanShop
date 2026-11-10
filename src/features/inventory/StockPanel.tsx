@@ -1,12 +1,12 @@
-// Stock (doc §3.1, §5): valuation now or as of a date (by batch and by category), oversold layers, a stock
+// Stock tools for the Products & Stock page (doc §3.1, §5): valuation now or as of a date (by batch and by category), oversold layers, a stock
 // count, damage and adjustments (with a supervisor's approval where the role lacks it), and movement history.
 import { ClipboardList, History, PackageMinus, Scale, TriangleAlert } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { useSession } from "@/app/session";
 import { ApprovalDialog } from "@/components/auth/ApprovalDialog";
-import { Can } from "@/components/auth/Can";
 import { DataTable } from "@/components/data-table/DataTable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,7 @@ import {
 } from "@/db/hooks";
 import { translateError } from "@/i18n";
 import { formatMoney } from "@/lib/money";
+import { hasPerm } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 /** Must match `commands::inventory::STOCK_TARGET`. */
@@ -37,7 +38,7 @@ export const STOCK_TARGET = "stock";
 const FIELD = "h-12 text-base";
 const SELECT = "h-12 w-full rounded-md border border-input bg-background px-3 text-base";
 const REASONS: DamageReason[] = ["broken", "expired", "stolen", "faulty", "other"];
-type Tab = "valuation" | "oversold" | "count" | "damage" | "history";
+export type StockSection = "valuation" | "oversold" | "count" | "damage" | "history";
 
 /** Whole units: "12" → 12, "-3" → -3 when `signed`. */
 export function parseUnits(text: string, signed = false): number | null {
@@ -525,7 +526,7 @@ function HistoryTab() {
   );
 }
 
-const TABS: { id: Tab; icon: ReactNode; perm: Perm }[] = [
+const TABS: { id: StockSection; icon: ReactNode; perm: Perm }[] = [
   { id: "valuation", icon: <Scale aria-hidden />, perm: "REPORT_FINANCIAL" },
   { id: "oversold", icon: <TriangleAlert aria-hidden />, perm: "REPORT_FINANCIAL" },
   { id: "count", icon: <ClipboardList aria-hidden />, perm: "SALE_CREATE" },
@@ -533,36 +534,54 @@ const TABS: { id: Tab; icon: ReactNode; perm: Perm }[] = [
   { id: "history", icon: <History aria-hidden />, perm: "REPORT_FINANCIAL" },
 ];
 
-export function InventoryScreen() {
+/** Who may open a stock section (hides only; Rust enforces, asking a supervisor where needed). */
+export const STOCK_SECTION_PERMS: Record<StockSection, Perm> = Object.fromEntries(
+  TABS.map((x) => [x.id, x.perm]),
+) as Record<StockSection, Perm>;
+
+/**
+ * Some of the stock tools, for the Products & Stock page (composed in `src/app`, since features never
+ * import each other). Several sections get their own sub-tabs; a single one renders on its own. Sections
+ * the staff member can't open are left out.
+ */
+export function StockPanel({ sections, label }: { sections: readonly StockSection[]; label: string }) {
   const { t } = useTranslation("inventory");
-  const [tab, setTab] = useState<Tab>("damage");
+  const { session } = useSession();
+  // In the order given: the first section the staff member may open is the one shown first.
+  const visible = sections
+    .map((id) => TABS.find((x) => x.id === id))
+    .filter((x): x is (typeof TABS)[number] => x !== undefined && hasPerm(session, x.perm));
+  const [picked, setPicked] = useState<StockSection | null>(null);
+  const first = visible[0];
+  if (!first) return null;
+  const tab = picked && visible.some((x) => x.id === picked) ? picked : first.id;
   return (
-    <section className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">{t("title")}</h1>
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label={t("title")}>
-        {TABS.map((x) => (
-          <Can key={x.id} perm={x.perm}>
+    <div className="flex flex-col gap-4">
+      {visible.length > 1 && (
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label={label}>
+          {visible.map((x) => (
             <Button
+              key={x.id}
               type="button"
               role="tab"
               aria-selected={tab === x.id}
               size="pos"
               variant={tab === x.id ? "default" : "outline"}
-              onClick={() => setTab(x.id)}
+              onClick={() => setPicked(x.id)}
             >
               {x.icon}
               {t(`tabs.${x.id}`)}
             </Button>
-          </Can>
-        ))}
-      </div>
-      <div role="tabpanel" className="rounded-lg border p-4">
+          ))}
+        </div>
+      )}
+      <div role={visible.length > 1 ? "tabpanel" : undefined}>
         {tab === "valuation" && <ValuationTab />}
         {tab === "oversold" && <OversoldTab />}
         {tab === "count" && <CountTab />}
         {tab === "damage" && <DamageTab />}
         {tab === "history" && <HistoryTab />}
       </div>
-    </section>
+    </div>
   );
 }

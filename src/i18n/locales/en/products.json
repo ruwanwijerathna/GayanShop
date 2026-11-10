@@ -18,7 +18,8 @@
     "category": "Category",
     "price": "Price",
     "cost": "Cost",
-    "status": "Status"
+    "status": "Status",
+    "stock": "Stock"
   },
   "status": {
     "active": "Active",
@@ -71,5 +72,28 @@
   },
   "selectForLabels": "Select for labels",
   "selectProduct": "Select {{name}}",
-  "printLabels": "Print labels ({{count}})"
+  "printLabels": "Print labels ({{count}})",
+  "all": "All",
+  "lowStock": "Low stock",
+  "outOfStock": "Out of stock",
+  "stockFilter": {
+    "label": "Filter by stock",
+    "all": "$t(all) Products",
+    "low": "Low Stock (≤ {{max}})",
+    "out": "Out of Stock (0)"
+  },
+  "stockCell": {
+    "untracked": "Stock not tracked",
+    "inStock": "{{count}} in stock",
+    "low": "{{count}} ($t(lowStock))",
+    "out": "0 ($t(outOfStock))",
+    "oversold": "{{count}} (Oversold)"
+  },
+  "tabs": {
+    "label": "Products & Stock sections",
+    "products": "All Products",
+    "adjustments": "Stock Adjustments",
+    "valuation": "Stock Valuation",
+    "history": "Movement History"
+  }
 }

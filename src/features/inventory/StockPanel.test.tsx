@@ -4,7 +4,10 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useSession } from "@/app/session";
 import { commands, type Perm, type ProductSummary_Serialize as ProductSummary } from "@/db/bindings";
 import { err, ok, renderWithProviders, session } from "@/test/render";
-import { InventoryScreen, parseUnits } from "./InventoryScreen";
+import { parseUnits, StockPanel, type StockSection } from "./StockPanel";
+
+/** Every section, damage first (the old Stock screen's opening tab). */
+const ALL: StockSection[] = ["damage", "count", "valuation", "oversold", "history"];
 
 vi.mock("@/db/bindings", () => ({
   commands: {
@@ -45,7 +48,7 @@ const OWNER: Perm[] = ["SALE_CREATE", "STOCK_DAMAGE", "STOCK_ADJUST", "REPORT_FI
 function renderAs(perms: Perm[] = OWNER) {
   renderWithProviders(
     <As perms={perms}>
-      <InventoryScreen />
+      <StockPanel sections={ALL} label="Stock" />
     </As>,
   );
 }
@@ -101,7 +104,7 @@ beforeEach(() => {
   vi.mocked(commands.requestApproval).mockImplementation(() => ok({ approval_id: "appr", expires_at: "" }));
 });
 
-describe("InventoryScreen", () => {
+describe("StockPanel", () => {
   it("pages a product's movement history on the virtualised table", async () => {
     const row = (id: string, reason: string, qty: number) => ({
       id,

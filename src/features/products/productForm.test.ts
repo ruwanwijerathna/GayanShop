@@ -20,6 +20,7 @@ const product: Product = {
   barcode_conflict: false,
   updated_at: "2026-11-08T09:00:00.000Z",
   version: 1,
+  on_hand: 0,
 };
 
 describe("product form", () => {

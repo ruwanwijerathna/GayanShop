@@ -10,6 +10,7 @@ import {
 } from "@/db/bindings";
 import { err, ok, renderWithProviders, session } from "@/test/render";
 import { PRODUCT_COLUMN_WIDTHS, ProductsScreen } from "./ProductsScreen";
+import { matchesStockFilter, stockLevel } from "./stock";
 
 vi.mock("@/db/bindings", () => ({
   commands: {
@@ -45,6 +46,7 @@ function product(over: Partial<Product>): Product {
     barcode_conflict: false,
     updated_at: "2026-11-08T09:00:00.000Z",
     version: 1,
+    on_hand: 45,
     ...over,
   };
 }
@@ -205,5 +207,71 @@ describe("ProductsScreen", () => {
   it("fits every column at the 1024×768 minimum window, cost included", () => {
     const total = Object.values(PRODUCT_COLUMN_WIDTHS).reduce((a, b) => a + b, 0);
     expect(total).toBeLessThanOrEqual(895);
+  });
+
+  it("shows live stock: a count, low, out, oversold, or a dash when untracked", async () => {
+    vi.mocked(commands.listProducts).mockImplementation(() =>
+      ok([
+        product({ id: "a", name: "Plenty", on_hand: 45 }),
+        product({ id: "b", name: "Few", sku: "100010", on_hand: 3 }),
+        product({ id: "c", name: "None", sku: "100011", on_hand: 0 }),
+        product({ id: "d", name: "Minus", sku: "100012", on_hand: -2 }),
+        product({ id: "e", name: "Loose", sku: "100013", track_stock: false, on_hand: 0 }),
+      ]),
+    );
+    renderAs(MANAGER);
+    expect(await within(grid()).findByText("45 in stock")).toBeInTheDocument();
+    expect(within(grid()).getByText("Stock")).toBeInTheDocument();
+    expect(within(grid()).getByText("3 (Low stock)")).toBeInTheDocument();
+    expect(within(grid()).getByText("0 (Out of stock)")).toBeInTheDocument();
+    expect(within(grid()).getByText("-2 (Oversold)")).toBeInTheDocument();
+    expect(within(grid()).getByText("Stock not tracked")).toBeInTheDocument();
+  });
+
+  it("filters to low stock (1–5) and out of stock (0 or oversold), and back to all", async () => {
+    vi.mocked(commands.listProducts).mockImplementation(() =>
+      ok([
+        product({ id: "a", name: "Plenty", on_hand: 45 }),
+        product({ id: "b", name: "Few", sku: "100010", on_hand: 5 }),
+        product({ id: "c", name: "None", sku: "100011", on_hand: 0 }),
+        product({ id: "d", name: "Minus", sku: "100012", on_hand: -2 }),
+        product({ id: "e", name: "Loose", sku: "100013", track_stock: false, on_hand: 0 }),
+      ]),
+    );
+    renderAs(MANAGER);
+    await within(grid()).findByText("Plenty");
+    const filters = screen.getByRole("group", { name: "Filter by stock" });
+    expect(within(filters).getByRole("button", { name: "All Products" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    fireEvent.click(within(filters).getByRole("button", { name: "Low Stock (≤ 5)" }));
+    expect(screen.getByRole("status")).toHaveTextContent("1 product");
+    expect(within(grid()).getByText("Few")).toBeInTheDocument();
+
+    fireEvent.click(within(filters).getByRole("button", { name: "Out of Stock (0)" }));
+    expect(screen.getByRole("status")).toHaveTextContent("2 products");
+    expect(within(grid()).getByText("None")).toBeInTheDocument();
+    expect(within(grid()).getByText("Minus")).toBeInTheDocument();
+    expect(within(grid()).queryByText("Loose")).not.toBeInTheDocument();
+
+    fireEvent.click(within(filters).getByRole("button", { name: "All Products" }));
+    expect(screen.getByRole("status")).toHaveTextContent("5 products");
+  });
+
+  it("classifies stock levels at the boundaries", () => {
+    const at = (on_hand: number, track_stock = true) => ({ on_hand, track_stock });
+    expect([6, 5, 1, 0, -1].map((n) => stockLevel(at(n)))).toEqual([
+      "in_stock",
+      "low",
+      "low",
+      "out",
+      "oversold",
+    ]);
+    expect(stockLevel(at(-4, false))).toBe("untracked");
+    expect(matchesStockFilter(at(0, false), "out")).toBe(false);
+    expect(matchesStockFilter(at(-1), "out")).toBe(true);
+    expect(matchesStockFilter(at(6), "low")).toBe(false);
   });
 });

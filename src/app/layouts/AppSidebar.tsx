@@ -15,7 +15,6 @@ import {
   Store,
   UserRound,
   Users,
-  Warehouse,
   Zap,
   type LucideIcon,
 } from "lucide-react";
@@ -48,7 +47,6 @@ type NavTo =
   | "/customers"
   | "/products"
   | "/batches"
-  | "/inventory"
   | "/quick-sales"
   | "/reports"
   | "/expenses"
@@ -86,12 +84,6 @@ const GROUPS: NavGroup[] = [
     items: [
       { to: "/products", label: "nav.products", Icon: Package },
       { to: "/batches", label: "nav.batches", Icon: Boxes, perm: ["BATCH_MANAGE"] },
-      {
-        to: "/inventory",
-        label: "nav.inventory",
-        Icon: Warehouse,
-        perm: ["STOCK_DAMAGE", "STOCK_ADJUST", "REPORT_FINANCIAL"],
-      },
       { to: "/quick-sales", label: "nav.quickSales", Icon: Zap, perm: ["QUICK_SALE_PROMOTE"] },
     ],
   },

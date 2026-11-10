@@ -315,3 +315,20 @@ async fn rebuild_reproduces_the_incremental_derived_tables() {
     let upd = sqlx::query("UPDATE stock_movements SET qty_delta = 1").execute(p).await;
     assert!(upd.unwrap_err().to_string().contains("append-only"));
 }
+
+#[tokio::test]
+async fn product_list_and_get_carry_units_on_hand() {
+    let till = common::till().await;
+    let pot = till.stocked("Pot", 50_000, &[(7, 20_000), (3, 21_000)]).await;
+    let never_stocked = till.product("Mug", 10_000, true, 0, None).await;
+    let untracked = till.product("Bag", 5_000, false, 0, None).await;
+    let store = till.ctx().store_id;
+
+    let list = products::list(till.pool(), &store, true).await.unwrap();
+    let on_hand = |id: &str| list.iter().find(|p| p.id == id).map(|p| p.on_hand);
+    assert_eq!(on_hand(&pot), Some(10), "both layers count");
+    assert_eq!(on_hand(&never_stocked), Some(0), "no stock_levels row reads as 0");
+    assert_eq!(on_hand(&untracked), Some(0));
+    assert_eq!(list.len(), 3, "the stock join never duplicates or drops a product");
+    assert_eq!(products::get(till.pool(), &store, &pot, false).await.unwrap().on_hand, 10);
+}

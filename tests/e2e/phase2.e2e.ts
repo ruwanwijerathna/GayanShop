@@ -114,15 +114,15 @@ describe("Phase 2 acceptance: the back office at full scale", () => {
   });
 
   it("scrolls the year's orders at 60 fps while pages load, and opens a receipt", async () => {
-    await nav("Orders");
+    await nav("Bills");
     await click("All time");
-    const g = await grid("Orders");
+    const g = await grid("Bills");
     await g.$('[role="row"][data-row-index]').waitForExist({ timeout: 30_000 });
-    const f = await scrollFrames("Orders", 96, 4_000);
+    const f = await scrollFrames("Bills", 96, 4_000);
     expectSmooth("orders", f);
     expect(f.scrollHeight).toBeGreaterThan(200 * 48);
     await browser.execute(() => {
-      const viewport = document.querySelector('[role="grid"][aria-label="Orders"] .overflow-auto');
+      const viewport = document.querySelector('[role="grid"][aria-label="Bills"] .overflow-auto');
       if (viewport) viewport.scrollTop = 0;
     });
     const first = await g.$('[role="row"][data-row-index="0"]');

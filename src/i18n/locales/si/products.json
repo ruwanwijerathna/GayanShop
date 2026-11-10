@@ -18,7 +18,8 @@
     "category": "වර්ගය",
     "price": "මිල",
     "cost": "පිරිවැය",
-    "status": "තත්ත්වය"
+    "status": "තත්ත්වය",
+    "stock": "තොගය"
   },
   "status": {
     "active": "සක්‍රියයි",
@@ -71,5 +72,28 @@
   },
   "selectForLabels": "ලේබල් සඳහා තෝරන්න",
   "selectProduct": "{{name}} තෝරන්න",
-  "printLabels": "ලේබල් මුද්‍රණය ({{count}})"
+  "printLabels": "ලේබල් මුද්‍රණය ({{count}})",
+  "all": "සියල්ල",
+  "lowStock": "අඩු තොග",
+  "outOfStock": "තොග අවසන්",
+  "stockFilter": {
+    "label": "තොගය අනුව පෙරන්න",
+    "all": "සියලු භාණ්ඩ",
+    "low": "අඩු තොග (≤ {{max}})",
+    "out": "තොග අවසන් (0)"
+  },
+  "stockCell": {
+    "untracked": "තොගය ගණන් නොකෙරේ",
+    "inStock": "තොගයේ {{count}}",
+    "low": "{{count}} ($t(lowStock))",
+    "out": "0 ($t(outOfStock))",
+    "oversold": "{{count}} (අධික ලෙස විකුණා ඇත)"
+  },
+  "tabs": {
+    "label": "භාණ්ඩ සහ තොග කොටස්",
+    "products": "සියලු භාණ්ඩ",
+    "adjustments": "තොග ගැලපීම්",
+    "valuation": "තොග තක්සේරුව",
+    "history": "චලන ඉතිහාසය"
+  }
 }
