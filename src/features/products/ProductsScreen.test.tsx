@@ -22,6 +22,7 @@ vi.mock("@/db/bindings", () => ({
     createCategory: vi.fn(),
     updateCategory: vi.fn(),
     deleteCategory: vi.fn(),
+    adjustStock: vi.fn(),
   },
 }));
 
@@ -89,6 +90,7 @@ beforeEach(() => {
   vi.mocked(commands.updateProduct).mockReset();
   vi.mocked(commands.createCategory).mockReset();
   vi.mocked(commands.deleteCategory).mockReset();
+  vi.mocked(commands.adjustStock).mockReset();
 });
 
 const grid = () => screen.getByRole("grid", { name: "Products" });
@@ -151,6 +153,31 @@ describe("ProductsScreen", () => {
         sku: { mode: "generate" },
         barcode: { mode: "none" },
       }),
+    );
+  });
+
+  it("creates a product with initial stock quantity and note", async () => {
+    vi.mocked(commands.createProduct).mockImplementation(() =>
+      ok(product({ id: "soap1", name: "Sunlight Soap" })),
+    );
+    vi.mocked(commands.adjustStock).mockImplementation(() => ok({} as never));
+    renderAs(MANAGER);
+    fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Sunlight Soap" } });
+    fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "150" } });
+    fireEvent.change(within(dialog).getByLabelText("Stock Quantity"), { target: { value: "50" } });
+    fireEvent.change(within(dialog).getByLabelText("Note"), { target: { value: "Initial opening batch" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(commands.createProduct).toHaveBeenCalled();
+    expect(commands.adjustStock).toHaveBeenCalledWith(
+      {
+        product_id: "soap1",
+        qty_delta: 50,
+        note: "Initial opening batch",
+      },
+      null,
     );
   });
 

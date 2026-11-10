@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Category, Product } from "@/db/bindings";
 import { CommandError } from "@/db/client";
-import { useDeleteProduct, useSaveProduct } from "@/db/hooks";
+import { useAdjustStock, useDeleteProduct, useSaveProduct } from "@/db/hooks";
 import { translateError } from "@/i18n";
 import { playCue } from "@/lib/audio";
 import { hasPerm } from "@/lib/permissions";
@@ -29,7 +29,7 @@ import {
   type ProductFormState,
 } from "./productForm";
 import { SelectField } from "@/components/common/SelectField";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { WithTooltip } from "@/components/common/WithTooltip";
 
 const FIELD = "h-12 text-base";
@@ -53,25 +53,6 @@ function Field({ id, label, children }: { id: string; label: string; children: R
   );
 }
 
-function Check({
-  id,
-  label,
-  checked,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <label htmlFor={id} className="flex min-h-12 items-center gap-3 text-base">
-      <Checkbox id={id} className="size-6" checked={checked} onCheckedChange={(v) => onChange(v === true)} />
-      {label}
-    </label>
-  );
-}
-
 /** Create or edit a product (PRODUCT_MANAGE). The form is re-created per product via `key`. */
 export function ProductFormDialog(props: ProductFormDialogProps) {
   return props.open ? <ProductForm key={props.product?.id ?? "new"} {...props} /> : null;
@@ -83,18 +64,28 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
   const canViewCost = hasPerm(session, "VIEW_COST");
   const save = useSaveProduct();
   const remove = useDeleteProduct();
+  const adjust = useAdjustStock();
   const [form, setForm] = useState<ProductFormState>(() => (product ? fromProduct(product) : emptyForm()));
   const [moneyError, setMoneyError] = useState<MoneyField | null>(null);
+  const [quantityError, setQuantityError] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const set = <K extends keyof ProductFormState>(key: K, value: ProductFormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
-  const failure = save.error ?? remove.error;
+  const failure = save.error ?? remove.error ?? adjust.error;
   const serverError = failure instanceof CommandError ? translateError(i18n.t, failure.error) : null;
-  const busy = save.isPending || remove.isPending;
+  const busy = save.isPending || remove.isPending || adjust.isPending;
 
   const submit = () => {
+    const qtyText = form.quantity.trim();
+    if (qtyText !== "" && (!/^\d{1,7}$/.test(qtyText) || Number.parseInt(qtyText, 10) < 0)) {
+      setQuantityError(true);
+      playCue("error");
+      return;
+    }
+    setQuantityError(false);
+
     const built = toInput(form, canViewCost);
     if (!built.ok) {
       setMoneyError(built.field);
@@ -105,7 +96,27 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
     save.mutate(
       { id: product?.id ?? null, input: built.input },
       {
-        onSuccess: (saved) => {
+        onSuccess: async (saved) => {
+          if (qtyText !== "") {
+            const targetQty = Number.parseInt(qtyText, 10);
+            const currentOnHand = product?.on_hand ?? 0;
+            const delta = !product ? targetQty : targetQty - currentOnHand;
+            if (delta !== 0) {
+              const noteText = form.note.trim() || (!product ? "Initial stock" : "Stock adjustment");
+              try {
+                await adjust.mutateAsync({
+                  input: {
+                    product_id: saved.id,
+                    qty_delta: delta,
+                    note: noteText,
+                  },
+                  approvalId: null,
+                });
+              } catch {
+                // Stock adjust refusal or error does not roll back the product save
+              }
+            }
+          }
           playCue("complete");
           onSaved?.(saved);
           onClose();
@@ -214,6 +225,36 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
           </Field>
           {money("price", "product-price", t("form.price"))}
           {canViewCost && money("cost", "product-cost", t("form.cost"))}
+          <Field id="product-quantity" label={t("form.quantity")}>
+            <Input
+              id="product-quantity"
+              inputMode="numeric"
+              className={`${FIELD} font-mono`}
+              value={form.quantity}
+              placeholder={t("form.quantityPlaceholder")}
+              aria-invalid={quantityError}
+              aria-describedby={quantityError ? "product-quantity-error" : undefined}
+              onChange={(e) => {
+                set("quantity", e.target.value);
+                if (quantityError) setQuantityError(false);
+              }}
+            />
+            {quantityError && (
+              <p id="product-quantity-error" className="text-sm text-destructive">
+                {t("form.quantityInvalid")}
+              </p>
+            )}
+          </Field>
+          <Field id="product-note" label={t("form.note")}>
+            <Input
+              id="product-note"
+              className={FIELD}
+              value={form.note}
+              placeholder={t("form.notePlaceholder")}
+              maxLength={200}
+              onChange={(e) => set("note", e.target.value)}
+            />
+          </Field>
           <div className="xl:col-span-2 grid grid-cols-1 gap-4 xl:grid-cols-2">
             {codeField("sku")}
             {codeField("barcode")}
@@ -277,24 +318,20 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
               </Button>
             )}
           </fieldset>
-          <div className="flex flex-col gap-1 xl:col-span-2">
-            <Check
-              id="product-track"
-              label={t("form.trackStock")}
-              checked={form.trackStock}
-              onChange={(v) => set("trackStock", v)}
-            />
-            <Check
-              id="product-negative"
-              label={t("form.allowNegative")}
-              checked={form.allowNegative}
-              onChange={(v) => set("allowNegative", v)}
-            />
-            <Check
+          <div className="flex items-center justify-between gap-4 rounded-lg border p-3.5 xl:col-span-2">
+            <div className="flex flex-col gap-0.5">
+              <Label htmlFor="product-active" className="cursor-pointer text-base font-medium">
+                {t("form.active")}
+              </Label>
+              <span className="text-sm text-muted-foreground">
+                {form.isActive ? t("form.activeHint") : t("form.inactiveHint")}
+              </span>
+            </div>
+            <Switch
               id="product-active"
-              label={t("form.active")}
+              size="pos"
               checked={form.isActive}
-              onChange={(v) => set("isActive", v)}
+              onCheckedChange={(v) => set("isActive", v)}
             />
           </div>
           {serverError && (

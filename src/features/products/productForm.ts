@@ -17,6 +17,8 @@ export interface ProductFormState {
   price: string;
   minPrice: string;
   cost: string;
+  quantity: string;
+  note: string;
   skuMode: CodeMode;
   sku: string;
   barcodeMode: CodeMode;
@@ -40,6 +42,8 @@ export function emptyForm(): ProductFormState {
     price: "",
     minPrice: "",
     cost: "",
+    quantity: "",
+    note: "",
     skuMode: "generate",
     sku: "",
     barcodeMode: "none",
@@ -65,12 +69,14 @@ export function fromProduct(p: Product): ProductFormState {
     price: toMajor(p.price),
     minPrice: toMajor(p.min_price),
     cost: toMajor(p.default_cost),
+    quantity: p.on_hand > 0 ? String(p.on_hand) : "",
+    note: "",
     skuMode: p.sku ? "manual" : "none",
     sku: p.sku ?? "",
     barcodeMode: p.barcode ? "manual" : "none",
     barcode: p.barcode ?? "",
-    trackStock: p.track_stock,
-    allowNegative: p.allow_negative_stock,
+    trackStock: true,
+    allowNegative: true,
     isActive: p.is_active,
     attributes: Object.entries(p.attributes).map(([key, value]) => ({ key, value: value ?? "" })),
   };
