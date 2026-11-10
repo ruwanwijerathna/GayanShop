@@ -206,8 +206,8 @@ describe("App sidebar", () => {
     const groups: [string, string[]][] = [
       ["Sales & Counter", ["Counter", "POS Terminal", "Bills", "Cash", "Customers"]],
       ["Catalog & Stock", ["Products & Stock", "Unlisted Items"]],
-      ["Management & Reports", ["Reports", "Audit log"]],
-      ["System", ["Staff", "Settings"]],
+      ["Management & Reports", ["Reports", "Staff", "Audit log"]],
+      ["System", ["Settings"]],
     ];
     for (const [label, links] of groups) {
       const heading = await screen.findByText(label);

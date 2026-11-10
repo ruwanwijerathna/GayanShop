@@ -87,6 +87,7 @@ const GROUPS: NavGroup[] = [
     label: "nav.groupManagement",
     items: [
       { to: "/reports", label: "nav.reports", Icon: BarChart3, perm: ["REPORT_SALES"] },
+      { to: "/staff", label: "nav.staff", Icon: Users, perm: ["USER_MANAGE"] },
       { to: "/audit", label: "nav.audit", Icon: ShieldCheck, perm: ["AUDIT_VIEW"] },
     ],
   },
@@ -95,7 +96,6 @@ const GROUPS: NavGroup[] = [
 const SYSTEM: NavGroup = {
   label: "nav.groupSystem",
   items: [
-    { to: "/staff", label: "nav.staff", Icon: Users, perm: ["USER_MANAGE"] },
     { to: "/settings", label: "nav.settings", Icon: Settings2, perm: ["SETTINGS_MANAGE", "BACKUP_CREATE"] },
   ],
 };
