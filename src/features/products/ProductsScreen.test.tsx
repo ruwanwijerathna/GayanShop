@@ -142,6 +142,7 @@ describe("ProductsScreen", () => {
     fireEvent.change(name, { target: { value: "Soap" } });
     fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "120.50" } });
     fireEvent.change(within(dialog).getByLabelText("Default cost (Rs)"), { target: { value: "80" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Auto-generate SKU" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(commands.createProduct).toHaveBeenCalledWith(
@@ -151,6 +152,24 @@ describe("ProductsScreen", () => {
         price: 12_050,
         default_cost: 8_000,
         sku: { mode: "generate" },
+        barcode: { mode: "none" },
+      }),
+    );
+  });
+
+  it("creates a product with no SKU or barcode when left blank (None state)", async () => {
+    vi.mocked(commands.createProduct).mockImplementation(() => ok(product({ id: "new2", name: "Apple" })));
+    renderAs(MANAGER);
+    fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Apple" } });
+    fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "50" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(commands.createProduct).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Apple",
+        sku: { mode: "none" },
         barcode: { mode: "none" },
       }),
     );

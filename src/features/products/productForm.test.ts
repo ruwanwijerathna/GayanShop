@@ -24,7 +24,7 @@ const product: Product = {
 };
 
 describe("product form", () => {
-  it("starts a new product with a generated in-store SKU and no barcode", () => {
+  it("starts a new product with no SKU and no barcode by default (None state)", () => {
     const f = { ...emptyForm(), name: "Soap", price: "120" };
     const r = toInput(f, true);
     expect(r).toEqual({
@@ -35,12 +35,32 @@ describe("product form", () => {
         price: 12_000,
         min_price: null,
         default_cost: null,
-        sku: { mode: "generate" },
+        sku: { mode: "none" },
         barcode: { mode: "none" },
         category_id: null,
         attributes: {},
       }),
     });
+  });
+
+  it("handles code generation and manual codes for SKU and barcode", () => {
+    const gen = toInput(
+      { ...emptyForm(), name: "Soap", price: "120", skuMode: "generate", barcodeMode: "generate" },
+      true,
+    );
+    expect(gen.ok && [gen.input.sku, gen.input.barcode]).toEqual([
+      { mode: "generate" },
+      { mode: "generate" },
+    ]);
+
+    const manual = toInput(
+      { ...emptyForm(), name: "Soap", price: "120", sku: "SKU101", barcode: "4791234567890" },
+      true,
+    );
+    expect(manual.ok && [manual.input.sku, manual.input.barcode]).toEqual([
+      { mode: "manual", value: "SKU101" },
+      { mode: "manual", value: "4791234567890" },
+    ]);
   });
 
   it("converts typed rupees to integer cents and names the field that doesn't parse", () => {
