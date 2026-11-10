@@ -14,7 +14,6 @@ import { Label } from "@/components/ui/label";
 import type { QuickSaleRow, QuickSaleStatus } from "@/db/bindings";
 import { CommandError } from "@/db/client";
 import {
-  useBatches,
   useCategories,
   useIgnoreQuickSale,
   usePromoteQuickSale,
@@ -33,7 +32,6 @@ function Detail({ row, onDone }: { row: QuickSaleRow; onDone: () => void }) {
   const { t, i18n } = useTranslation("quickSales");
   const detail = useQuickSaleDetail(row.custom_key);
   const categories = useCategories();
-  const batches = useBatches();
   const promote = usePromoteQuickSale();
   const ignore = useIgnoreQuickSale();
   const [name, setName] = useState(row.display_name);
@@ -42,14 +40,12 @@ function Detail({ row, onDone }: { row: QuickSaleRow; onDone: () => void }) {
   const [categoryId, setCategoryId] = useState("");
   const [barcode, setBarcode] = useState(true);
   const [shelf, setShelf] = useState("");
-  const [batchId, setBatchId] = useState("");
 
   const priceN = parseMajor(price);
   const costN = parseMajor(cost);
   const shelfN =
     shelf.trim() === "" ? null : /^\d{1,7}$/.test(shelf.trim()) ? Number.parseInt(shelf.trim(), 10) : -1;
   const valid = name.trim() !== "" && priceN !== null && costN !== null && shelfN !== -1;
-  const received = (batches.data ?? []).filter((b) => b.status === "received" && !b.is_system);
   const error = [promote.error, ignore.error].find((e) => e instanceof CommandError);
 
   const submit = (e: FormEvent) => {
@@ -64,7 +60,7 @@ function Detail({ row, onDone }: { row: QuickSaleRow; onDone: () => void }) {
         category_id: categoryId || null,
         generate_barcode: barcode,
         shelf_qty: shelfN,
-        batch_id: shelfN !== null && batchId ? batchId : null,
+        batch_id: null,
       },
       {
         onSuccess: (r) => {
@@ -151,19 +147,6 @@ function Detail({ row, onDone }: { row: QuickSaleRow; onDone: () => void }) {
               value={shelf}
               onChange={(e) => setShelf(e.target.value)}
               aria-invalid={shelfN === -1}
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="qs-batch">{t("promote.batch")}</Label>
-            <SelectField
-              id="qs-batch"
-              value={batchId}
-              onValueChange={setBatchId}
-              disabled={shelfN === null}
-              options={[
-                { value: "", label: t("promote.noBatch") },
-                ...received.map((b) => ({ value: b.id, label: `${b.code} · ${b.name}` })),
-              ]}
             />
           </div>
           {error instanceof CommandError && (

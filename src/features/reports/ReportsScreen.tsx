@@ -5,7 +5,6 @@
 // sell-through.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { BatchSellThroughBar } from "@/components/charts/BatchSellThroughBar";
 import { PaymentDonut } from "@/components/charts/PaymentDonut";
 import { RevenueExpenseBar } from "@/components/charts/RevenueExpenseBar";
 import { SalesTrendArea } from "@/components/charts/SalesTrendArea";
@@ -24,7 +23,6 @@ import {
   useBusinessToday,
   useReportDevices,
   useReportSalesBy,
-  useReportSellThrough,
   useReportSummary,
   useReportTrend,
   useReportVoids,
@@ -35,7 +33,7 @@ import { cn } from "@/lib/utils";
 import { SelectField } from "@/components/common/SelectField";
 import { Checkbox } from "@/components/ui/checkbox";
 
-const DIMENSIONS: SalesDimension[] = ["product", "category", "batch"];
+const DIMENSIONS: SalesDimension[] = ["product", "category"];
 
 /** `2_550` bp → `25.5%` (negative margins keep their sign). */
 export function formatBp(bp: number): string {
@@ -280,7 +278,6 @@ function Charts({
 }) {
   const granularity = trendGranularity(period);
   const trend = useReportTrend(period, deviceId, granularity ?? "day", compare && period.kind !== "all_time");
-  const sellThrough = useReportSellThrough();
   return (
     <div className="grid gap-6 xl:grid-cols-2">
       {granularity && trend.data && (
@@ -290,7 +287,6 @@ function Charts({
         </>
       )}
       <PaymentDonut payments={payments} />
-      {sellThrough.data && <BatchSellThroughBar batches={sellThrough.data} />}
     </div>
   );
 }

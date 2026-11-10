@@ -205,8 +205,8 @@ describe("App sidebar", () => {
     renderWithProviders(<App />);
     const groups: [string, string[]][] = [
       ["Sales & Counter", ["Counter", "POS Terminal", "Bills", "Cash", "Customers"]],
-      ["Catalog & Stock", ["Products & Stock", "Batches", "Unlisted Items"]],
-      ["Management & Reports", ["Reports", "Expenses", "Audit log"]],
+      ["Catalog & Stock", ["Products & Stock", "Unlisted Items"]],
+      ["Management & Reports", ["Reports", "Audit log"]],
       ["System", ["Staff", "Settings"]],
     ];
     for (const [label, links] of groups) {
@@ -230,16 +230,7 @@ describe("App sidebar", () => {
     expect(await screen.findByRole("link", { name: "POS Terminal" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Cash" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Products & Stock" })).toBeInTheDocument();
-    for (const hidden of [
-      "Bills",
-      "Customers",
-      "Batches",
-      "Reports",
-      "Audit log",
-      "Staff",
-      "Settings",
-      "Stock",
-    ]) {
+    for (const hidden of ["Bills", "Customers", "Reports", "Audit log", "Staff", "Settings", "Stock"]) {
       expect(screen.queryByRole("link", { name: hidden })).not.toBeInTheDocument();
     }
     expect(screen.queryByText("Management & Reports")).not.toBeInTheDocument();

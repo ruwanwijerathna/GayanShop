@@ -1,11 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  commands,
-  type Batch_Serialize as Batch,
-  type QuickSaleRow_Serialize as QuickSaleRow,
-} from "@/db/bindings";
-import { chooseOption, ok, renderWithProviders } from "@/test/render";
+import { commands, type QuickSaleRow_Serialize as QuickSaleRow } from "@/db/bindings";
+import { ok, renderWithProviders } from "@/test/render";
 import { QuickSalesScreen } from "./QuickSalesScreen";
 
 vi.mock("@/db/bindings", () => ({
@@ -15,7 +11,6 @@ vi.mock("@/db/bindings", () => ({
     promoteQuickSale: vi.fn(),
     ignoreQuickSale: vi.fn(),
     listCategories: vi.fn(),
-    listBatches: vi.fn(),
   },
 }));
 
@@ -34,14 +29,6 @@ const ROW: QuickSaleRow = {
   product_id: null,
 };
 
-const BATCH = {
-  id: "b1",
-  code: "B-2026-1001",
-  name: "Pettah",
-  status: "received",
-  is_system: false,
-} as unknown as Batch;
-
 beforeAll(() => {
   // jsdom has no layout: give the virtualised table a viewport.
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 480 });
@@ -59,7 +46,6 @@ beforeEach(() => {
     }),
   );
   vi.mocked(commands.listCategories).mockImplementation(() => ok([]));
-  vi.mocked(commands.listBatches).mockImplementation(() => ok([BATCH]));
   vi.mocked(commands.promoteQuickSale).mockReset();
   vi.mocked(commands.ignoreQuickSale).mockImplementation(() => ok(null));
 });
@@ -77,7 +63,7 @@ describe("QuickSalesScreen", () => {
     await waitFor(() => expect(commands.quickSaleReview).toHaveBeenLastCalledWith(null));
   });
 
-  it("promotes a key with its cost and shelf count in a received batch", async () => {
+  it("promotes a key with its cost and shelf count", async () => {
     vi.mocked(commands.promoteQuickSale).mockImplementation(() =>
       ok({ product: { name: "Blue Bucket 10L" } as never, shelf_qty: 6 }),
     );
@@ -90,7 +76,6 @@ describe("QuickSalesScreen", () => {
     fireEvent.change(within(form).getByLabelText("Units on the shelf now (optional)"), {
       target: { value: "6" },
     });
-    chooseOption(within(form).getByLabelText("Batch the shelf stock belongs to"), /B-2026-1001/);
     fireEvent.click(within(form).getByRole("button", { name: "Promote" }));
     await waitFor(() =>
       expect(commands.promoteQuickSale).toHaveBeenCalledWith({
@@ -101,7 +86,7 @@ describe("QuickSalesScreen", () => {
         category_id: null,
         generate_barcode: true,
         shelf_qty: 6,
-        batch_id: "b1",
+        batch_id: null,
       }),
     );
   });

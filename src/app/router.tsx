@@ -6,13 +6,11 @@ import {
   redirect,
 } from "@tanstack/react-router";
 import { AuditLogScreen } from "@/features/audit/AuditLogScreen";
-import { BatchesScreen } from "@/features/batches/BatchesScreen";
 import { CashScreen } from "@/features/cash/CashScreen";
 import { HomePage } from "./HomePage";
 import { PosScreen } from "@/features/pos/PosScreen";
 import { QuickSalesScreen } from "@/features/quick-sales/QuickSalesScreen";
 import { CustomersScreen } from "@/features/customers/CustomersScreen";
-import { ExpensesScreen } from "@/features/expenses/ExpensesScreen";
 import { OrdersScreen } from "@/features/orders/OrdersScreen";
 import { ReportsScreen } from "@/features/reports/ReportsScreen";
 import { StaffScreen } from "@/features/staff/StaffScreen";
@@ -48,7 +46,10 @@ export const productsRoute = createRoute({
 export const batchesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/batches",
-  component: BatchesScreen,
+  // Batches feature is retired in favor of direct product stock & cost; redirect to Products.
+  beforeLoad: () => {
+    throw redirect({ to: "/products" });
+  },
 });
 
 export const cashRoute = createRoute({
@@ -87,7 +88,10 @@ export const customersRoute = createRoute({
 export const expensesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/expenses",
-  component: ExpensesScreen,
+  // Expenses feature is retired; redirect to Reports.
+  beforeLoad: () => {
+    throw redirect({ to: "/reports" });
+  },
 });
 
 export const reportsRoute = createRoute({

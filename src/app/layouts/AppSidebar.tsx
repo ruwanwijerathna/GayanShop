@@ -2,12 +2,10 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Banknote,
   BarChart3,
-  Boxes,
   Contact,
   Lock,
   Package,
   PanelLeft,
-  Receipt,
   ScrollText,
   Settings2,
   ShieldCheck,
@@ -47,10 +45,8 @@ type NavTo =
   | "/cash"
   | "/customers"
   | "/products"
-  | "/batches"
   | "/quick-sales"
   | "/reports"
-  | "/expenses"
   | "/audit"
   | "/staff"
   | "/settings";
@@ -84,7 +80,6 @@ const GROUPS: NavGroup[] = [
     label: "nav.groupInventory",
     items: [
       { to: "/products", label: "nav.products", Icon: Package },
-      { to: "/batches", label: "nav.batches", Icon: Boxes, perm: ["BATCH_MANAGE"] },
       { to: "/quick-sales", label: "nav.quickSales", Icon: Zap, perm: ["QUICK_SALE_PROMOTE"] },
     ],
   },
@@ -92,7 +87,6 @@ const GROUPS: NavGroup[] = [
     label: "nav.groupManagement",
     items: [
       { to: "/reports", label: "nav.reports", Icon: BarChart3, perm: ["REPORT_SALES"] },
-      { to: "/expenses", label: "nav.expenses", Icon: Receipt, perm: ["EXPENSE_MANAGE"] },
       { to: "/audit", label: "nav.audit", Icon: ShieldCheck, perm: ["AUDIT_VIEW"] },
     ],
   },

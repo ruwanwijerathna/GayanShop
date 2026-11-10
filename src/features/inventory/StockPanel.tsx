@@ -206,7 +206,6 @@ function ValuationTab() {
               {t("valuation.negative", { count: v.data.negative_layers })}
             </p>
           )}
-          <GroupTable title={t("valuation.byBatch")} rows={v.data.by_batch} uncategorised="" />
           <GroupTable
             title={t("valuation.byCategory")}
             rows={v.data.by_category}
