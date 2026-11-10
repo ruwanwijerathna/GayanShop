@@ -74,7 +74,7 @@ describe("product form", () => {
       input: {
         kind: "standard",
         name: "Blue Bucket 10L",
-        name_si: "නිල් බාල්දිය",
+        name_si: null, // one product name only: a stored Sinhala name is dropped on save
         sku: { mode: "manual", value: "100001" },
         barcode: { mode: "manual", value: "2100000000017" },
         category_id: "c1",

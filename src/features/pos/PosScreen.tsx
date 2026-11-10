@@ -502,9 +502,7 @@ function Till() {
                           focusScan();
                         }}
                       >
-                        <span className="flex-1 truncate">
-                          {i18n.resolvedLanguage === "si" && p.name_si ? p.name_si : p.name}
-                        </span>
+                        <span className="flex-1 truncate">{p.name}</span>
                         <span className="font-mono text-sm text-muted-foreground">{p.barcode ?? p.sku}</span>
                         <span className="tabular-nums">{formatMoney(p.price)}</span>
                       </button>

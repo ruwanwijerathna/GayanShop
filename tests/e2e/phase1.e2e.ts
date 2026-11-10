@@ -80,9 +80,9 @@ describe("Phase 1 acceptance: an offline sale day", () => {
       await $(`//td[normalize-space()="${name}"]`).waitForExist();
     }
 
-    await click("Products");
+    await click("Products & Stock");
     await click("Add product");
-    await type("Name (English, printed on receipts and labels)", "Blue Bucket");
+    await type("Product Name", "Blue Bucket");
     await type("Selling price (Rs)", "450");
     await click("Save");
     await $(`//*[normalize-space()="Blue Bucket"]`).waitForExist();

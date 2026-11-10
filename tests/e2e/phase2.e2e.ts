@@ -105,7 +105,7 @@ describe("Phase 2 acceptance: the back office at full scale", () => {
   });
 
   it("scrolls 50,000 products at 60 fps", async () => {
-    await nav("Products");
+    await nav("Products & Stock");
     const g = await grid("Products");
     await g.$('[role="row"][data-row-index]').waitForExist({ timeout: 30_000 });
     const f = await scrollFrames("Products", 240, 4_000);

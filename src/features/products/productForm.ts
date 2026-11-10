@@ -13,7 +13,6 @@ export interface AttributeRow {
 export interface ProductFormState {
   kind: ProductKind;
   name: string;
-  nameSi: string;
   categoryId: string;
   price: string;
   minPrice: string;
@@ -37,7 +36,6 @@ export function emptyForm(): ProductFormState {
   return {
     kind: "standard",
     name: "",
-    nameSi: "",
     categoryId: "",
     price: "",
     minPrice: "",
@@ -63,7 +61,6 @@ export function fromProduct(p: Product): ProductFormState {
   return {
     kind: p.kind,
     name: p.name,
-    nameSi: p.name_si ?? "",
     categoryId: p.category_id ?? "",
     price: toMajor(p.price),
     minPrice: toMajor(p.min_price),
@@ -108,7 +105,8 @@ export function toInput(f: ProductFormState, canViewCost: boolean): FormResult {
     input: {
       kind: f.kind,
       name: f.name,
-      name_si: f.nameSi.trim() === "" ? null : f.nameSi,
+      // One name for screens, receipts and labels: no separate Sinhala name is kept.
+      name_si: null,
       sku: code(f.skuMode, f.sku),
       barcode: code(f.barcodeMode, f.barcode),
       category_id: f.categoryId === "" ? null : f.categoryId,

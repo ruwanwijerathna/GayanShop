@@ -30,8 +30,7 @@
     "kind": "Type",
     "kindStandard": "Standard item",
     "kindGeneric": "Generic (many items, one price)",
-    "name": "Name (English, printed on receipts and labels)",
-    "nameSi": "Sinhala name (shown on screens only)",
+    "name": "Product Name",
     "category": "Category",
     "noCategory": "No category",
     "price": "Selling price (Rs)",
@@ -56,7 +55,8 @@
     "delete": "Delete",
     "deleteConfirm": "Delete {{name}}? It leaves the till and the lists; past sales keep it.",
     "confirmDelete": "Yes, delete",
-    "moneyInvalid": "Enter an amount such as 450 or 450.50."
+    "moneyInvalid": "Enter an amount such as 450 or 450.50.",
+    "namePlaceholder": "Enter product name"
   },
   "categories": {
     "title": "Categories",

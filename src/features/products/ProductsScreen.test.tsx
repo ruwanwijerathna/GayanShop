@@ -94,10 +94,10 @@ beforeEach(() => {
 const grid = () => screen.getByRole("grid", { name: "Products" });
 
 describe("ProductsScreen", () => {
-  it("lists active products with their Sinhala name, category path and cost, and filters as you type", async () => {
+  it("lists active products by their one name, with category path and cost, and filters as you type", async () => {
     renderAs(MANAGER);
     expect(await within(grid()).findByText("Blue Bucket 10L")).toBeInTheDocument();
-    expect(within(grid()).getByText("නිල් බාල්දිය")).toBeInTheDocument();
+    expect(within(grid()).queryByText("නිල් බාල්දිය")).not.toBeInTheDocument(); // no secondary name line
     expect(within(grid()).getByText("Home › Kitchen")).toBeInTheDocument();
     expect(within(grid()).getAllByText("Rs 200.00")).toHaveLength(2);
     expect(within(grid()).queryByText("Old Mug")).not.toBeInTheDocument();
@@ -135,7 +135,11 @@ describe("ProductsScreen", () => {
     renderAs(MANAGER);
     fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText(/^Name \(English/), { target: { value: "Soap" } });
+    const name = within(dialog).getByLabelText("Product Name");
+    expect(name).toHaveAttribute("placeholder", "Enter product name");
+    expect(within(dialog).queryByLabelText(/Sinhala/)).not.toBeInTheDocument();
+    expect(dialog.querySelectorAll("input[lang='si']")).toHaveLength(0);
+    fireEvent.change(name, { target: { value: "Soap" } });
     fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "120.50" } });
     fireEvent.change(within(dialog).getByLabelText("Default cost (Rs)"), { target: { value: "80" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
@@ -143,6 +147,7 @@ describe("ProductsScreen", () => {
     expect(commands.createProduct).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "Soap",
+        name_si: null,
         price: 12_050,
         default_cost: 8_000,
         sku: { mode: "generate" },

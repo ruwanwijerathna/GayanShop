@@ -144,16 +144,7 @@ export function ProductsScreen() {
         header: t("columns.name"),
         size: PRODUCT_COLUMN_WIDTHS.name,
         accessorFn: (p) => p.name,
-        cell: ({ row }) => (
-          <span className="flex min-w-0 flex-col leading-tight">
-            <span className="truncate">{row.original.name}</span>
-            {row.original.name_si && (
-              <span lang="si" className="truncate text-sm text-muted-foreground">
-                {row.original.name_si}
-              </span>
-            )}
-          </span>
-        ),
+        cell: ({ row }) => <span className="truncate">{row.original.name}</span>,
       },
       {
         id: "sku",

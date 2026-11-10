@@ -254,6 +254,7 @@ It's never derived from UTC at query time. Otherwise terminals, and the cloud, w
 - **Receipts and labels stay English.** Generic ESC/POS and TSPL printers have no Sinhala code page, so receipt text, the footer and label text are English or Latin. This is an owner requirement.
   - Product `name` must be printable: Rust warns at save time if it contains characters outside the printer code page.
   - An optional `products.name_si` is shown on screens when the UI is in Sinhala, and is never printed.
+  - **Owner decision (2026-11-10): one product name.** The product form has a single "Product Name" field and saves `name_si = NULL`, so the same English name shows in the product list, at the till and on receipts and labels. The column, its FTS index and the sync field stay (older rows, other counters). An existing `name_si` is dropped the next time that product is saved.
   - Raster (bitmap) Sinhala printing stays in the Phase 5 backlog.
 - **Quality gates:**
   - A CI script fails the build when a key exists in `en` but not `si`, or vice versa.

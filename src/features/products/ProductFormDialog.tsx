@@ -200,20 +200,10 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
               id="product-name"
               className={FIELD}
               value={form.name}
+              placeholder={t("form.namePlaceholder")}
               maxLength={80}
               autoComplete="off"
               onChange={(e) => set("name", e.target.value)}
-            />
-          </Field>
-          <Field id="product-name-si" label={t("form.nameSi")}>
-            <Input
-              id="product-name-si"
-              lang="si"
-              className={FIELD}
-              value={form.nameSi}
-              maxLength={80}
-              autoComplete="off"
-              onChange={(e) => set("nameSi", e.target.value)}
             />
           </Field>
           <Field id="product-kind" label={t("form.kind")}>
