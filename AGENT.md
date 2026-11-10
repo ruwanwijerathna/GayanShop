@@ -7,7 +7,7 @@
 >
 > Never change an architectural decision silently. Propose the doc change to the owner first.
 
-**Current state (2026-11-10): Phase 4 (production hardening) complete on branch `feat/phase-4-production-hardening`.** Blocks 4.1–4.5 are committed and green. Production NSIS Windows installer (6.40 MiB) generated at `src-tauri/target/release/bundle/nsis/GayanShop POS_0.1.0_x64-setup.exe`. Phases 0–3 are complete and merged to `main`. Deploying Phase 3 to the live project (link, `db push` — which now also carries Block 4.1's `sync_health` migration —, `functions deploy`, sign-up off, the owner account) and registering the counters are the owner's steps in `docs/qa/phase3-acceptance.md`. Owner hardware, touch and Sinhala checks are pending in `docs/qa/phase1-acceptance.md` and `docs/qa/phase2-acceptance.md`. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
+**Current state (2026-11-10): Phases 0–4 are complete and merged to `main`.** Blocks 4.1–4.5 are committed and green. Production NSIS Windows installer (6.40 MiB) generated at `src-tauri/target/release/bundle/nsis/GayanShop POS_0.1.0_x64-setup.exe`. Deploying Phase 3 to the live project (link, `db push` — which now also carries Block 4.1's `sync_health` migration —, `functions deploy`, sign-up off, the owner account) and registering the counters are the owner's steps in `docs/qa/phase3-acceptance.md`. Owner hardware, touch and Sinhala checks are pending in `docs/qa/phase1-acceptance.md` and `docs/qa/phase2-acceptance.md`. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
 
 ---
 
@@ -468,9 +468,13 @@ Each block's **gate = its specific commands + `pnpm verify`**.
 - [x] **4.4 Observability**: done 2026-11-10 (rotating logs with KeepSome(5), support bundle with diagnostic summary, integrity probes, audit chain verification, zip export)
   - **Deliverables:** rotating logs, a support bundle (logs, sync_logs, integrity probes, chain verify).
   - **Gate:** `--test support_bundle` + `pnpm verify`
-- [ ] **4.5 Pilot readiness**
+- [x] **4.5 Pilot readiness**: done 2026-11-10 (soak: 8 × 3,600 s of scripted selling at 3 counters with catalog and quick-sale lines, a same-session void, every cash session closed with a balanced Z-report, convergence and `rebuild_derived` equality on every counter; owner pilot steps in `docs/qa/pilot-checklist.md`)
   - **Deliverables:** a soak test (8 h scripted selling at 3 counters), the final perf budgets, and `docs/qa/pilot-checklist.md`.
   - **Gate:** the soak test + `pnpm verify` + `pnpm tauri build`
+
+**Phase 4 decisions (owner, 2026-11-10):**
+- **SQLCipher: deferred.** The till keeps standard SQLite (WAL) protected by OS file permissions (the DB lives in the user profile). Block 4.3's "optional SQLCipher" is not built.
+- **Crash reporting: local only.** Rotating local logs plus the support bundle (Block 4.4), exported by the owner on request. No remote telemetry.
 
 ---
 
