@@ -28,10 +28,11 @@ import {
   type MoneyField,
   type ProductFormState,
 } from "./productForm";
+import { SelectField } from "@/components/common/SelectField";
+import { Checkbox } from "@/components/ui/checkbox";
+import { WithTooltip } from "@/components/common/WithTooltip";
 
 const FIELD = "h-12 text-base";
-const SELECT =
-  "h-12 w-full rounded-md border border-input bg-background px-3 text-base focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none";
 const CODE_MODES: CodeMode[] = ["none", "generate", "manual"];
 
 export interface ProductFormDialogProps {
@@ -65,13 +66,7 @@ function Check({
 }) {
   return (
     <label htmlFor={id} className="flex min-h-12 items-center gap-3 text-base">
-      <input
-        id={id}
-        type="checkbox"
-        className="size-6 accent-primary"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-      />
+      <Checkbox id={id} className="size-6" checked={checked} onCheckedChange={(v) => onChange(v === true)} />
       {label}
     </label>
   );
@@ -207,30 +202,26 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
             />
           </Field>
           <Field id="product-kind" label={t("form.kind")}>
-            <select
+            <SelectField
               id="product-kind"
-              className={SELECT}
               value={form.kind}
-              onChange={(e) => set("kind", e.target.value === "generic" ? "generic" : "standard")}
-            >
-              <option value="standard">{t("form.kindStandard")}</option>
-              <option value="generic">{t("form.kindGeneric")}</option>
-            </select>
+              onValueChange={(v) => set("kind", v === "generic" ? "generic" : "standard")}
+              options={[
+                { value: "standard", label: t("form.kindStandard") },
+                { value: "generic", label: t("form.kindGeneric") },
+              ]}
+            />
           </Field>
           <Field id="product-category" label={t("form.category")}>
-            <select
+            <SelectField
               id="product-category"
-              className={SELECT}
               value={form.categoryId}
-              onChange={(e) => set("categoryId", e.target.value)}
-            >
-              <option value="">{t("form.noCategory")}</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {categoryPath(c, categories)}
-                </option>
-              ))}
-            </select>
+              onValueChange={(v) => set("categoryId", v)}
+              options={[
+                { value: "", label: t("form.noCategory") },
+                ...categories.map((c) => ({ value: c.id, label: categoryPath(c, categories) })),
+              ]}
+            />
           </Field>
           {money("price", "product-price", t("form.price"))}
           {money("minPrice", "product-min-price", t("form.minPrice"))}
@@ -267,20 +258,22 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
                     )
                   }
                 />
-                <Button
-                  type="button"
-                  size="icon-pos"
-                  variant="outline"
-                  aria-label={t("form.removeAttribute", { name: row.key })}
-                  onClick={() =>
-                    set(
-                      "attributes",
-                      form.attributes.filter((_, j) => j !== i),
-                    )
-                  }
-                >
-                  <X aria-hidden />
-                </Button>
+                <WithTooltip label={t("form.removeAttribute", { name: row.key })}>
+                  <Button
+                    type="button"
+                    size="icon-pos"
+                    variant="outline"
+                    aria-label={t("form.removeAttribute", { name: row.key })}
+                    onClick={() =>
+                      set(
+                        "attributes",
+                        form.attributes.filter((_, j) => j !== i),
+                      )
+                    }
+                  >
+                    <X aria-hidden />
+                  </Button>
+                </WithTooltip>
               </div>
             ))}
             {form.attributes.length < 10 && (

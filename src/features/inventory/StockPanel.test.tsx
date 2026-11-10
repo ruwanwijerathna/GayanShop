@@ -3,7 +3,7 @@ import { useEffect, type ReactNode } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useSession } from "@/app/session";
 import { commands, type Perm, type ProductSummary_Serialize as ProductSummary } from "@/db/bindings";
-import { err, ok, renderWithProviders, session } from "@/test/render";
+import { chooseOption, err, ok, openTab, renderWithProviders, session } from "@/test/render";
 import { parseUnits, StockPanel, type StockSection } from "./StockPanel";
 
 /** Every section, damage first (the old Stock screen's opening tab). */
@@ -130,7 +130,7 @@ describe("StockPanel", () => {
       )
       .mockImplementationOnce(() => ok({ rows: [row("m1", "batch_intake", 10)], next_cursor: null }));
     renderAs();
-    fireEvent.click(screen.getByRole("tab", { name: /History/ }));
+    openTab(screen.getByRole("tab", { name: /History/ }));
     await pickPot("Product");
     const grid = await screen.findByRole("grid", { name: /History/ });
     expect(await within(grid).findByText("cracked")).toBeInTheDocument();
@@ -146,7 +146,7 @@ describe("StockPanel", () => {
 
   it("values the stock now and as of a date, flagging oversold layers", async () => {
     renderAs();
-    fireEvent.click(screen.getByRole("tab", { name: /Valuation/ }));
+    openTab(screen.getByRole("tab", { name: /Valuation/ }));
     expect(await screen.findByTestId("value-at-cost")).toHaveTextContent("Rs 1,250.00");
     expect(screen.getByText("No category")).toBeInTheDocument();
     expect(screen.getByText(/1 oversold layer/)).toBeInTheDocument();
@@ -156,7 +156,7 @@ describe("StockPanel", () => {
 
   it("lists oversold layers", async () => {
     renderAs();
-    fireEvent.click(screen.getByRole("tab", { name: /Oversold/ }));
+    openTab(screen.getByRole("tab", { name: /Oversold/ }));
     const row = (await screen.findByText("Cup")).closest("tr");
     if (row) expect(within(row).getByText("-2")).toBeInTheDocument();
   });
@@ -168,7 +168,7 @@ describe("StockPanel", () => {
     renderAs(["SALE_CREATE"]);
     await pickPot("Product");
     fireEvent.change(screen.getByLabelText("Units"), { target: { value: "2" } });
-    fireEvent.change(screen.getByLabelText("Why"), { target: { value: "expired" } });
+    chooseOption(screen.getByLabelText("Why"), "Expired");
     fireEvent.click(screen.getByRole("button", { name: "Write off" }));
     fireEvent.click(await screen.findByRole("button", { name: "Kamal" }));
     fireEvent.change(screen.getByLabelText("PIN"), { target: { value: "2222" } });
@@ -203,7 +203,7 @@ describe("StockPanel", () => {
   it("saves a stock count", async () => {
     vi.mocked(commands.recordStockCount).mockImplementation(() => ok({ changes: [CHANGE], unchanged: 0 }));
     renderAs();
-    fireEvent.click(screen.getByRole("tab", { name: /Stock count/ }));
+    openTab(screen.getByRole("tab", { name: /Stock count/ }));
     await pickPot("Add a product to the count");
     fireEvent.change(screen.getByLabelText("Counted Pot"), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: "Save count (1)" }));

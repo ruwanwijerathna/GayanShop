@@ -23,9 +23,10 @@ import {
 } from "@/db/hooks";
 import { translateError } from "@/i18n";
 import { formatMoney, parseMajor, toMajorInput } from "@/lib/money";
+import { SelectField } from "@/components/common/SelectField";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const FIELD = "h-12 text-base";
-const SELECT = "h-12 w-full rounded-md border border-input bg-background px-3 text-base";
 const FILTERS: (QuickSaleStatus | null)[] = ["new", null, "promoted", "ignored"];
 
 function Detail({ row, onDone }: { row: QuickSaleRow; onDone: () => void }) {
@@ -127,27 +128,18 @@ function Detail({ row, onDone }: { row: QuickSaleRow; onDone: () => void }) {
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="qs-category">{t("promote.category")}</Label>
-            <select
+            <SelectField
               id="qs-category"
-              className={SELECT}
               value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-            >
-              <option value="">{t("promote.noCategory")}</option>
-              {(categories.data ?? []).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+              onValueChange={setCategoryId}
+              options={[
+                { value: "", label: t("promote.noCategory") },
+                ...(categories.data ?? []).map((c) => ({ value: c.id, label: c.name })),
+              ]}
+            />
           </div>
           <label className="flex min-h-12 items-center gap-3 self-end text-base">
-            <input
-              type="checkbox"
-              className="size-6"
-              checked={barcode}
-              onChange={(e) => setBarcode(e.target.checked)}
-            />
+            <Checkbox className="size-6" checked={barcode} onCheckedChange={(v) => setBarcode(v === true)} />
             {t("promote.barcode")}
           </label>
           <div className="flex flex-col gap-2">
@@ -163,20 +155,16 @@ function Detail({ row, onDone }: { row: QuickSaleRow; onDone: () => void }) {
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="qs-batch">{t("promote.batch")}</Label>
-            <select
+            <SelectField
               id="qs-batch"
-              className={SELECT}
               value={batchId}
-              onChange={(e) => setBatchId(e.target.value)}
+              onValueChange={setBatchId}
               disabled={shelfN === null}
-            >
-              <option value="">{t("promote.noBatch")}</option>
-              {received.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.code} · {b.name}
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: "", label: t("promote.noBatch") },
+                ...received.map((b) => ({ value: b.id, label: `${b.code} · ${b.name}` })),
+              ]}
+            />
           </div>
           {error instanceof CommandError && (
             <p role="alert" className="text-base text-destructive sm:col-span-2">

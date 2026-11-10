@@ -5,7 +5,7 @@ import {
   type Batch_Serialize as Batch,
   type QuickSaleRow_Serialize as QuickSaleRow,
 } from "@/db/bindings";
-import { ok, renderWithProviders } from "@/test/render";
+import { chooseOption, ok, renderWithProviders } from "@/test/render";
 import { QuickSalesScreen } from "./QuickSalesScreen";
 
 vi.mock("@/db/bindings", () => ({
@@ -90,9 +90,7 @@ describe("QuickSalesScreen", () => {
     fireEvent.change(within(form).getByLabelText("Units on the shelf now (optional)"), {
       target: { value: "6" },
     });
-    fireEvent.change(within(form).getByLabelText("Batch the shelf stock belongs to"), {
-      target: { value: "b1" },
-    });
+    chooseOption(within(form).getByLabelText("Batch the shelf stock belongs to"), /B-2026-1001/);
     fireEvent.click(within(form).getByRole("button", { name: "Promote" }));
     await waitFor(() =>
       expect(commands.promoteQuickSale).toHaveBeenCalledWith({

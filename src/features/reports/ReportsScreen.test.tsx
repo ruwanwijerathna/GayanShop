@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { commands, type FinancialSummary_Serialize as FinancialSummary } from "@/db/bindings";
-import { ok, renderWithProviders } from "@/test/render";
+import { chooseOption, ok, renderWithProviders } from "@/test/render";
 import { ReportsScreen, changeBp, formatBp, trendGranularity } from "./ReportsScreen";
 
 vi.mock("@/db/bindings", () => ({
@@ -163,7 +163,7 @@ describe("ReportsScreen", () => {
   it("filters by counter and period", async () => {
     renderWithProviders(<ReportsScreen />);
     await screen.findByRole("table", { name: "Profit and loss" });
-    fireEvent.change(await screen.findByLabelText("Counter"), { target: { value: "d2" } });
+    chooseOption(await screen.findByLabelText("Counter"), "T02");
     await waitFor(() =>
       expect(commands.reportSummary).toHaveBeenLastCalledWith(
         { kind: "day", date: "2026-11-08" },

@@ -9,6 +9,7 @@ import type { PaymentLine_Deserialize as PaymentLine, PaymentMethod } from "@/db
 import { useTouchMode } from "@/db/hooks";
 import { formatMoney, parseMajor, toMajorInput, type Money } from "@/lib/money";
 import { NumericKeypad } from "./NumericKeypad";
+import { WithTooltip } from "@/components/common/WithTooltip";
 
 const METHODS: PaymentMethod[] = ["cash", "card", "bank_transfer", "qr", "other"];
 
@@ -148,15 +149,17 @@ export function PaymentDialog({ open, due, pending, error, onPay, onCancel }: Pa
                   </Button>
                 )}
                 {rows.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-pos"
-                    aria-label={t("pay.remove")}
-                    onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}
-                  >
-                    <Trash2 aria-hidden />
-                  </Button>
+                  <WithTooltip label={t("pay.remove")}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-pos"
+                      aria-label={t("pay.remove")}
+                      onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}
+                    >
+                      <Trash2 aria-hidden />
+                    </Button>
+                  </WithTooltip>
                 )}
               </div>
             ))}

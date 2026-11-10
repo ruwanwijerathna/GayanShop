@@ -10,6 +10,8 @@ import { CommandError } from "@/db/client";
 import { useDeleteCategory, useSaveCategory } from "@/db/hooks";
 import { translateError } from "@/i18n";
 import { playCue } from "@/lib/audio";
+import { SelectField } from "@/components/common/SelectField";
+import { WithTooltip } from "@/components/common/WithTooltip";
 
 /** "Kitchen" or "Home › Kitchen" — the parent chain, for lists and pickers. */
 export function categoryPath(c: Category, all: Category[]): string {
@@ -94,21 +96,17 @@ export function CategoryPanel({ categories }: { categories: Category[] }) {
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="category-parent">{t("categories.parent")}</Label>
-            <select
+            <SelectField
               id="category-parent"
-              className="h-12 w-full rounded-md border border-input bg-background px-3 text-base"
               value={parentId}
-              onChange={(e) => setParentId(e.target.value)}
-            >
-              <option value="">{t("categories.topLevel")}</option>
-              {sorted
-                .filter((c) => c.id !== editing)
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {categoryPath(c, categories)}
-                  </option>
-                ))}
-            </select>
+              onValueChange={setParentId}
+              options={[
+                { value: "", label: t("categories.topLevel") },
+                ...sorted
+                  .filter((c) => c.id !== editing)
+                  .map((c) => ({ value: c.id, label: categoryPath(c, categories) })),
+              ]}
+            />
           </div>
           <div className="flex gap-2">
             <Button type="submit" size="pos" disabled={save.isPending}>
@@ -140,28 +138,32 @@ export function CategoryPanel({ categories }: { categories: Category[] }) {
                   </span>
                 </span>
                 <Can perm="PRODUCT_MANAGE">
-                  <Button
-                    type="button"
-                    size="icon-pos"
-                    variant="outline"
-                    aria-label={t("categories.renameLabel", { name: path })}
-                    onClick={() => start(c)}
-                  >
-                    <Pencil aria-hidden />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon-pos"
-                    variant="outline"
-                    aria-label={t("categories.deleteLabel", { name: path })}
-                    disabled={remove.isPending}
-                    onClick={() => {
-                      save.reset();
-                      remove.mutate(c.id, { onError: () => playCue("error") });
-                    }}
-                  >
-                    <Trash2 aria-hidden />
-                  </Button>
+                  <WithTooltip label={t("categories.renameLabel", { name: path })}>
+                    <Button
+                      type="button"
+                      size="icon-pos"
+                      variant="outline"
+                      aria-label={t("categories.renameLabel", { name: path })}
+                      onClick={() => start(c)}
+                    >
+                      <Pencil aria-hidden />
+                    </Button>
+                  </WithTooltip>
+                  <WithTooltip label={t("categories.deleteLabel", { name: path })}>
+                    <Button
+                      type="button"
+                      size="icon-pos"
+                      variant="outline"
+                      aria-label={t("categories.deleteLabel", { name: path })}
+                      disabled={remove.isPending}
+                      onClick={() => {
+                        save.reset();
+                        remove.mutate(c.id, { onError: () => playCue("error") });
+                      }}
+                    >
+                      <Trash2 aria-hidden />
+                    </Button>
+                  </WithTooltip>
                 </Can>
               </li>
             );

@@ -25,6 +25,7 @@ import { NewBatchDialog, QuickPurchaseDialog } from "./BatchDialogs";
 import { AllocationReview, ClosedNote, HeaderStep, PnlCard, ReceivedActions, Step } from "./IntakeWizard";
 import { parseQty } from "./batchForm";
 import { ProductPicker } from "./ProductPicker";
+import { WithTooltip } from "@/components/common/WithTooltip";
 
 /** The system go-live batch shows a translated name; every other batch shows its own. */
 function batchLabel(b: Batch, openingStock: string): string {
@@ -197,19 +198,21 @@ function Detail({ detail }: { detail: BatchDetail }) {
         size: 72,
         enableSorting: false,
         cell: ({ row }) => (
-          <Button
-            type="button"
-            size="icon-pos"
-            variant="outline"
-            aria-label={t("detail.removeItem", { name: row.original.product_name })}
-            disabled={remove.isPending}
-            onClick={(e) => {
-              e.stopPropagation();
-              remove.mutate({ batchId: batch.id, itemId: row.original.id });
-            }}
-          >
-            <Trash2 aria-hidden />
-          </Button>
+          <WithTooltip label={t("detail.removeItem", { name: row.original.product_name })}>
+            <Button
+              type="button"
+              size="icon-pos"
+              variant="outline"
+              aria-label={t("detail.removeItem", { name: row.original.product_name })}
+              disabled={remove.isPending}
+              onClick={(e) => {
+                e.stopPropagation();
+                remove.mutate({ batchId: batch.id, itemId: row.original.id });
+              }}
+            >
+              <Trash2 aria-hidden />
+            </Button>
+          </WithTooltip>
         ),
       });
     }

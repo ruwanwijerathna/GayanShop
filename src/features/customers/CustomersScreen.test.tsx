@@ -7,7 +7,7 @@ import {
   type CustomerRow_Serialize as CustomerRow,
   type ReceiptData_Serialize as ReceiptData,
 } from "@/db/bindings";
-import { ok, renderWithProviders } from "@/test/render";
+import { ok, openTab, renderWithProviders } from "@/test/render";
 import { CustomersScreen, formatBp } from "./CustomersScreen";
 
 vi.mock("@/db/bindings", () => ({
@@ -185,7 +185,7 @@ describe("CustomersScreen", () => {
 
   it("shows analytics for this month and switches buckets and periods", async () => {
     renderWithProviders(<CustomersScreen />);
-    fireEvent.click(await screen.findByRole("tab", { name: "Analytics" }));
+    openTab(await screen.findByRole("tab", { name: "Analytics" }));
     expect(await screen.findByText("75.0% of sales had a customer (3 of 4).")).toBeInTheDocument();
     expect(screen.getAllByText("Kamala").length).toBeGreaterThan(0);
     expect(screen.getByRole("figure", { name: "Top customers by spend" })).toBeInTheDocument();

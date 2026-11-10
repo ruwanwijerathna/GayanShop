@@ -5,7 +5,7 @@
 // or voided). Rules that have no UI path (negative payments, the SQL CHECKs) are proven by the Rust suites.
 import { $, browser, expect } from "@wdio/globals";
 import { Key } from "webdriverio";
-import { click, field, login, seeText, type } from "./helpers";
+import { choose, click, field, login, seeText, type } from "./helpers";
 
 const OWNER_PIN = "246810";
 const CASHIER_PIN = "1357";
@@ -74,7 +74,7 @@ describe("Phase 1 acceptance: an offline sale day", () => {
     ] as const) {
       await click("Add staff");
       await type("Name", name);
-      await (await field("Role")).selectByVisibleText(role);
+      await choose("Role", role);
       await type("PIN (4–8 digits)", pin);
       await click("Add");
       await $(`//td[normalize-space()="${name}"]`).waitForExist();

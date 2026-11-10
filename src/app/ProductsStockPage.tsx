@@ -1,7 +1,8 @@
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowLeftRight, History, Package, Scale, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Button } from "@/components/ui/button";
+import { PosTabsList, PosTabsTrigger } from "@/components/common/PosTabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import type { Perm } from "@/db/bindings";
 import { STOCK_SECTION_PERMS, StockPanel, type StockSection } from "@/features/inventory/StockPanel";
 import { ProductsScreen } from "@/features/products/ProductsScreen";
@@ -50,39 +51,36 @@ export function ProductsStockPage({ tab }: { tab: ProductsTab | undefined }) {
   const tabs = PRODUCTS_TABS.filter(allowed);
   const current: ProductsTab = tab && allowed(tab) ? tab : "products";
 
+  const choose = (v: string) => {
+    if (!isProductsTab(v)) return;
+    void navigate({ to: "/products", search: { tab: v === "products" ? undefined : v } });
+  };
+
   return (
     <section className="flex flex-col gap-4">
       <h1 className="text-2xl font-semibold">{t("app:nav.products")}</h1>
-      <div className="flex flex-wrap gap-2 border-b pb-3" role="tablist" aria-label={t("tabs.label")}>
-        {tabs.map((x) => {
-          const Icon = ICONS[x];
-          return (
-            <Button
-              key={x}
-              type="button"
-              role="tab"
-              id={`products-tab-${x}`}
-              aria-selected={current === x}
-              aria-controls="products-tabpanel"
-              size="pos"
-              variant={current === x ? "default" : "ghost"}
-              onClick={() =>
-                void navigate({ to: "/products", search: { tab: x === "products" ? undefined : x } })
-              }
-            >
-              <Icon aria-hidden />
-              {t(`tabs.${x}`)}
-            </Button>
-          );
-        })}
-      </div>
-      <div role="tabpanel" id="products-tabpanel" aria-labelledby={`products-tab-${current}`}>
-        {current === "products" ? (
-          <ProductsScreen />
-        ) : (
-          <StockPanel key={current} sections={SECTIONS[current]} label={t(`tabs.${current}`)} />
-        )}
-      </div>
+      <Tabs value={current} onValueChange={choose} className="gap-4">
+        <PosTabsList aria-label={t("tabs.label")} className="border-b pb-3">
+          {tabs.map((x) => {
+            const Icon = ICONS[x];
+            return (
+              <PosTabsTrigger key={x} value={x}>
+                <Icon aria-hidden />
+                {t(`tabs.${x}`)}
+              </PosTabsTrigger>
+            );
+          })}
+        </PosTabsList>
+        {tabs.map((x) => (
+          <TabsContent key={x} value={x}>
+            {x === "products" ? (
+              <ProductsScreen />
+            ) : (
+              <StockPanel sections={SECTIONS[x]} label={t(`tabs.${x}`)} />
+            )}
+          </TabsContent>
+        ))}
+      </Tabs>
     </section>
   );
 }

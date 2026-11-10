@@ -16,10 +16,10 @@ import type {
 import { CommandError } from "@/db/client";
 import { usePrinterProfile, usePrinterStatus, usePrintTestPage, useSetPrinterProfile } from "@/db/hooks";
 import { translateError } from "@/i18n";
+import { SelectField } from "@/components/common/SelectField";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const FIELD = "h-12 text-base";
-const SELECT =
-  "h-12 w-full rounded-md border border-input bg-background px-3 text-base focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none";
 
 type Kind = TransportConfig["kind"];
 const KINDS: Kind[] = ["spooler", "network", "serial"];
@@ -148,18 +148,12 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-2 sm:col-span-2">
           <Label htmlFor="printer-kind">{t("settings.connection")}</Label>
-          <select
+          <SelectField
             id="printer-kind"
-            className={SELECT}
             value={form.kind}
-            onChange={(e) => set("kind", KINDS.find((k) => k === e.target.value) ?? "spooler")}
-          >
-            {KINDS.map((k) => (
-              <option key={k} value={k}>
-                {t(`settings.kinds.${k}`)}
-              </option>
-            ))}
-          </select>
+            onValueChange={(v) => set("kind", KINDS.find((k) => k === v) ?? "spooler")}
+            options={KINDS.map((k) => ({ value: k, label: t(`settings.kinds.${k}`) }))}
+          />
         </div>
         {form.kind === "spooler" && (
           <div className="flex flex-col gap-2 sm:col-span-2">
@@ -208,18 +202,12 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="printer-baud">{t("settings.baud")}</Label>
-              <select
+              <SelectField
                 id="printer-baud"
-                className={SELECT}
-                value={form.baud}
-                onChange={(e) => set("baud", BAUDS.find((b) => String(b) === e.target.value) ?? 9600)}
-              >
-                {BAUDS.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
+                value={String(form.baud)}
+                onValueChange={(v) => set("baud", BAUDS.find((b) => String(b) === v) ?? 9600)}
+                options={BAUDS.map((b) => ({ value: String(b), label: String(b) }))}
+              />
             </div>
           </>
         )}
@@ -266,12 +254,7 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
           onChange={(v) => set("drawerPin", v)}
         />
         <label className="flex min-h-12 items-center gap-3 text-base sm:col-span-2">
-          <input
-            type="checkbox"
-            className="size-6"
-            checked={form.qr}
-            onChange={(e) => set("qr", e.target.checked)}
-          />
+          <Checkbox className="size-6" checked={form.qr} onCheckedChange={(v) => set("qr", v === true)} />
           {t("settings.qr")}
         </label>
       </div>
@@ -315,18 +298,12 @@ function Choice<T extends string>(props: {
   return (
     <div className="flex flex-col gap-2">
       <Label htmlFor={props.id}>{props.label}</Label>
-      <select
+      <SelectField
         id={props.id}
-        className={SELECT}
         value={props.value}
-        onChange={(e) => props.onChange(props.options.find((o) => o === e.target.value) ?? props.value)}
-      >
-        {props.options.map((o) => (
-          <option key={o} value={o}>
-            {props.render(o)}
-          </option>
-        ))}
-      </select>
+        onValueChange={(v) => props.onChange(props.options.find((o) => o === v) ?? props.value)}
+        options={props.options.map((o) => ({ value: o, label: props.render(o) }))}
+      />
     </div>
   );
 }

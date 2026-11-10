@@ -35,11 +35,12 @@ import {
 } from "@/db/hooks";
 import { translateError } from "@/i18n";
 import { formatMoney, parseMajor, toMajorInput } from "@/lib/money";
+import { SelectField } from "@/components/common/SelectField";
+import { Checkbox } from "@/components/ui/checkbox";
 
 /** Must match `commands::cash::DRAWER_TARGET`. */
 export const DRAWER_TARGET = "cash_drawer";
 const FIELD = "h-12 text-base";
-const SELECT = "h-12 w-full rounded-md border border-input bg-background px-3 text-base";
 const METHODS: PaymentMethod[] = ["cash", "card", "bank_transfer", "qr", "other"];
 
 function ErrorText({ error }: { error: unknown }) {
@@ -150,18 +151,12 @@ function ExpenseDialog({
         >
           <div className="flex flex-col gap-2 sm:col-span-2">
             <Label htmlFor="exp-category">{t("fields.category")}</Label>
-            <select
+            <SelectField
               id="exp-category"
-              className={SELECT}
               value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-            >
-              {active.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+              onValueChange={setCategoryId}
+              options={active.map((c) => ({ value: c.id, label: c.name }))}
+            />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="exp-amount">{t("fields.amount")}</Label>
@@ -188,14 +183,13 @@ function ExpenseDialog({
           </div>
           {!editing && (
             <label className="flex min-h-12 items-center gap-3 text-base sm:col-span-2">
-              <input
-                type="checkbox"
+              <Checkbox
                 className="size-6"
                 checked={drawer}
                 disabled={!sessionOpen}
-                onChange={(e) => {
-                  setDrawer(e.target.checked);
-                  if (e.target.checked) setDate(today);
+                onCheckedChange={(v) => {
+                  setDrawer(v === true);
+                  if (v === true) setDate(today);
                 }}
               />
               {sessionOpen ? t("fields.fromDrawer") : t("fields.noSession")}
@@ -204,19 +198,13 @@ function ExpenseDialog({
           {locked && <p className="text-sm text-muted-foreground sm:col-span-2">{t("lockedHint")}</p>}
           <div className="flex flex-col gap-2">
             <Label htmlFor="exp-method">{t("fields.method")}</Label>
-            <select
+            <SelectField
               id="exp-method"
-              className={SELECT}
               disabled={drawer || locked}
               value={drawer ? "cash" : method}
-              onChange={(e) => setMethod(e.target.value as PaymentMethod)}
-            >
-              {METHODS.map((m) => (
-                <option key={m} value={m}>
-                  {t(`methods.${m}`)}
-                </option>
-              ))}
-            </select>
+              onValueChange={(v) => setMethod(METHODS.find((m) => m === v) ?? method)}
+              options={METHODS.map((m) => ({ value: m, label: t(`methods.${m}`) }))}
+            />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="exp-payee">{t("fields.payee")}</Label>
@@ -458,19 +446,15 @@ function Expenses({ today }: { today: string }) {
       <PeriodPicker value={period} onChange={setPeriod} today={today} />
       <div className="flex max-w-sm flex-col gap-2">
         <Label htmlFor="exp-filter">{t("fields.category")}</Label>
-        <select
+        <SelectField
           id="exp-filter"
-          className={SELECT}
           value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-        >
-          <option value="">{t("allCategories")}</option>
-          {(categories.data ?? []).map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+          onValueChange={setCategoryId}
+          options={[
+            { value: "", label: t("allCategories") },
+            ...(categories.data ?? []).map((c) => ({ value: c.id, label: c.name })),
+          ]}
+        />
       </div>
       <ErrorText error={list.error ?? categories.error} />
       {data && (

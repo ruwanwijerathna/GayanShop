@@ -20,6 +20,8 @@ import { CategoryPanel, categoryPath } from "./CategoryPanel";
 import { ProductFormDialog } from "./ProductFormDialog";
 import { matchesText } from "./productForm";
 import { LOW_STOCK_MAX, matchesStockFilter, stockLevel, type StockFilter } from "./stock";
+import { SelectField } from "@/components/common/SelectField";
+import { Checkbox } from "@/components/ui/checkbox";
 
 /**
  * Column widths (px). With the cost column they must fit the 1024×768 grid (≈ 895 px usable, see the audit
@@ -119,16 +121,15 @@ export function ProductsScreen() {
         enableSorting: false,
         accessorFn: (p) => p.id,
         cell: ({ row }) => (
-          <input
-            type="checkbox"
-            className="size-6 accent-primary"
+          <Checkbox
+            className="size-6"
             aria-label={t("selectProduct", { name: row.original.name })}
             checked={selected.has(row.original.id)}
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
-            onChange={(e) => {
+            onCheckedChange={(v) => {
               const id = row.original.id;
-              const on = e.target.checked;
+              const on = v === true;
               setSelected((prev) => {
                 const next = new Set(prev);
                 if (on) next.add(id);
@@ -266,19 +267,16 @@ export function ProductsScreen() {
             onChange={(e) => setText(e.target.value)}
           />
         </div>
-        <select
+        <SelectField
           aria-label={t("categoryFilter")}
-          className="h-12 rounded-md border border-input bg-background px-3 text-base"
+          className="w-auto min-w-48"
           value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-        >
-          <option value="">{t("allCategories")}</option>
-          {cats.map((c) => (
-            <option key={c.id} value={c.id}>
-              {catName.get(c.id)}
-            </option>
-          ))}
-        </select>
+          onValueChange={setCategoryId}
+          options={[
+            { value: "", label: t("allCategories") },
+            ...cats.map((c) => ({ value: c.id, label: catName.get(c.id) ?? c.name })),
+          ]}
+        />
         <div role="group" aria-label={t("stockFilter.label")} className="flex flex-wrap gap-2">
           {STOCK_FILTERS.map((f) => (
             <Button
@@ -294,11 +292,10 @@ export function ProductsScreen() {
           ))}
         </div>
         <label className="flex min-h-12 items-center gap-2">
-          <input
-            type="checkbox"
-            className="size-6 accent-primary"
+          <Checkbox
+            className="size-6"
             checked={showInactive}
-            onChange={(e) => setShowInactive(e.target.checked)}
+            onCheckedChange={(v) => setShowInactive(v === true)}
           />
           {t("showInactive")}
         </label>

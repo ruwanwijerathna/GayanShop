@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { commands } from "@/db/bindings";
-import { ok, renderWithProviders, session } from "@/test/render";
+import { ok, openTab, renderWithProviders, session } from "@/test/render";
 import App from "./App";
 
 vi.mock("@/db/bindings", () => ({
@@ -289,7 +289,7 @@ describe("Products & Stock", () => {
     expect(tabs.getByRole("tab", { name: "All Products" })).toHaveAttribute("aria-selected", "true");
     expect(await screen.findByRole("grid", { name: "Products" })).toBeInTheDocument();
 
-    fireEvent.click(tabs.getByRole("tab", { name: "Stock Valuation" }));
+    openTab(tabs.getByRole("tab", { name: "Stock Valuation" }));
     await waitFor(() => expect(window.location.hash).toContain("tab=valuation"));
     expect(tabs.getByRole("tab", { name: "Stock Valuation" })).toHaveAttribute("aria-selected", "true");
   });

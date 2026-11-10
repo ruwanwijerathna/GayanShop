@@ -1,7 +1,7 @@
 import { Hand } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useDevicePrefs, useSetDeviceTouchMode } from "@/db/hooks";
-import { cn } from "@/lib/utils";
+import { Switch } from "@/components/ui/switch";
 
 /** Settings → Touch screen: this counter's touch screen mode (local to the counter, never synced). */
 export function TouchModeSettings() {
@@ -28,28 +28,14 @@ export function TouchModeSettings() {
             {t("touchMode.description")}
           </span>
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={on}
+        <Switch
+          size="pos"
+          checked={on}
           aria-labelledby="touch-label"
           aria-describedby="touch-description"
           disabled={busy}
-          onClick={() => set.mutate(!on)}
-          className={cn(
-            "relative inline-flex h-12 w-20 shrink-0 items-center rounded-full border-2 border-transparent transition-colors focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50 motion-reduce:transition-none",
-            on ? "bg-primary" : "bg-input",
-          )}
-        >
-          <span className="sr-only">{on ? t("touchMode.on") : t("touchMode.off")}</span>
-          <span
-            aria-hidden
-            className={cn(
-              "inline-block size-9 rounded-full bg-background shadow transition-transform motion-reduce:transition-none",
-              on ? "translate-x-9" : "translate-x-1",
-            )}
-          />
-        </button>
+          onCheckedChange={(v) => set.mutate(v)}
+        />
       </div>
     </section>
   );

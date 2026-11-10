@@ -2,6 +2,7 @@ import { Moon, Sun } from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { WithTooltip } from "@/components/common/WithTooltip";
 
 export type Theme = "light" | "dark";
 
@@ -16,14 +17,16 @@ export function ThemeToggle({ theme, onChange }: { theme: Theme; onChange: (them
   const { t } = useTranslation();
   const next: Theme = theme === "dark" ? "light" : "dark";
   return (
-    <Button
-      type="button"
-      size="icon-pos"
-      variant="outline"
-      aria-label={`${t("theme.label")}: ${t(`theme.${next}`)}`}
-      onClick={() => onChange(next)}
-    >
-      {theme === "dark" ? <Sun aria-hidden /> : <Moon aria-hidden />}
-    </Button>
+    <WithTooltip label={`${t("theme.label")}: ${t(`theme.${next}`)}`}>
+      <Button
+        type="button"
+        size="icon-pos"
+        variant="outline"
+        aria-label={`${t("theme.label")}: ${t(`theme.${next}`)}`}
+        onClick={() => onChange(next)}
+      >
+        {theme === "dark" ? <Sun aria-hidden /> : <Moon aria-hidden />}
+      </Button>
+    </WithTooltip>
   );
 }

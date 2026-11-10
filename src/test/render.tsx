@@ -1,5 +1,5 @@
 // Test helpers: render inside the real providers; shape mocked command results like tauri-specta does.
-import { render } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { Providers } from "@/app/providers";
 import type { AppError, SessionInfo } from "@/db/bindings";
@@ -22,4 +22,26 @@ export function session(overrides: Partial<SessionInfo> = {}): SessionInfo {
     ui_language: "en",
     ...overrides,
   };
+}
+
+/**
+ * Pick an option from a shadcn Select (Radix): open it from the keyboard, then choose the option by its
+ * visible name, as a keyboard user would.
+ */
+export function chooseOption(trigger: HTMLElement, name: string | RegExp) {
+  fireEvent.keyDown(trigger, { key: "Enter" });
+  fireEvent.keyDown(screen.getByRole("option", { name }), { key: "Enter" });
+}
+
+/** Switch to a shadcn (Radix) tab: Radix activates on mouse-down / keyboard, not on a synthetic click. */
+export function openTab(tab: HTMLElement) {
+  fireEvent.mouseDown(tab, { button: 0 });
+}
+
+/** The option names a shadcn Select offers: opens it, reads them, and closes it again with Escape. */
+export function optionNames(trigger: HTMLElement): string[] {
+  fireEvent.keyDown(trigger, { key: "Enter" });
+  const names = screen.getAllByRole("option").map((o) => o.textContent ?? "");
+  fireEvent.keyDown(screen.getAllByRole("option")[0] ?? trigger, { key: "Escape" });
+  return names;
 }

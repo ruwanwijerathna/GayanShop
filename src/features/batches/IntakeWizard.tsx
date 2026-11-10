@@ -22,10 +22,9 @@ import { formatMoney, toMajorInput } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { parseOptionalMoney, parseQty } from "./batchForm";
 import { ProductPicker } from "./ProductPicker";
+import { SelectField } from "@/components/common/SelectField";
 
 export const METHODS: AllocationMethod[] = ["even_per_unit", "by_retail_value", "manual"];
-const SELECT =
-  "h-12 w-full rounded-md border border-input bg-background px-3 text-base focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none";
 
 /** A numbered wizard section. */
 export function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
@@ -95,20 +94,14 @@ export function HeaderStep({ batch }: { batch: Batch }) {
     >
       <div className="flex flex-col gap-1.5 sm:col-span-3">
         <Label htmlFor="batch-method">{t("wizard.method")}</Label>
-        <select
+        <SelectField
           id="batch-method"
-          className={SELECT}
           value={method}
           disabled={batch.is_system}
-          onChange={(e) => setMethod(METHODS.find((m) => m === e.target.value) ?? "manual")}
+          onValueChange={(v) => setMethod(METHODS.find((m) => m === v) ?? "manual")}
           aria-describedby="batch-method-hint"
-        >
-          {METHODS.map((m) => (
-            <option key={m} value={m}>
-              {t(`methods.${m}`)}
-            </option>
-          ))}
-        </select>
+          options={METHODS.map((m) => ({ value: m, label: t(`methods.${m}`) }))}
+        />
         <p id="batch-method-hint" className="text-sm text-muted-foreground">
           {t(`methodHints.${method}`)}
         </p>

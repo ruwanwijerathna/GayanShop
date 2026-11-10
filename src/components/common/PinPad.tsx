@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { useTouchMode } from "@/db/hooks";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 
 export interface PinPadProps {
   value: string;
@@ -48,7 +49,7 @@ export function PinPad({
     >
       <label className="flex flex-col gap-1 text-sm font-medium">
         {label}
-        <input
+        <Input
           type="password"
           inputMode="numeric"
           autoComplete="off"
@@ -57,7 +58,7 @@ export function PinPad({
           maxLength={maxLength}
           disabled={disabled}
           onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, maxLength))}
-          className="h-14 rounded-md border border-input bg-background px-4 text-center font-mono text-2xl tracking-[0.5em]"
+          className="h-14 bg-background px-4 text-center font-mono text-2xl tracking-[0.5em] md:text-2xl"
         />
       </label>
       {showKeys && <PinKeys value={value} onChange={onChange} maxLength={maxLength} disabled={disabled} />}

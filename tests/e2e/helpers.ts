@@ -42,3 +42,13 @@ export async function login(name: string, pin: string) {
   await click("Sign In");
   await $("a[aria-label='Counter']").waitForExist();
 }
+
+/** Pick an option in a shadcn Select: open the labelled trigger, then click the option by its text. */
+export async function choose(label: string, option: string) {
+  const trigger = await field(label);
+  await trigger.waitForClickable();
+  await trigger.click();
+  const item = await $(`//*[@role="option"][normalize-space()="${option}"]`);
+  await item.waitForClickable();
+  await item.click();
+}

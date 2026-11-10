@@ -2675,6 +2675,13 @@ Each phase ends with **exit criteria**. Don't start the next phase until they pa
   - i18n bootstrapped (`en` + `si` dictionaries, Noto Sans Sinhala bundled, a key-parity CI check, LanguageToggle).
   - The shared `DataTable` (TanStack Table v8 + Virtual).
   - The `size="pos"` 48 px variants.
+  - **shadcn/ui controls throughout (2026-11-10):**
+    - Dropdowns use `SelectField` (shadcn Select). Its trigger and options are 48 px, and `""` stays a usable value.
+    - Tab bars use shadcn Tabs via `PosTabsList` / `PosTabsTrigger`. Tabs are 48 px and use arrow-key roving.
+    - Checkboxes use shadcn Checkbox (`size-6` inside a 48 px label). The touch-mode toggle uses shadcn Switch `size="pos"`.
+    - Icon-only buttons are wrapped in `WithTooltip`. The tooltip repeats the button's `aria-label`.
+    - Free text uses shadcn Input / Textarea.
+    - List-row buttons (search results, cart lines, sortable headers) stay plain `<button>`s styled with tokens.
   - The `minWidth/minHeight` 1024×768 window.
 - Tooling: ESLint, Prettier, `clippy -D warnings`, vitest, cargo test, and CI on `windows-latest`.
 

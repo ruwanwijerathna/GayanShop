@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useCustomerLookup } from "@/db/hooks";
 import { normalizeLk } from "@/lib/phone";
 import { cartStore, useCart } from "../store/cart.store";
+import { WithTooltip } from "@/components/common/WithTooltip";
 
 /** `0771234567` → `077 123 4567` while typing (digits only, at most 10). */
 export function formatTyped(raw: string): string {
@@ -80,15 +81,17 @@ export function CustomerPhoneField({
           aria-describedby="customer-status"
         />
         {phone !== "" && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-pos"
-            aria-label={t("customer.clear")}
-            onClick={() => set("", "")}
-          >
-            <X aria-hidden />
-          </Button>
+          <WithTooltip label={t("customer.clear")}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-pos"
+              aria-label={t("customer.clear")}
+              onClick={() => set("", "")}
+            >
+              <X aria-hidden />
+            </Button>
+          </WithTooltip>
         )}
       </div>
       <p id="customer-status" role="status" className="min-h-5 truncate text-sm text-muted-foreground">

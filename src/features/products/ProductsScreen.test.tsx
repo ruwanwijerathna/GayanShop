@@ -8,7 +8,7 @@ import {
   type Perm,
   type Product_Serialize as Product,
 } from "@/db/bindings";
-import { err, ok, renderWithProviders, session } from "@/test/render";
+import { chooseOption, err, ok, renderWithProviders, session } from "@/test/render";
 import { PRODUCT_COLUMN_WIDTHS, ProductsScreen } from "./ProductsScreen";
 import { matchesStockFilter, stockLevel } from "./stock";
 
@@ -114,9 +114,7 @@ describe("ProductsScreen", () => {
     expect(within(grid()).getByText("Old Mug")).toBeInTheDocument();
     expect(within(grid()).getByText("Inactive")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByRole("combobox", { name: "Filter by category" }), {
-      target: { value: "c2" },
-    });
+    chooseOption(screen.getByRole("combobox", { name: "Filter by category" }), "Home › Kitchen");
     expect(screen.getByRole("status")).toHaveTextContent("2 products");
   });
 

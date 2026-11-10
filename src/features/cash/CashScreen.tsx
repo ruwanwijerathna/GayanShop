@@ -19,6 +19,7 @@ import { translateError } from "@/i18n";
 import { playCue } from "@/lib/audio";
 import { formatMoney, parseMajor } from "@/lib/money";
 import { ZReportView } from "./ZReportView";
+import { Checkbox } from "@/components/ui/checkbox";
 
 /** Must match `commands::cash::DRAWER_TARGET`: the approval is bound to it. */
 export const DRAWER_TARGET = "cash_drawer";
@@ -314,11 +315,10 @@ function CloseForm({ onDone, onClosed }: { onDone: () => void; onClosed: (z: ZRe
     >
       <h3 className="font-semibold">{t("close.title")}</h3>
       <label className="flex min-h-12 items-center gap-3">
-        <input
-          type="checkbox"
-          className="size-6 accent-primary"
+        <Checkbox
+          className="size-6"
           checked={byDenomination}
-          onChange={(e) => setByDenomination(e.target.checked)}
+          onCheckedChange={(v) => setByDenomination(v === true)}
         />
         {t("close.byDenomination")}
       </label>

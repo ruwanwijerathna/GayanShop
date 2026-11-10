@@ -6,7 +6,7 @@ import {
   type Batch_Serialize as Batch,
   type ProductSummary_Serialize as ProductSummary,
 } from "@/db/bindings";
-import { err, ok, renderWithProviders } from "@/test/render";
+import { chooseOption, err, ok, renderWithProviders } from "@/test/render";
 import { parseOptionalMoney, parseQty } from "./batchForm";
 import { BatchesScreen } from "./BatchesScreen";
 
@@ -227,9 +227,7 @@ describe("intake wizard and lifecycle", () => {
     vi.mocked(commands.updateBatch).mockImplementation(() => ok(draft));
     const detail = await openDraft();
     expect(await within(detail).findByTestId("variance")).toHaveTextContent("Rs 100.00");
-    fireEvent.change(within(detail).getByLabelText("How to share the cost"), {
-      target: { value: "by_retail_value" },
-    });
+    chooseOption(within(detail).getByLabelText("How to share the cost"), "By retail value");
     fireEvent.change(within(detail).getByLabelText("Invoice total (Rs, optional)"), {
       target: { value: "2000" },
     });

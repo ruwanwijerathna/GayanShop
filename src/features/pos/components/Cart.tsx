@@ -7,6 +7,7 @@ import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import type { PricedOrder } from "../lib/pricing";
 import { cartStore, useCart, type CartLine } from "../store/cart.store";
+import { WithTooltip } from "@/components/common/WithTooltip";
 
 const ROW = 64;
 
@@ -104,15 +105,17 @@ function CartRow(props: {
           {discount > 0 && ` · ${t("cart.discount", { amount: formatMoney(discount) })}`}
         </span>
       </button>
-      <Button
-        type="button"
-        variant="outline"
-        size="icon-pos"
-        aria-label={t("cart.less", { name: line.name })}
-        onClick={() => (line.qty > 1 ? s.increment(line.key, -1) : s.removeLine(line.key))}
-      >
-        {line.qty > 1 ? <Minus aria-hidden /> : <Trash2 aria-hidden />}
-      </Button>
+      <WithTooltip label={t("cart.less", { name: line.name })}>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-pos"
+          aria-label={t("cart.less", { name: line.name })}
+          onClick={() => (line.qty > 1 ? s.increment(line.key, -1) : s.removeLine(line.key))}
+        >
+          {line.qty > 1 ? <Minus aria-hidden /> : <Trash2 aria-hidden />}
+        </Button>
+      </WithTooltip>
       <span
         className={cn(
           "w-12 text-center text-lg font-semibold tabular-nums",
@@ -122,15 +125,17 @@ function CartRow(props: {
       >
         {line.qty}
       </span>
-      <Button
-        type="button"
-        variant="outline"
-        size="icon-pos"
-        aria-label={t("cart.more", { name: line.name })}
-        onClick={() => s.increment(line.key, 1)}
-      >
-        <Plus aria-hidden />
-      </Button>
+      <WithTooltip label={t("cart.more", { name: line.name })}>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-pos"
+          aria-label={t("cart.more", { name: line.name })}
+          onClick={() => s.increment(line.key, 1)}
+        >
+          <Plus aria-hidden />
+        </Button>
+      </WithTooltip>
       <span className="w-32 text-right text-lg font-semibold tabular-nums">{formatMoney(props.total)}</span>
     </div>
   );

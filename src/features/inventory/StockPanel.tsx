@@ -32,11 +32,13 @@ import { translateError } from "@/i18n";
 import { formatMoney } from "@/lib/money";
 import { hasPerm } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
+import { SelectField } from "@/components/common/SelectField";
+import { PosTabsList, PosTabsTrigger } from "@/components/common/PosTabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 
 /** Must match `commands::inventory::STOCK_TARGET`. */
 export const STOCK_TARGET = "stock";
 const FIELD = "h-12 text-base";
-const SELECT = "h-12 w-full rounded-md border border-input bg-background px-3 text-base";
 const REASONS: DamageReason[] = ["broken", "expired", "stolen", "faulty", "other"];
 export type StockSection = "valuation" | "oversold" | "count" | "damage" | "history";
 
@@ -394,18 +396,12 @@ function DamageTab() {
         {mode === "damage" && (
           <div className="flex flex-col gap-2">
             <Label htmlFor="damage-reason">{t("damage.reason")}</Label>
-            <select
+            <SelectField
               id="damage-reason"
-              className={SELECT}
               value={reason}
-              onChange={(e) => setReason(REASONS.find((r) => r === e.target.value) ?? "other")}
-            >
-              {REASONS.map((r) => (
-                <option key={r} value={r}>
-                  {t(`damage.reasons.${r}`)}
-                </option>
-              ))}
-            </select>
+              onValueChange={(v) => setReason(REASONS.find((r) => r === v) ?? "other")}
+              options={REASONS.map((r) => ({ value: r, label: t(`damage.reasons.${r}`) }))}
+            />
           </div>
         )}
       </div>
@@ -555,33 +551,35 @@ export function StockPanel({ sections, label }: { sections: readonly StockSectio
   const first = visible[0];
   if (!first) return null;
   const tab = picked && visible.some((x) => x.id === picked) ? picked : first.id;
+  const body = (id: StockSection) => (
+    <>
+      {id === "valuation" && <ValuationTab />}
+      {id === "oversold" && <OversoldTab />}
+      {id === "count" && <CountTab />}
+      {id === "damage" && <DamageTab />}
+      {id === "history" && <HistoryTab />}
+    </>
+  );
+  if (visible.length === 1) return body(first.id);
   return (
-    <div className="flex flex-col gap-4">
-      {visible.length > 1 && (
-        <div className="flex flex-wrap gap-2" role="tablist" aria-label={label}>
-          {visible.map((x) => (
-            <Button
-              key={x.id}
-              type="button"
-              role="tab"
-              aria-selected={tab === x.id}
-              size="pos"
-              variant={tab === x.id ? "default" : "outline"}
-              onClick={() => setPicked(x.id)}
-            >
-              {x.icon}
-              {t(`tabs.${x.id}`)}
-            </Button>
-          ))}
-        </div>
-      )}
-      <div role={visible.length > 1 ? "tabpanel" : undefined}>
-        {tab === "valuation" && <ValuationTab />}
-        {tab === "oversold" && <OversoldTab />}
-        {tab === "count" && <CountTab />}
-        {tab === "damage" && <DamageTab />}
-        {tab === "history" && <HistoryTab />}
-      </div>
-    </div>
+    <Tabs
+      value={tab}
+      onValueChange={(v) => setPicked(visible.find((x) => x.id === v)?.id ?? first.id)}
+      className="gap-4"
+    >
+      <PosTabsList aria-label={label}>
+        {visible.map((x) => (
+          <PosTabsTrigger key={x.id} value={x.id}>
+            {x.icon}
+            {t(`tabs.${x.id}`)}
+          </PosTabsTrigger>
+        ))}
+      </PosTabsList>
+      {visible.map((x) => (
+        <TabsContent key={x.id} value={x.id}>
+          {body(x.id)}
+        </TabsContent>
+      ))}
+    </Tabs>
   );
 }

@@ -74,8 +74,6 @@
   "touchMode": {
     "title": "Touch screen",
     "label": "Touch screen mode",
-    "description": "Show on-screen touch keypads and number pads for touch-enabled devices",
-    "on": "On",
-    "off": "Off"
+    "description": "Show on-screen touch keypads and number pads for touch-enabled devices"
   }
 }

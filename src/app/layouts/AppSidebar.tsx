@@ -38,6 +38,7 @@ import {
 import type { Perm } from "@/db/bindings";
 import { hasPerm } from "@/lib/permissions";
 import { useSession } from "../session";
+import { WithTooltip } from "@/components/common/WithTooltip";
 
 type NavTo =
   | "/"
@@ -150,16 +151,18 @@ export function AppSidebar({ deviceCode, onLock }: { deviceCode: string | null; 
   return (
     <Sidebar collapsible="icon" aria-label={t("nav.label")}>
       <SidebarHeader className="flex-row items-center justify-end p-2">
-        <Button
-          type="button"
-          size="icon-pos"
-          variant="ghost"
-          aria-label={state === "expanded" ? t("nav.collapse") : t("nav.expand")}
-          aria-expanded={state === "expanded"}
-          onClick={toggleSidebar}
-        >
-          <PanelLeft aria-hidden />
-        </Button>
+        <WithTooltip label={state === "expanded" ? t("nav.collapse") : t("nav.expand")}>
+          <Button
+            type="button"
+            size="icon-pos"
+            variant="ghost"
+            aria-label={state === "expanded" ? t("nav.collapse") : t("nav.expand")}
+            aria-expanded={state === "expanded"}
+            onClick={toggleSidebar}
+          >
+            <PanelLeft aria-hidden />
+          </Button>
+        </WithTooltip>
       </SidebarHeader>
 
       <SidebarContent>

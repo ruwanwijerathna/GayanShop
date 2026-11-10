@@ -10,10 +10,10 @@ import type { Perm, Role, StaffMember_Serialize as StaffMember } from "@/db/bind
 import { CommandError } from "@/db/client";
 import { useCreateStaff, useResetStaffPin, useRoles, useStaffList, useUpdateStaff } from "@/db/hooks";
 import { translateError } from "@/i18n";
+import { SelectField } from "@/components/common/SelectField";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const FIELD = "h-12 text-base";
-const SELECT =
-  "h-12 w-full rounded-md border border-input bg-background px-3 text-base focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none";
 
 /** Every permission a person-level override can touch, in the doc's bit order (§3.5). */
 export const ALL_PERMS: Perm[] = [
@@ -228,32 +228,26 @@ function StaffDialog({
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="staff-role">{t("form.role")}</Label>
-              <select
+              <SelectField
                 id="staff-role"
-                className={SELECT}
                 value={roleId}
                 disabled={locked}
-                onChange={(e) => setRoleId(e.target.value)}
+                onValueChange={setRoleId}
                 aria-describedby={locked ? "staff-locked" : undefined}
-              >
-                {roles.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
+                options={roles.map((r) => ({ value: r.id, label: r.name }))}
+              />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="staff-language">{t("form.language")}</Label>
-              <select
+              <SelectField
                 id="staff-language"
-                className={SELECT}
                 value={language}
-                onChange={(e) => setLanguage(e.target.value === "si" ? "si" : "en")}
-              >
-                <option value="en">{t("languages.en")}</option>
-                <option value="si">{t("languages.si")}</option>
-              </select>
+                onValueChange={(v) => setLanguage(v === "si" ? "si" : "en")}
+                options={[
+                  { value: "en", label: t("languages.en") },
+                  { value: "si", label: t("languages.si") },
+                ]}
+              />
             </div>
             {!member && (
               <div className="flex flex-col gap-2">
@@ -288,12 +282,11 @@ function StaffDialog({
               </div>
             )}
             <label className="flex min-h-12 items-center gap-3 text-base sm:col-span-2">
-              <input
-                type="checkbox"
+              <Checkbox
                 className="size-6"
                 checked={active}
                 disabled={locked}
-                onChange={(e) => setActive(e.target.checked)}
+                onCheckedChange={(v) => setActive(v === true)}
               />
               {t("form.activeLabel")}
             </label>
@@ -322,21 +315,19 @@ function StaffDialog({
                         </span>
                         {fromRole ? (
                           <label className="flex min-h-12 items-center gap-1 text-sm">
-                            <input
-                              type="checkbox"
-                              className="size-5"
+                            <Checkbox
+                              className="size-6"
                               checked={denies.includes(p)}
-                              onChange={() => toggle(p, denies, setDenies, grants, setGrants)}
+                              onCheckedChange={() => toggle(p, denies, setDenies, grants, setGrants)}
                             />
                             {t("form.deny")}
                           </label>
                         ) : (
                           <label className="flex min-h-12 items-center gap-1 text-sm">
-                            <input
-                              type="checkbox"
-                              className="size-5"
+                            <Checkbox
+                              className="size-6"
                               checked={grants.includes(p)}
-                              onChange={() => toggle(p, grants, setGrants, denies, setDenies)}
+                              onCheckedChange={() => toggle(p, grants, setGrants, denies, setDenies)}
                             />
                             {t("form.grant")}
                           </label>

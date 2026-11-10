@@ -3,7 +3,7 @@ import { useEffect, type ReactNode } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useSession } from "@/app/session";
 import { commands, type OrderRow_Serialize as OrderRow } from "@/db/bindings";
-import { ok, renderWithProviders, session } from "@/test/render";
+import { chooseOption, ok, renderWithProviders, session } from "@/test/render";
 import { OrdersScreen } from "./OrdersScreen";
 
 vi.mock("@/db/bindings", () => ({
@@ -118,7 +118,7 @@ describe("OrdersScreen", () => {
     renderWithProviders(<OrdersScreen />);
     await screen.findByRole("grid", { name: "Bills" });
     fireEvent.change(screen.getByLabelText("Receipt number"), { target: { value: "T01-2026" } });
-    fireEvent.change(await screen.findByLabelText("Status"), { target: { value: "voided" } });
+    chooseOption(await screen.findByLabelText("Status"), "Voided");
     await waitFor(() =>
       expect(commands.orderHistory).toHaveBeenLastCalledWith(
         {
