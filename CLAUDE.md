@@ -6,7 +6,7 @@ The import above loads the full operating manual: identity, non-negotiable rules
 
 ## Claude Code–specific rules
 
-1. **Phases 0–3 are complete and merged to `main`. Phase 4 (production hardening) is in progress** on branch `feat/phase-4-production-hardening`.
+1. **Phases 0–4 are complete and merged to `main`.** Remaining work is the owner's deploy, hardware and pilot steps in `docs/qa/`.
    - Work only on blocks the owner has explicitly named. Don't start the next block or phase until they say so.
    - "Explain", "plan" or "review" is not a start command.
 2. **Work in roadmap order, one block per turn sequence.** Before each block:
