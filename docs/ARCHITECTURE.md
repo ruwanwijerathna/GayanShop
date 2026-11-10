@@ -1,6 +1,6 @@
 # GayanShop POS — Master Architecture Plan
 
-> Status: **v4, 2026-11-08. Phase 0 is ON HOLD at the owner's request.** v2 added:
+> Status: **v4 (2026-11-10). Phases 0–4 complete and merged to main. Production NSIS installer built.** v2 added:
 > - **Batches** (cost layers), replacing "lots"
 > - Full financial reporting
 > - Role-based access control (RBAC) with supervisor approvals
@@ -3004,8 +3004,8 @@ cargo add --dev proptest
 | 18 | **A new counter joins the store from the first-run wizard** ("Join existing store"): the owner signs in with the store's cloud owner account, the counter gets the next free code (T02, T03), pulls the full history, and staff log in with their existing PINs (owner-confirmed 2026-11-09) | A pairing code generated on T01 | One flow for the first counter (adopting its offline ids) and for later ones. The owner's password never stays on a counter; each counter has its own device identity. |
 | 19 | **The owner's cloud account is one email + password user created in the Supabase dashboard.** The first counter that registers with it claims the store; later counters must use the same account. Public sign-up is off (owner-confirmed 2026-11-09) | A shared registration secret | Whoever holds a shared secret could join a counter to the store. |
 | 20 | **JSON-in-text columns stay `text` in the cloud** (§4.4) | `jsonb` | Byte-identical round trips. The audit hash chain depends on them. |
-| 21 | **A store that never registered with the cloud keeps its counter identity on restore** (proposed 2026-11-10, pending the owner) | Retiring the identity as an offline cloud restore does | Nothing after the backup exists anywhere to collide with; the receipt and SKU counters continue from the restored data. |
-| 22 | **Successful automatic backups are not audited; a failure is audited once until one succeeds** (proposed 2026-11-10, pending the owner) | Auditing every hourly backup | About 24 audit rows a day, all synced, would bury the audit log. The status shows the last automatic backup. Manual backups and restores stay fully audited. |
+| 21 | **A store that never registered with the cloud keeps its counter identity on restore** (owner-confirmed 2026-11-10) | Retiring the identity as an offline cloud restore does | Nothing after the backup exists anywhere to collide with; the receipt and SKU counters continue from the restored data. |
+| 22 | **Successful automatic backups are not audited; a failure is audited once until one succeeds** (owner-confirmed 2026-11-10) | Auditing every hourly backup | About 24 audit rows a day, all synced, would bury the audit log. The status shows the last automatic backup. Manual backups and restores stay fully audited. |
 | 23 | **SQLCipher deferred; standard SQLite WAL with OS file permissions retained** (Block 4.3) | Bundling SQLCipher / full-database encryption | SQLite WAL with Windows NTFS ACLs meets the single-store offline threat model with zero read overhead; full-disk BitLocker protects against physical theft. |
 | 24 | **Local rotating logs + support bundle export; no SaaS crash reporting** (Block 4.4) | Third-party cloud telemetry (Sentry, etc.) | Preserves customer privacy and strict offline operation; support bundle ZIP is exported on demand by the store owner for diagnostics. |
 

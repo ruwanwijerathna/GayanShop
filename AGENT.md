@@ -7,7 +7,7 @@
 >
 > Never change an architectural decision silently. Propose the doc change to the owner first.
 
-**Current state (2026-11-10): Phases 0–4 are complete and merged to `main`.** Blocks 4.1–4.5 are committed and green. Production NSIS Windows installer (6.40 MiB) generated at `src-tauri/target/release/bundle/nsis/GayanShop POS_0.1.0_x64-setup.exe`. Deploying Phase 3 to the live project (link, `db push` — which now also carries Block 4.1's `sync_health` migration —, `functions deploy`, sign-up off, the owner account) and registering the counters are the owner's steps in `docs/qa/phase3-acceptance.md`. Owner hardware, touch and Sinhala checks are pending in `docs/qa/phase1-acceptance.md` and `docs/qa/phase2-acceptance.md`. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and the first real CI run (it needs a GitHub remote).
+**Current state (2026-11-10): Phases 0–4 are complete and merged to `main`.** Blocks 4.1–4.5 are committed and green. Production NSIS Windows installer (6.40 MiB) generated at `src-tauri/target/release/bundle/nsis/GayanShop POS_0.1.0_x64-setup.exe`. Deploying Phase 3 to the live project (link, `db push` — which now also carries Block 4.1's `sync_health` migration —, `functions deploy`, sign-up off, the owner account) and registering the counters are the owner's steps in `docs/qa/phase3-acceptance.md`. Owner hardware, touch and Sinhala checks are pending in `docs/qa/phase1-acceptance.md` and `docs/qa/phase2-acceptance.md`. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and verifying the first GitHub Actions CI run on remote `origin` (`github.com/ruwanwijerathna/GayanShop`).
 
 ---
 
@@ -139,7 +139,7 @@ Every block must comply. Reviewers and gates enforce them.
   - Never use `--no-verify`.
   - To undo a bad block, use `git revert <sha>`.
   - Discarding *the current block's own uncommitted changes* (`git restore`, `git clean` of files this block created) is allowed. Resetting past a committed block needs the owner's approval.
-- **Never push** unless the owner asks. No remote is configured.
+- **Never push** unless the owner asks. Remote `origin` points to `github.com/ruwanwijerathna/GayanShop`.
 
 ---
 
@@ -280,7 +280,7 @@ Each block's **gate = its specific commands + `pnpm verify`**.
       - A supervisor approval works once.
       - The chain verifies.
 
-- [x] **0.10 Continuous integration**: done 2026-11-08 (workflow committed and local gate green; **CI pending remote**, since no GitHub remote is configured. Note for the first CI run: `tests/registration.rs` round-trips a secret through the real Windows Credential Manager, which needs a logged-on user session on the runner)
+- [x] **0.10 Continuous integration**: done 2026-11-08 (workflow committed and local gate green; remote configured as `github.com/ruwanwijerathna/GayanShop`. Note for the first CI run: `tests/registration.rs` round-trips a secret through the real Windows Credential Manager, which needs a logged-on user session on the runner)
   - **Deliverables:** `.github/workflows/ci.yml` (`windows-latest`: pnpm + Rust cache, `pnpm verify`, `pnpm tauri build --no-bundle`).
   - **Gate:**
     - `pnpm verify` locally.
