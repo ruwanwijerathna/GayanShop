@@ -27,7 +27,7 @@ async function pressKeys(...keys: string[]) {
 
 async function lock() {
   await browser.keys([Key.Ctrl, "l"]);
-  await seeText("Who is working?");
+  await seeText("Sign In to your account");
 }
 
 async function approve(as: string, pin: string) {
@@ -61,7 +61,7 @@ describe("Phase 1 acceptance: an offline sale day", () => {
     await type("Owner PIN (6–8 digits)", OWNER_PIN);
     await type("Confirm PIN", OWNER_PIN);
     await click("Finish setup");
-    await seeText("Who is working?");
+    await seeText("Sign In to your account");
   });
 
   it("the Owner adds staff, a product and opens the drawer", async () => {

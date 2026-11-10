@@ -33,15 +33,11 @@ export function PinPad({
   keypad,
   className,
 }: PinPadProps) {
-  const { t } = useTranslation("auth");
   const touchMode = useTouchMode();
   const showKeys = keypad ?? touchMode;
   const input = useRef<HTMLInputElement>(null);
   // Focus the PIN field on mount so a keyboard/numpad works immediately.
   useEffect(() => input.current?.focus(), []);
-  const press = (d: string) => {
-    if (value.length < maxLength) onChange(value + d);
-  };
   return (
     <form
       className={cn("flex w-72 flex-col gap-3", className)}
@@ -64,52 +60,70 @@ export function PinPad({
           className="h-14 rounded-md border border-input bg-background px-4 text-center font-mono text-2xl tracking-[0.5em]"
         />
       </label>
-      {showKeys && (
-        <div className="grid grid-cols-3 gap-2">
-          {KEYS.map((d) => (
-            <Button
-              key={d}
-              type="button"
-              size="pos-lg"
-              variant="outline"
-              disabled={disabled}
-              aria-label={t("pinpad.digit", { digit: d })}
-              onClick={() => press(d)}
-            >
-              {d}
-            </Button>
-          ))}
-          <Button
-            type="button"
-            size="pos-lg"
-            variant="secondary"
-            disabled={disabled}
-            onClick={() => onChange("")}
-          >
-            {t("pinpad.clear")}
-          </Button>
-          <Button
-            type="button"
-            size="pos-lg"
-            variant="outline"
-            disabled={disabled}
-            aria-label={t("pinpad.digit", { digit: "0" })}
-            onClick={() => press("0")}
-          >
-            0
-          </Button>
-          <Button
-            type="button"
-            size="pos-lg"
-            variant="secondary"
-            disabled={disabled}
-            aria-label={t("pinpad.backspace")}
-            onClick={() => onChange(value.slice(0, -1))}
-          >
-            <Delete aria-hidden />
-          </Button>
-        </div>
-      )}
+      {showKeys && <PinKeys value={value} onChange={onChange} maxLength={maxLength} disabled={disabled} />}
     </form>
+  );
+}
+
+export interface PinKeysProps {
+  value: string;
+  onChange: (value: string) => void;
+  maxLength?: number;
+  disabled?: boolean;
+  /** Pin the key labels to one language (the English-only login form). Defaults to the UI language. */
+  lng?: "en" | "si";
+}
+
+/** The touch number pad on its own: 64 px digit keys, Clear and Delete, editing `value`. */
+export function PinKeys({ value, onChange, maxLength = 8, disabled = false, lng }: PinKeysProps) {
+  const { t } = useTranslation("auth", lng ? { lng } : undefined);
+  const press = (d: string) => {
+    if (value.length < maxLength) onChange(value + d);
+  };
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {KEYS.map((d) => (
+        <Button
+          key={d}
+          type="button"
+          size="pos-lg"
+          variant="outline"
+          disabled={disabled}
+          aria-label={t("pinpad.digit", { digit: d })}
+          onClick={() => press(d)}
+        >
+          {d}
+        </Button>
+      ))}
+      <Button
+        type="button"
+        size="pos-lg"
+        variant="secondary"
+        disabled={disabled}
+        onClick={() => onChange("")}
+      >
+        {t("pinpad.clear")}
+      </Button>
+      <Button
+        type="button"
+        size="pos-lg"
+        variant="outline"
+        disabled={disabled}
+        aria-label={t("pinpad.digit", { digit: "0" })}
+        onClick={() => press("0")}
+      >
+        0
+      </Button>
+      <Button
+        type="button"
+        size="pos-lg"
+        variant="secondary"
+        disabled={disabled}
+        aria-label={t("pinpad.backspace")}
+        onClick={() => onChange(value.slice(0, -1))}
+      >
+        <Delete aria-hidden />
+      </Button>
+    </div>
   );
 }

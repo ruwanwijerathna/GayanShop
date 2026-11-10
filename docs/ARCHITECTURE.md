@@ -237,7 +237,7 @@ It's never derived from UTC at query time. Otherwise terminals, and the cloud, w
   - English (`en`) is the source and fallback language.
 - **Switching:**
   - A language toggle (EN | සිං) sits in the top bar of the till and the back office, with shortcut Ctrl+Shift+L.
-  - The choice is saved **per staff member** in `staff.ui_language` and applied at login. Before login, the lock and login screens use the device default (`device_settings` `ui.default_language`, seeded `en`).
+  - The choice is saved **per staff member** in `staff.ui_language` and applied at login. Before login, the lock screen uses the device default (`device_settings` `ui.default_language`, seeded `en`). The **sign-in form is English-only** (owner decision, 2026-11-10): it shows a Username field matched trimmed and case-insensitively against active staff `display_name`, plus a masked Password (PIN) field, whatever the device language is. A lone staff member's name is prefilled, and a name shared by two staff is refused rather than guessed. Its en/si keys still exist for parity.
   - Switching is instant, with no reload (`i18n.changeLanguage`).
 - **Fonts:** bundle **Noto Sans Sinhala** locally (`@fontsource/noto-sans-sinhala`) alongside the Latin UI font.
   - Use `:lang(si)` rules for a slightly larger line-height and size, because Sinhala glyphs need more vertical room.

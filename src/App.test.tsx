@@ -101,7 +101,8 @@ describe("App routing", () => {
       }),
     );
     renderWithProviders(<App />);
-    expect(await screen.findByRole("heading", { name: "Who is working?" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "GayanShop" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Username")).toBeInTheDocument();
   });
 
   it("hides the audit log from a cashier (Rust still enforces AUDIT_VIEW)", async () => {

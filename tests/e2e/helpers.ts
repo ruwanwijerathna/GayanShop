@@ -1,5 +1,5 @@
 // Shared WebdriverIO helpers for the acceptance suites: find controls the way a person does (by their
-// visible label or name), and log in at the PIN screen.
+// visible label or name), and sign in on the login form.
 import { $ } from "@wdio/globals";
 
 /** The input a visible <label> points at. */
@@ -36,13 +36,9 @@ export async function seeText(text: string) {
 }
 
 export async function login(name: string, pin: string) {
-  // Login tiles show the name and the role underneath.
-  const tile = await $(`//button[.//span[normalize-space()="${name}"]]`);
-  await tile.waitForClickable();
-  await tile.click();
-  const pinField = await $("input[inputmode='numeric']");
-  await pinField.waitForDisplayed();
-  await pinField.setValue(pin);
-  await click("Sign in");
+  // The English sign-in form: username, then password; Enter in Password signs in.
+  await type("Username", name);
+  await type("Password", pin);
+  await click("Sign In");
   await $("a[aria-label='Counter']").waitForExist();
 }
