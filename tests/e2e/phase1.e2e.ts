@@ -96,7 +96,7 @@ describe("Phase 1 acceptance: an offline sale day", () => {
 
   it("a cashier sells by keyboard only: quick sales, search, phone and cash with change", async () => {
     await login("Nimal", CASHIER_PIN);
-    await click("Till");
+    await click("POS Terminal");
     await $("#scan-field").waitForDisplayed();
     // The till never scrolls (doc §1.9): PAY is on screen even with the printer banner showing.
     const pay = await $("//button[starts-with(normalize-space(), 'PAY')]");
@@ -183,7 +183,7 @@ describe("Phase 1 acceptance: an offline sale day", () => {
     await click("Close and print Z-report");
     await click("Yes, close");
     await seeText("Z-report");
-    await click("Till");
+    await click("POS Terminal");
     await seeText("Open a cash session before selling.");
   });
 });

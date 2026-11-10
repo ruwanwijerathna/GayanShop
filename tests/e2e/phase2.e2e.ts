@@ -157,7 +157,7 @@ describe("Phase 2 acceptance: the back office at full scale", () => {
   });
 
   it("promotes a frequent quick sale to a product", async () => {
-    await nav("Quick sales");
+    await nav("Unlisted Items");
     const item = await $(`//button[starts-with(normalize-space(), "Quick item")]`);
     await item.waitForClickable({ timeout: 30_000 });
     const name = await item.getText();
