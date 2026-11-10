@@ -13,7 +13,14 @@
     "customers": "පාරිභෝගිකයන්",
     "expenses": "වියදම්",
     "reports": "වාර්තා",
-    "orders": "ඇණවුම්"
+    "orders": "ඇණවුම්",
+    "groupSales": "විකුණුම් සහ කවුන්ටරය",
+    "groupInventory": "භාණ්ඩ සහ තොග",
+    "groupManagement": "කළමනාකරණය සහ වාර්තා",
+    "groupSystem": "පද්ධතිය",
+    "label": "ප්‍රධාන සංචාලනය",
+    "collapse": "පැති තීරුව හකුළන්න",
+    "expand": "පැති තීරුව දිග හරින්න"
   },
   "status": {
     "title": "කවුන්ටරයේ තත්ත්වය",

@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { commands } from "@/db/bindings";
 import { ok, renderWithProviders, session } from "@/test/render";
@@ -20,6 +20,7 @@ vi.mock("@/db/bindings", () => ({
     ),
     syncBootstrap: vi.fn(() => ok({ pages: 2, rows: 700, permille: 1000, done: true })),
     restoreStatus: vi.fn(() => ok({ pending: null, modes: ["local"], device_code: "T01" })),
+    logout: vi.fn(() => ok(null)),
   },
 }));
 
@@ -164,5 +165,93 @@ describe("App routing", () => {
     fireEvent.keyDown(window, { key: "L", code: "KeyL", ctrlKey: true, shiftKey: true });
     expect(await screen.findByRole("heading", { name: "Counter status" })).toBeInTheDocument();
     expect(commands.setUiLanguage).toHaveBeenLastCalledWith("en");
+  });
+});
+
+function loggedIn(overrides: Parameters<typeof session>[0] = {}) {
+  status.mockImplementation(() =>
+    ok({
+      initialized: true,
+      store_name: "GayanShop",
+      device_code: "T01",
+      session: session(overrides),
+      bootstrap_pending: false,
+      restore_pending: false,
+    }),
+  );
+}
+
+describe("App sidebar", () => {
+  it("groups the owner's navigation into Sales, Catalog, Management and System", async () => {
+    loggedIn({
+      staff_id: "owner",
+      display_name: "Gayan",
+      role_name: "Owner",
+      permissions: [
+        "SALE_CREATE",
+        "REPORT_SALES",
+        "CUSTOMER_VIEW",
+        "BATCH_MANAGE",
+        "STOCK_ADJUST",
+        "QUICK_SALE_PROMOTE",
+        "EXPENSE_MANAGE",
+        "AUDIT_VIEW",
+        "USER_MANAGE",
+        "SETTINGS_MANAGE",
+      ],
+    });
+    renderWithProviders(<App />);
+    const groups: [string, string[]][] = [
+      ["Sales & Counter", ["Counter", "POS Terminal", "Orders", "Cash", "Customers"]],
+      ["Catalog & Stock", ["Products", "Batches", "Stock", "Unlisted Items"]],
+      ["Management & Reports", ["Reports", "Expenses", "Audit log"]],
+      ["System", ["Staff", "Settings"]],
+    ];
+    for (const [label, links] of groups) {
+      const heading = await screen.findByText(label);
+      const group = heading.closest("[data-sidebar=group]");
+      expect(group).not.toBeNull();
+      const names = within(group as HTMLElement)
+        .getAllByRole("link")
+        .map((a) => a.getAttribute("aria-label"));
+      expect(names).toEqual(links);
+    }
+    expect(screen.getByRole("link", { name: "Counter" })).toHaveAttribute("data-active", "true");
+    expect(screen.getByRole("link", { name: "Orders" })).toHaveAttribute("data-active", "false");
+    expect(screen.getByRole("button", { name: /Lock/ })).toBeInTheDocument();
+    expect(screen.getAllByText("T01").length).toBeGreaterThan(0);
+  });
+
+  it("hides links, and a whole group, a cashier can't open", async () => {
+    loggedIn();
+    renderWithProviders(<App />);
+    expect(await screen.findByRole("link", { name: "POS Terminal" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Cash" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Products" })).toBeInTheDocument();
+    for (const hidden of ["Orders", "Customers", "Batches", "Reports", "Audit log", "Staff", "Settings"]) {
+      expect(screen.queryByRole("link", { name: hidden })).not.toBeInTheDocument();
+    }
+    expect(screen.queryByText("Management & Reports")).not.toBeInTheDocument();
+    expect(screen.queryByText("System")).not.toBeInTheDocument();
+  });
+
+  it("collapses to icons and expands again from the header button", async () => {
+    loggedIn();
+    renderWithProviders(<App />);
+    // jsdom's window is 1024 px wide: the 1024 baseline starts collapsed.
+    const toggle = await screen.findByRole("button", { name: "Expand sidebar" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(toggle);
+    expect(await screen.findByRole("button", { name: "Collapse sidebar" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  });
+
+  it("locks from the sidebar footer", async () => {
+    loggedIn();
+    renderWithProviders(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: /Lock/ }));
+    await waitFor(() => expect(commands.logout).toHaveBeenCalled());
   });
 });

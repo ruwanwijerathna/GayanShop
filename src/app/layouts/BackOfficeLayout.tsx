@@ -1,24 +1,34 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
-/** Back-office shell: top bar, collapsible sidebar navigation, content (doc §1.4 responsive table). */
+/** Wide screens start with the sidebar open; the 1024 px baseline starts collapsed to icons (doc §1.4). */
+const OPEN_FROM_PX = 1280;
+
+/** 64 px icon rail so collapsed items keep 48 px touch targets (doc §1.9); 15 rem open. */
+const SIDEBAR_SIZE = { "--sidebar-width": "15rem", "--sidebar-width-icon": "4rem" } as CSSProperties;
+
+/** Back-office shell: the shadcn Sidebar (collapsible to icons), then the top bar and content. */
 export function BackOfficeLayout({
   topBar,
-  nav,
+  sidebar,
   children,
 }: {
   topBar: ReactNode;
-  nav: ReactNode;
+  sidebar: ReactNode;
   children: ReactNode;
 }) {
+  const defaultOpen = typeof window === "undefined" || window.innerWidth >= OPEN_FROM_PX;
   return (
-    <div className="flex h-screen min-h-[768px] min-w-[1024px] flex-col bg-background">
-      {topBar}
-      <div className="flex min-h-0 flex-1">
-        <nav className="flex w-16 shrink-0 flex-col gap-2 border-r border-border bg-card p-2 xl:w-56">
-          {nav}
-        </nav>
-        <main className="flex min-w-0 flex-1 flex-col overflow-auto p-4">{children}</main>
-      </div>
-    </div>
+    <SidebarProvider
+      defaultOpen={defaultOpen}
+      style={SIDEBAR_SIZE}
+      className="h-screen min-h-[768px] min-w-[1024px] bg-background"
+    >
+      {sidebar}
+      <SidebarInset className="flex min-h-0 min-w-0 flex-col overflow-hidden">
+        {topBar}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto p-4">{children}</div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

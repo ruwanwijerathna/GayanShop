@@ -13,7 +13,14 @@
     "customers": "Customers",
     "expenses": "Expenses",
     "reports": "Reports",
-    "orders": "Orders"
+    "orders": "Orders",
+    "groupSales": "Sales & Counter",
+    "groupInventory": "Catalog & Stock",
+    "groupManagement": "Management & Reports",
+    "groupSystem": "System",
+    "label": "Main navigation",
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar"
   },
   "status": {
     "title": "Counter status",
