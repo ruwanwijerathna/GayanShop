@@ -3006,6 +3006,8 @@ cargo add --dev proptest
 | 20 | **JSON-in-text columns stay `text` in the cloud** (§4.4) | `jsonb` | Byte-identical round trips. The audit hash chain depends on them. |
 | 21 | **A store that never registered with the cloud keeps its counter identity on restore** (proposed 2026-11-10, pending the owner) | Retiring the identity as an offline cloud restore does | Nothing after the backup exists anywhere to collide with; the receipt and SKU counters continue from the restored data. |
 | 22 | **Successful automatic backups are not audited; a failure is audited once until one succeeds** (proposed 2026-11-10, pending the owner) | Auditing every hourly backup | About 24 audit rows a day, all synced, would bury the audit log. The status shows the last automatic backup. Manual backups and restores stay fully audited. |
+| 23 | **SQLCipher deferred; standard SQLite WAL with OS file permissions retained** (Block 4.3) | Bundling SQLCipher / full-database encryption | SQLite WAL with Windows NTFS ACLs meets the single-store offline threat model with zero read overhead; full-disk BitLocker protects against physical theft. |
+| 24 | **Local rotating logs + support bundle export; no SaaS crash reporting** (Block 4.4) | Third-party cloud telemetry (Sentry, etc.) | Preserves customer privacy and strict offline operation; support bundle ZIP is exported on demand by the store owner for diagnostics. |
 
 
 ---
