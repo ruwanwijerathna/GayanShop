@@ -63,5 +63,12 @@
   "shortcuts": {
     "lock": "Ctrl+L",
     "language": "Ctrl+Shift+L"
+  },
+  "touchMode": {
+    "title": "ස්පර්ශ තිරය",
+    "label": "ස්පර්ශ තිර මාදිලිය (Touch Screen)",
+    "description": "ස්පර්ශ සක්‍රීය උපාංග සඳහා තිරය මත ස්පර්ශ යතුරු පුවරු සහ අංක පුවරු පෙන්වන්න",
+    "on": "සක්‍රියයි",
+    "off": "අක්‍රියයි"
   }
 }

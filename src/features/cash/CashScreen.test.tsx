@@ -148,7 +148,7 @@ describe("CashScreen", () => {
     fireEvent.click(within(form).getByRole("button", { name: "Record and open drawer" }));
 
     fireEvent.click(await screen.findByRole("button", { name: "Kamal" }));
-    for (const d of "1357") fireEvent.click(screen.getByRole("button", { name: `Digit ${d}` }));
+    fireEvent.change(screen.getByLabelText("PIN"), { target: { value: "1357" } });
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
 
     await waitFor(() => expect(commands.cashDrawerMovement).toHaveBeenCalledTimes(2));

@@ -43,6 +43,6 @@ export async function login(name: string, pin: string) {
   const pinField = await $("input[inputmode='numeric']");
   await pinField.waitForDisplayed();
   await pinField.setValue(pin);
-  await click("Log in");
+  await click("Sign in");
   await $("a[aria-label='Counter']").waitForExist();
 }

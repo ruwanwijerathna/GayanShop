@@ -14,15 +14,18 @@ async fn device_preferences_default_and_update() {
     let t = open().await;
     assert_eq!(
         prefs::device_preferences(t.pool()).await.unwrap(),
-        DevicePreferences { default_language: UiLanguage::En, theme: UiTheme::Light }
+        DevicePreferences { default_language: UiLanguage::En, theme: UiTheme::Light, touch_mode: false }
     );
     prefs::set_device_theme(&t.db, UiTheme::Dark).await.unwrap();
     prefs::set_device_language(&t.db, UiLanguage::Si).await.unwrap();
+    prefs::set_device_touch_mode(&t.db, true).await.unwrap();
     assert_eq!(
         prefs::device_preferences(t.pool()).await.unwrap(),
-        DevicePreferences { default_language: UiLanguage::Si, theme: UiTheme::Dark }
+        DevicePreferences { default_language: UiLanguage::Si, theme: UiTheme::Dark, touch_mode: true }
     );
     assert_eq!(scalar_i64(t.pool(), "SELECT COUNT(*) FROM sync_outbox").await, 0, "device prefs never sync");
+    prefs::set_device_touch_mode(&t.db, false).await.unwrap();
+    assert!(!prefs::device_preferences(t.pool()).await.unwrap().touch_mode, "touch mode turns back off");
 }
 
 #[tokio::test]

@@ -341,6 +341,7 @@ Style: flat with clear borders, no decorative effects. Borders, not shadows, sep
   - Every till button shows its key as a visible **`<Kbd>` badge** (e.g. `PAY [F9]`).
   - In dialogs, Tab order is logical, Enter triggers the default action and Esc cancels. A focus trap is mandatory, and focus returns to where it was on close.
 - **Touch:**
+  - **Touch screen mode** is a per-device toggle (Settings → Touch screen; `device_settings` key `ui.touch_mode`, default off, never synced). Only when it is on do the till's numeric keypad, the payment dialog's keypad and the PIN pads' digit keys show. Off, the masked PIN field and every input stay fully keyboard-driven.
   - No hover-only affordances, no long-press-only actions, and no drag-required interactions.
   - Pressed state appears within one frame (`active:` scale 0.98 plus a darker fill).
 - Shortcuts are suspended while a text field is focused, except for F-keys and Esc, and while a scanner burst is being captured (§7.1).
@@ -2973,6 +2974,7 @@ cargo add --dev proptest
 | `receipt.mask_customer_phone` | `true`: printed as `07X XXX X123` |
 | `customer.capture` | `optional`, with **verbal consent at the counter**. There's no popup, no notice dialog and no blocking step. Enter or Esc on an empty phone field skips it. |
 | `ui.default_language` (device) | `en`. Staff can switch to `si` (Sinhala), and the choice is saved per staff member. |
+| `ui.touch_mode` (device) | `false` when absent (not seeded). Settings → Touch screen turns on the on-screen keypads and PIN-pad digit keys for touch counters (§1.9). |
 | `label.templates` (device) | The `two_up_2x1` and `three_up_1x1` built-ins (§7.4). **Default 203 dpi, with a 2 mm row (die-cut) gap.** Column gap and left margin are roll-specific and set by calibration. |
 | `backup.reminder_days` | `7` |
 | Stores | 1 store with 2–3 counters for the next 12 months. Multi-store stays in the design, and delivery is in Phase 5. |

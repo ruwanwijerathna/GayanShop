@@ -44,20 +44,31 @@ pub struct DevicePreferences {
     /// Language for the lock/login screens (before anyone logs in).
     pub default_language: UiLanguage,
     pub theme: UiTheme,
+    /// Touch screen mode: show on-screen keypads and number pads (off by default; keyboard-first).
+    pub touch_mode: bool,
 }
 
 pub async fn device_preferences(pool: &SqlitePool) -> AppResult<DevicePreferences> {
     let lang: Option<String> = settings::device_get(pool, "ui.default_language").await?;
     let theme: Option<String> = settings::device_get(pool, "ui.theme").await?;
+    let touch_mode: Option<bool> = settings::device_get(pool, "ui.touch_mode").await?;
     Ok(DevicePreferences {
         default_language: if lang.as_deref() == Some("si") { UiLanguage::Si } else { UiLanguage::En },
         theme: if theme.as_deref() == Some("dark") { UiTheme::Dark } else { UiTheme::Light },
+        touch_mode: touch_mode.unwrap_or(false),
     })
 }
 
 pub async fn set_device_theme(db: &Db, theme: UiTheme) -> AppResult<()> {
     let mut tx = db.write().await?;
     settings::device_set(tx.conn(), "ui.theme", &theme.code()).await?;
+    tx.commit().await
+}
+
+/// Turn this counter's touch screen mode on or off (local-only; it depends on the counter's hardware).
+pub async fn set_device_touch_mode(db: &Db, enabled: bool) -> AppResult<()> {
+    let mut tx = db.write().await?;
+    settings::device_set(tx.conn(), "ui.touch_mode", &enabled).await?;
     tx.commit().await
 }
 

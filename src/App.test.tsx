@@ -7,7 +7,7 @@ import App from "./App";
 vi.mock("@/db/bindings", () => ({
   commands: {
     appStatus: vi.fn(),
-    devicePreferences: vi.fn(() => ok({ default_language: "en", theme: "light" })),
+    devicePreferences: vi.fn(() => ok({ default_language: "en", theme: "light", touch_mode: false })),
     listLoginStaff: vi.fn(() => ok([])),
     appInfo: vi.fn(() => ok({ app_version: "0.1.0", schema_version: 1, data_dir: "C:\\data" })),
     integrityCheck: vi.fn(() =>

@@ -139,7 +139,7 @@ describe("PrintLabelsDialog", () => {
     await screen.findByRole("img", { name: "Label preview" });
     fireEvent.click(screen.getByRole("button", { name: "Print 2 label(s)" }));
     fireEvent.click(await screen.findByRole("button", { name: "Kamal" }));
-    for (const d of "2222") fireEvent.click(screen.getByRole("button", { name: `Digit ${d}` }));
+    fireEvent.change(screen.getByLabelText("PIN"), { target: { value: "2222" } });
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     await waitFor(() => expect(commands.printLabels).toHaveBeenCalledTimes(2));
     expect(commands.requestApproval).toHaveBeenCalledWith("LABEL_PRINT", "labels", "sup", "2222");

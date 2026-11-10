@@ -33,7 +33,10 @@ async function lock() {
 async function approve(as: string, pin: string) {
   await seeText("Supervisor approval");
   await click(as);
-  for (const d of pin) await click(`Digit ${d}`);
+  // Keyboard mode (touch screen mode off): the PIN goes into the masked field.
+  const pinField = await $("[role='dialog'] input[inputmode='numeric']");
+  await pinField.waitForDisplayed();
+  await pinField.setValue(pin);
   await click("Approve");
 }
 

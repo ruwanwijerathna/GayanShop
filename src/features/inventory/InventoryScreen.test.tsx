@@ -168,7 +168,7 @@ describe("InventoryScreen", () => {
     fireEvent.change(screen.getByLabelText("Why"), { target: { value: "expired" } });
     fireEvent.click(screen.getByRole("button", { name: "Write off" }));
     fireEvent.click(await screen.findByRole("button", { name: "Kamal" }));
-    for (const d of "2222") fireEvent.click(screen.getByRole("button", { name: `Digit ${d}` }));
+    fireEvent.change(screen.getByLabelText("PIN"), { target: { value: "2222" } });
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     await waitFor(() => expect(commands.recordDamage).toHaveBeenCalledTimes(2));
     expect(commands.requestApproval).toHaveBeenCalledWith("STOCK_DAMAGE", "stock", "sup", "2222");
