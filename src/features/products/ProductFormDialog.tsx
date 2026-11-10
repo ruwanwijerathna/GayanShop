@@ -201,17 +201,6 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
               onChange={(e) => set("name", e.target.value)}
             />
           </Field>
-          <Field id="product-kind" label={t("form.kind")}>
-            <SelectField
-              id="product-kind"
-              value={form.kind}
-              onValueChange={(v) => set("kind", v === "generic" ? "generic" : "standard")}
-              options={[
-                { value: "standard", label: t("form.kindStandard") },
-                { value: "generic", label: t("form.kindGeneric") },
-              ]}
-            />
-          </Field>
           <Field id="product-category" label={t("form.category")}>
             <SelectField
               id="product-category"
