@@ -213,7 +213,6 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
             />
           </Field>
           {money("price", "product-price", t("form.price"))}
-          {money("minPrice", "product-min-price", t("form.minPrice"))}
           {canViewCost && money("cost", "product-cost", t("form.cost"))}
           <div className="xl:col-span-2 grid grid-cols-1 gap-4 xl:grid-cols-2">
             {codeField("sku")}
