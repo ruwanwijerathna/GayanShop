@@ -1,9 +1,11 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Banknote,
   BarChart3,
+  ChevronsUpDown,
   Contact,
   Lock,
+  LogOut,
   Package,
   PanelLeft,
   ScrollText,
@@ -11,14 +13,23 @@ import {
   ShieldCheck,
   ShoppingCart,
   Store,
-  UserRound,
   Users,
   Zap,
   type LucideIcon,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Kbd } from "@/components/common/Kbd";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Sidebar,
   SidebarContent,
@@ -133,14 +144,22 @@ function NavItems({ items, pathname }: { items: NavItem[]; pathname: string }) {
 export function AppSidebar({ deviceCode, onLock }: { deviceCode: string | null; onLock: () => void }) {
   const { t } = useTranslation(["app", "auth"]);
   const { session } = useSession();
-  const { toggleSidebar, state } = useSidebar();
+  const { toggleSidebar, state, isMobile } = useSidebar();
+  const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const allowed = (item: NavItem) => !item.perm || item.perm.some((p) => hasPerm(session, p));
   const groups = GROUPS.map((g) => ({ ...g, items: g.items.filter(allowed) })).filter(
     (g) => g.items.length > 0,
   );
   const system = SYSTEM.items.filter(allowed);
-  const who = session ? `${session.display_name} · ${session.role_name}` : null;
+  const initials =
+    (session?.display_name ?? "")
+      .split(" ")
+      .filter(Boolean)
+      .map((n) => n[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "U";
 
   return (
     <Sidebar collapsible="icon" aria-label={t("nav.label")}>
@@ -181,32 +200,81 @@ export function AppSidebar({ deviceCode, onLock }: { deviceCode: string | null; 
         )}
         <SidebarSeparator className="mx-0" />
         <SidebarMenu>
-          {who && (
+          {session && (
             <SidebarMenuItem>
-              <div
-                className="flex h-12 items-center gap-2 overflow-hidden rounded-md px-3.5 text-sm"
-                title={deviceCode ? `${who} · ${deviceCode}` : who}
-              >
-                <UserRound aria-hidden className="size-5 shrink-0" />
-                <span className="flex min-w-0 flex-1 flex-col group-data-[collapsible=icon]:hidden">
-                  <span className="truncate font-medium">{session?.display_name}</span>
-                  <span className="truncate text-muted-foreground">{session?.role_name}</span>
-                </span>
-                {deviceCode && (
-                  <span className="rounded border border-input px-1.5 font-mono text-xs group-data-[collapsible=icon]:hidden">
-                    {deviceCode}
-                  </span>
-                )}
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <SidebarMenuButton
+                    size="lg"
+                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground h-12 text-base group-data-[collapsible=icon]:size-12! group-data-[collapsible=icon]:p-2!"
+                    aria-label={session.display_name}
+                  >
+                    <Avatar className="size-8 rounded-lg">
+                      <AvatarFallback className="rounded-lg bg-primary/10 text-primary font-semibold">
+                        {initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                      <span className="truncate font-semibold">{session.display_name}</span>
+                      <span className="truncate text-xs text-muted-foreground">{session.role_name}</span>
+                    </div>
+                    {deviceCode && (
+                      <span className="rounded border border-input px-1.5 font-mono text-xs group-data-[collapsible=icon]:hidden">
+                        {deviceCode}
+                      </span>
+                    )}
+                    <ChevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden text-muted-foreground" />
+                  </SidebarMenuButton>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+                  side={isMobile ? "bottom" : "right"}
+                  align="end"
+                  sideOffset={8}
+                >
+                  <DropdownMenuLabel className="p-0 font-normal">
+                    <div className="flex items-center gap-2 px-2 py-1.5 text-left text-sm">
+                      <Avatar className="size-8 rounded-lg">
+                        <AvatarFallback className="rounded-lg bg-primary/10 text-primary font-semibold">
+                          {initials}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="grid flex-1 text-left text-sm leading-tight">
+                        <span className="truncate font-semibold">{session.display_name}</span>
+                        <span className="truncate text-xs text-muted-foreground">{session.role_name}</span>
+                      </div>
+                      {deviceCode && (
+                        <span className="rounded border border-input px-1.5 font-mono text-xs">
+                          {deviceCode}
+                        </span>
+                      )}
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {system.length > 0 && (
+                    <>
+                      <DropdownMenuGroup>
+                        <DropdownMenuItem onClick={() => navigate({ to: "/settings" })}>
+                          <Settings2 className="mr-2 size-4" />
+                          <span>{t("nav.settings")}</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuGroup>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  <DropdownMenuItem onClick={onLock}>
+                    <Lock className="mr-2 size-4" />
+                    <span>{t("auth:lock")}</span>
+                    <DropdownMenuShortcut>{t("shortcuts.lock")}</DropdownMenuShortcut>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={onLock} variant="destructive">
+                    <LogOut className="mr-2 size-4" />
+                    <span>{t("auth:logout")}</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </SidebarMenuItem>
           )}
-          <SidebarMenuItem>
-            <SidebarMenuButton tooltip={t("auth:lock")} onClick={onLock} className={ROW}>
-              <Lock aria-hidden />
-              <span>{t("auth:lock")}</span>
-              <Kbd className="ml-auto group-data-[collapsible=icon]:hidden">{t("shortcuts.lock")}</Kbd>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>

@@ -220,7 +220,7 @@ describe("App sidebar", () => {
     }
     expect(screen.getByRole("link", { name: "Counter" })).toHaveAttribute("data-active", "true");
     expect(screen.getByRole("link", { name: "Bills" })).toHaveAttribute("data-active", "false");
-    expect(screen.getByRole("button", { name: /Lock/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Gayan" })).toBeInTheDocument();
     expect(screen.getAllByText("T01").length).toBeGreaterThan(0);
   });
 
@@ -250,11 +250,27 @@ describe("App sidebar", () => {
     );
   });
 
-  it("locks from the sidebar footer", async () => {
+  it("locks from the sidebar footer user menu", async () => {
     loggedIn();
     renderWithProviders(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: /Lock/ }));
+    const trigger = await screen.findByRole("button", { name: "Nimal" });
+    fireEvent.pointerDown(trigger, { button: 0 });
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Lock/ }));
     await waitFor(() => expect(commands.logout).toHaveBeenCalled());
+  });
+
+  it("navigates to settings from the sidebar footer user menu", async () => {
+    loggedIn({
+      staff_id: "owner",
+      display_name: "Gayan",
+      role_name: "Owner",
+      permissions: ["SETTINGS_MANAGE"],
+    });
+    renderWithProviders(<App />);
+    const trigger = await screen.findByRole("button", { name: "Gayan" });
+    fireEvent.pointerDown(trigger, { button: 0 });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Settings" }));
+    expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
   });
 });
 
