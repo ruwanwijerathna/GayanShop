@@ -71,6 +71,13 @@
     "lock": "Ctrl+L",
     "language": "Ctrl+Shift+L"
   },
+  "appearance": {
+    "title": "Appearance & Language",
+    "themeLabel": "Theme",
+    "themeDescription": "Switch between light and dark visual themes",
+    "languageLabel": "Display language",
+    "languageDescription": "Select your preferred application language (English or සිංහල)"
+  },
   "touchMode": {
     "title": "Touch screen",
     "label": "Touch screen mode",

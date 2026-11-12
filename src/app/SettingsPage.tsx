@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Can } from "@/components/auth/Can";
+import { AppearanceSettings } from "@/components/common/AppearanceSettings";
 import { TouchModeSettings } from "@/components/common/TouchModeSettings";
 import { BackupSettings } from "@/features/backup/BackupSettings";
 import { RestoreSettings } from "@/features/backup/RestoreSettings";
@@ -15,6 +16,7 @@ export function SettingsPage() {
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
       <h1 className="text-2xl font-semibold">{t("nav.settings")}</h1>
+      <AppearanceSettings />
       <TouchModeSettings />
       <PrinterSettings />
       <LabelSettings />

@@ -146,7 +146,7 @@ describe("App routing", () => {
     expect(screen.getByRole("heading", { name: "කවුන්ටරයේ තත්ත්වය" })).toBeInTheDocument();
   });
 
-  it("switches language live from the toggle and Ctrl+Shift+L while logged in", async () => {
+  it("switches language live from Ctrl+Shift+L while logged in", async () => {
     status.mockImplementation(() =>
       ok({
         initialized: true,
@@ -160,7 +160,7 @@ describe("App routing", () => {
     renderWithProviders(<App />);
     expect(await screen.findByRole("heading", { name: "Counter status" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "සිං" }));
+    fireEvent.keyDown(window, { key: "L", code: "KeyL", ctrlKey: true, shiftKey: true });
     expect(await screen.findByRole("heading", { name: "කවුන්ටරයේ තත්ත්වය" })).toBeInTheDocument();
     expect(commands.setUiLanguage).toHaveBeenLastCalledWith("si");
 
@@ -259,7 +259,7 @@ describe("App sidebar", () => {
     await waitFor(() => expect(commands.logout).toHaveBeenCalled());
   });
 
-  it("navigates to settings from the sidebar footer user menu", async () => {
+  it("navigates to settings from the sidebar footer user menu and shows appearance settings", async () => {
     loggedIn({
       staff_id: "owner",
       display_name: "Gayan",
@@ -271,6 +271,8 @@ describe("App sidebar", () => {
     fireEvent.pointerDown(trigger, { button: 0 });
     fireEvent.click(await screen.findByRole("menuitem", { name: "Settings" }));
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Appearance & Language" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "සිං" })).toBeInTheDocument();
   });
 });
 

@@ -71,6 +71,13 @@
     "lock": "Ctrl+L",
     "language": "Ctrl+Shift+L"
   },
+  "appearance": {
+    "title": "පෙනුම සහ භාෂාව",
+    "themeLabel": "තේමාව",
+    "themeDescription": "ආලෝක (Light) සහ අඳුරු (Dark) මාදිලි අතර මාරු වන්න",
+    "languageLabel": "භාෂාව",
+    "languageDescription": "පද්ධතිය සඳහා ඔබ කැමති භාෂාව තෝරන්න (English හෝ සිංහල)"
+  },
   "touchMode": {
     "title": "ස්පර්ශ තිරය",
     "label": "ස්පර්ශ තිර මාදිලිය (Touch Screen)",

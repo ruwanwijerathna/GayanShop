@@ -4,23 +4,19 @@ import { useTranslation } from "react-i18next";
 import { useDbChangedInvalidation } from "@/db/events";
 import { BackupReminder } from "@/features/backup/BackupSettings";
 import { PrinterBanner } from "@/features/printing/PrinterBanner";
-import { SyncStatusPill } from "@/features/sync/SyncStatusPill";
-import { useAppStatus, useDevicePrefs, useLogout, useSetDeviceTheme, useSetUiLanguage } from "@/db/hooks";
+import { useAppStatus, useLogout, useSetUiLanguage } from "@/db/hooks";
 import type { UiLanguage } from "@/i18n";
 import { AppSidebar } from "./layouts/AppSidebar";
 import { BackOfficeLayout } from "./layouts/BackOfficeLayout";
 import { useMarkExplicitLock } from "./lock-context";
-import { TopBar } from "./layouts/TopBar";
 
-/** Logged-in shell: top bar, grouped sidebar navigation, lock (Ctrl+L) and language toggle (Ctrl+Shift+L). */
+/** Logged-in shell: grouped sidebar navigation, lock (Ctrl+L) and language toggle (Ctrl+Shift+L). */
 export function AppShell() {
   const { i18n } = useTranslation();
   const status = useAppStatus();
-  const prefs = useDevicePrefs();
   const markExplicitLock = useMarkExplicitLock();
   const logout = useLogout();
   const setLanguage = useSetUiLanguage();
-  const setTheme = useSetDeviceTheme();
   useDbChangedInvalidation();
 
   const lock = () => {
@@ -49,17 +45,13 @@ export function AppShell() {
 
   return (
     <BackOfficeLayout
-      topBar={
-        <TopBar
+      sidebar={
+        <AppSidebar
           storeName={status.data?.store_name ?? null}
           deviceCode={status.data?.device_code ?? null}
-          theme={prefs.data?.theme ?? "light"}
-          onThemeChange={(theme) => setTheme.mutate(theme)}
-          onLanguageChange={changeLanguage}
-          sync={<SyncStatusPill />}
+          onLock={lock}
         />
       }
-      sidebar={<AppSidebar deviceCode={status.data?.device_code ?? null} onLock={lock} />}
     >
       <PrinterBanner />
       <BackupReminder />

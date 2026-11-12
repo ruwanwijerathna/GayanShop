@@ -132,7 +132,15 @@ function NavItems({ items, pathname }: { items: NavItem[]; pathname: string }) {
  * The back-office navigation (shadcn Sidebar, collapsible to icons; Ctrl+B or the header button toggles
  * it). Items are grouped by job; a group whose items the staff member can't open isn't shown.
  */
-export function AppSidebar({ deviceCode, onLock }: { deviceCode: string | null; onLock: () => void }) {
+export function AppSidebar({
+  storeName,
+  deviceCode,
+  onLock,
+}: {
+  storeName?: string | null;
+  deviceCode: string | null;
+  onLock: () => void;
+}) {
   const { t } = useTranslation(["app", "auth"]);
   const { session } = useSession();
   const { toggleSidebar, state, isMobile } = useSidebar();
@@ -154,7 +162,11 @@ export function AppSidebar({ deviceCode, onLock }: { deviceCode: string | null; 
 
   return (
     <Sidebar collapsible="icon" aria-label={t("nav.label")}>
-      <SidebarHeader className="flex-row items-center justify-end p-2">
+      <SidebarHeader className="flex-row items-center justify-between p-2">
+        <div className="flex items-center gap-2 overflow-hidden px-2 group-data-[collapsible=icon]:hidden">
+          <Store className="size-5 shrink-0 text-primary" aria-hidden />
+          <span className="truncate font-bold text-base tracking-tight">{storeName ?? t("app.name")}</span>
+        </div>
         <WithTooltip label={state === "expanded" ? t("nav.collapse") : t("nav.expand")}>
           <Button
             type="button"
