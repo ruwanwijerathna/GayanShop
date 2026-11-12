@@ -155,4 +155,24 @@ describe("LoginScreen", () => {
     await renderLogin({ wasLocked: true });
     expect(screen.getByRole("status")).toHaveTextContent("The counter locked after inactivity.");
   });
+
+  it("toggles password visibility between password and text", async () => {
+    const { password } = await renderLogin();
+    expect(password).toHaveAttribute("type", "password");
+    const toggle = screen.getByRole("button", { name: "Show password" });
+    fireEvent.click(toggle);
+    expect(password).toHaveAttribute("type", "text");
+    expect(screen.getByRole("button", { name: "Hide password" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Hide password" }));
+    expect(password).toHaveAttribute("type", "password");
+  });
+
+  it("shows helpful guidance when clicking forgot password or create one", async () => {
+    await renderLogin();
+    fireEvent.click(screen.getByRole("button", { name: "Forgot password?" }));
+    expect(screen.getByText(/ask the store owner or manager to reset it/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Create one" }));
+    expect(screen.getByText(/can be created by the store owner or manager/i)).toBeInTheDocument();
+  });
 });
