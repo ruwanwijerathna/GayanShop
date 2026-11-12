@@ -5,7 +5,6 @@ import {
   ChevronsUpDown,
   Contact,
   Lock,
-  LogOut,
   Package,
   PanelLeft,
   ScrollText,
@@ -249,10 +248,6 @@ export function AppSidebar({ deviceCode, onLock }: { deviceCode: string | null; 
                     <Lock className="mr-2 size-4" />
                     <span>{t("auth:lock")}</span>
                     <DropdownMenuShortcut>{t("shortcuts.lock")}</DropdownMenuShortcut>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={onLock} variant="destructive">
-                    <LogOut className="mr-2 size-4" />
-                    <span>{t("auth:logout")}</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
