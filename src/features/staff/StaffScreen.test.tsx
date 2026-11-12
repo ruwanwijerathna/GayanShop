@@ -137,6 +137,29 @@ describe("StaffScreen", () => {
     await waitFor(() => expect(commands.resetStaffPin).toHaveBeenCalledWith("s2", "9753"));
   });
 
+  it("filters staff by search query", async () => {
+    renderWithProviders(<StaffScreen />);
+    expect(await screen.findByText("Gayan")).toBeInTheDocument();
+    expect(screen.getByText("Kasun")).toBeInTheDocument();
+
+    const searchInput = screen.getByLabelText("Search by name or role");
+    fireEvent.change(searchInput, { target: { value: "Kasun" } });
+
+    expect(screen.getByText("Kasun")).toBeInTheDocument();
+    expect(screen.queryByText("Gayan")).not.toBeInTheDocument();
+  });
+
+  it("switches to roles tab and displays permission matrix", async () => {
+    renderWithProviders(<StaffScreen />);
+    const rolesTab = await screen.findByRole("tab", { name: "Roles & permissions" });
+    fireEvent.click(rolesTab);
+
+    expect(await screen.findByText("Permission matrix")).toBeInTheDocument();
+    expect(screen.getByText("Sales & Till")).toBeInTheDocument();
+    expect(screen.getByText("Cash Management")).toBeInTheDocument();
+    expect(screen.getByText("Full access")).toBeInTheDocument();
+  });
+
   it("parses personal discount limits as percentages", () => {
     expect(parseLimit("")).toBeNull();
     expect(parseLimit("5")).toBe(500);

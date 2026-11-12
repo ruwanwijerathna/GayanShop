@@ -1,6 +1,31 @@
 {
   "title": "කාර්ය මණ්ඩලය",
+  "subtitle": "පොස් පද්ධතියට ලොග් විය හැකි අය සහ ඔවුන්ගේ අවසර කළමනාකරණය කරන්න.",
   "add": "කාර්ය මණ්ඩලයට එක් කරන්න",
+  "stats": {
+    "total": "මුළු කාර්ය මණ්ඩලය",
+    "active": "සක්‍රීය",
+    "roles": "භූමිකාවන්"
+  },
+  "tabs": {
+    "staff": "සාමාජිකයින්",
+    "roles": "භූමිකාවන් සහ අවසර"
+  },
+  "searchPlaceholder": "නම හෝ භූමිකාව අනුව සොයන්න",
+  "filters": {
+    "allRoles": "සියලු භූමිකාවන්",
+    "allStatuses": "සියලු තත්ත්වයන්"
+  },
+  "rolesTab": {
+    "matrixTitle": "අවසර වගුව (Permission matrix)",
+    "matrixSubtitle": "එක් එක් භූමිකාවට කළ හැකි දේ පිළිබඳ සාරාංශය.",
+    "members_one": "සාමාජික {{count}}ක්",
+    "members_other": "සාමාජිකයින් {{count}}ක්",
+    "permsCount": "අවසර {{total}}න් {{count}}ක්",
+    "maxDiscount": "උපරිම වට්ටම: {{pct}}%"
+  },
+  "emptySearch": "කිසිදු කාර්ය මණ්ඩල සාමාජිකයෙකු හමු නොවීය.",
+  "lastOwnerCannotDeactivate": "එකම සක්‍රීය හිමිකරු අක්‍රීය කළ නොහැක.",
   "columns": {
     "name": "නම",
     "role": "භූමිකාව",
