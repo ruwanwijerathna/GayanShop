@@ -41,7 +41,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarSeparator,
   useSidebar,
 } from "@/components/ui/sidebar";
 import type { Perm } from "@/db/bindings";
@@ -104,13 +103,6 @@ const GROUPS: NavGroup[] = [
   },
 ];
 
-const SYSTEM: NavGroup = {
-  label: "nav.groupSystem",
-  items: [
-    { to: "/settings", label: "nav.settings", Icon: Settings2, perm: ["SETTINGS_MANAGE", "BACKUP_CREATE"] },
-  ],
-};
-
 /** 48 px rows open and collapsed (touch targets, doc §1.9); 20 px icons. */
 const ROW =
   "h-12 text-base [&>svg]:size-5 group-data-[collapsible=icon]:size-12! group-data-[collapsible=icon]:p-3.5!";
@@ -151,7 +143,7 @@ export function AppSidebar({ deviceCode, onLock }: { deviceCode: string | null; 
   const groups = GROUPS.map((g) => ({ ...g, items: g.items.filter(allowed) })).filter(
     (g) => g.items.length > 0,
   );
-  const system = SYSTEM.items.filter(allowed);
+  const canSettings = hasPerm(session, "SETTINGS_MANAGE") || hasPerm(session, "BACKUP_CREATE");
   const initials =
     (session?.display_name ?? "")
       .split(" ")
@@ -190,15 +182,6 @@ export function AppSidebar({ deviceCode, onLock }: { deviceCode: string | null; 
       </SidebarContent>
 
       <SidebarFooter>
-        {system.length > 0 && (
-          <SidebarGroup className="p-0">
-            <SidebarGroupLabel className="text-sm">{t("nav.groupSystem")}</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <NavItems items={system} pathname={pathname} />
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-        <SidebarSeparator className="mx-0" />
         <SidebarMenu>
           {session && (
             <SidebarMenuItem>
@@ -251,7 +234,7 @@ export function AppSidebar({ deviceCode, onLock }: { deviceCode: string | null; 
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  {system.length > 0 && (
+                  {canSettings && (
                     <>
                       <DropdownMenuGroup>
                         <DropdownMenuItem onClick={() => navigate({ to: "/settings" })}>

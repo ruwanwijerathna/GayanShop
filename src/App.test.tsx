@@ -207,7 +207,6 @@ describe("App sidebar", () => {
       ["Sales & Counter", ["Counter", "POS Terminal", "Bills", "Cash", "Customers"]],
       ["Catalog & Stock", ["Products & Stock", "Unlisted Items"]],
       ["Management & Reports", ["Reports", "Staff", "Audit log"]],
-      ["System", ["Settings"]],
     ];
     for (const [label, links] of groups) {
       const heading = await screen.findByText(label);
@@ -218,6 +217,7 @@ describe("App sidebar", () => {
         .map((a) => a.getAttribute("aria-label"));
       expect(names).toEqual(links);
     }
+    expect(screen.queryByText("System")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Counter" })).toHaveAttribute("data-active", "true");
     expect(screen.getByRole("link", { name: "Bills" })).toHaveAttribute("data-active", "false");
     expect(screen.getByRole("button", { name: "Gayan" })).toBeInTheDocument();
