@@ -1,18 +1,21 @@
-import { createHashHistory, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
+import {
+  createHashHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  redirect,
+} from "@tanstack/react-router";
 import { AuditLogScreen } from "@/features/audit/AuditLogScreen";
-import { BatchesScreen } from "@/features/batches/BatchesScreen";
 import { CashScreen } from "@/features/cash/CashScreen";
 import { HomePage } from "./HomePage";
-import { InventoryScreen } from "@/features/inventory/InventoryScreen";
 import { PosScreen } from "@/features/pos/PosScreen";
-import { ProductsScreen } from "@/features/products/ProductsScreen";
 import { QuickSalesScreen } from "@/features/quick-sales/QuickSalesScreen";
 import { CustomersScreen } from "@/features/customers/CustomersScreen";
-import { ExpensesScreen } from "@/features/expenses/ExpensesScreen";
 import { OrdersScreen } from "@/features/orders/OrdersScreen";
 import { ReportsScreen } from "@/features/reports/ReportsScreen";
 import { StaffScreen } from "@/features/staff/StaffScreen";
 import { AppShell } from "./AppShell";
+import { isProductsTab, ProductsStockPage, type ProductsTab } from "./ProductsStockPage";
 import { SettingsPage } from "./SettingsPage";
 
 // Hash history: the app is served from Tauri's asset protocol, so routes must not depend on a server.
@@ -32,13 +35,21 @@ export const auditRoute = createRoute({
 export const productsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/products",
-  component: ProductsScreen,
+  validateSearch: (search: Record<string, unknown>): { tab?: ProductsTab } =>
+    isProductsTab(search.tab) && search.tab !== "products" ? { tab: search.tab } : {},
+  component: function ProductsRoute() {
+    const { tab } = productsRoute.useSearch();
+    return <ProductsStockPage tab={tab} />;
+  },
 });
 
 export const batchesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/batches",
-  component: BatchesScreen,
+  // Batches feature is retired in favor of direct product stock & cost; redirect to Products.
+  beforeLoad: () => {
+    throw redirect({ to: "/products" });
+  },
 });
 
 export const cashRoute = createRoute({
@@ -56,7 +67,10 @@ export const posRoute = createRoute({
 export const inventoryRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/inventory",
-  component: InventoryScreen,
+  // Stock now lives on Products & Stock; old links and bookmarks land on its adjustments tab.
+  beforeLoad: () => {
+    throw redirect({ to: "/products", search: { tab: "adjustments" } });
+  },
 });
 
 export const quickSalesRoute = createRoute({
@@ -74,7 +88,10 @@ export const customersRoute = createRoute({
 export const expensesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/expenses",
-  component: ExpensesScreen,
+  // Expenses feature is retired; redirect to Reports.
+  beforeLoad: () => {
+    throw redirect({ to: "/reports" });
+  },
 });
 
 export const reportsRoute = createRoute({

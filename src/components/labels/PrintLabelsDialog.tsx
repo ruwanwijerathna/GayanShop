@@ -15,6 +15,8 @@ import { CommandError } from "@/db/client";
 import { useLabelPreview, useLabelTemplates, usePrintLabels } from "@/db/hooks";
 import { translateError } from "@/i18n";
 import { LabelPreviewSvg } from "./LabelPreviewSvg";
+import { SelectField } from "@/components/common/SelectField";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export interface LabelItem {
   product_id: string;
@@ -99,26 +101,18 @@ export function PrintLabelsDialog({ items, onClose }: { items: LabelItem[]; onCl
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <Label htmlFor="label-template">{t("print.template")}</Label>
-              <select
+              <SelectField
                 id="label-template"
-                className="h-12 w-full rounded-md border border-input bg-background px-3 text-base"
                 value={templateId}
-                onChange={(e) => setTemplateId(e.target.value)}
-              >
-                {(templates.data ?? []).map((tpl) => (
-                  <option key={tpl.id} value={tpl.id}>
-                    {t(`templates.${tpl.id}`, { defaultValue: tpl.name })}
-                  </option>
-                ))}
-              </select>
+                onValueChange={setTemplateId}
+                options={(templates.data ?? []).map((tpl) => ({
+                  value: tpl.id,
+                  label: t(`templates.${tpl.id}`, { defaultValue: tpl.name }),
+                }))}
+              />
             </div>
             <label className="flex min-h-12 items-center gap-3 self-end text-base">
-              <input
-                type="checkbox"
-                className="size-6"
-                checked={fill}
-                onChange={(e) => setFill(e.target.checked)}
-              />
+              <Checkbox className="size-6" checked={fill} onCheckedChange={(v) => setFill(v === true)} />
               {t("print.fill")}
             </label>
           </div>

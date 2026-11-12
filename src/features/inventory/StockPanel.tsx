@@ -1,12 +1,12 @@
-// Stock (doc §3.1, §5): valuation now or as of a date (by batch and by category), oversold layers, a stock
+// Stock tools for the Products & Stock page (doc §3.1, §5): valuation now or as of a date (by batch and by category), oversold layers, a stock
 // count, damage and adjustments (with a supervisor's approval where the role lacks it), and movement history.
 import { ClipboardList, History, PackageMinus, Scale, TriangleAlert } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { useSession } from "@/app/session";
 import { ApprovalDialog } from "@/components/auth/ApprovalDialog";
-import { Can } from "@/components/auth/Can";
 import { DataTable } from "@/components/data-table/DataTable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,14 +30,17 @@ import {
 } from "@/db/hooks";
 import { translateError } from "@/i18n";
 import { formatMoney } from "@/lib/money";
+import { hasPerm } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
+import { SelectField } from "@/components/common/SelectField";
+import { PosTabsList, PosTabsTrigger } from "@/components/common/PosTabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 
 /** Must match `commands::inventory::STOCK_TARGET`. */
 export const STOCK_TARGET = "stock";
 const FIELD = "h-12 text-base";
-const SELECT = "h-12 w-full rounded-md border border-input bg-background px-3 text-base";
 const REASONS: DamageReason[] = ["broken", "expired", "stolen", "faulty", "other"];
-type Tab = "valuation" | "oversold" | "count" | "damage" | "history";
+export type StockSection = "valuation" | "oversold" | "count" | "damage" | "history";
 
 /** Whole units: "12" → 12, "-3" → -3 when `signed`. */
 export function parseUnits(text: string, signed = false): number | null {
@@ -203,7 +206,6 @@ function ValuationTab() {
               {t("valuation.negative", { count: v.data.negative_layers })}
             </p>
           )}
-          <GroupTable title={t("valuation.byBatch")} rows={v.data.by_batch} uncategorised="" />
           <GroupTable
             title={t("valuation.byCategory")}
             rows={v.data.by_category}
@@ -393,18 +395,12 @@ function DamageTab() {
         {mode === "damage" && (
           <div className="flex flex-col gap-2">
             <Label htmlFor="damage-reason">{t("damage.reason")}</Label>
-            <select
+            <SelectField
               id="damage-reason"
-              className={SELECT}
               value={reason}
-              onChange={(e) => setReason(REASONS.find((r) => r === e.target.value) ?? "other")}
-            >
-              {REASONS.map((r) => (
-                <option key={r} value={r}>
-                  {t(`damage.reasons.${r}`)}
-                </option>
-              ))}
-            </select>
+              onValueChange={(v) => setReason(REASONS.find((r) => r === v) ?? "other")}
+              options={REASONS.map((r) => ({ value: r, label: t(`damage.reasons.${r}`) }))}
+            />
           </div>
         )}
       </div>
@@ -525,7 +521,7 @@ function HistoryTab() {
   );
 }
 
-const TABS: { id: Tab; icon: ReactNode; perm: Perm }[] = [
+const TABS: { id: StockSection; icon: ReactNode; perm: Perm }[] = [
   { id: "valuation", icon: <Scale aria-hidden />, perm: "REPORT_FINANCIAL" },
   { id: "oversold", icon: <TriangleAlert aria-hidden />, perm: "REPORT_FINANCIAL" },
   { id: "count", icon: <ClipboardList aria-hidden />, perm: "SALE_CREATE" },
@@ -533,36 +529,56 @@ const TABS: { id: Tab; icon: ReactNode; perm: Perm }[] = [
   { id: "history", icon: <History aria-hidden />, perm: "REPORT_FINANCIAL" },
 ];
 
-export function InventoryScreen() {
+/** Who may open a stock section (hides only; Rust enforces, asking a supervisor where needed). */
+export const STOCK_SECTION_PERMS: Record<StockSection, Perm> = Object.fromEntries(
+  TABS.map((x) => [x.id, x.perm]),
+) as Record<StockSection, Perm>;
+
+/**
+ * Some of the stock tools, for the Products & Stock page (composed in `src/app`, since features never
+ * import each other). Several sections get their own sub-tabs; a single one renders on its own. Sections
+ * the staff member can't open are left out.
+ */
+export function StockPanel({ sections, label }: { sections: readonly StockSection[]; label: string }) {
   const { t } = useTranslation("inventory");
-  const [tab, setTab] = useState<Tab>("damage");
+  const { session } = useSession();
+  // In the order given: the first section the staff member may open is the one shown first.
+  const visible = sections
+    .map((id) => TABS.find((x) => x.id === id))
+    .filter((x): x is (typeof TABS)[number] => x !== undefined && hasPerm(session, x.perm));
+  const [picked, setPicked] = useState<StockSection | null>(null);
+  const first = visible[0];
+  if (!first) return null;
+  const tab = picked && visible.some((x) => x.id === picked) ? picked : first.id;
+  const body = (id: StockSection) => (
+    <>
+      {id === "valuation" && <ValuationTab />}
+      {id === "oversold" && <OversoldTab />}
+      {id === "count" && <CountTab />}
+      {id === "damage" && <DamageTab />}
+      {id === "history" && <HistoryTab />}
+    </>
+  );
+  if (visible.length === 1) return body(first.id);
   return (
-    <section className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">{t("title")}</h1>
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label={t("title")}>
-        {TABS.map((x) => (
-          <Can key={x.id} perm={x.perm}>
-            <Button
-              type="button"
-              role="tab"
-              aria-selected={tab === x.id}
-              size="pos"
-              variant={tab === x.id ? "default" : "outline"}
-              onClick={() => setTab(x.id)}
-            >
-              {x.icon}
-              {t(`tabs.${x.id}`)}
-            </Button>
-          </Can>
+    <Tabs
+      value={tab}
+      onValueChange={(v) => setPicked(visible.find((x) => x.id === v)?.id ?? first.id)}
+      className="gap-4"
+    >
+      <PosTabsList aria-label={label}>
+        {visible.map((x) => (
+          <PosTabsTrigger key={x.id} value={x.id}>
+            {x.icon}
+            {t(`tabs.${x.id}`)}
+          </PosTabsTrigger>
         ))}
-      </div>
-      <div role="tabpanel" className="rounded-lg border p-4">
-        {tab === "valuation" && <ValuationTab />}
-        {tab === "oversold" && <OversoldTab />}
-        {tab === "count" && <CountTab />}
-        {tab === "damage" && <DamageTab />}
-        {tab === "history" && <HistoryTab />}
-      </div>
-    </section>
+      </PosTabsList>
+      {visible.map((x) => (
+        <TabsContent key={x.id} value={x.id}>
+          {body(x.id)}
+        </TabsContent>
+      ))}
+    </Tabs>
   );
 }

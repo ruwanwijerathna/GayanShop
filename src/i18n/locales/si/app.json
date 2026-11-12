@@ -2,18 +2,25 @@
   "nav": {
     "home": "කවුන්ටරය",
     "audit": "විගණන සටහන",
-    "products": "භාණ්ඩ",
+    "products": "භාණ්ඩ සහ තොග",
     "batches": "තොග කාණ්ඩ",
     "cash": "මුදල්",
     "settings": "සැකසුම්",
-    "pos": "මුදල් ලාච්චුව",
+    "pos": "විකුණුම් පර්යන්තය",
     "staff": "කාර්ය මණ්ඩලය",
     "inventory": "තොගය",
-    "quickSales": "ඉක්මන් විකුණුම්",
+    "quickSales": "ලියාපදිංචි නොවූ අයිතම",
     "customers": "පාරිභෝගිකයන්",
     "expenses": "වියදම්",
     "reports": "වාර්තා",
-    "orders": "ඇණවුම්"
+    "orders": "බිල්පත්",
+    "groupSales": "විකුණුම් සහ කවුන්ටරය",
+    "groupInventory": "භාණ්ඩ කළමනාකරණය",
+    "groupManagement": "කළමනාකරණය සහ වාර්තා",
+    "groupSystem": "පද්ධතිය",
+    "label": "ප්‍රධාන සංචාලනය",
+    "collapse": "පැති තීරුව හකුළන්න",
+    "expand": "පැති තීරුව දිග හරින්න"
   },
   "status": {
     "title": "කවුන්ටරයේ තත්ත්වය",
@@ -63,5 +70,17 @@
   "shortcuts": {
     "lock": "Ctrl+L",
     "language": "Ctrl+Shift+L"
+  },
+  "appearance": {
+    "title": "පෙනුම සහ භාෂාව",
+    "themeLabel": "තේමාව",
+    "themeDescription": "ආලෝක (Light) සහ අඳුරු (Dark) මාදිලි අතර මාරු වන්න",
+    "languageLabel": "භාෂාව",
+    "languageDescription": "පද්ධතිය සඳහා ඔබ කැමති භාෂාව තෝරන්න (English හෝ සිංහල)"
+  },
+  "touchMode": {
+    "title": "ස්පර්ශ තිරය",
+    "label": "ස්පර්ශ තිර මාදිලිය (Touch Screen)",
+    "description": "ස්පර්ශ සක්‍රීය උපාංග සඳහා තිරය මත ස්පර්ශ යතුරු පුවරු සහ අංක පුවරු පෙන්වන්න"
   }
 }

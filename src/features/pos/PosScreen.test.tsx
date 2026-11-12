@@ -33,6 +33,7 @@ vi.mock("@/db/bindings", () => ({
     listLoginStaff: vi.fn(),
     requestApproval: vi.fn(),
     quickSaleHint: vi.fn(),
+    devicePreferences: vi.fn(),
   },
 }));
 
@@ -116,6 +117,9 @@ beforeAll(() => {
 
 beforeEach(() => {
   cartStore.getState().clear();
+  vi.mocked(commands.devicePreferences).mockImplementation(() =>
+    ok({ default_language: "en", theme: "light", touch_mode: false }),
+  );
   vi.mocked(commands.currentCashSession).mockImplementation(() => ok(OPEN));
   vi.mocked(commands.searchProducts).mockImplementation(() => ok([BUCKET]));
   vi.mocked(commands.lookupProductCode).mockImplementation((c: string) =>
@@ -153,6 +157,20 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("PosScreen", () => {
+  it("hides the on-screen keypad unless touch screen mode is on", async () => {
+    await renderTill();
+    await waitFor(() => expect(commands.devicePreferences).toHaveBeenCalled());
+    expect(screen.queryByRole("group", { name: "Keypad" })).not.toBeInTheDocument();
+  });
+
+  it("shows the on-screen keypad in touch screen mode", async () => {
+    vi.mocked(commands.devicePreferences).mockImplementation(() =>
+      ok({ default_language: "en", theme: "light", touch_mode: true }),
+    );
+    await renderTill();
+    expect(await screen.findByRole("group", { name: "Keypad" })).toBeInTheDocument();
+  });
+
   it("adds a scanned product, bumps it on a second scan and totals it", async () => {
     await renderTill();
     await scan("4791234567890");
@@ -278,7 +296,7 @@ describe("PosScreen", () => {
     const pay = await screen.findByRole("dialog");
     fireEvent.click(within(pay).getByRole("button", { name: "Complete sale" }));
     fireEvent.click(await screen.findByRole("button", { name: "Kamal" }));
-    for (const d of "2222") fireEvent.click(screen.getByRole("button", { name: `Digit ${d}` }));
+    fireEvent.change(screen.getByLabelText("PIN"), { target: { value: "2222" } });
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     await waitFor(() => expect(commands.checkoutOrder).toHaveBeenCalledTimes(2));
     const token = vi.mocked(commands.checkoutOrder).mock.calls[0]?.[0].checkout_token;

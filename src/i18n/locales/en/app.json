@@ -2,18 +2,25 @@
   "nav": {
     "home": "Counter",
     "audit": "Audit log",
-    "products": "Products",
+    "products": "Products & Stock",
     "batches": "Batches",
     "cash": "Cash",
     "settings": "Settings",
-    "pos": "Till",
+    "pos": "POS Terminal",
     "staff": "Staff",
     "inventory": "Stock",
-    "quickSales": "Quick sales",
+    "quickSales": "Unlisted Items",
     "customers": "Customers",
     "expenses": "Expenses",
     "reports": "Reports",
-    "orders": "Orders"
+    "orders": "Bills",
+    "groupSales": "Sales & Counter",
+    "groupInventory": "Catalog & Stock",
+    "groupManagement": "Management & Reports",
+    "groupSystem": "System",
+    "label": "Main navigation",
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar"
   },
   "status": {
     "title": "Counter status",
@@ -63,5 +70,17 @@
   "shortcuts": {
     "lock": "Ctrl+L",
     "language": "Ctrl+Shift+L"
+  },
+  "appearance": {
+    "title": "Appearance & Language",
+    "themeLabel": "Theme",
+    "themeDescription": "Switch between light and dark visual themes",
+    "languageLabel": "Display language",
+    "languageDescription": "Select your preferred application language (English or සිංහල)"
+  },
+  "touchMode": {
+    "title": "Touch screen",
+    "label": "Touch screen mode",
+    "description": "Show on-screen touch keypads and number pads for touch-enabled devices"
   }
 }

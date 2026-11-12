@@ -24,7 +24,7 @@
     "LANGUAGE_INVALID": "Choose English or Sinhala.",
     "PRODUCT_NAME_REQUIRED": "Enter the product name.",
     "PRODUCT_NAME_TOO_LONG": "The name can have at most 80 characters.",
-    "PRODUCT_NAME_NOT_PRINTABLE": "Use English letters for the printed name; put the Sinhala name in its own field.",
+    "PRODUCT_NAME_NOT_PRINTABLE": "Use English letters for the product name: it prints on receipts and labels.",
     "PRODUCT_NAME_SI_TOO_LONG": "The Sinhala name can have at most 80 characters.",
     "PRICE_INVALID": "Enter a valid price.",
     "MIN_PRICE_INVALID": "The lowest price must be between zero and the selling price.",

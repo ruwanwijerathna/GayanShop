@@ -13,6 +13,7 @@ import { translateError } from "@/i18n";
 import { playCue } from "@/lib/audio";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { SelectField } from "@/components/common/SelectField";
 
 const REASONS: VoidReason[] = [
   "WRONG_ITEM",
@@ -22,8 +23,6 @@ const REASONS: VoidReason[] = [
   "CUSTOMER_CANCELLED",
   "OTHER",
 ];
-const SELECT =
-  "h-12 w-full rounded-md border border-input bg-background px-3 text-base focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none";
 
 /**
  * F10 (doc §3.3): the open session's sales on this counter. All sales are final; a void cancels a whole sale,
@@ -118,18 +117,12 @@ export function VoidDialog({ onClose, preselect }: { onClose: () => void; presel
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="void-reason">{t("void.reason")}</Label>
-                <select
+                <SelectField
                   id="void-reason"
-                  className={SELECT}
                   value={reason}
-                  onChange={(e) => setReason(REASONS.find((r) => r === e.target.value) ?? "WRONG_ITEM")}
-                >
-                  {REASONS.map((r) => (
-                    <option key={r} value={r}>
-                      {t(`void.reasons.${r}`)}
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={(v) => setReason(REASONS.find((r) => r === v) ?? "WRONG_ITEM")}
+                  options={REASONS.map((r) => ({ value: r, label: t(`void.reasons.${r}`) }))}
+                />
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="void-note">{t("void.note")}</Label>

@@ -1,6 +1,6 @@
 # GayanShop POS — Master Architecture Plan
 
-> Status: **v4, 2026-11-08. Phase 0 is ON HOLD at the owner's request.** v2 added:
+> Status: **v4 (2026-11-10). Phases 0–4 complete and merged to main. Production NSIS installer built.** v2 added:
 > - **Batches** (cost layers), replacing "lots"
 > - Full financial reporting
 > - Role-based access control (RBAC) with supervisor approvals
@@ -237,7 +237,7 @@ It's never derived from UTC at query time. Otherwise terminals, and the cloud, w
   - English (`en`) is the source and fallback language.
 - **Switching:**
   - A language toggle (EN | සිං) sits in the top bar of the till and the back office, with shortcut Ctrl+Shift+L.
-  - The choice is saved **per staff member** in `staff.ui_language` and applied at login. Before login, the lock and login screens use the device default (`device_settings` `ui.default_language`, seeded `en`).
+  - The choice is saved **per staff member** in `staff.ui_language` and applied at login. Before login, the lock screen uses the device default (`device_settings` `ui.default_language`, seeded `en`). The **sign-in form is English-only** (owner decision, 2026-11-10): it shows a Username field matched trimmed and case-insensitively against active staff `display_name`, plus a masked Password (PIN) field, whatever the device language is. A lone staff member's name is prefilled, and a name shared by two staff is refused rather than guessed. Its en/si keys still exist for parity.
   - Switching is instant, with no reload (`i18n.changeLanguage`).
 - **Fonts:** bundle **Noto Sans Sinhala** locally (`@fontsource/noto-sans-sinhala`) alongside the Latin UI font.
   - Use `:lang(si)` rules for a slightly larger line-height and size, because Sinhala glyphs need more vertical room.
@@ -254,6 +254,7 @@ It's never derived from UTC at query time. Otherwise terminals, and the cloud, w
 - **Receipts and labels stay English.** Generic ESC/POS and TSPL printers have no Sinhala code page, so receipt text, the footer and label text are English or Latin. This is an owner requirement.
   - Product `name` must be printable: Rust warns at save time if it contains characters outside the printer code page.
   - An optional `products.name_si` is shown on screens when the UI is in Sinhala, and is never printed.
+  - **Owner decision (2026-11-10): one product name.** The product form has a single "Product Name" field and saves `name_si = NULL`, so the same English name shows in the product list, at the till and on receipts and labels. The column, its FTS index and the sync field stay (older rows, other counters). An existing `name_si` is dropped the next time that product is saved.
   - Raster (bitmap) Sinhala printing stays in the Phase 5 backlog.
 - **Quality gates:**
   - A CI script fails the build when a key exists in `en` but not `si`, or vice versa.
@@ -341,6 +342,7 @@ Style: flat with clear borders, no decorative effects. Borders, not shadows, sep
   - Every till button shows its key as a visible **`<Kbd>` badge** (e.g. `PAY [F9]`).
   - In dialogs, Tab order is logical, Enter triggers the default action and Esc cancels. A focus trap is mandatory, and focus returns to where it was on close.
 - **Touch:**
+  - **Touch screen mode** is a per-device toggle (Settings → Touch screen; `device_settings` key `ui.touch_mode`, default off, never synced). Only when it is on do the till's numeric keypad, the payment dialog's keypad and the PIN pads' digit keys show. Off, the masked PIN field and every input stay fully keyboard-driven.
   - No hover-only affordances, no long-press-only actions, and no drag-required interactions.
   - Pressed state appears within one frame (`active:` scale 0.98 plus a darker fill).
 - Shortcuts are suspended while a text field is focused, except for F-keys and Esc, and while a scanner burst is being captured (§7.1).
@@ -566,6 +568,7 @@ batches (header)  1 ──── n  batch_items (cost layers)  1 ──── n 
 - A stock count (`STOCK_ADJUST`) sets each counted product to the shelf figure with `count_correction` movements in one transaction, audited once as `STOCK_COUNT` with system and counted figures. Matching lines write nothing; a single bad line refuses the whole count. Counting an oversold product back to its real figure is how a negative layer is fixed.
 - "Write off what's left" (`write_off_batch`, `BATCH_MANAGE` + `STOCK_ADJUST`) turns a received batch's remaining stock into `adjustment` movements on its own layers, so the batch can then be closed. The loss shows in its P&L.
 - Valuation "now" reads `batch_item_stock`; "as of" a business date sums the ledger up to that date. Both use today's prices for retail and list oversold layers separately. History, valuation and oversold layers need `REPORT_FINANCIAL`, because they show cost.
+- **Products & Stock (UI, 2026-11-10).** The catalog and the stock tools share one page at `/products`. Its tabs are All Products, Stock Adjustments (count + damage/adjust), Stock Valuation (valuation + oversold layers), and Movement History, and the tab is kept in the URL as `?tab=adjustments|valuation|history`. `/inventory` redirects to `?tab=adjustments`. The product list carries `on_hand` from `stock_levels` (0 when there's no row), and the Stock column reads it: a count, low at ≤ 5 units, out at 0, oversold below 0, and a dash when untracked. The quick filters are All / Low Stock / Out of Stock, and Out of Stock includes oversold. Each tab keeps its section permissions.
 
 **Layer selection at checkout (FIFO, offline-safe).** For each tracked line of qty *n*:
 1. Take layers of that product ordered by `batches.received_at, batch_items.id`.
@@ -2672,6 +2675,13 @@ Each phase ends with **exit criteria**. Don't start the next phase until they pa
   - i18n bootstrapped (`en` + `si` dictionaries, Noto Sans Sinhala bundled, a key-parity CI check, LanguageToggle).
   - The shared `DataTable` (TanStack Table v8 + Virtual).
   - The `size="pos"` 48 px variants.
+  - **shadcn/ui controls throughout (2026-11-10):**
+    - Dropdowns use `SelectField` (shadcn Select). Its trigger and options are 48 px, and `""` stays a usable value.
+    - Tab bars use shadcn Tabs via `PosTabsList` / `PosTabsTrigger`. Tabs are 48 px and use arrow-key roving.
+    - Checkboxes use shadcn Checkbox (`size-6` inside a 48 px label). The touch-mode toggle uses shadcn Switch `size="pos"`.
+    - Icon-only buttons are wrapped in `WithTooltip`. The tooltip repeats the button's `aria-label`.
+    - Free text uses shadcn Input / Textarea.
+    - List-row buttons (search results, cart lines, sortable headers) stay plain `<button>`s styled with tokens.
   - The `minWidth/minHeight` 1024×768 window.
 - Tooling: ESLint, Prettier, `clippy -D warnings`, vitest, cargo test, and CI on `windows-latest`.
 
@@ -2973,6 +2983,7 @@ cargo add --dev proptest
 | `receipt.mask_customer_phone` | `true`: printed as `07X XXX X123` |
 | `customer.capture` | `optional`, with **verbal consent at the counter**. There's no popup, no notice dialog and no blocking step. Enter or Esc on an empty phone field skips it. |
 | `ui.default_language` (device) | `en`. Staff can switch to `si` (Sinhala), and the choice is saved per staff member. |
+| `ui.touch_mode` (device) | `false` when absent (not seeded). Settings → Touch screen turns on the on-screen keypads and PIN-pad digit keys for touch counters (§1.9). |
 | `label.templates` (device) | The `two_up_2x1` and `three_up_1x1` built-ins (§7.4). **Default 203 dpi, with a 2 mm row (die-cut) gap.** Column gap and left margin are roll-specific and set by calibration. |
 | `backup.reminder_days` | `7` |
 | Stores | 1 store with 2–3 counters for the next 12 months. Multi-store stays in the design, and delivery is in Phase 5. |
@@ -3004,8 +3015,8 @@ cargo add --dev proptest
 | 18 | **A new counter joins the store from the first-run wizard** ("Join existing store"): the owner signs in with the store's cloud owner account, the counter gets the next free code (T02, T03), pulls the full history, and staff log in with their existing PINs (owner-confirmed 2026-11-09) | A pairing code generated on T01 | One flow for the first counter (adopting its offline ids) and for later ones. The owner's password never stays on a counter; each counter has its own device identity. |
 | 19 | **The owner's cloud account is one email + password user created in the Supabase dashboard.** The first counter that registers with it claims the store; later counters must use the same account. Public sign-up is off (owner-confirmed 2026-11-09) | A shared registration secret | Whoever holds a shared secret could join a counter to the store. |
 | 20 | **JSON-in-text columns stay `text` in the cloud** (§4.4) | `jsonb` | Byte-identical round trips. The audit hash chain depends on them. |
-| 21 | **A store that never registered with the cloud keeps its counter identity on restore** (proposed 2026-11-10, pending the owner) | Retiring the identity as an offline cloud restore does | Nothing after the backup exists anywhere to collide with; the receipt and SKU counters continue from the restored data. |
-| 22 | **Successful automatic backups are not audited; a failure is audited once until one succeeds** (proposed 2026-11-10, pending the owner) | Auditing every hourly backup | About 24 audit rows a day, all synced, would bury the audit log. The status shows the last automatic backup. Manual backups and restores stay fully audited. |
+| 21 | **A store that never registered with the cloud keeps its counter identity on restore** (owner-confirmed 2026-11-10) | Retiring the identity as an offline cloud restore does | Nothing after the backup exists anywhere to collide with; the receipt and SKU counters continue from the restored data. |
+| 22 | **Successful automatic backups are not audited; a failure is audited once until one succeeds** (owner-confirmed 2026-11-10) | Auditing every hourly backup | About 24 audit rows a day, all synced, would bury the audit log. The status shows the last automatic backup. Manual backups and restores stay fully audited. |
 | 23 | **SQLCipher deferred; standard SQLite WAL with OS file permissions retained** (Block 4.3) | Bundling SQLCipher / full-database encryption | SQLite WAL with Windows NTFS ACLs meets the single-store offline threat model with zero read overhead; full-disk BitLocker protects against physical theft. |
 | 24 | **Local rotating logs + support bundle export; no SaaS crash reporting** (Block 4.4) | Third-party cloud telemetry (Sentry, etc.) | Preserves customer privacy and strict offline operation; support bundle ZIP is exported on demand by the store owner for diagnostics. |
 

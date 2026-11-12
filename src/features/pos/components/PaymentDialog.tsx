@@ -6,8 +6,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { PaymentLine_Deserialize as PaymentLine, PaymentMethod } from "@/db/bindings";
+import { useTouchMode } from "@/db/hooks";
 import { formatMoney, parseMajor, toMajorInput, type Money } from "@/lib/money";
 import { NumericKeypad } from "./NumericKeypad";
+import { WithTooltip } from "@/components/common/WithTooltip";
 
 const METHODS: PaymentMethod[] = ["cash", "card", "bank_transfer", "qr", "other"];
 
@@ -63,6 +65,7 @@ export interface PaymentDialogProps {
 
 export function PaymentDialog({ open, due, pending, error, onPay, onCancel }: PaymentDialogProps) {
   const { t } = useTranslation("pos");
+  const touchMode = useTouchMode();
   const [rows, setRows] = useState<PaymentRow[]>([{ method: "cash", value: "", reference: "" }]);
   const plan = planPayments(due, rows);
   const remaining = Math.max(0, due - plan.paid);
@@ -91,7 +94,7 @@ export function PaymentDialog({ open, due, pending, error, onPay, onCancel }: Pa
           <DialogTitle className="text-xl">{t("pay.title")}</DialogTitle>
           <DialogDescription className="sr-only">{t("pay.due")}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={submit} className="grid gap-6 md:grid-cols-[1fr_auto]">
+        <form onSubmit={submit} className={touchMode ? "grid gap-6 md:grid-cols-[1fr_auto]" : "grid gap-6"}>
           <div className="flex flex-col gap-4">
             <dl className="grid grid-cols-2 gap-2">
               <dt className="text-base text-muted-foreground">{t("pay.due")}</dt>
@@ -146,15 +149,17 @@ export function PaymentDialog({ open, due, pending, error, onPay, onCancel }: Pa
                   </Button>
                 )}
                 {rows.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-pos"
-                    aria-label={t("pay.remove")}
-                    onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}
-                  >
-                    <Trash2 aria-hidden />
-                  </Button>
+                  <WithTooltip label={t("pay.remove")}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-pos"
+                      aria-label={t("pay.remove")}
+                      onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}
+                    >
+                      <Trash2 aria-hidden />
+                    </Button>
+                  </WithTooltip>
                 )}
               </div>
             ))}
@@ -180,9 +185,11 @@ export function PaymentDialog({ open, due, pending, error, onPay, onCancel }: Pa
               {pending ? t("pay.processing") : t("pay.complete")}
             </Button>
           </div>
-          <div className="hidden w-64 md:block">
-            <NumericKeypad />
-          </div>
+          {touchMode && (
+            <div className="hidden w-64 md:block">
+              <NumericKeypad />
+            </div>
+          )}
         </form>
       </DialogContent>
     </Dialog>

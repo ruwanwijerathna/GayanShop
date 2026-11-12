@@ -19,10 +19,9 @@ import {
   useSetLabelPrinterProfile,
 } from "@/db/hooks";
 import { translateError } from "@/i18n";
+import { SelectField } from "@/components/common/SelectField";
 
 const FIELD = "h-12 text-base";
-const SELECT =
-  "h-12 w-full rounded-md border border-input bg-background px-3 text-base focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none";
 
 type Kind = TransportConfig["kind"];
 const KINDS: Kind[] = ["spooler", "network", "serial"];
@@ -155,18 +154,12 @@ function PrinterCard({ profile }: { profile: LabelPrinterProfile | null }) {
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
           <Label htmlFor="lp-kind">{t("settings.connection")}</Label>
-          <select
+          <SelectField
             id="lp-kind"
-            className={SELECT}
             value={form.kind}
-            onChange={(e) => set("kind", KINDS.find((k) => k === e.target.value) ?? "spooler")}
-          >
-            {KINDS.map((k) => (
-              <option key={k} value={k}>
-                {t(`settings.kinds.${k}`)}
-              </option>
-            ))}
-          </select>
+            onValueChange={(v) => set("kind", KINDS.find((k) => k === v) ?? "spooler")}
+            options={KINDS.map((k) => ({ value: k, label: t(`settings.kinds.${k}`) }))}
+          />
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="lp-target">{targetLabel}</Label>
@@ -192,43 +185,37 @@ function PrinterCard({ profile }: { profile: LabelPrinterProfile | null }) {
         {form.kind === "serial" && (
           <div className="flex flex-col gap-2">
             <Label htmlFor="lp-baud">{t("settings.baud")}</Label>
-            <select
+            <SelectField
               id="lp-baud"
-              className={SELECT}
-              value={form.baud}
-              onChange={(e) => set("baud", BAUDS.find((b) => String(b) === e.target.value) ?? 9600)}
-            >
-              {BAUDS.map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </select>
+              value={String(form.baud)}
+              onValueChange={(v) => set("baud", BAUDS.find((b) => String(b) === v) ?? 9600)}
+              options={BAUDS.map((b) => ({ value: String(b), label: String(b) }))}
+            />
           </div>
         )}
         <div className="flex flex-col gap-2">
           <Label htmlFor="lp-language">{t("settings.language")}</Label>
-          <select
+          <SelectField
             id="lp-language"
-            className={SELECT}
             value={form.language}
-            onChange={(e) => set("language", e.target.value === "zpl" ? "zpl" : "tspl")}
-          >
-            <option value="tspl">{t("settings.languages.tspl")}</option>
-            <option value="zpl">{t("settings.languages.zpl")}</option>
-          </select>
+            onValueChange={(v) => set("language", v === "zpl" ? "zpl" : "tspl")}
+            options={[
+              { value: "tspl", label: t("settings.languages.tspl") },
+              { value: "zpl", label: t("settings.languages.zpl") },
+            ]}
+          />
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="lp-dpi">{t("settings.dpi")}</Label>
-          <select
+          <SelectField
             id="lp-dpi"
-            className={SELECT}
-            value={form.dpi}
-            onChange={(e) => set("dpi", e.target.value === "300" ? 300 : 203)}
-          >
-            <option value={203}>203 dpi</option>
-            <option value={300}>300 dpi</option>
-          </select>
+            value={String(form.dpi)}
+            onValueChange={(v) => set("dpi", v === "300" ? 300 : 203)}
+            options={[
+              { value: "203", label: "203 dpi" },
+              { value: "300", label: "300 dpi" },
+            ]}
+          />
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="lp-darkness">{t("settings.darkness")}</Label>

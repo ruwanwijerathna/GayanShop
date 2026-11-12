@@ -1,5 +1,5 @@
 {
-  "title": "Orders",
+  "title": "Bills",
   "empty": "No orders in this period.",
   "columns": {
     "receipt": "Receipt",

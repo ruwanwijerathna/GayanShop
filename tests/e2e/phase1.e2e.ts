@@ -5,7 +5,7 @@
 // or voided). Rules that have no UI path (negative payments, the SQL CHECKs) are proven by the Rust suites.
 import { $, browser, expect } from "@wdio/globals";
 import { Key } from "webdriverio";
-import { click, field, login, seeText, type } from "./helpers";
+import { choose, click, field, login, seeText, type } from "./helpers";
 
 const OWNER_PIN = "246810";
 const CASHIER_PIN = "1357";
@@ -27,13 +27,16 @@ async function pressKeys(...keys: string[]) {
 
 async function lock() {
   await browser.keys([Key.Ctrl, "l"]);
-  await seeText("Who is working?");
+  await seeText("Sign In to your account");
 }
 
 async function approve(as: string, pin: string) {
   await seeText("Supervisor approval");
   await click(as);
-  for (const d of pin) await click(`Digit ${d}`);
+  // Keyboard mode (touch screen mode off): the PIN goes into the masked field.
+  const pinField = await $("[role='dialog'] input[inputmode='numeric']");
+  await pinField.waitForDisplayed();
+  await pinField.setValue(pin);
   await click("Approve");
 }
 
@@ -58,7 +61,7 @@ describe("Phase 1 acceptance: an offline sale day", () => {
     await type("Owner PIN (6–8 digits)", OWNER_PIN);
     await type("Confirm PIN", OWNER_PIN);
     await click("Finish setup");
-    await seeText("Who is working?");
+    await seeText("Sign In to your account");
   });
 
   it("the Owner adds staff, a product and opens the drawer", async () => {
@@ -71,15 +74,15 @@ describe("Phase 1 acceptance: an offline sale day", () => {
     ] as const) {
       await click("Add staff");
       await type("Name", name);
-      await (await field("Role")).selectByVisibleText(role);
+      await choose("Role", role);
       await type("PIN (4–8 digits)", pin);
       await click("Add");
       await $(`//td[normalize-space()="${name}"]`).waitForExist();
     }
 
-    await click("Products");
+    await click("Products & Stock");
     await click("Add product");
-    await type("Name (English, printed on receipts and labels)", "Blue Bucket");
+    await type("Product Name", "Blue Bucket");
     await type("Selling price (Rs)", "450");
     await click("Save");
     await $(`//*[normalize-space()="Blue Bucket"]`).waitForExist();
@@ -93,7 +96,7 @@ describe("Phase 1 acceptance: an offline sale day", () => {
 
   it("a cashier sells by keyboard only: quick sales, search, phone and cash with change", async () => {
     await login("Nimal", CASHIER_PIN);
-    await click("Till");
+    await click("POS Terminal");
     await $("#scan-field").waitForDisplayed();
     // The till never scrolls (doc §1.9): PAY is on screen even with the printer banner showing.
     const pay = await $("//button[starts-with(normalize-space(), 'PAY')]");
@@ -180,7 +183,7 @@ describe("Phase 1 acceptance: an offline sale day", () => {
     await click("Close and print Z-report");
     await click("Yes, close");
     await seeText("Z-report");
-    await click("Till");
+    await click("POS Terminal");
     await seeText("Open a cash session before selling.");
   });
 });

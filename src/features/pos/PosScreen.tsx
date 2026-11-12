@@ -25,6 +25,7 @@ import {
   useHoldCart,
   useProductSearch,
   useRecallCart,
+  useTouchMode,
 } from "@/db/hooks";
 import { notFoundToast, routeScan } from "@/hardware/scanner/feedback";
 import { useScanHandler, useScanner } from "@/hardware/scanner/ScannerProvider";
@@ -76,6 +77,7 @@ function isTextField(el: Element | null): boolean {
 
 function Till() {
   const { t, i18n } = useTranslation("pos");
+  const touchMode = useTouchMode();
   const { session } = useSession();
   const scanner = useScanner();
   const lines = useCart((s) => s.lines);
@@ -500,9 +502,7 @@ function Till() {
                           focusScan();
                         }}
                       >
-                        <span className="flex-1 truncate">
-                          {i18n.resolvedLanguage === "si" && p.name_si ? p.name_si : p.name}
-                        </span>
+                        <span className="flex-1 truncate">{p.name}</span>
                         <span className="font-mono text-sm text-muted-foreground">{p.barcode ?? p.sku}</span>
                         <span className="tabular-nums">{formatMoney(p.price)}</span>
                       </button>
@@ -514,7 +514,7 @@ function Till() {
           ) : (
             <div className="flex-1" />
           )}
-          <NumericKeypad />
+          {touchMode && <NumericKeypad />}
         </section>
       </div>
 

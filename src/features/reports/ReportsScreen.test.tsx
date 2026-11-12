@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { commands, type FinancialSummary_Serialize as FinancialSummary } from "@/db/bindings";
-import { ok, renderWithProviders } from "@/test/render";
+import { chooseOption, ok, renderWithProviders } from "@/test/render";
 import { ReportsScreen, changeBp, formatBp, trendGranularity } from "./ReportsScreen";
 
 vi.mock("@/db/bindings", () => ({
@@ -147,12 +147,12 @@ describe("ReportsScreen", () => {
     expect(await within(salesBy).findByText("Bucket")).toBeInTheDocument();
     expect(within(salesBy).getByText("Quick sales")).toBeInTheDocument();
     expect(within(salesBy).getByText("Rs 2,800.00")).toBeInTheDocument();
-    fireEvent.click(within(salesBy).getByRole("button", { name: "Batch" }));
+    fireEvent.click(within(salesBy).getByRole("button", { name: "Category" }));
     await waitFor(() =>
       expect(commands.reportSalesBy).toHaveBeenLastCalledWith(
         { kind: "day", date: "2026-11-08" },
         null,
-        "batch",
+        "category",
       ),
     );
     const voids = await screen.findByRole("region", { name: "Voids" });
@@ -163,7 +163,7 @@ describe("ReportsScreen", () => {
   it("filters by counter and period", async () => {
     renderWithProviders(<ReportsScreen />);
     await screen.findByRole("table", { name: "Profit and loss" });
-    fireEvent.change(await screen.findByLabelText("Counter"), { target: { value: "d2" } });
+    chooseOption(await screen.findByLabelText("Counter"), "T02");
     await waitFor(() =>
       expect(commands.reportSummary).toHaveBeenLastCalledWith(
         { kind: "day", date: "2026-11-08" },
@@ -200,7 +200,6 @@ describe("ReportsScreen", () => {
     await screen.findByRole("table", { name: "Profit and loss" });
     expect(screen.queryByRole("figure", { name: "Sales trend" })).not.toBeInTheDocument();
     expect(await screen.findByRole("figure", { name: "Payment methods" })).toBeInTheDocument();
-    expect(await screen.findByRole("figure", { name: "Batch sell-through" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Week" }));
     const trend = await screen.findByRole("figure", { name: "Sales trend" });
     expect(within(trend).getByText("Rs 300.00")).toBeInTheDocument();

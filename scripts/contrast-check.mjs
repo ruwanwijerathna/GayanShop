@@ -47,6 +47,10 @@ const RULES = [
   ["input", "card", 3, "control boundaries on panels"],
   ["ring", "background", 3, "focus ring"],
   ["primary", "background", 3, "primary button boundary"],
+  ["sidebar-foreground", "sidebar", 7, "sidebar navigation text"],
+  ["sidebar-accent-foreground", "sidebar-accent", 7, "sidebar hovered item"],
+  ["sidebar-primary-foreground", "sidebar-primary", 4.5, "sidebar active item"],
+  ["sidebar-ring", "sidebar", 3, "sidebar focus ring"],
 ];
 
 const failures = [];

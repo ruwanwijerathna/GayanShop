@@ -37,6 +37,8 @@ export const commands = {
 	devicePreferences: () => typedError<DevicePreferences, AppError>(__TAURI_INVOKE("device_preferences")),
 	/**  Set this counter's theme (local-only; each counter's screen and lighting differ). */
 	setDeviceTheme: (theme: UiTheme) => typedError<null, AppError>(__TAURI_INVOKE("set_device_theme", { theme })),
+	/**  Turn this counter's touch screen mode on or off (local-only: on-screen keypads for touch hardware). */
+	setDeviceTouchMode: (enabled: boolean) => typedError<null, AppError>(__TAURI_INVOKE("set_device_touch_mode", { enabled })),
 	/**
 	 *  Save the UI language. Logged in ⇒ the staff member's own preference (synced, applied at their next
 	 *  login on any counter); otherwise ⇒ this counter's default for the lock and login screens.
@@ -1125,6 +1127,8 @@ export type DevicePreferences = {
 	/**  Language for the lock/login screens (before anyone logs in). */
 	default_language: UiLanguage,
 	theme: UiTheme,
+	/**  Touch screen mode: show on-screen keypads and number pads (off by default; keyboard-first). */
+	touch_mode: boolean,
 };
 
 export type DrawerMovement = DrawerMovement_Serialize | DrawerMovement_Deserialize;
@@ -2035,6 +2039,11 @@ export type Product_Deserialize = {
 	barcode_conflict: boolean,
 	updated_at: string,
 	version: number,
+	/**
+	 *  Units on hand now (`stock_levels`, derived from the ledger; 0 when nothing was ever stocked).
+	 *  Negative when oversold.
+	 */
+	on_hand: number,
 };
 
 /**  The full product, for the back office. `default_cost` is `None` unless the viewer holds `VIEW_COST`. */
@@ -2056,6 +2065,11 @@ export type Product_Serialize = {
 	barcode_conflict: boolean,
 	updated_at: string,
 	version: number,
+	/**
+	 *  Units on hand now (`stock_levels`, derived from the ledger; 0 when nothing was ever stocked).
+	 *  Negative when oversold.
+	 */
+	on_hand: number,
 };
 
 export type PromoteInput = PromoteInput_Serialize | PromoteInput_Deserialize;

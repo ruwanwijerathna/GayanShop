@@ -15,24 +15,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Category, Product } from "@/db/bindings";
 import { CommandError } from "@/db/client";
-import { useDeleteProduct, useSaveProduct } from "@/db/hooks";
+import { useAdjustStock, useDeleteProduct, useSaveProduct } from "@/db/hooks";
 import { translateError } from "@/i18n";
+import { Sparkles } from "lucide-react";
 import { playCue } from "@/lib/audio";
 import { hasPerm } from "@/lib/permissions";
 import { categoryPath } from "./CategoryPanel";
-import {
-  emptyForm,
-  fromProduct,
-  toInput,
-  type CodeMode,
-  type MoneyField,
-  type ProductFormState,
-} from "./productForm";
+import { emptyForm, fromProduct, toInput, type MoneyField, type ProductFormState } from "./productForm";
+import { SelectField } from "@/components/common/SelectField";
+import { Switch } from "@/components/ui/switch";
+import { WithTooltip } from "@/components/common/WithTooltip";
 
 const FIELD = "h-12 text-base";
-const SELECT =
-  "h-12 w-full rounded-md border border-input bg-background px-3 text-base focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none";
-const CODE_MODES: CodeMode[] = ["none", "generate", "manual"];
 
 export interface ProductFormDialogProps {
   /** `null` = create. */
@@ -52,31 +46,6 @@ function Field({ id, label, children }: { id: string; label: string; children: R
   );
 }
 
-function Check({
-  id,
-  label,
-  checked,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <label htmlFor={id} className="flex min-h-12 items-center gap-3 text-base">
-      <input
-        id={id}
-        type="checkbox"
-        className="size-6 accent-primary"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-      {label}
-    </label>
-  );
-}
-
 /** Create or edit a product (PRODUCT_MANAGE). The form is re-created per product via `key`. */
 export function ProductFormDialog(props: ProductFormDialogProps) {
   return props.open ? <ProductForm key={props.product?.id ?? "new"} {...props} /> : null;
@@ -88,18 +57,28 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
   const canViewCost = hasPerm(session, "VIEW_COST");
   const save = useSaveProduct();
   const remove = useDeleteProduct();
+  const adjust = useAdjustStock();
   const [form, setForm] = useState<ProductFormState>(() => (product ? fromProduct(product) : emptyForm()));
   const [moneyError, setMoneyError] = useState<MoneyField | null>(null);
+  const [quantityError, setQuantityError] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const set = <K extends keyof ProductFormState>(key: K, value: ProductFormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
-  const failure = save.error ?? remove.error;
+  const failure = save.error ?? remove.error ?? adjust.error;
   const serverError = failure instanceof CommandError ? translateError(i18n.t, failure.error) : null;
-  const busy = save.isPending || remove.isPending;
+  const busy = save.isPending || remove.isPending || adjust.isPending;
 
   const submit = () => {
+    const qtyText = form.quantity.trim();
+    if (qtyText !== "" && (!/^\d{1,7}$/.test(qtyText) || Number.parseInt(qtyText, 10) < 0)) {
+      setQuantityError(true);
+      playCue("error");
+      return;
+    }
+    setQuantityError(false);
+
     const built = toInput(form, canViewCost);
     if (!built.ok) {
       setMoneyError(built.field);
@@ -110,7 +89,27 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
     save.mutate(
       { id: product?.id ?? null, input: built.input },
       {
-        onSuccess: (saved) => {
+        onSuccess: async (saved) => {
+          if (qtyText !== "") {
+            const targetQty = Number.parseInt(qtyText, 10);
+            const currentOnHand = product?.on_hand ?? 0;
+            const delta = !product ? targetQty : targetQty - currentOnHand;
+            if (delta !== 0) {
+              const noteText = form.note.trim() || (!product ? "Initial stock" : "Stock adjustment");
+              try {
+                await adjust.mutateAsync({
+                  input: {
+                    product_id: saved.id,
+                    qty_delta: delta,
+                    note: noteText,
+                  },
+                  approvalId: null,
+                });
+              } catch {
+                // Stock adjust refusal or error does not roll back the product save
+              }
+            }
+          }
           playCue("complete");
           onSaved?.(saved);
           onClose();
@@ -129,36 +128,54 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
     const modeKey = which === "sku" ? "skuMode" : "barcodeMode";
     const mode = form[modeKey];
     const fieldLabel = t(`form.${which}`);
+    const isGenerate = mode === "generate";
+    const generateLabel = which === "sku" ? t("form.generateSku") : t("form.generateBarcode");
+    const cancelLabel = which === "sku" ? t("form.cancelGenerateSku") : t("form.cancelGenerateBarcode");
+    const placeholder = isGenerate
+      ? t("form.codeAutoGenerated")
+      : which === "sku"
+        ? t("form.skuPlaceholder")
+        : t("form.barcodePlaceholder");
+
     return (
-      <fieldset className="flex flex-col gap-1.5">
-        <legend className="mb-1.5 text-sm font-medium">{fieldLabel}</legend>
-        <div role="group" aria-label={t("form.codeMode", { field: fieldLabel })} className="flex gap-2">
-          {CODE_MODES.map((m) => (
-            <Button
-              key={m}
-              type="button"
-              size="pos"
-              variant={mode === m ? "default" : "outline"}
-              aria-pressed={mode === m}
-              className="flex-1"
-              onClick={() => set(modeKey, m)}
-            >
-              {t(`form.code${m === "none" ? "None" : m === "generate" ? "Generate" : "Manual"}`)}
-            </Button>
-          ))}
-        </div>
-        {mode === "manual" && (
+      <Field id={`product-${which}`} label={fieldLabel}>
+        <div className="flex gap-2">
           <Input
+            id={`product-${which}`}
             aria-label={fieldLabel}
-            className={`${FIELD} font-mono`}
-            value={form[which]}
+            className={`${FIELD} font-mono flex-1`}
+            value={isGenerate ? "" : form[which]}
             maxLength={which === "sku" ? 16 : 32}
             autoComplete="off"
-            onChange={(e) => set(which, e.target.value)}
+            placeholder={placeholder}
+            onChange={(e) => {
+              const val = e.target.value;
+              set(which, val);
+              set(modeKey, val.trim() === "" ? "none" : "manual");
+            }}
           />
-        )}
-        {mode === "generate" && <p className="text-sm text-muted-foreground">{t("form.codeGenerateHint")}</p>}
-      </fieldset>
+          <WithTooltip label={isGenerate ? cancelLabel : generateLabel}>
+            <Button
+              type="button"
+              size="icon-pos"
+              variant={isGenerate ? "default" : "outline"}
+              aria-label={isGenerate ? cancelLabel : generateLabel}
+              aria-pressed={isGenerate}
+              onClick={() => {
+                if (isGenerate) {
+                  set(modeKey, form[which].trim() === "" ? "none" : "manual");
+                } else {
+                  set(modeKey, "generate");
+                  set(which, "");
+                }
+              }}
+            >
+              <Sparkles className="size-5" />
+            </Button>
+          </WithTooltip>
+        </div>
+        {isGenerate && <p className="text-xs text-muted-foreground">{t("form.codeGenerateHint")}</p>}
+      </Field>
     );
   };
 
@@ -200,51 +217,55 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
               id="product-name"
               className={FIELD}
               value={form.name}
+              placeholder={t("form.namePlaceholder")}
               maxLength={80}
               autoComplete="off"
               onChange={(e) => set("name", e.target.value)}
             />
           </Field>
-          <Field id="product-name-si" label={t("form.nameSi")}>
-            <Input
-              id="product-name-si"
-              lang="si"
-              className={FIELD}
-              value={form.nameSi}
-              maxLength={80}
-              autoComplete="off"
-              onChange={(e) => set("nameSi", e.target.value)}
+          <Field id="product-category" label={t("form.category")}>
+            <SelectField
+              id="product-category"
+              value={form.categoryId}
+              onValueChange={(v) => set("categoryId", v)}
+              options={[
+                { value: "", label: t("form.noCategory") },
+                ...categories.map((c) => ({ value: c.id, label: categoryPath(c, categories) })),
+              ]}
             />
           </Field>
-          <Field id="product-kind" label={t("form.kind")}>
-            <select
-              id="product-kind"
-              className={SELECT}
-              value={form.kind}
-              onChange={(e) => set("kind", e.target.value === "generic" ? "generic" : "standard")}
-            >
-              <option value="standard">{t("form.kindStandard")}</option>
-              <option value="generic">{t("form.kindGeneric")}</option>
-            </select>
-          </Field>
-          <Field id="product-category" label={t("form.category")}>
-            <select
-              id="product-category"
-              className={SELECT}
-              value={form.categoryId}
-              onChange={(e) => set("categoryId", e.target.value)}
-            >
-              <option value="">{t("form.noCategory")}</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {categoryPath(c, categories)}
-                </option>
-              ))}
-            </select>
-          </Field>
           {money("price", "product-price", t("form.price"))}
-          {money("minPrice", "product-min-price", t("form.minPrice"))}
           {canViewCost && money("cost", "product-cost", t("form.cost"))}
+          <Field id="product-quantity" label={t("form.quantity")}>
+            <Input
+              id="product-quantity"
+              inputMode="numeric"
+              className={`${FIELD} font-mono`}
+              value={form.quantity}
+              placeholder={t("form.quantityPlaceholder")}
+              aria-invalid={quantityError}
+              aria-describedby={quantityError ? "product-quantity-error" : undefined}
+              onChange={(e) => {
+                set("quantity", e.target.value);
+                if (quantityError) setQuantityError(false);
+              }}
+            />
+            {quantityError && (
+              <p id="product-quantity-error" className="text-sm text-destructive">
+                {t("form.quantityInvalid")}
+              </p>
+            )}
+          </Field>
+          <Field id="product-note" label={t("form.note")}>
+            <Input
+              id="product-note"
+              className={FIELD}
+              value={form.note}
+              placeholder={t("form.notePlaceholder")}
+              maxLength={200}
+              onChange={(e) => set("note", e.target.value)}
+            />
+          </Field>
           <div className="xl:col-span-2 grid grid-cols-1 gap-4 xl:grid-cols-2">
             {codeField("sku")}
             {codeField("barcode")}
@@ -277,20 +298,22 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
                     )
                   }
                 />
-                <Button
-                  type="button"
-                  size="icon-pos"
-                  variant="outline"
-                  aria-label={t("form.removeAttribute", { name: row.key })}
-                  onClick={() =>
-                    set(
-                      "attributes",
-                      form.attributes.filter((_, j) => j !== i),
-                    )
-                  }
-                >
-                  <X aria-hidden />
-                </Button>
+                <WithTooltip label={t("form.removeAttribute", { name: row.key })}>
+                  <Button
+                    type="button"
+                    size="icon-pos"
+                    variant="outline"
+                    aria-label={t("form.removeAttribute", { name: row.key })}
+                    onClick={() =>
+                      set(
+                        "attributes",
+                        form.attributes.filter((_, j) => j !== i),
+                      )
+                    }
+                  >
+                    <X aria-hidden />
+                  </Button>
+                </WithTooltip>
               </div>
             ))}
             {form.attributes.length < 10 && (
@@ -306,24 +329,20 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
               </Button>
             )}
           </fieldset>
-          <div className="flex flex-col gap-1 xl:col-span-2">
-            <Check
-              id="product-track"
-              label={t("form.trackStock")}
-              checked={form.trackStock}
-              onChange={(v) => set("trackStock", v)}
-            />
-            <Check
-              id="product-negative"
-              label={t("form.allowNegative")}
-              checked={form.allowNegative}
-              onChange={(v) => set("allowNegative", v)}
-            />
-            <Check
+          <div className="flex items-center justify-between gap-4 rounded-lg border p-3.5 xl:col-span-2">
+            <div className="flex flex-col gap-0.5">
+              <Label htmlFor="product-active" className="cursor-pointer text-base font-medium">
+                {t("form.active")}
+              </Label>
+              <span className="text-sm text-muted-foreground">
+                {form.isActive ? t("form.activeHint") : t("form.inactiveHint")}
+              </span>
+            </div>
+            <Switch
               id="product-active"
-              label={t("form.active")}
+              size="pos"
               checked={form.isActive}
-              onChange={(v) => set("isActive", v)}
+              onCheckedChange={(v) => set("isActive", v)}
             />
           </div>
           {serverError && (

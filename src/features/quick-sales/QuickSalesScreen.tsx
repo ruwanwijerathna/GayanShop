@@ -14,7 +14,6 @@ import { Label } from "@/components/ui/label";
 import type { QuickSaleRow, QuickSaleStatus } from "@/db/bindings";
 import { CommandError } from "@/db/client";
 import {
-  useBatches,
   useCategories,
   useIgnoreQuickSale,
   usePromoteQuickSale,
@@ -23,16 +22,16 @@ import {
 } from "@/db/hooks";
 import { translateError } from "@/i18n";
 import { formatMoney, parseMajor, toMajorInput } from "@/lib/money";
+import { SelectField } from "@/components/common/SelectField";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const FIELD = "h-12 text-base";
-const SELECT = "h-12 w-full rounded-md border border-input bg-background px-3 text-base";
 const FILTERS: (QuickSaleStatus | null)[] = ["new", null, "promoted", "ignored"];
 
 function Detail({ row, onDone }: { row: QuickSaleRow; onDone: () => void }) {
   const { t, i18n } = useTranslation("quickSales");
   const detail = useQuickSaleDetail(row.custom_key);
   const categories = useCategories();
-  const batches = useBatches();
   const promote = usePromoteQuickSale();
   const ignore = useIgnoreQuickSale();
   const [name, setName] = useState(row.display_name);
@@ -41,14 +40,12 @@ function Detail({ row, onDone }: { row: QuickSaleRow; onDone: () => void }) {
   const [categoryId, setCategoryId] = useState("");
   const [barcode, setBarcode] = useState(true);
   const [shelf, setShelf] = useState("");
-  const [batchId, setBatchId] = useState("");
 
   const priceN = parseMajor(price);
   const costN = parseMajor(cost);
   const shelfN =
     shelf.trim() === "" ? null : /^\d{1,7}$/.test(shelf.trim()) ? Number.parseInt(shelf.trim(), 10) : -1;
   const valid = name.trim() !== "" && priceN !== null && costN !== null && shelfN !== -1;
-  const received = (batches.data ?? []).filter((b) => b.status === "received" && !b.is_system);
   const error = [promote.error, ignore.error].find((e) => e instanceof CommandError);
 
   const submit = (e: FormEvent) => {
@@ -63,7 +60,7 @@ function Detail({ row, onDone }: { row: QuickSaleRow; onDone: () => void }) {
         category_id: categoryId || null,
         generate_barcode: barcode,
         shelf_qty: shelfN,
-        batch_id: shelfN !== null && batchId ? batchId : null,
+        batch_id: null,
       },
       {
         onSuccess: (r) => {
@@ -127,27 +124,18 @@ function Detail({ row, onDone }: { row: QuickSaleRow; onDone: () => void }) {
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="qs-category">{t("promote.category")}</Label>
-            <select
+            <SelectField
               id="qs-category"
-              className={SELECT}
               value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-            >
-              <option value="">{t("promote.noCategory")}</option>
-              {(categories.data ?? []).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+              onValueChange={setCategoryId}
+              options={[
+                { value: "", label: t("promote.noCategory") },
+                ...(categories.data ?? []).map((c) => ({ value: c.id, label: c.name })),
+              ]}
+            />
           </div>
           <label className="flex min-h-12 items-center gap-3 self-end text-base">
-            <input
-              type="checkbox"
-              className="size-6"
-              checked={barcode}
-              onChange={(e) => setBarcode(e.target.checked)}
-            />
+            <Checkbox className="size-6" checked={barcode} onCheckedChange={(v) => setBarcode(v === true)} />
             {t("promote.barcode")}
           </label>
           <div className="flex flex-col gap-2">
@@ -160,23 +148,6 @@ function Detail({ row, onDone }: { row: QuickSaleRow; onDone: () => void }) {
               onChange={(e) => setShelf(e.target.value)}
               aria-invalid={shelfN === -1}
             />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="qs-batch">{t("promote.batch")}</Label>
-            <select
-              id="qs-batch"
-              className={SELECT}
-              value={batchId}
-              onChange={(e) => setBatchId(e.target.value)}
-              disabled={shelfN === null}
-            >
-              <option value="">{t("promote.noBatch")}</option>
-              {received.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.code} · {b.name}
-                </option>
-              ))}
-            </select>
           </div>
           {error instanceof CommandError && (
             <p role="alert" className="text-base text-destructive sm:col-span-2">

@@ -5,7 +5,7 @@ import {
   type LabelPreview_Serialize as LabelPreview,
   type LabelTemplate_Serialize as LabelTemplate,
 } from "@/db/bindings";
-import { err, ok, renderWithProviders } from "@/test/render";
+import { chooseOption, err, ok, renderWithProviders } from "@/test/render";
 import { PrintLabelsDialog } from "./PrintLabelsDialog";
 
 vi.mock("@/db/bindings", () => ({
@@ -102,7 +102,7 @@ describe("PrintLabelsDialog", () => {
     });
 
     fireEvent.change(screen.getByLabelText("Copies of Ladies Sandal"), { target: { value: "3" } });
-    fireEvent.change(screen.getByLabelText("Label roll"), { target: { value: "three_up_1x1" } });
+    chooseOption(screen.getByLabelText("Label roll"), '3 across, 1" x 1"');
     fireEvent.click(screen.getByRole("button", { name: "Print 3 label(s)" }));
     await waitFor(() =>
       expect(commands.printLabels).toHaveBeenCalledWith(
@@ -139,7 +139,7 @@ describe("PrintLabelsDialog", () => {
     await screen.findByRole("img", { name: "Label preview" });
     fireEvent.click(screen.getByRole("button", { name: "Print 2 label(s)" }));
     fireEvent.click(await screen.findByRole("button", { name: "Kamal" }));
-    for (const d of "2222") fireEvent.click(screen.getByRole("button", { name: `Digit ${d}` }));
+    fireEvent.change(screen.getByLabelText("PIN"), { target: { value: "2222" } });
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     await waitFor(() => expect(commands.printLabels).toHaveBeenCalledTimes(2));
     expect(commands.requestApproval).toHaveBeenCalledWith("LABEL_PRINT", "labels", "sup", "2222");

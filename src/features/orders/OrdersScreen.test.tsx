@@ -3,7 +3,7 @@ import { useEffect, type ReactNode } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useSession } from "@/app/session";
 import { commands, type OrderRow_Serialize as OrderRow } from "@/db/bindings";
-import { ok, renderWithProviders, session } from "@/test/render";
+import { chooseOption, ok, renderWithProviders, session } from "@/test/render";
 import { OrdersScreen } from "./OrdersScreen";
 
 vi.mock("@/db/bindings", () => ({
@@ -90,7 +90,7 @@ beforeEach(() => {
 describe("OrdersScreen", () => {
   it("pages today's orders newest first and opens a receipt", async () => {
     renderWithProviders(<OrdersScreen />);
-    const grid = await screen.findByRole("grid", { name: "Orders" });
+    const grid = await screen.findByRole("grid", { name: "Bills" });
     expect(await within(grid).findByText("T01-20261108-0003")).toBeInTheDocument();
     expect(within(grid).getByText("Voided · Scanned twice")).toBeInTheDocument();
     expect(within(grid).getByText("Completed · customer")).toBeInTheDocument();
@@ -116,9 +116,9 @@ describe("OrdersScreen", () => {
 
   it("filters by receipt, counter and status", async () => {
     renderWithProviders(<OrdersScreen />);
-    await screen.findByRole("grid", { name: "Orders" });
+    await screen.findByRole("grid", { name: "Bills" });
     fireEvent.change(screen.getByLabelText("Receipt number"), { target: { value: "T01-2026" } });
-    fireEvent.change(await screen.findByLabelText("Status"), { target: { value: "voided" } });
+    chooseOption(await screen.findByLabelText("Status"), "Voided");
     await waitFor(() =>
       expect(commands.orderHistory).toHaveBeenLastCalledWith(
         {

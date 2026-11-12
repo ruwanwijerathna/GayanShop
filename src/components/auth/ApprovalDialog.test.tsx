@@ -6,7 +6,9 @@ import { commands } from "@/db/bindings";
 import { err, ok, renderWithProviders, session } from "@/test/render";
 import { ApprovalDialog } from "./ApprovalDialog";
 
-vi.mock("@/db/bindings", () => ({ commands: { listLoginStaff: vi.fn(), requestApproval: vi.fn() } }));
+vi.mock("@/db/bindings", () => ({
+  commands: { listLoginStaff: vi.fn(), requestApproval: vi.fn(), devicePreferences: vi.fn() },
+}));
 
 function AsCashier({ children }: { children: ReactNode }) {
   const { setSession } = useSession();
@@ -22,6 +24,9 @@ beforeEach(() => {
     ]),
   );
   vi.mocked(commands.requestApproval).mockReset();
+  vi.mocked(commands.devicePreferences).mockImplementation(() =>
+    ok({ default_language: "en", theme: "light", touch_mode: false }),
+  );
 });
 
 function open(onApproved = vi.fn()) {
@@ -34,7 +39,10 @@ function open(onApproved = vi.fn()) {
 }
 
 describe("ApprovalDialog", () => {
-  it("lets a different staff member approve with their PIN and returns the single-use token", async () => {
+  it("lets a different staff member approve with the touch PIN pad and returns the single-use token", async () => {
+    vi.mocked(commands.devicePreferences).mockImplementation(() =>
+      ok({ default_language: "en", theme: "light", touch_mode: true }),
+    );
     vi.mocked(commands.requestApproval).mockImplementation(() =>
       ok({ approval_id: "tok-1", expires_at: "2026-11-08T09:01:00.000Z" }),
     );
@@ -43,7 +51,7 @@ describe("ApprovalDialog", () => {
     await screen.findByRole("button", { name: "Kamal" });
     expect(screen.queryByRole("button", { name: "Nimal" })).not.toBeInTheDocument(); // no self-approval
     fireEvent.click(screen.getByRole("button", { name: "Kamal" }));
-    for (const d of "1357") fireEvent.click(screen.getByRole("button", { name: `Digit ${d}` }));
+    for (const d of "1357") fireEvent.click(await screen.findByRole("button", { name: `Digit ${d}` }));
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     await waitFor(() => expect(onApproved).toHaveBeenCalledWith("tok-1"));
     expect(commands.requestApproval).toHaveBeenCalledWith("VOID_ORDER", "order-1", "sup", "1357");
@@ -55,7 +63,8 @@ describe("ApprovalDialog", () => {
     );
     const onApproved = open();
     fireEvent.click(await screen.findByRole("button", { name: "Kamal" }));
-    fireEvent.click(screen.getByRole("button", { name: "Digit 1" }));
+    expect(screen.queryByRole("button", { name: "Digit 1" })).not.toBeInTheDocument(); // keyboard mode
+    fireEvent.change(screen.getByLabelText("PIN"), { target: { value: "1" } });
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/permission to do this/);
     expect(onApproved).not.toHaveBeenCalled();

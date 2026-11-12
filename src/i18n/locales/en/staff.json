@@ -1,6 +1,31 @@
 {
   "title": "Staff",
+  "subtitle": "Manage who can sign in to the POS and what they're allowed to do.",
   "add": "Add staff",
+  "stats": {
+    "total": "Total staff",
+    "active": "Active",
+    "roles": "Roles"
+  },
+  "tabs": {
+    "staff": "Team members",
+    "roles": "Roles & permissions"
+  },
+  "searchPlaceholder": "Search by name or role",
+  "filters": {
+    "allRoles": "All roles",
+    "allStatuses": "All statuses"
+  },
+  "rolesTab": {
+    "matrixTitle": "Permission matrix",
+    "matrixSubtitle": "What each role can do at a glance.",
+    "members_one": "{{count}} member",
+    "members_other": "{{count}} members",
+    "permsCount": "{{count}} of {{total}} permissions",
+    "maxDiscount": "Max discount: {{pct}}%"
+  },
+  "emptySearch": "No staff match your filters.",
+  "lastOwnerCannotDeactivate": "The only active Owner cannot be deactivated.",
   "columns": {
     "name": "Name",
     "role": "Role",

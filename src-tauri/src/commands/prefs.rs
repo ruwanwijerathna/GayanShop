@@ -21,6 +21,13 @@ pub async fn set_device_theme(state: State<'_, AppState>, theme: UiTheme) -> App
     prefs::set_device_theme(&state.db, theme).await
 }
 
+/// Turn this counter's touch screen mode on or off (local-only: on-screen keypads for touch hardware).
+#[tauri::command]
+#[specta::specta]
+pub async fn set_device_touch_mode(state: State<'_, AppState>, enabled: bool) -> AppResult<()> {
+    prefs::set_device_touch_mode(&state.db, enabled).await
+}
+
 /// Save the UI language. Logged in ⇒ the staff member's own preference (synced, applied at their next
 /// login on any counter); otherwise ⇒ this counter's default for the lock and login screens.
 #[tauri::command]

@@ -5,7 +5,6 @@
 // sell-through.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { BatchSellThroughBar } from "@/components/charts/BatchSellThroughBar";
 import { PaymentDonut } from "@/components/charts/PaymentDonut";
 import { RevenueExpenseBar } from "@/components/charts/RevenueExpenseBar";
 import { SalesTrendArea } from "@/components/charts/SalesTrendArea";
@@ -24,7 +23,6 @@ import {
   useBusinessToday,
   useReportDevices,
   useReportSalesBy,
-  useReportSellThrough,
   useReportSummary,
   useReportTrend,
   useReportVoids,
@@ -32,9 +30,10 @@ import {
 import { translateError } from "@/i18n";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { SelectField } from "@/components/common/SelectField";
+import { Checkbox } from "@/components/ui/checkbox";
 
-const SELECT = "h-12 w-full rounded-md border border-input bg-background px-3 text-base";
-const DIMENSIONS: SalesDimension[] = ["product", "category", "batch"];
+const DIMENSIONS: SalesDimension[] = ["product", "category"];
 
 /** `2_550` bp → `25.5%` (negative margins keep their sign). */
 export function formatBp(bp: number): string {
@@ -279,7 +278,6 @@ function Charts({
 }) {
   const granularity = trendGranularity(period);
   const trend = useReportTrend(period, deviceId, granularity ?? "day", compare && period.kind !== "all_time");
-  const sellThrough = useReportSellThrough();
   return (
     <div className="grid gap-6 xl:grid-cols-2">
       {granularity && trend.data && (
@@ -289,7 +287,6 @@ function Charts({
         </>
       )}
       <PaymentDonut payments={payments} />
-      {sellThrough.data && <BatchSellThroughBar batches={sellThrough.data} />}
     </div>
   );
 }
@@ -313,27 +310,22 @@ function Reports({ today }: { today: string }) {
       <div className="flex flex-wrap items-end gap-4">
         <div className="flex min-w-48 flex-col gap-2">
           <Label htmlFor="report-device">{t("counter")}</Label>
-          <select
+          <SelectField
             id="report-device"
-            className={SELECT}
             value={deviceId}
-            onChange={(e) => setDeviceId(e.target.value)}
-          >
-            <option value="">{t("wholeStore")}</option>
-            {(devices.data ?? []).map((d) => (
-              <option key={d.device_id} value={d.device_id}>
-                {d.device_code}
-              </option>
-            ))}
-          </select>
+            onValueChange={setDeviceId}
+            options={[
+              { value: "", label: t("wholeStore") },
+              ...(devices.data ?? []).map((d) => ({ value: d.device_id, label: d.device_code })),
+            ]}
+          />
         </div>
         <label className="flex min-h-12 items-center gap-3 text-base">
-          <input
-            type="checkbox"
+          <Checkbox
             className="size-6"
             checked={compare}
             disabled={period.kind === "all_time"}
-            onChange={(e) => setCompare(e.target.checked)}
+            onCheckedChange={(v) => setCompare(v === true)}
           />
           {t("compare")}
         </label>

@@ -44,6 +44,9 @@ import {
 } from "@/db/hooks";
 import { translateError } from "@/i18n";
 import { formatMoney } from "@/lib/money";
+import { PosTabsList, PosTabsTrigger } from "@/components/common/PosTabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 
 const FIELD = "h-12 text-base";
 const SORTS: CustomerSort[] = ["spend", "visits", "last_visit", "name"];
@@ -170,9 +173,9 @@ function EditForm({ profile }: { profile: CustomerProfile }) {
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="cust-note">{t("profile.note")}</Label>
-        <textarea
+        <Textarea
           id="cust-note"
-          className="min-h-20 rounded-md border border-input bg-background p-3 text-base"
+          className="min-h-20 bg-background p-3 text-base md:text-base"
           maxLength={500}
           value={note}
           onChange={(e) => setNote(e.target.value)}
@@ -484,43 +487,35 @@ export function CustomersScreen() {
   const [open, setOpen] = useState<string | null>(null);
   const today = useBusinessToday();
   return (
-    <section className="flex flex-col gap-4">
-      <header className="flex flex-wrap items-center gap-3">
-        <h1 className="flex-1 text-2xl font-semibold">{t("title")}</h1>
-        <ExportButton kind="customers" period={{ kind: "all_time" }} />
-        <div className="flex gap-2" role="tablist" aria-label={t("title")}>
-          <Button
-            type="button"
-            role="tab"
-            size="pos"
-            aria-selected={tab === "list"}
-            variant={tab === "list" ? "default" : "outline"}
-            onClick={() => setTab("list")}
-          >
-            <Users aria-hidden />
-            {t("tabs.list")}
-          </Button>
-          <Button
-            type="button"
-            role="tab"
-            size="pos"
-            aria-selected={tab === "analytics"}
-            variant={tab === "analytics" ? "default" : "outline"}
-            onClick={() => setTab("analytics")}
-          >
-            <BarChart3 aria-hidden />
-            {t("tabs.analytics")}
-          </Button>
-        </div>
-      </header>
-      {tab === "list" ? (
-        <div className="grid gap-4 xl:grid-cols-[1fr_32rem]">
-          <CustomerList onOpen={setOpen} />
-          {open && <Profile key={open} id={open} onClose={() => setOpen(null)} />}
-        </div>
-      ) : (
-        today.data && <Analytics today={today.data} />
-      )}
-    </section>
+    <Tabs
+      value={tab}
+      onValueChange={(v) => setTab(v === "analytics" ? "analytics" : "list")}
+      className="flex flex-col gap-4"
+      asChild
+    >
+      <section>
+        <header className="flex flex-wrap items-center gap-3">
+          <h1 className="flex-1 text-2xl font-semibold">{t("title")}</h1>
+          <ExportButton kind="customers" period={{ kind: "all_time" }} />
+          <PosTabsList aria-label={t("title")}>
+            <PosTabsTrigger value="list">
+              <Users aria-hidden />
+              {t("tabs.list")}
+            </PosTabsTrigger>
+            <PosTabsTrigger value="analytics">
+              <BarChart3 aria-hidden />
+              {t("tabs.analytics")}
+            </PosTabsTrigger>
+          </PosTabsList>
+        </header>
+        <TabsContent value="list">
+          <div className="grid gap-4 xl:grid-cols-[1fr_32rem]">
+            <CustomerList onOpen={setOpen} />
+            {open && <Profile key={open} id={open} onClose={() => setOpen(null)} />}
+          </div>
+        </TabsContent>
+        <TabsContent value="analytics">{today.data && <Analytics today={today.data} />}</TabsContent>
+      </section>
+    </Tabs>
   );
 }

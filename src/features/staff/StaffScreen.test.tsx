@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { commands, type Role, type StaffMember_Serialize as StaffMember } from "@/db/bindings";
-import { err, ok, renderWithProviders } from "@/test/render";
+import { chooseOption, err, ok, renderWithProviders } from "@/test/render";
 import { parseLimit, StaffScreen } from "./StaffScreen";
 
 vi.mock("@/db/bindings", () => ({
@@ -87,7 +87,7 @@ describe("StaffScreen", () => {
     const dialog = await screen.findByRole("dialog");
     fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Nimali" } });
     fireEvent.change(within(dialog).getByLabelText("PIN (4–8 digits)"), { target: { value: "48a26" } });
-    fireEvent.change(within(dialog).getByLabelText("Screen language"), { target: { value: "si" } });
+    chooseOption(within(dialog).getByLabelText("Screen language"), "Sinhala");
     const voidRow = within(dialog).getByText("Void a sale").closest("li");
     if (voidRow) fireEvent.click(within(voidRow).getByLabelText("Grant"));
     fireEvent.click(within(dialog).getByRole("button", { name: "Add" }));
@@ -135,6 +135,29 @@ describe("StaffScreen", () => {
     fireEvent.change(within(dialog).getByLabelText("New PIN (4–8 digits)"), { target: { value: "9753" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Set PIN" }));
     await waitFor(() => expect(commands.resetStaffPin).toHaveBeenCalledWith("s2", "9753"));
+  });
+
+  it("filters staff by search query", async () => {
+    renderWithProviders(<StaffScreen />);
+    expect(await screen.findByText("Gayan")).toBeInTheDocument();
+    expect(screen.getByText("Kasun")).toBeInTheDocument();
+
+    const searchInput = screen.getByLabelText("Search by name or role");
+    fireEvent.change(searchInput, { target: { value: "Kasun" } });
+
+    expect(screen.getByText("Kasun")).toBeInTheDocument();
+    expect(screen.queryByText("Gayan")).not.toBeInTheDocument();
+  });
+
+  it("switches to roles tab and displays permission matrix", async () => {
+    renderWithProviders(<StaffScreen />);
+    const rolesTab = await screen.findByRole("tab", { name: "Roles & permissions" });
+    fireEvent.click(rolesTab);
+
+    expect(await screen.findByText("Permission matrix")).toBeInTheDocument();
+    expect(screen.getByText("Sales & Till")).toBeInTheDocument();
+    expect(screen.getByText("Cash Management")).toBeInTheDocument();
+    expect(screen.getByText("Full access")).toBeInTheDocument();
   });
 
   it("parses personal discount limits as percentages", () => {

@@ -68,14 +68,7 @@ export function ProductPicker({
                     setQuery("");
                   }}
                 >
-                  <span className="flex-1">
-                    {p.name}
-                    {p.name_si && (
-                      <span lang="si" className="ml-2 text-sm text-muted-foreground">
-                        {p.name_si}
-                      </span>
-                    )}
-                  </span>
+                  <span className="flex-1">{p.name}</span>
                   <span className="font-mono text-sm text-muted-foreground">{p.sku ?? p.barcode}</span>
                   <span className="font-mono text-sm">{formatMoney(p.price)}</span>
                 </button>

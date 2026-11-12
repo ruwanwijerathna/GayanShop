@@ -7,7 +7,7 @@ import {
   type ExpenseList_Serialize as ExpenseList,
   type ExpenseRow_Serialize as ExpenseRow,
 } from "@/db/bindings";
-import { err, ok, renderWithProviders } from "@/test/render";
+import { chooseOption, optionNames, err, ok, renderWithProviders } from "@/test/render";
 import { ExpensesScreen } from "./ExpensesScreen";
 
 vi.mock("@/db/bindings", () => ({
@@ -87,7 +87,7 @@ describe("ExpensesScreen", () => {
     const totals = screen.getByRole("region", { name: "Totals" });
     expect(within(totals).getAllByText("Rs 750.00").length).toBe(3);
     expect(commands.expenseList).toHaveBeenCalledWith({ kind: "month", year: 2026, month: 11 }, null);
-    fireEvent.change(screen.getByLabelText("Category"), { target: { value: "rent" } });
+    chooseOption(screen.getByLabelText("Category"), "Rent");
     await waitFor(() =>
       expect(commands.expenseList).toHaveBeenLastCalledWith({ kind: "month", year: 2026, month: 11 }, "rent"),
     );
@@ -97,11 +97,10 @@ describe("ExpensesScreen", () => {
     renderWithProviders(<ExpensesScreen />);
     await openAdd();
     const form = await screen.findByRole("form", { name: "Add expense" });
-    const options = within(within(form).getByLabelText("Category")).getAllByRole("option");
-    expect(options.map((o) => o.textContent)).toEqual(["Rent", "Tea & sundries"]);
-    fireEvent.change(within(form).getByLabelText("Category"), { target: { value: "tea" } });
+    expect(optionNames(within(form).getByLabelText("Category"))).toEqual(["Rent", "Tea & sundries"]);
+    chooseOption(within(form).getByLabelText("Category"), "Tea & sundries");
     fireEvent.change(within(form).getByLabelText("Amount (Rs)"), { target: { value: "750" } });
-    fireEvent.change(within(form).getByLabelText("Paid by"), { target: { value: "card" } });
+    chooseOption(within(form).getByLabelText("Paid by"), "Card");
     fireEvent.click(within(form).getByLabelText(/cash from this counter's drawer/));
     expect(within(form).getByLabelText("Paid by")).toBeDisabled();
     fireEvent.change(within(form).getByLabelText("Paid to (optional)"), { target: { value: "CEB" } });
@@ -150,7 +149,7 @@ describe("ExpensesScreen", () => {
     const form = await screen.findByRole("form", { name: "Edit expense" });
     expect(within(form).getByLabelText("Amount (Rs)")).toBeDisabled();
     expect(within(form).getByText(/amount, date and method are fixed/)).toBeInTheDocument();
-    fireEvent.change(within(form).getByLabelText("Category"), { target: { value: "rent" } });
+    chooseOption(within(form).getByLabelText("Category"), "Rent");
     fireEvent.click(within(form).getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(commands.updateExpense).toHaveBeenCalledWith(

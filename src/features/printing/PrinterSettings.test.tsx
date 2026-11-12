@@ -3,7 +3,7 @@ import { useEffect, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSession } from "@/app/session";
 import { commands, type Perm, type ReceiptPrinterProfile } from "@/db/bindings";
-import { err, ok, renderWithProviders, session } from "@/test/render";
+import { chooseOption, err, ok, renderWithProviders, session } from "@/test/render";
 import { DEFAULT_FORM, PrinterSettings, toForm, toProfile } from "./PrinterSettings";
 
 vi.mock("@/db/bindings", () => ({
@@ -79,9 +79,9 @@ describe("PrinterSettings", () => {
   it("saves a network printer and prints the test page", async () => {
     renderAs();
     expect(await screen.findByText("Not set up")).toBeInTheDocument();
-    fireEvent.change(await screen.findByLabelText("Connection"), { target: { value: "network" } });
+    chooseOption(await screen.findByLabelText("Connection"), "Network (TCP 9100)");
     fireEvent.change(screen.getByLabelText("IP address or host name"), { target: { value: "192.168.1.50" } });
-    fireEvent.change(screen.getByLabelText("Paper width"), { target: { value: "mm58" } });
+    chooseOption(screen.getByLabelText("Paper width"), "58 mm (32 columns)");
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(commands.setPrinterProfile).toHaveBeenCalledWith({

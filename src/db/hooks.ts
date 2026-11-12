@@ -203,6 +203,19 @@ export function useSetDeviceTheme() {
   });
 }
 
+/** This counter's touch screen mode: on-screen keypads and number pads show only when it is on. */
+export function useTouchMode(): boolean {
+  return useDevicePrefs().data?.touch_mode ?? false;
+}
+
+export function useSetDeviceTouchMode() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) => unwrap(commands.setDeviceTouchMode(enabled)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.devicePrefs }),
+  });
+}
+
 // ───────── catalog ─────────
 
 export function useCategories() {

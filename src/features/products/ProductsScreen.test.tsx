@@ -8,8 +8,9 @@ import {
   type Perm,
   type Product_Serialize as Product,
 } from "@/db/bindings";
-import { err, ok, renderWithProviders, session } from "@/test/render";
+import { chooseOption, err, ok, renderWithProviders, session } from "@/test/render";
 import { PRODUCT_COLUMN_WIDTHS, ProductsScreen } from "./ProductsScreen";
+import { matchesStockFilter, stockLevel } from "./stock";
 
 vi.mock("@/db/bindings", () => ({
   commands: {
@@ -21,6 +22,7 @@ vi.mock("@/db/bindings", () => ({
     createCategory: vi.fn(),
     updateCategory: vi.fn(),
     deleteCategory: vi.fn(),
+    adjustStock: vi.fn(),
   },
 }));
 
@@ -45,6 +47,7 @@ function product(over: Partial<Product>): Product {
     barcode_conflict: false,
     updated_at: "2026-11-08T09:00:00.000Z",
     version: 1,
+    on_hand: 45,
     ...over,
   };
 }
@@ -87,15 +90,16 @@ beforeEach(() => {
   vi.mocked(commands.updateProduct).mockReset();
   vi.mocked(commands.createCategory).mockReset();
   vi.mocked(commands.deleteCategory).mockReset();
+  vi.mocked(commands.adjustStock).mockReset();
 });
 
 const grid = () => screen.getByRole("grid", { name: "Products" });
 
 describe("ProductsScreen", () => {
-  it("lists active products with their Sinhala name, category path and cost, and filters as you type", async () => {
+  it("lists active products by their one name, with category path and cost, and filters as you type", async () => {
     renderAs(MANAGER);
     expect(await within(grid()).findByText("Blue Bucket 10L")).toBeInTheDocument();
-    expect(within(grid()).getByText("නිල් බාල්දිය")).toBeInTheDocument();
+    expect(within(grid()).queryByText("නිල් බාල්දිය")).not.toBeInTheDocument(); // no secondary name line
     expect(within(grid()).getByText("Home › Kitchen")).toBeInTheDocument();
     expect(within(grid()).getAllByText("Rs 200.00")).toHaveLength(2);
     expect(within(grid()).queryByText("Old Mug")).not.toBeInTheDocument();
@@ -112,9 +116,7 @@ describe("ProductsScreen", () => {
     expect(within(grid()).getByText("Old Mug")).toBeInTheDocument();
     expect(within(grid()).getByText("Inactive")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByRole("combobox", { name: "Filter by category" }), {
-      target: { value: "c2" },
-    });
+    chooseOption(screen.getByRole("combobox", { name: "Filter by category" }), "Home › Kitchen");
     expect(screen.getByRole("status")).toHaveTextContent("2 products");
   });
 
@@ -133,19 +135,68 @@ describe("ProductsScreen", () => {
     renderAs(MANAGER);
     fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText(/^Name \(English/), { target: { value: "Soap" } });
+    const name = within(dialog).getByLabelText("Product Name");
+    expect(name).toHaveAttribute("placeholder", "Enter product name");
+    expect(within(dialog).queryByLabelText(/Sinhala/)).not.toBeInTheDocument();
+    expect(dialog.querySelectorAll("input[lang='si']")).toHaveLength(0);
+    fireEvent.change(name, { target: { value: "Soap" } });
     fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "120.50" } });
     fireEvent.change(within(dialog).getByLabelText("Default cost (Rs)"), { target: { value: "80" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Auto-generate SKU" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(commands.createProduct).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "Soap",
+        name_si: null,
         price: 12_050,
         default_cost: 8_000,
         sku: { mode: "generate" },
         barcode: { mode: "none" },
       }),
+    );
+  });
+
+  it("creates a product with no SKU or barcode when left blank (None state)", async () => {
+    vi.mocked(commands.createProduct).mockImplementation(() => ok(product({ id: "new2", name: "Apple" })));
+    renderAs(MANAGER);
+    fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Apple" } });
+    fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "50" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(commands.createProduct).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Apple",
+        sku: { mode: "none" },
+        barcode: { mode: "none" },
+      }),
+    );
+  });
+
+  it("creates a product with initial stock quantity and note", async () => {
+    vi.mocked(commands.createProduct).mockImplementation(() =>
+      ok(product({ id: "soap1", name: "Sunlight Soap" })),
+    );
+    vi.mocked(commands.adjustStock).mockImplementation(() => ok({} as never));
+    renderAs(MANAGER);
+    fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Sunlight Soap" } });
+    fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "150" } });
+    fireEvent.change(within(dialog).getByLabelText("Stock Quantity"), { target: { value: "50" } });
+    fireEvent.change(within(dialog).getByLabelText("Note"), { target: { value: "Initial opening batch" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(commands.createProduct).toHaveBeenCalled();
+    expect(commands.adjustStock).toHaveBeenCalledWith(
+      {
+        product_id: "soap1",
+        qty_delta: 50,
+        note: "Initial opening batch",
+      },
+      null,
     );
   });
 
@@ -205,5 +256,71 @@ describe("ProductsScreen", () => {
   it("fits every column at the 1024×768 minimum window, cost included", () => {
     const total = Object.values(PRODUCT_COLUMN_WIDTHS).reduce((a, b) => a + b, 0);
     expect(total).toBeLessThanOrEqual(895);
+  });
+
+  it("shows live stock: a count, low, out, oversold, or a dash when untracked", async () => {
+    vi.mocked(commands.listProducts).mockImplementation(() =>
+      ok([
+        product({ id: "a", name: "Plenty", on_hand: 45 }),
+        product({ id: "b", name: "Few", sku: "100010", on_hand: 3 }),
+        product({ id: "c", name: "None", sku: "100011", on_hand: 0 }),
+        product({ id: "d", name: "Minus", sku: "100012", on_hand: -2 }),
+        product({ id: "e", name: "Loose", sku: "100013", track_stock: false, on_hand: 0 }),
+      ]),
+    );
+    renderAs(MANAGER);
+    expect(await within(grid()).findByText("45 in stock")).toBeInTheDocument();
+    expect(within(grid()).getByText("Stock")).toBeInTheDocument();
+    expect(within(grid()).getByText("3 (Low stock)")).toBeInTheDocument();
+    expect(within(grid()).getByText("0 (Out of stock)")).toBeInTheDocument();
+    expect(within(grid()).getByText("-2 (Oversold)")).toBeInTheDocument();
+    expect(within(grid()).getByText("Stock not tracked")).toBeInTheDocument();
+  });
+
+  it("filters to low stock (1–5) and out of stock (0 or oversold), and back to all", async () => {
+    vi.mocked(commands.listProducts).mockImplementation(() =>
+      ok([
+        product({ id: "a", name: "Plenty", on_hand: 45 }),
+        product({ id: "b", name: "Few", sku: "100010", on_hand: 5 }),
+        product({ id: "c", name: "None", sku: "100011", on_hand: 0 }),
+        product({ id: "d", name: "Minus", sku: "100012", on_hand: -2 }),
+        product({ id: "e", name: "Loose", sku: "100013", track_stock: false, on_hand: 0 }),
+      ]),
+    );
+    renderAs(MANAGER);
+    await within(grid()).findByText("Plenty");
+    const filters = screen.getByRole("group", { name: "Filter by stock" });
+    expect(within(filters).getByRole("button", { name: "All Products" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    fireEvent.click(within(filters).getByRole("button", { name: "Low Stock (≤ 5)" }));
+    expect(screen.getByRole("status")).toHaveTextContent("1 product");
+    expect(within(grid()).getByText("Few")).toBeInTheDocument();
+
+    fireEvent.click(within(filters).getByRole("button", { name: "Out of Stock (0)" }));
+    expect(screen.getByRole("status")).toHaveTextContent("2 products");
+    expect(within(grid()).getByText("None")).toBeInTheDocument();
+    expect(within(grid()).getByText("Minus")).toBeInTheDocument();
+    expect(within(grid()).queryByText("Loose")).not.toBeInTheDocument();
+
+    fireEvent.click(within(filters).getByRole("button", { name: "All Products" }));
+    expect(screen.getByRole("status")).toHaveTextContent("5 products");
+  });
+
+  it("classifies stock levels at the boundaries", () => {
+    const at = (on_hand: number, track_stock = true) => ({ on_hand, track_stock });
+    expect([6, 5, 1, 0, -1].map((n) => stockLevel(at(n)))).toEqual([
+      "in_stock",
+      "low",
+      "low",
+      "out",
+      "oversold",
+    ]);
+    expect(stockLevel(at(-4, false))).toBe("untracked");
+    expect(matchesStockFilter(at(0, false), "out")).toBe(false);
+    expect(matchesStockFilter(at(-1), "out")).toBe(true);
+    expect(matchesStockFilter(at(6), "low")).toBe(false);
   });
 });

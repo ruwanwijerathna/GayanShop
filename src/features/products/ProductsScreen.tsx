@@ -19,6 +19,9 @@ import { hasPerm } from "@/lib/permissions";
 import { CategoryPanel, categoryPath } from "./CategoryPanel";
 import { ProductFormDialog } from "./ProductFormDialog";
 import { matchesText } from "./productForm";
+import { LOW_STOCK_MAX, matchesStockFilter, stockLevel, type StockFilter } from "./stock";
+import { SelectField } from "@/components/common/SelectField";
+import { Checkbox } from "@/components/ui/checkbox";
 
 /**
  * Column widths (px). With the cost column they must fit the 1024×768 grid (≈ 895 px usable, see the audit
@@ -26,18 +29,54 @@ import { matchesText } from "./productForm";
  */
 export const PRODUCT_COLUMN_WIDTHS = {
   select: 48,
-  name: 204,
+  name: 150,
   sku: 84,
-  barcode: 150,
-  category: 100,
-  price: 104,
-  cost: 104,
-  status: 100,
+  barcode: 135,
+  category: 90,
+  price: 96,
+  cost: 96,
+  stock: 112,
+  status: 82,
 } as const;
+
+const STOCK_FILTERS: StockFilter[] = ["all", "low", "out"];
+
+/** The Stock cell: plain count, or a badge for low / out / oversold; a dash when stock isn't tracked. */
+function StockCell({ product }: { product: Product }) {
+  const { t } = useTranslation("products");
+  const level = stockLevel(product);
+  const n = product.on_hand;
+  if (level === "untracked")
+    return (
+      <span className="text-muted-foreground" title={t("stockCell.untracked")}>
+        <span aria-hidden>—</span>
+        <span className="sr-only">{t("stockCell.untracked")}</span>
+      </span>
+    );
+  if (level === "in_stock")
+    return <span className="text-sm tabular-nums">{t("stockCell.inStock", { count: n })}</span>;
+  if (level === "low")
+    return (
+      <Badge className="bg-warning text-warning-foreground tabular-nums">
+        {t("stockCell.low", { count: n })}
+      </Badge>
+    );
+  if (level === "out")
+    return (
+      <Badge variant="outline" className="border-destructive text-destructive tabular-nums">
+        {t("stockCell.out")}
+      </Badge>
+    );
+  return (
+    <Badge variant="destructive" className="tabular-nums">
+      {t("stockCell.oversold", { count: n })}
+    </Badge>
+  );
+}
 
 type Editing = { product: Product | null } | null;
 
-/** Back-office product list (bounded: loaded once, filtered client-side) plus categories. */
+/** Back-office product list with live stock (bounded: loaded once, filtered client-side) plus categories. */
 export function ProductsScreen() {
   const { t, i18n } = useTranslation(["products", "common"]);
   const { session } = useSession();
@@ -48,6 +87,7 @@ export function ProductsScreen() {
   const [text, setText] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [showInactive, setShowInactive] = useState(false);
+  const [stockFilter, setStockFilter] = useState<StockFilter>("all");
   const [editing, setEditing] = useState<Editing>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [printing, setPrinting] = useState(false);
@@ -66,9 +106,10 @@ export function ProductsScreen() {
         (p) =>
           (showInactive || p.is_active) &&
           (categoryId === "" || p.category_id === categoryId) &&
+          matchesStockFilter(p, stockFilter) &&
           matchesText(p, text),
       ),
-    [all, showInactive, categoryId, text],
+    [all, showInactive, categoryId, stockFilter, text],
   );
 
   const columns = useMemo<ColumnDef<Product>[]>(() => {
@@ -80,16 +121,15 @@ export function ProductsScreen() {
         enableSorting: false,
         accessorFn: (p) => p.id,
         cell: ({ row }) => (
-          <input
-            type="checkbox"
-            className="size-6 accent-primary"
+          <Checkbox
+            className="size-6"
             aria-label={t("selectProduct", { name: row.original.name })}
             checked={selected.has(row.original.id)}
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
-            onChange={(e) => {
+            onCheckedChange={(v) => {
               const id = row.original.id;
-              const on = e.target.checked;
+              const on = v === true;
               setSelected((prev) => {
                 const next = new Set(prev);
                 if (on) next.add(id);
@@ -105,16 +145,7 @@ export function ProductsScreen() {
         header: t("columns.name"),
         size: PRODUCT_COLUMN_WIDTHS.name,
         accessorFn: (p) => p.name,
-        cell: ({ row }) => (
-          <span className="flex min-w-0 flex-col leading-tight">
-            <span className="truncate">{row.original.name}</span>
-            {row.original.name_si && (
-              <span lang="si" className="truncate text-sm text-muted-foreground">
-                {row.original.name_si}
-              </span>
-            )}
-          </span>
-        ),
+        cell: ({ row }) => <span className="truncate">{row.original.name}</span>,
       },
       {
         id: "sku",
@@ -156,6 +187,14 @@ export function ProductsScreen() {
       });
     }
     cols.push({
+      id: "stock",
+      header: t("columns.stock"),
+      size: PRODUCT_COLUMN_WIDTHS.stock,
+      // Untracked sorts first, then by units on hand.
+      accessorFn: (p) => (p.track_stock ? p.on_hand : Number.MIN_SAFE_INTEGER),
+      cell: ({ row }) => <StockCell product={row.original} />,
+    });
+    cols.push({
       id: "status",
       header: t("columns.status"),
       size: PRODUCT_COLUMN_WIDTHS.status,
@@ -190,7 +229,7 @@ export function ProductsScreen() {
   return (
     <section className="flex flex-col gap-4">
       <header className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">{t("title")}</h1>
+        <h2 className="text-xl font-semibold">{t("title")}</h2>
         <span role="status" className="flex-1 text-sm text-muted-foreground">
           {t("count", { count: rows.length })}
         </span>
@@ -228,25 +267,35 @@ export function ProductsScreen() {
             onChange={(e) => setText(e.target.value)}
           />
         </div>
-        <select
+        <SelectField
           aria-label={t("categoryFilter")}
-          className="h-12 rounded-md border border-input bg-background px-3 text-base"
+          className="w-auto min-w-48"
           value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-        >
-          <option value="">{t("allCategories")}</option>
-          {cats.map((c) => (
-            <option key={c.id} value={c.id}>
-              {catName.get(c.id)}
-            </option>
+          onValueChange={setCategoryId}
+          options={[
+            { value: "", label: t("allCategories") },
+            ...cats.map((c) => ({ value: c.id, label: catName.get(c.id) ?? c.name })),
+          ]}
+        />
+        <div role="group" aria-label={t("stockFilter.label")} className="flex flex-wrap gap-2">
+          {STOCK_FILTERS.map((f) => (
+            <Button
+              key={f}
+              type="button"
+              size="pos"
+              variant={stockFilter === f ? "default" : "outline"}
+              aria-pressed={stockFilter === f}
+              onClick={() => setStockFilter(f)}
+            >
+              {t(`stockFilter.${f}`, { max: LOW_STOCK_MAX })}
+            </Button>
           ))}
-        </select>
+        </div>
         <label className="flex min-h-12 items-center gap-2">
-          <input
-            type="checkbox"
-            className="size-6 accent-primary"
+          <Checkbox
+            className="size-6"
             checked={showInactive}
-            onChange={(e) => setShowInactive(e.target.checked)}
+            onCheckedChange={(v) => setShowInactive(v === true)}
           />
           {t("showInactive")}
         </label>

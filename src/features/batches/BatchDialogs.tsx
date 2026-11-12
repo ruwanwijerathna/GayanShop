@@ -20,6 +20,7 @@ import { parseMajor } from "@/lib/money";
 import { parseOptionalMoney, parseQty } from "./batchForm";
 import { METHODS } from "./IntakeWizard";
 import { ProductPicker } from "./ProductPicker";
+import { SelectField } from "@/components/common/SelectField";
 
 const FIELD = "h-12 text-base";
 
@@ -164,18 +165,12 @@ export function NewBatchDialog({
             />
           </Field>
           <Field id="new-batch-method" label={t("wizard.method")} hint={t(`methodHints.${method}`)}>
-            <select
+            <SelectField
               id="new-batch-method"
-              className="h-12 w-full rounded-md border border-input bg-background px-3 text-base"
               value={method}
-              onChange={(e) => setMethod(METHODS.find((m) => m === e.target.value) ?? "manual")}
-            >
-              {METHODS.map((m) => (
-                <option key={m} value={m}>
-                  {t(`methods.${m}`)}
-                </option>
-              ))}
-            </select>
+              onValueChange={(v) => setMethod(METHODS.find((m) => m === v) ?? "manual")}
+              options={METHODS.map((m) => ({ value: m, label: t(`methods.${m}`) }))}
+            />
           </Field>
           <FieldError message={localError ?? serverError} />
           <DialogFooter className="gap-2">

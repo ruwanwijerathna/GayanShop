@@ -15,9 +15,9 @@ import { CommandError } from "@/db/client";
 import { useBusinessToday, useOrderHistory, useOrderReceipt, useReportDevices } from "@/db/hooks";
 import { translateError } from "@/i18n";
 import { formatMoney } from "@/lib/money";
+import { SelectField } from "@/components/common/SelectField";
 
 const FIELD = "h-12 text-base";
-const SELECT = "h-12 w-full rounded-md border border-input bg-background px-3 text-base";
 
 function Receipt({ orderId, onClose }: { orderId: string; onClose: () => void }) {
   const receipt = useOrderReceipt(orderId);
@@ -114,32 +114,28 @@ function Orders({ today }: { today: string }) {
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="orders-device">{t("filters.counter")}</Label>
-          <select
+          <SelectField
             id="orders-device"
-            className={SELECT}
             value={deviceId}
-            onChange={(e) => setDeviceId(e.target.value)}
-          >
-            <option value="">{t("filters.allCounters")}</option>
-            {(devices.data ?? []).map((d) => (
-              <option key={d.device_id} value={d.device_id}>
-                {d.device_code}
-              </option>
-            ))}
-          </select>
+            onValueChange={setDeviceId}
+            options={[
+              { value: "", label: t("filters.allCounters") },
+              ...(devices.data ?? []).map((d) => ({ value: d.device_id, label: d.device_code })),
+            ]}
+          />
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="orders-status">{t("filters.status")}</Label>
-          <select
+          <SelectField
             id="orders-status"
-            className={SELECT}
             value={status}
-            onChange={(e) => setStatus(e.target.value === "" ? "" : (e.target.value as OrderStatusFilter))}
-          >
-            <option value="">{t("filters.allStatuses")}</option>
-            <option value="completed">{t("status.completed")}</option>
-            <option value="voided">{t("status.voided")}</option>
-          </select>
+            onValueChange={(v) => setStatus(v === "completed" || v === "voided" ? v : "")}
+            options={[
+              { value: "", label: t("filters.allStatuses") },
+              { value: "completed", label: t("status.completed") },
+              { value: "voided", label: t("status.voided") },
+            ]}
+          />
         </div>
       </div>
       {error && (
