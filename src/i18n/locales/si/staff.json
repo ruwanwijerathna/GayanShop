@@ -22,7 +22,13 @@
     "members_one": "සාමාජික {{count}}ක්",
     "members_other": "සාමාජිකයින් {{count}}ක්",
     "permsCount": "අවසර {{total}}න් {{count}}ක්",
-    "maxDiscount": "උපරිම වට්ටම: {{pct}}%"
+    "maxDiscount": "උපරිම වට්ටම: {{pct}}%",
+    "fullAccess": "සම්පූර්ණ ප්‍රවේශය",
+    "systemRole": "පද්ධති භූමිකාව",
+    "allowed": "අවසර ඇත",
+    "notAllowed": "අවසර නැත",
+    "pinLength_one": "ඉලක්කම් {{count}}ක PIN",
+    "pinLength_other": "ඉලක්කම් {{count}}ක PIN"
   },
   "emptySearch": "කිසිදු කාර්ය මණ්ඩල සාමාජිකයෙකු හමු නොවීය.",
   "lastOwnerCannotDeactivate": "එකම සක්‍රීය හිමිකරු අක්‍රීය කළ නොහැක.",
@@ -60,7 +66,9 @@
     "lastOwner": "එකම සක්‍රීය හිමිකරු අක්‍රීය කිරීමට හෝ වෙනත් භූමිකාවකට මාරු කිරීමට නොහැක.",
     "ownerAll": "හිමිකරුවන්ට සියල්ල කළ හැක.",
     "save": "සුරකින්න",
-    "create": "එක් කරන්න"
+    "create": "එක් කරන්න",
+    "cancel": "අවලංගු කරන්න",
+    "details": "විස්තර"
   },
   "pin": {
     "title": "{{name}} සඳහා නව PIN",
@@ -99,5 +107,17 @@
     "DATA_EXPORT": "දත්ත අපනයනය",
     "CUSTOMER_VIEW": "පාරිභෝගික ඉතිහාසය බැලීම",
     "BACKUP_CREATE": "උපස්ථ ගැනීම"
+  },
+  "showing": "{{total}}න් {{shown}} පෙන්වයි",
+  "toggle": {
+    "activate": "{{name}} සක්‍රීය කරන්න",
+    "deactivate": "{{name}} අක්‍රීය කරන්න"
+  },
+  "groups": {
+    "sales": "විකිණීම සහ කවුන්ටරය",
+    "cash": "මුදල් කළමනාකරණය",
+    "inventory": "තොග සහ නිෂ්පාදන",
+    "reports": "වාර්තා සහ මූල්‍ය",
+    "system": "පද්ධති පරිපාලනය"
   }
 }

@@ -1,4 +1,5 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { commands, type Role, type StaffMember_Serialize as StaffMember } from "@/db/bindings";
 import { chooseOption, err, ok, renderWithProviders } from "@/test/render";
@@ -152,12 +153,41 @@ describe("StaffScreen", () => {
   it("switches to roles tab and displays permission matrix", async () => {
     renderWithProviders(<StaffScreen />);
     const rolesTab = await screen.findByRole("tab", { name: "Roles & permissions" });
-    fireEvent.click(rolesTab);
+    await userEvent.click(rolesTab);
 
     expect(await screen.findByText("Permission matrix")).toBeInTheDocument();
     expect(screen.getByText("Sales & Till")).toBeInTheDocument();
     expect(screen.getByText("Cash Management")).toBeInTheDocument();
     expect(screen.getByText("Full access")).toBeInTheDocument();
+  });
+
+  it("deactivates a staff member from the list switch and refuses for the last Owner", async () => {
+    renderWithProviders(<StaffScreen />);
+    expect(await screen.findByRole("switch", { name: "Deactivate Gayan" })).toBeDisabled();
+    fireEvent.click(await screen.findByRole("switch", { name: "Deactivate Kasun" }));
+    await waitFor(() =>
+      expect(commands.updateStaff).toHaveBeenCalledWith(
+        "s2",
+        expect.objectContaining({ display_name: "Kasun", is_active: false }),
+      ),
+    );
+  });
+
+  it("shows an empty state when no staff match the filters", async () => {
+    renderWithProviders(<StaffScreen />);
+    await screen.findByText("Kasun");
+    fireEvent.change(screen.getByLabelText("Search by name or role"), { target: { value: "zzz" } });
+    expect(screen.getByText("No staff match your filters.")).toBeInTheDocument();
+    expect(screen.getByText("Showing 0 of 2")).toBeInTheDocument();
+  });
+
+  it("closes the editor with Cancel without saving", async () => {
+    renderWithProviders(<StaffScreen />);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Kasun" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(commands.updateStaff).not.toHaveBeenCalled();
   });
 
   it("parses personal discount limits as percentages", () => {
