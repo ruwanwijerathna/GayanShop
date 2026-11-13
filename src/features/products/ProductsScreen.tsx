@@ -14,7 +14,19 @@ import {
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { FolderTree, History, MoreHorizontal, Package, Pencil, Plus, Search, Tag, X } from "lucide-react";
+import {
+  ClipboardCheck,
+  FolderTree,
+  History,
+  MoreHorizontal,
+  Package,
+  PackagePlus,
+  Pencil,
+  Plus,
+  Search,
+  Tag,
+  X,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSession } from "@/app/session";
@@ -23,7 +35,6 @@ import { DataTableColumnHeader } from "@/components/data-table/DataTableColumnHe
 import { DataTableFacetedFilter, facetFilterFn } from "@/components/data-table/DataTableFacetedFilter";
 import { DataTablePagination } from "@/components/data-table/DataTablePagination";
 import { DataTableViewOptions } from "@/components/data-table/DataTableViewOptions";
-import { ExportButton } from "@/components/export/ExportButton";
 import { PrintLabelsDialog } from "@/components/labels/PrintLabelsDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,6 +44,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -49,6 +62,7 @@ import { CategoriesDialog } from "./CategoriesDialog";
 import { MovementHistorySheet } from "./MovementHistorySheet";
 import { categoryPath } from "./categories";
 import { ProductFormDialog } from "./ProductFormDialog";
+import { AdjustStockDialog, RestockDialog } from "./ProductStockDialogs";
 import { matchesText } from "./productForm";
 import { LOW_STOCK_MAX, stockLevel, type StockLevel } from "./stock";
 
@@ -103,6 +117,7 @@ export function ProductsScreen() {
   const canManage = hasPerm(session, "PRODUCT_MANAGE");
   const canViewCost = hasPerm(session, "VIEW_COST");
   const canSeeHistory = hasPerm(session, "REPORT_FINANCIAL");
+  const canStock = hasPerm(session, "SALE_CREATE");
   const products = useProducts();
   const categories = useCategories();
 
@@ -110,6 +125,8 @@ export function ProductsScreen() {
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [printIds, setPrintIds] = useState<string[] | null>(null);
   const [historyFor, setHistoryFor] = useState<Product | null>(null);
+  const [restockFor, setRestockFor] = useState<Product | null>(null);
+  const [adjustFor, setAdjustFor] = useState<Product | null>(null);
 
   const [sorting, setSorting] = useState<SortingState>([{ id: "name", desc: false }]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(DEFAULT_FILTERS);
@@ -277,6 +294,20 @@ export function ProductsScreen() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {canStock && row.original.track_stock && (
+                <>
+                  <DropdownMenuLabel>{t("stock.menuLabel")}</DropdownMenuLabel>
+                  <DropdownMenuItem className="min-h-11" onSelect={() => setRestockFor(row.original)}>
+                    <PackagePlus aria-hidden />
+                    {t("stock.restock.menu")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="min-h-11" onSelect={() => setAdjustFor(row.original)}>
+                    <ClipboardCheck aria-hidden />
+                    {t("stock.adjust.menu")}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
               {canManage && (
                 <DropdownMenuItem className="min-h-11" onSelect={() => setEditing({ product: row.original })}>
                   <Pencil aria-hidden />
@@ -299,7 +330,7 @@ export function ProductsScreen() {
       },
     );
     return cols;
-  }, [t, canViewCost, canManage, canSeeHistory, catName]);
+  }, [t, canViewCost, canManage, canSeeHistory, canStock, catName]);
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table v8 is not React-Compiler-safe; opted out above
   const table = useReactTable({
@@ -360,7 +391,6 @@ export function ProductsScreen() {
             </p>
           </div>
         </div>
-        <ExportButton kind="products" period={{ kind: "all_time" }} />
         <Button
           type="button"
           size="pos"
@@ -572,6 +602,8 @@ export function ProductsScreen() {
         categories={cats}
         onClose={() => setEditing(null)}
       />
+      {restockFor && <RestockDialog product={restockFor} onClose={() => setRestockFor(null)} />}
+      {adjustFor && <AdjustStockDialog product={adjustFor} onClose={() => setAdjustFor(null)} />}
       {historyFor && <MovementHistorySheet product={historyFor} onClose={() => setHistoryFor(null)} />}
       {printIds && (
         <PrintLabelsDialog

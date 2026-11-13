@@ -203,7 +203,7 @@ describe("ProductsScreen", () => {
     const dialog = await screen.findByRole("dialog");
     fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Sunlight Soap" } });
     fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "150" } });
-    fireEvent.change(within(dialog).getByLabelText("Stock Quantity"), { target: { value: "50" } });
+    fireEvent.change(within(dialog).getByLabelText("Opening stock"), { target: { value: "50" } });
     fireEvent.change(within(dialog).getByLabelText("Note"), { target: { value: "Initial opening batch" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -357,6 +357,26 @@ describe("ProductsScreen", () => {
     openMenu(screen.getByRole("button", { name: "Actions for Blue Bucket 10L" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Edit product" }));
     expect(await screen.findByRole("dialog", { name: "Edit product" })).toBeInTheDocument();
+  });
+
+  it("offers Restock and Adjust stock on a tracked product's row, opening separate dialogs", async () => {
+    renderAs(["SALE_CREATE"]);
+    await within(grid()).findByText("Blue Bucket 10L");
+    openMenu(screen.getByRole("button", { name: "Actions for Blue Bucket 10L" }));
+    expect(screen.getByRole("menuitem", { name: "Restock" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Adjust stock" }));
+    expect(await screen.findByRole("dialog", { name: "Adjust stock: Blue Bucket 10L" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Counted quantity")).toBeInTheDocument();
+  });
+
+  it("keeps stock out of the product editor: it points to the row actions instead", async () => {
+    renderAs(MANAGER);
+    await within(grid()).findByText("Blue Bucket 10L");
+    openMenu(screen.getByRole("button", { name: "Actions for Blue Bucket 10L" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit product" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).queryByLabelText("Opening stock")).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/use Restock or Adjust stock/)).toBeInTheDocument();
   });
 
   it("shows live stock: a count, low, out, oversold, or a dash when untracked", async () => {

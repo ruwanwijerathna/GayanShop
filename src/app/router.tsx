@@ -15,7 +15,7 @@ import { OrdersScreen } from "@/features/orders/OrdersScreen";
 import { ReportsScreen } from "@/features/reports/ReportsScreen";
 import { StaffScreen } from "@/features/staff/StaffScreen";
 import { AppShell } from "./AppShell";
-import { isProductsTab, ProductsStockPage, type ProductsTab } from "./ProductsStockPage";
+import { ProductsStockPage } from "./ProductsStockPage";
 import { SettingsPage } from "./SettingsPage";
 
 // Hash history: the app is served from Tauri's asset protocol, so routes must not depend on a server.
@@ -35,12 +35,7 @@ export const auditRoute = createRoute({
 export const productsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/products",
-  validateSearch: (search: Record<string, unknown>): { tab?: ProductsTab } =>
-    isProductsTab(search.tab) && search.tab !== "products" ? { tab: search.tab } : {},
-  component: function ProductsRoute() {
-    const { tab } = productsRoute.useSearch();
-    return <ProductsStockPage tab={tab} />;
-  },
+  component: ProductsStockPage,
 });
 
 export const batchesRoute = createRoute({
@@ -67,9 +62,9 @@ export const posRoute = createRoute({
 export const inventoryRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/inventory",
-  // Stock now lives on Products & Stock; old links and bookmarks land on its adjustments tab.
+  // Stock now lives on Products & Stock; old links and bookmarks land there.
   beforeLoad: () => {
-    throw redirect({ to: "/products", search: { tab: "adjustments" } });
+    throw redirect({ to: "/products" });
   },
 });
 

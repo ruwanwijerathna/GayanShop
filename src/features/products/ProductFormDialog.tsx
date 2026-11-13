@@ -71,8 +71,8 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
   const busy = save.isPending || remove.isPending || adjust.isPending;
 
   const submit = () => {
-    const qtyText = form.quantity.trim();
-    if (qtyText !== "" && (!/^\d{1,7}$/.test(qtyText) || Number.parseInt(qtyText, 10) < 0)) {
+    const qtyText = product ? "" : form.quantity.trim();
+    if (qtyText !== "" && !/^\d{1,7}$/.test(qtyText)) {
       setQuantityError(true);
       playCue("error");
       return;
@@ -90,24 +90,19 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
       { id: product?.id ?? null, input: built.input },
       {
         onSuccess: async (saved) => {
-          if (qtyText !== "") {
-            const targetQty = Number.parseInt(qtyText, 10);
-            const currentOnHand = product?.on_hand ?? 0;
-            const delta = !product ? targetQty : targetQty - currentOnHand;
-            if (delta !== 0) {
-              const noteText = form.note.trim() || (!product ? "Initial stock" : "Stock adjustment");
-              try {
-                await adjust.mutateAsync({
-                  input: {
-                    product_id: saved.id,
-                    qty_delta: delta,
-                    note: noteText,
-                  },
-                  approvalId: null,
-                });
-              } catch {
-                // Stock adjust refusal or error does not roll back the product save
-              }
+          // Only a NEW product takes opening stock here. Changing stock later is Restock / Adjust stock.
+          if (qtyText !== "" && Number.parseInt(qtyText, 10) > 0) {
+            try {
+              await adjust.mutateAsync({
+                input: {
+                  product_id: saved.id,
+                  qty_delta: Number.parseInt(qtyText, 10),
+                  note: form.note.trim() || "Opening stock",
+                },
+                approvalId: null,
+              });
+            } catch {
+              // A refused stock entry does not roll back the saved product.
             }
           }
           playCue("complete");
@@ -236,36 +231,44 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
           </Field>
           {money("price", "product-price", t("form.price"))}
           {canViewCost && money("cost", "product-cost", t("form.cost"))}
-          <Field id="product-quantity" label={t("form.quantity")}>
-            <Input
-              id="product-quantity"
-              inputMode="numeric"
-              className={`${FIELD} font-mono`}
-              value={form.quantity}
-              placeholder={t("form.quantityPlaceholder")}
-              aria-invalid={quantityError}
-              aria-describedby={quantityError ? "product-quantity-error" : undefined}
-              onChange={(e) => {
-                set("quantity", e.target.value);
-                if (quantityError) setQuantityError(false);
-              }}
-            />
-            {quantityError && (
-              <p id="product-quantity-error" className="text-sm text-destructive">
-                {t("form.quantityInvalid")}
-              </p>
-            )}
-          </Field>
-          <Field id="product-note" label={t("form.note")}>
-            <Input
-              id="product-note"
-              className={FIELD}
-              value={form.note}
-              placeholder={t("form.notePlaceholder")}
-              maxLength={200}
-              onChange={(e) => set("note", e.target.value)}
-            />
-          </Field>
+          {product ? (
+            <p className="rounded-md border border-dashed bg-muted/40 px-3 py-2 text-sm text-muted-foreground xl:col-span-2">
+              {t("form.stockElsewhere", { count: product.on_hand })}
+            </p>
+          ) : (
+            <>
+              <Field id="product-quantity" label={t("form.quantity")}>
+                <Input
+                  id="product-quantity"
+                  inputMode="numeric"
+                  className={`${FIELD} font-mono`}
+                  value={form.quantity}
+                  placeholder={t("form.quantityPlaceholder")}
+                  aria-invalid={quantityError}
+                  aria-describedby={quantityError ? "product-quantity-error" : undefined}
+                  onChange={(e) => {
+                    set("quantity", e.target.value);
+                    if (quantityError) setQuantityError(false);
+                  }}
+                />
+                {quantityError && (
+                  <p id="product-quantity-error" className="text-sm text-destructive">
+                    {t("form.quantityInvalid")}
+                  </p>
+                )}
+              </Field>
+              <Field id="product-note" label={t("form.note")}>
+                <Input
+                  id="product-note"
+                  className={FIELD}
+                  value={form.note}
+                  placeholder={t("form.notePlaceholder")}
+                  maxLength={200}
+                  onChange={(e) => set("note", e.target.value)}
+                />
+              </Field>
+            </>
+          )}
           <div className="xl:col-span-2 grid grid-cols-1 gap-4 xl:grid-cols-2">
             {codeField("sku")}
             {codeField("barcode")}
