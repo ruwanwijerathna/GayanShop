@@ -49,6 +49,8 @@
     "role": "Role",
     "language": "Screen language",
     "pin": "PIN ({{min}}–8 digits)",
+    "confirmPin": "Confirm PIN",
+    "pinMismatch": "PINs do not match.",
     "activeLabel": "Can log in",
     "limit": "Personal discount limit (%)",
     "limitHint": "Empty = the role's {{pct}}%",
@@ -65,6 +67,8 @@
   "pin": {
     "title": "New PIN for {{name}}",
     "label": "New PIN ({{min}}–8 digits)",
+    "confirmLabel": "Confirm new PIN",
+    "mismatch": "PINs do not match.",
     "save": "Set PIN",
     "done": "PIN changed for {{name}}."
   },

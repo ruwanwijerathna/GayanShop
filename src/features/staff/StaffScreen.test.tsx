@@ -79,7 +79,7 @@ describe("StaffScreen", () => {
     if (row) expect(within(row).getByText("Sinhala")).toBeInTheDocument();
   });
 
-  it("adds a cashier with a PIN", async () => {
+  it("adds a cashier with a PIN and confirmed PIN", async () => {
     renderWithProviders(<StaffScreen />);
     const add = await screen.findByRole("button", { name: "Add staff" });
     await waitFor(() => expect(add).toBeEnabled());
@@ -87,6 +87,7 @@ describe("StaffScreen", () => {
     const dialog = await screen.findByRole("dialog");
     fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Nimali" } });
     fireEvent.change(within(dialog).getByLabelText("PIN (4–8 digits)"), { target: { value: "48a26" } });
+    fireEvent.change(within(dialog).getByLabelText("Confirm PIN"), { target: { value: "4826" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add" }));
     await waitFor(() =>
       expect(commands.createStaff).toHaveBeenCalledWith({
@@ -129,6 +130,7 @@ describe("StaffScreen", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Reset PIN Kasun" }));
     const dialog = await screen.findByRole("dialog");
     fireEvent.change(within(dialog).getByLabelText("New PIN (4–8 digits)"), { target: { value: "9753" } });
+    fireEvent.change(within(dialog).getByLabelText("Confirm new PIN"), { target: { value: "9753" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Set PIN" }));
     await waitFor(() => expect(commands.resetStaffPin).toHaveBeenCalledWith("s2", "9753"));
   });

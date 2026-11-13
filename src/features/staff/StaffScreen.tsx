@@ -553,16 +553,19 @@ function StaffDialog({
   const [roleId, setRoleId] = React.useState(member?.role_id ?? cashier?.id ?? "");
   const [active, setActive] = React.useState(member?.is_active ?? true);
   const [pin, setPin] = React.useState("");
+  const [confirmPin, setConfirmPin] = React.useState("");
 
   const locked = member?.last_owner === true;
   const pending = create.isPending || update.isPending;
   const error = [create.error, update.error].find((e) => e instanceof CommandError);
   const minDigits = minPin(roles, roleId);
+  const pinMismatch = !member && confirmPin.length > 0 && pin !== confirmPin;
+  const pinValid = member || (pin.length >= minDigits && pin === confirmPin);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    if (!member && pin.length < minDigits) return;
+    if (!pinValid) return;
 
     const input = {
       display_name: name.trim(),
@@ -633,20 +636,38 @@ function StaffDialog({
             </div>
 
             {!member && (
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="staff-pin">{t("form.pin", { min: minDigits })}</Label>
-                <Input
-                  id="staff-pin"
-                  className={cn(FIELD, "tracking-[0.3em]")}
-                  type="password"
-                  inputMode="numeric"
-                  autoComplete="new-password"
-                  maxLength={8}
-                  value={pin}
-                  placeholder="••••"
-                  onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-                  required
-                />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="staff-pin">{t("form.pin", { min: minDigits })}</Label>
+                  <Input
+                    id="staff-pin"
+                    className={cn(FIELD, "tracking-[0.3em]")}
+                    type="password"
+                    inputMode="numeric"
+                    autoComplete="new-password"
+                    maxLength={8}
+                    value={pin}
+                    placeholder="••••"
+                    onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="staff-confirm-pin">{t("form.confirmPin")}</Label>
+                  <Input
+                    id="staff-confirm-pin"
+                    className={cn(FIELD, "tracking-[0.3em]")}
+                    type="password"
+                    inputMode="numeric"
+                    autoComplete="new-password"
+                    maxLength={8}
+                    value={confirmPin}
+                    placeholder="••••"
+                    onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ""))}
+                    required
+                  />
+                  {pinMismatch && <p className="text-xs text-destructive">{t("form.pinMismatch")}</p>}
+                </div>
               </div>
             )}
 
@@ -692,11 +713,7 @@ function StaffDialog({
             <Button type="button" variant="outline" size="pos" onClick={onClose} disabled={pending}>
               {i18n.t("common:actions.cancel", { defaultValue: "Cancel" })}
             </Button>
-            <Button
-              type="submit"
-              size="pos"
-              disabled={pending || !name.trim() || (!member && pin.length < minDigits)}
-            >
+            <Button type="submit" size="pos" disabled={pending || !name.trim() || !pinValid}>
               {member ? t("form.save") : t("form.create")}
             </Button>
           </DialogFooter>
@@ -710,10 +727,14 @@ function PinDialog({ member, roles, onClose }: { member: StaffMember; roles: Rol
   const { t, i18n } = useTranslation(["staff", "common"]);
   const reset = useResetStaffPin();
   const [pin, setPin] = React.useState("");
+  const [confirmPin, setConfirmPin] = React.useState("");
   const minDigits = minPin(roles, member.role_id);
+  const pinMismatch = confirmPin.length > 0 && pin !== confirmPin;
+  const valid = pin.length >= minDigits && pin === confirmPin;
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (pin.length < minDigits) return;
+    if (!valid) return;
     reset.mutate(
       { id: member.id, pin },
       {
@@ -747,17 +768,37 @@ function PinDialog({ member, roles, onClose }: { member: StaffMember; roles: Rol
         </DialogHeader>
         <form onSubmit={submit}>
           <div className="flex flex-col gap-4 px-6 py-6">
-            <Label htmlFor="new-pin">{t("pin.label", { min: minDigits })}</Label>
-            <Input
-              id="new-pin"
-              className={cn(FIELD, "text-center text-2xl tracking-[0.5em]")}
-              type="password"
-              inputMode="numeric"
-              autoComplete="new-password"
-              maxLength={8}
-              value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-            />
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="new-pin">{t("pin.label", { min: minDigits })}</Label>
+              <Input
+                id="new-pin"
+                className={cn(FIELD, "text-center text-xl tracking-[0.4em]")}
+                type="password"
+                inputMode="numeric"
+                autoComplete="new-password"
+                maxLength={8}
+                value={pin}
+                placeholder="••••"
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="confirm-new-pin">{t("pin.confirmLabel")}</Label>
+              <Input
+                id="confirm-new-pin"
+                className={cn(FIELD, "text-center text-xl tracking-[0.4em]")}
+                type="password"
+                inputMode="numeric"
+                autoComplete="new-password"
+                maxLength={8}
+                value={confirmPin}
+                placeholder="••••"
+                onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ""))}
+                required
+              />
+              {pinMismatch && <p className="text-xs text-destructive">{t("pin.mismatch")}</p>}
+            </div>
             {reset.error instanceof CommandError && (
               <p
                 role="alert"
@@ -771,7 +812,7 @@ function PinDialog({ member, roles, onClose }: { member: StaffMember; roles: Rol
             <Button type="button" variant="outline" size="pos" onClick={onClose} disabled={reset.isPending}>
               {i18n.t("common:actions.cancel", { defaultValue: "Cancel" })}
             </Button>
-            <Button type="submit" size="pos" disabled={reset.isPending || pin.length < minDigits}>
+            <Button type="submit" size="pos" disabled={reset.isPending || !valid}>
               {t("pin.save")}
             </Button>
           </DialogFooter>

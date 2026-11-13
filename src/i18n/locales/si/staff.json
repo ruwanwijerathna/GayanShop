@@ -49,6 +49,8 @@
     "role": "භූමිකාව",
     "language": "තිර භාෂාව",
     "pin": "PIN (ඉලක්කම් {{min}}–8)",
+    "confirmPin": "PIN එක තහවුරු කරන්න",
+    "pinMismatch": "PIN අංක නොගැළපේ.",
     "activeLabel": "ලොග් විය හැක",
     "limit": "පුද්ගලික වට්ටම් සීමාව (%)",
     "limitHint": "හිස් = භූමිකාවේ {{pct}}%",
@@ -65,6 +67,8 @@
   "pin": {
     "title": "{{name}} සඳහා නව PIN",
     "label": "නව PIN (ඉලක්කම් {{min}}–8)",
+    "confirmLabel": "නව PIN එක තහවුරු කරන්න",
+    "mismatch": "PIN අංක නොගැළපේ.",
     "save": "PIN සකසන්න",
     "done": "{{name}} සඳහා PIN වෙනස් කළා."
   },
