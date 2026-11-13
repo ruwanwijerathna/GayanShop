@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { useEffect, type ReactNode } from "react";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSession } from "@/app/session";
 import {
   commands,
@@ -8,9 +8,9 @@ import {
   type Perm,
   type Product_Serialize as Product,
 } from "@/db/bindings";
-import { chooseOption, err, ok, renderWithProviders, session } from "@/test/render";
-import { PRODUCT_COLUMN_WIDTHS, ProductsScreen } from "./ProductsScreen";
-import { matchesStockFilter, stockLevel } from "./stock";
+import { err, ok, renderWithProviders, session } from "@/test/render";
+import { ProductsScreen } from "./ProductsScreen";
+import { stockLevel } from "./stock";
 
 vi.mock("@/db/bindings", () => ({
   commands: {
@@ -77,12 +77,6 @@ function renderAs(perms: Perm[]) {
   );
 }
 
-beforeAll(() => {
-  // jsdom has no layout: give the virtualised table a viewport (see DataTable.test.tsx).
-  Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 480 });
-  Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 900 });
-});
-
 beforeEach(() => {
   vi.mocked(commands.listProducts).mockImplementation(() => ok(products));
   vi.mocked(commands.listCategories).mockImplementation(() => ok(categories));
@@ -93,7 +87,22 @@ beforeEach(() => {
   vi.mocked(commands.adjustStock).mockReset();
 });
 
-const grid = () => screen.getByRole("grid", { name: "Products" });
+const grid = () => screen.getByRole("grid", { name: "Products", hidden: true });
+
+/** Radix menus open on Enter / pointer-down; jsdom gets the keyboard route. */
+const openMenu = (trigger: HTMLElement) => fireEvent.keyDown(trigger, { key: "Enter" });
+/** A toolbar filter button (the column header may share its name, so look outside the table). */
+const facet = (name: string) =>
+  screen.getAllByRole("button", { name }).find((b) => !grid().contains(b)) as HTMLElement;
+const pickFacet = (filter: string, option: RegExp | string) => {
+  openMenu(facet(filter));
+  fireEvent.click(screen.getByRole("menuitemcheckbox", { name: option }));
+  fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+};
+const openCategories = async () => {
+  fireEvent.click(await screen.findByRole("button", { name: /^Categories/ }));
+  return screen.findByRole("dialog", { name: "Categories" });
+};
 
 describe("ProductsScreen", () => {
   it("lists active products by their one name, with category path and cost, and filters as you type", async () => {
@@ -112,22 +121,30 @@ describe("ProductsScreen", () => {
     expect(screen.getByRole("status")).toHaveTextContent("1 product");
 
     fireEvent.change(screen.getByRole("searchbox", { name: "Search products" }), { target: { value: "" } });
-    fireEvent.click(screen.getByRole("checkbox", { name: "Show inactive" }));
+    pickFacet("Status", /^Inactive/);
     expect(within(grid()).getByText("Old Mug")).toBeInTheDocument();
     expect(within(grid()).getByText("Inactive")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("3 products");
 
-    chooseOption(screen.getByRole("combobox", { name: "Filter by category" }), "Home › Kitchen");
+    pickFacet("Category", /Home › Kitchen/);
     expect(screen.getByRole("status")).toHaveTextContent("2 products");
+    expect(within(grid()).queryByText("Black Sandal")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    expect(screen.getByRole("status")).toHaveTextContent("3 products");
   });
 
   it("is read-only without PRODUCT_MANAGE and hides cost without VIEW_COST", async () => {
     renderAs(["SALE_CREATE"]);
     expect(await within(grid()).findByText("Blue Bucket 10L")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add product" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Add category" })).not.toBeInTheDocument();
     expect(within(grid()).queryByText("Cost")).not.toBeInTheDocument();
     fireEvent.click(within(grid()).getByText("Blue Bucket 10L"));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    const categories = await openCategories();
+    expect(within(categories).getByText("Kitchen")).toBeInTheDocument();
+    expect(within(categories).queryByRole("button", { name: "Add category" })).not.toBeInTheDocument();
+    expect(within(categories).queryByRole("button", { name: /^Delete / })).not.toBeInTheDocument();
   });
 
   it("creates a product with a generated SKU, sending integer cents", async () => {
@@ -241,21 +258,87 @@ describe("ProductsScreen", () => {
       err({ kind: "VALIDATION", code: "CATEGORY_IN_USE", detail: "1 products" }),
     );
     renderAs(MANAGER);
-    fireEvent.click(await screen.findByRole("button", { name: "Add category" }));
-    const nameField = screen.getByLabelText("Category name");
+    const dialog = await openCategories();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add category" }));
+    const nameField = within(dialog).getByLabelText("Category name");
     fireEvent.change(nameField, { target: { value: "Shoes" } });
     fireEvent.submit(nameField);
     await waitFor(() =>
       expect(commands.createCategory).toHaveBeenCalledWith({ name: "Shoes", parent_id: null }),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete Home › Kitchen" }));
-    expect(await screen.findByText("Move its products and sub-categories out first.")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete Home › Kitchen" }));
+    expect(within(dialog).getByText("Delete “Kitchen”?")).toBeInTheDocument();
+    expect(commands.deleteCategory).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    expect(
+      await within(dialog).findByText("Move its products and sub-categories out first."),
+    ).toBeInTheDocument();
+    expect(commands.deleteCategory).toHaveBeenCalledWith("c2");
   });
 
-  it("fits every column at the 1024×768 minimum window, cost included", () => {
-    const total = Object.values(PRODUCT_COLUMN_WIDTHS).reduce((a, b) => a + b, 0);
-    expect(total).toBeLessThanOrEqual(895);
+  it("shows a category's products from the category manager", async () => {
+    renderAs(MANAGER);
+    const dialog = await openCategories();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Show products in Home › Kitchen" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("status")).toHaveTextContent("1 product");
+    expect(within(grid()).queryByText("Black Sandal")).not.toBeInTheDocument();
+  });
+
+  it("hides and shows columns from the View menu", async () => {
+    renderAs(MANAGER);
+    await within(grid()).findByText("Blue Bucket 10L");
+    expect(within(grid()).getByText("Cost")).toBeInTheDocument();
+    openMenu(screen.getByRole("button", { name: "View" }));
+    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: "Cost" }));
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+    expect(within(grid()).queryByText("Cost")).not.toBeInTheDocument();
+    expect(within(grid()).getByText("Price")).toBeInTheDocument();
+  });
+
+  it("sorts from the column menu", async () => {
+    renderAs(MANAGER);
+    await within(grid()).findByText("Blue Bucket 10L");
+    const names = () =>
+      within(grid())
+        .getAllByRole("row")
+        .slice(1)
+        .map((r) => r.querySelectorAll("td")[1]?.textContent ?? "");
+    expect(names()[0]).toContain("Black Sandal");
+    openMenu(within(grid()).getByRole("button", { name: "Name" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Desc" }));
+    expect(names()[0]).toContain("Blue Bucket 10L");
+  });
+
+  it("pages through a long list", async () => {
+    vi.mocked(commands.listProducts).mockImplementation(() =>
+      ok(
+        Array.from({ length: 30 }, (_, i) =>
+          product({
+            id: `p${i}`,
+            name: `Item ${String(i).padStart(2, "0")}`,
+            sku: String(200000 + i),
+            barcode: null,
+          }),
+        ),
+      ),
+    );
+    renderAs(MANAGER);
+    await within(grid()).findByText("Item 00");
+    expect(within(grid()).queryByText("Item 25")).not.toBeInTheDocument();
+    expect(screen.getByText("Page 1 of 2")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    expect(await within(grid()).findByText("Item 25")).toBeInTheDocument();
+    expect(screen.getByText("Page 2 of 2")).toBeInTheDocument();
+  });
+
+  it("opens the editor from the row actions menu", async () => {
+    renderAs(MANAGER);
+    await within(grid()).findByText("Blue Bucket 10L");
+    openMenu(screen.getByRole("button", { name: "Actions for Blue Bucket 10L" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit product" }));
+    expect(await screen.findByRole("dialog", { name: "Edit product" })).toBeInTheDocument();
   });
 
   it("shows live stock: a count, low, out, oversold, or a dash when untracked", async () => {
@@ -277,7 +360,7 @@ describe("ProductsScreen", () => {
     expect(within(grid()).getByText("Stock not tracked")).toBeInTheDocument();
   });
 
-  it("filters to low stock (1–5) and out of stock (0 or oversold), and back to all", async () => {
+  it("filters by stock level, with live counts on each option", async () => {
     vi.mocked(commands.listProducts).mockImplementation(() =>
       ok([
         product({ id: "a", name: "Plenty", on_hand: 45 }),
@@ -289,24 +372,23 @@ describe("ProductsScreen", () => {
     );
     renderAs(MANAGER);
     await within(grid()).findByText("Plenty");
-    const filters = screen.getByRole("group", { name: "Filter by stock" });
-    expect(within(filters).getByRole("button", { name: "All Products" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(screen.getByRole("status")).toHaveTextContent("5 products");
 
-    fireEvent.click(within(filters).getByRole("button", { name: "Low Stock (≤ 5)" }));
-    expect(screen.getByRole("status")).toHaveTextContent("1 product");
+    openMenu(facet("Stock level"));
+    expect(screen.getByRole("menuitemcheckbox", { name: /Low stock/ })).toHaveTextContent("1");
+    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: /Low stock/ }));
+    expect(screen.getByRole("status", { hidden: true })).toHaveTextContent("1 product");
     expect(within(grid()).getByText("Few")).toBeInTheDocument();
 
-    fireEvent.click(within(filters).getByRole("button", { name: "Out of Stock (0)" }));
-    expect(screen.getByRole("status")).toHaveTextContent("2 products");
+    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: /Out of stock/ }));
+    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: /Oversold/ }));
+    expect(screen.getByRole("status", { hidden: true })).toHaveTextContent("3 products");
     expect(within(grid()).getByText("None")).toBeInTheDocument();
     expect(within(grid()).getByText("Minus")).toBeInTheDocument();
     expect(within(grid()).queryByText("Loose")).not.toBeInTheDocument();
 
-    fireEvent.click(within(filters).getByRole("button", { name: "All Products" }));
-    expect(screen.getByRole("status")).toHaveTextContent("5 products");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Clear filter" }));
+    expect(screen.getByRole("status", { hidden: true })).toHaveTextContent("5 products");
   });
 
   it("classifies stock levels at the boundaries", () => {
@@ -319,8 +401,5 @@ describe("ProductsScreen", () => {
       "oversold",
     ]);
     expect(stockLevel(at(-4, false))).toBe("untracked");
-    expect(matchesStockFilter(at(0, false), "out")).toBe(false);
-    expect(matchesStockFilter(at(-1), "out")).toBe(true);
-    expect(matchesStockFilter(at(6), "low")).toBe(false);
   });
 });

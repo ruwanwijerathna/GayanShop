@@ -13,16 +13,3 @@ export function stockLevel(p: Pick<Product, "track_stock" | "on_hand">): StockLe
   if (p.on_hand <= LOW_STOCK_MAX) return "low";
   return "in_stock";
 }
-
-export type StockFilter = "all" | "low" | "out";
-
-/** The quick filter next to the search: low = 1…5 units; out = none left, oversold included. */
-export function matchesStockFilter(
-  p: Pick<Product, "track_stock" | "on_hand">,
-  filter: StockFilter,
-): boolean {
-  const level = stockLevel(p);
-  if (filter === "low") return level === "low";
-  if (filter === "out") return level === "out" || level === "oversold";
-  return true;
-}

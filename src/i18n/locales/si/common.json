@@ -25,7 +25,22 @@
     "empty": "තවම පෙන්වීමට කිසිවක් නැත",
     "loading": "පූරණය වෙමින්…",
     "rowCount_one": "පේළි {{count}}",
-    "rowCount_other": "පේළි {{count}}"
+    "rowCount_other": "පේළි {{count}}",
+    "sortAsc": "ආරෝහණ",
+    "sortDesc": "අවරෝහණ",
+    "hide": "සඟවන්න",
+    "view": "දර්ශනය",
+    "toggleColumns": "තීරු පෙන්වන්න / සඟවන්න",
+    "clearFilter": "පෙරහන ඉවත් කරන්න",
+    "filterSelected_one": "{{count}}ක් තෝරා ඇත",
+    "filterSelected_other": "{{count}}ක් තෝරා ඇත",
+    "selectedOf": "{{total}}න් {{selected}}ක් තෝරා ඇත",
+    "rowsPerPage": "පිටුවකට පේළි",
+    "pageOf": "පිටුව {{page}} / {{pages}}",
+    "firstPage": "පළමු පිටුව",
+    "prevPage": "පෙර පිටුව",
+    "nextPage": "ඊළඟ පිටුව",
+    "lastPage": "අවසාන පිටුව"
   },
   "nav": {
     "till": "ටිල්",
