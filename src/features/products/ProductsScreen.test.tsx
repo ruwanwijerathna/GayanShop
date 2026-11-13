@@ -22,6 +22,7 @@ vi.mock("@/db/bindings", () => ({
     createCategory: vi.fn(),
     updateCategory: vi.fn(),
     deleteCategory: vi.fn(),
+    appStatus: vi.fn(),
     adjustStock: vi.fn(),
     stockMovements: vi.fn(),
   },
@@ -84,6 +85,7 @@ beforeEach(() => {
   vi.mocked(commands.createProduct).mockReset();
   vi.mocked(commands.updateProduct).mockReset();
   vi.mocked(commands.createCategory).mockReset();
+  vi.mocked(commands.appStatus).mockImplementation(() => ok({ device_code: "T02" } as never));
   vi.mocked(commands.deleteCategory).mockReset();
   vi.mocked(commands.adjustStock).mockReset();
 });
@@ -148,7 +150,7 @@ describe("ProductsScreen", () => {
     expect(within(categories).queryByRole("button", { name: /^Delete / })).not.toBeInTheDocument();
   });
 
-  it("creates a product with a generated SKU, sending integer cents", async () => {
+  it("fills the SKU and barcode inputs instantly on Generate, sending them as typed codes", async () => {
     vi.mocked(commands.createProduct).mockImplementation(() => ok(product({ id: "new", name: "Soap" })));
     renderAs(MANAGER);
     fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
@@ -159,8 +161,11 @@ describe("ProductsScreen", () => {
     expect(dialog.querySelectorAll("input[lang='si']")).toHaveLength(0);
     fireEvent.change(name, { target: { value: "Soap" } });
     fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "120.50" } });
-    fireEvent.change(within(dialog).getByLabelText("Default cost (Rs)"), { target: { value: "80" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Auto-generate SKU" }));
+    fireEvent.change(within(dialog).getByLabelText("Purchase price (Rs)"), { target: { value: "80" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Generate SKU" }));
+    expect(within(dialog).getByLabelText(/^SKU/)).toHaveValue("200001");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Generate barcode" }));
+    expect(within(dialog).getByLabelText(/^Barcode/)).toHaveValue("2200000000019");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(commands.createProduct).toHaveBeenCalledWith(
@@ -169,10 +174,74 @@ describe("ProductsScreen", () => {
         name_si: null,
         price: 12_050,
         default_cost: 8_000,
-        sku: { mode: "generate" },
-        barcode: { mode: "none" },
+        sku: { mode: "manual", value: "200001" },
+        barcode: { mode: "manual", value: "2200000000019" },
       }),
     );
+  });
+
+  it("generates a different code each time Generate is clicked", async () => {
+    renderAs(MANAGER);
+    fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
+    const dialog = await screen.findByRole("dialog");
+    const generate = within(dialog).getByRole("button", { name: "Generate SKU" });
+    fireEvent.click(generate);
+    fireEvent.click(generate);
+    expect(within(dialog).getByLabelText(/^SKU/)).toHaveValue("200002");
+  });
+
+  it("puts the note last, as a multi-line textarea", async () => {
+    renderAs(MANAGER);
+    fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
+    const dialog = await screen.findByRole("dialog");
+    const note = within(dialog).getByLabelText("Note");
+    expect(note.tagName).toBe("TEXTAREA");
+    const fields = Array.from(dialog.querySelectorAll("input, textarea, [role='switch']"));
+    expect(fields.indexOf(note)).toBe(fields.length - 1 - fields.slice(fields.indexOf(note) + 1).length);
+    expect(fields.slice(fields.indexOf(note) + 1)).toHaveLength(0);
+  });
+
+  it("suggests existing categories while typing and creates a new one on the fly", async () => {
+    vi.mocked(commands.createCategory).mockImplementation(() =>
+      ok({ id: "c9", name: "Shoes", parent_id: null } as never),
+    );
+    vi.mocked(commands.createProduct).mockImplementation(() => ok(product({ id: "n", name: "Boot" })));
+    renderAs(MANAGER);
+    fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
+    const dialog = await screen.findByRole("dialog");
+    const box = within(dialog).getByRole("combobox", { name: "Category" });
+    fireEvent.change(box, { target: { value: "kitch" } });
+    expect(await screen.findByRole("option", { name: "Home › Kitchen" })).toBeInTheDocument();
+    fireEvent.change(box, { target: { value: "Shoes" } });
+    expect(screen.queryByRole("option", { name: "Home › Kitchen" })).not.toBeInTheDocument();
+    fireEvent.mouseDown(await screen.findByRole("option", { name: "Create “Shoes”" }));
+    await waitFor(() =>
+      expect(commands.createCategory).toHaveBeenCalledWith({ name: "Shoes", parent_id: null }),
+    );
+    await waitFor(() => expect(box).toHaveValue("Shoes"));
+    fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Boot" } });
+    fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "900" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(commands.createProduct).toHaveBeenCalledWith(expect.objectContaining({ category_id: "c9" })),
+    );
+  });
+
+  it("picks an existing category with the keyboard and offers no duplicate create row", async () => {
+    vi.mocked(commands.createProduct).mockImplementation(() => ok(product({ id: "k", name: "Pan" })));
+    renderAs(MANAGER);
+    fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
+    const dialog = await screen.findByRole("dialog");
+    const box = within(dialog).getByRole("combobox", { name: "Category" });
+    fireEvent.change(box, { target: { value: "Home › Kitchen" } });
+    expect(screen.queryByRole("option", { name: /^Create/ })).not.toBeInTheDocument();
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(box).toHaveValue("Home › Kitchen");
+    fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Pan" } });
+    fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "100" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(commands.createProduct).toHaveBeenCalled());
+    expect(commands.createCategory).not.toHaveBeenCalled();
   });
 
   it("creates a product with no SKU or barcode when left blank (None state)", async () => {
@@ -203,7 +272,7 @@ describe("ProductsScreen", () => {
     const dialog = await screen.findByRole("dialog");
     fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Sunlight Soap" } });
     fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "150" } });
-    fireEvent.change(within(dialog).getByLabelText("Opening stock"), { target: { value: "50" } });
+    fireEvent.change(within(dialog).getByLabelText("Quantity"), { target: { value: "50" } });
     fireEvent.change(within(dialog).getByLabelText("Note"), { target: { value: "Initial opening batch" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -237,7 +306,7 @@ describe("ProductsScreen", () => {
     fireEvent.click(await within(grid()).findByText("Blue Bucket 10L"));
     const dialog = await screen.findByRole("dialog", { name: "Edit product" });
     expect(within(dialog).getByLabelText("Selling price (Rs)")).toHaveValue("450.00");
-    fireEvent.change(within(dialog).getByLabelText("Barcode"), { target: { value: "4792024015103" } });
+    fireEvent.change(within(dialog).getByLabelText(/^Barcode/), { target: { value: "4792024015103" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(
       "Another active product already has this barcode.",
@@ -375,7 +444,7 @@ describe("ProductsScreen", () => {
     openMenu(screen.getByRole("button", { name: "Actions for Blue Bucket 10L" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Edit product" }));
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).queryByLabelText("Opening stock")).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("Quantity")).not.toBeInTheDocument();
     expect(within(dialog).getByText(/use Restock or Adjust stock/)).toBeInTheDocument();
   });
 
