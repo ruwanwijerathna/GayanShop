@@ -359,11 +359,6 @@ export function ProductsScreen() {
   const isFiltered = columnFilters.length > 0 || globalFilter !== "";
   const visibleColumns = table.getVisibleLeafColumns().length;
 
-  const showCategory = (id: string) => {
-    table.setPageIndex(0);
-    setColumnFilters((prev) => [...prev.filter((f) => f.id !== "category"), { id: "category", value: [id] }]);
-  };
-
   const loadError =
     (products.error ?? categories.error) instanceof CommandError
       ? translateError(i18n.t, ((products.error ?? categories.error) as CommandError).error)
@@ -590,12 +585,7 @@ export function ProductsScreen() {
         <DataTablePagination table={table} />
       </Card>
 
-      <CategoriesDialog
-        open={categoriesOpen}
-        onOpenChange={setCategoriesOpen}
-        categories={cats}
-        onShowProducts={showCategory}
-      />
+      <CategoriesDialog open={categoriesOpen} onOpenChange={setCategoriesOpen} categories={cats} />
       <ProductFormDialog
         open={editing !== null}
         product={editing?.product ?? null}

@@ -278,15 +278,6 @@ describe("ProductsScreen", () => {
     expect(commands.deleteCategory).toHaveBeenCalledWith("c2");
   });
 
-  it("shows a category's products from the category manager", async () => {
-    renderAs(MANAGER);
-    const dialog = await openCategories();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Show products in Home › Kitchen" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(screen.getByRole("status")).toHaveTextContent("1 product");
-    expect(within(grid()).queryByText("Black Sandal")).not.toBeInTheDocument();
-  });
-
   it("hides and shows columns from the View menu", async () => {
     renderAs(MANAGER);
     await within(grid()).findByText("Blue Bucket 10L");

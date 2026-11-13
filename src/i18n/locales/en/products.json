@@ -88,8 +88,7 @@
     "search": "Search categories",
     "noMatch": "No categories match",
     "confirmDelete": "Delete “{{name}}”?",
-    "confirmYes": "Delete",
-    "showLabel": "Show products in {{name}}"
+    "confirmYes": "Delete"
   },
   "selectForLabels": "Select for labels",
   "selectProduct": "Select {{name}}",

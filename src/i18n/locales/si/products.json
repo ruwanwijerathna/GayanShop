@@ -88,8 +88,7 @@
     "search": "වර්ග සොයන්න",
     "noMatch": "ගැළපෙන වර්ග නැත",
     "confirmDelete": "“{{name}}” මකන්නද?",
-    "confirmYes": "මකන්න",
-    "showLabel": "{{name}} හි භාණ්ඩ පෙන්වන්න"
+    "confirmYes": "මකන්න"
   },
   "selectForLabels": "ලේබල් සඳහා තෝරන්න",
   "selectProduct": "{{name}} තෝරන්න",

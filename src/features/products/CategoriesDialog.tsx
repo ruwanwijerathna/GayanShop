@@ -1,4 +1,4 @@
-import { Check, ChevronRight, Filter, FolderPlus, FolderTree, Pencil, Search, Trash2, X } from "lucide-react";
+import { Check, ChevronRight, FolderPlus, FolderTree, Pencil, Search, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Can } from "@/components/auth/Can";
@@ -26,12 +26,10 @@ export function CategoriesDialog({
   open,
   onOpenChange,
   categories,
-  onShowProducts,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   categories: Category[];
-  onShowProducts: (categoryId: string) => void;
 }) {
   const { t, i18n } = useTranslation(["products", "common"]);
   const save = useSaveCategory();
@@ -262,21 +260,6 @@ export function CategoriesDialog({
                         <Badge variant="secondary" className="tabular-nums">
                           {t("categories.products", { count: c.product_count })}
                         </Badge>
-                        <WithTooltip label={t("categories.showLabel", { name: path })}>
-                          <Button
-                            type="button"
-                            size="icon-pos"
-                            variant="ghost"
-                            className="rounded-xl"
-                            aria-label={t("categories.showLabel", { name: path })}
-                            onClick={() => {
-                              onShowProducts(c.id);
-                              close(false);
-                            }}
-                          >
-                            <Filter aria-hidden />
-                          </Button>
-                        </WithTooltip>
                         <Can perm="PRODUCT_MANAGE">
                           <WithTooltip label={t("categories.renameLabel", { name: path })}>
                             <Button
