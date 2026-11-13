@@ -3,7 +3,14 @@ import { useTranslation } from "react-i18next";
 import { useSession } from "@/app/session";
 import { PinPad } from "@/components/common/PinPad";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { Perm } from "@/db/bindings";
 import { CommandError } from "@/db/client";
 import { useLoginStaff, useRequestApproval } from "@/db/hooks";
@@ -100,7 +107,7 @@ export function ApprovalDialog({ open, perm, targetRef, onApproved, onCancel }: 
             {error}
           </p>
         )}
-        <div className="flex justify-end gap-2">
+        <DialogFooter className="gap-2 sm:justify-end">
           <Button type="button" size="pos" variant="outline" onClick={close}>
             {t("approval.cancel")}
           </Button>
@@ -112,7 +119,7 @@ export function ApprovalDialog({ open, perm, targetRef, onApproved, onCancel }: 
           >
             {t("approval.approve")}
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

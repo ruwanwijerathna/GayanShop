@@ -6,7 +6,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -538,51 +545,32 @@ function StaffDialog({
   roles: Role[];
   onClose: () => void;
 }) {
-  const { t, i18n } = useTranslation("staff");
+  const { t, i18n } = useTranslation(["staff", "common"]);
   const create = useCreateStaff();
   const update = useUpdateStaff();
   const cashier = roles.find((r) => r.name === "Cashier") ?? roles.at(-1);
   const [name, setName] = React.useState(member?.display_name ?? "");
   const [roleId, setRoleId] = React.useState(member?.role_id ?? cashier?.id ?? "");
-  const [language, setLanguage] = React.useState(member?.ui_language === "si" ? "si" : "en");
   const [active, setActive] = React.useState(member?.is_active ?? true);
   const [pin, setPin] = React.useState("");
-  const [limit, setLimit] = React.useState(limitText(member?.max_discount_bp ?? null));
-  const [grants, setGrants] = React.useState<Perm[]>(member?.grants ?? []);
-  const [denies, setDenies] = React.useState<Perm[]>(member?.denies ?? []);
 
-  const role = roles.find((r) => r.id === roleId);
-  const isOwnerRole = role?.is_system === true && role.name === "Owner";
   const locked = member?.last_owner === true;
-  const limitBp = parseLimit(limit);
   const pending = create.isPending || update.isPending;
   const error = [create.error, update.error].find((e) => e instanceof CommandError);
-  const overrideCount = isOwnerRole ? 0 : grants.length + denies.length;
-
-  const toggle = (
-    perm: Perm,
-    list: Perm[],
-    set: (p: Perm[]) => void,
-    other: Perm[],
-    setOther: (p: Perm[]) => void,
-  ) => {
-    if (list.includes(perm)) set(list.filter((p) => p !== perm));
-    else {
-      set([...list, perm]);
-      setOther(other.filter((p) => p !== perm));
-    }
-  };
+  const minDigits = minPin(roles, roleId);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (limitBp === undefined) return;
+    if (!name.trim()) return;
+    if (!member && pin.length < minDigits) return;
+
     const input = {
-      display_name: name,
+      display_name: name.trim(),
       role_id: roleId,
-      ui_language: language,
-      grants: isOwnerRole ? [] : grants,
-      denies: isOwnerRole ? [] : denies,
-      max_discount_bp: limitBp,
+      ui_language: member?.ui_language ?? (i18n.resolvedLanguage === "si" ? "si" : "en"),
+      grants: member?.grants ?? [],
+      denies: member?.denies ?? [],
+      max_discount_bp: member?.max_discount_bp ?? null,
       is_active: active,
     };
     const done = () => {
@@ -595,7 +583,7 @@ function StaffDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-2xl gap-0 overflow-y-auto rounded-2xl p-0">
+      <DialogContent className="max-w-md gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-lg">
         <DialogHeader className="border-b bg-muted/30 px-6 py-5">
           <div className="flex items-center gap-3">
             <span
@@ -604,172 +592,91 @@ function StaffDialog({
             >
               {member ? initials(name || member.display_name) : <UserPlus className="size-5" />}
             </span>
-            <DialogTitle className="text-xl tracking-tight">
-              {member ? t("form.editTitle", { name: member.display_name }) : t("form.createTitle")}
-            </DialogTitle>
+            <div>
+              <DialogTitle className="text-xl tracking-tight">
+                {member ? t("form.editTitle", { name: member.display_name }) : t("form.createTitle")}
+              </DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground mt-0.5">
+                {member
+                  ? t("form.editSubtitle", "Update staff details and role.")
+                  : t("form.createSubtitle", "Add a new staff member to sign in to the POS.")}
+              </DialogDescription>
+            </div>
           </div>
-          <DialogDescription className="sr-only">{t("title")}</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={submit} className="flex flex-col">
-          <div className="flex flex-col gap-6 px-6 py-6">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="staff-name">{t("form.name")}</Label>
-                <Input
-                  id="staff-name"
-                  className={FIELD}
-                  maxLength={40}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="staff-role">{t("form.role")}</Label>
-                <SelectField
-                  id="staff-role"
-                  value={roleId}
-                  disabled={locked}
-                  onValueChange={setRoleId}
-                  aria-describedby={locked ? "staff-locked" : undefined}
-                  options={roles.map((r) => ({ value: r.id, label: r.name }))}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="staff-language">{t("form.language")}</Label>
-                <SelectField
-                  id="staff-language"
-                  value={language}
-                  onValueChange={(v) => setLanguage(v === "si" ? "si" : "en")}
-                  options={[
-                    { value: "en", label: t("languages.en") },
-                    { value: "si", label: t("languages.si") },
-                  ]}
-                />
-              </div>
-              {!member && (
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="staff-pin">{t("form.pin", { min: minPin(roles, roleId) })}</Label>
-                  <Input
-                    id="staff-pin"
-                    className={cn(FIELD, "tracking-[0.3em]")}
-                    type="password"
-                    inputMode="numeric"
-                    autoComplete="new-password"
-                    maxLength={8}
-                    value={pin}
-                    onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-                  />
-                </div>
-              )}
-              {!isOwnerRole && (
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="staff-limit">{t("form.limit")}</Label>
-                  <Input
-                    id="staff-limit"
-                    className={FIELD}
-                    inputMode="decimal"
-                    value={limit}
-                    onChange={(e) => setLimit(e.target.value)}
-                    aria-invalid={limitBp === undefined}
-                    aria-describedby="staff-limit-hint"
-                  />
-                  <p id="staff-limit-hint" className="text-sm text-muted-foreground">
-                    {t("form.limitHint", { pct: limitText(role?.max_discount_bp ?? 0) || "0" })}
-                  </p>
-                </div>
-              )}
-              <label
-                className={cn(
-                  "flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border px-4 text-base transition-colors sm:col-span-2",
-                  active ? "border-emerald-500/30 bg-emerald-500/5" : "bg-muted/30",
-                  locked && "cursor-not-allowed opacity-70",
-                )}
-              >
-                <Checkbox
-                  className="size-6"
-                  checked={active}
-                  disabled={locked}
-                  onCheckedChange={(v) => setActive(v === true)}
-                />
-                {t("form.activeLabel")}
-              </label>
+          <div className="flex flex-col gap-5 px-6 py-6">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="staff-name">{t("form.name")}</Label>
+              <Input
+                id="staff-name"
+                className={FIELD}
+                maxLength={40}
+                value={name}
+                placeholder={t("form.namePlaceholder", "e.g. Kasun Perera")}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
             </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="staff-role">{t("form.role")}</Label>
+              <SelectField
+                id="staff-role"
+                value={roleId}
+                disabled={locked}
+                onValueChange={setRoleId}
+                aria-describedby={locked ? "staff-locked" : undefined}
+                options={roles.map((r) => ({ value: r.id, label: r.name }))}
+              />
+            </div>
+
+            {!member && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="staff-pin">{t("form.pin", { min: minDigits })}</Label>
+                <Input
+                  id="staff-pin"
+                  className={cn(FIELD, "tracking-[0.3em]")}
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="new-password"
+                  maxLength={8}
+                  value={pin}
+                  placeholder="••••"
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                  required
+                />
+              </div>
+            )}
+
+            <label
+              htmlFor="staff-active"
+              className={cn(
+                "flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border px-4 text-base transition-colors",
+                active ? "border-emerald-500/30 bg-emerald-500/5" : "bg-muted/30",
+                locked && "cursor-not-allowed opacity-70",
+              )}
+            >
+              <Checkbox
+                id="staff-active"
+                className="size-5"
+                checked={active}
+                disabled={locked}
+                onCheckedChange={(v) => setActive(v === true)}
+              />
+              <span className="text-sm font-medium">{t("form.activeLabel")}</span>
+            </label>
+
             {locked && (
               <p
                 id="staff-locked"
-                className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-base text-muted-foreground"
+                className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-muted-foreground"
               >
-                <ShieldCheck aria-hidden className="mt-0.5 size-5 shrink-0 text-amber-500" />
+                <ShieldCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-amber-500" />
                 {t("form.lastOwner")}
               </p>
             )}
-
-            <fieldset className="flex flex-col gap-3">
-              <legend className="flex items-center gap-2 text-base font-medium">
-                {t("form.overrides")}
-                {overrideCount > 0 && (
-                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold tabular-nums text-primary">
-                    {overrideCount}
-                  </span>
-                )}
-              </legend>
-              {isOwnerRole ? (
-                <p className="rounded-xl border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-                  {t("form.ownerAll")}
-                </p>
-              ) : (
-                <>
-                  <p className="text-sm text-muted-foreground">{t("form.overridesHint")}</p>
-                  <ul className="grid gap-2 sm:grid-cols-2">
-                    {ALL_PERMS.map((p) => {
-                      const fromRole = role?.permissions.includes(p) ?? false;
-                      const denied = denies.includes(p);
-                      const granted = grants.includes(p);
-                      return (
-                        <li
-                          key={p}
-                          className={cn(
-                            "flex min-h-12 items-center gap-2 rounded-xl border px-3 transition-colors",
-                            denied && "border-destructive/40 bg-destructive/5",
-                            granted && "border-primary/40 bg-primary/5",
-                            !denied && !granted && fromRole && "bg-muted/40",
-                          )}
-                        >
-                          <span
-                            className={cn("flex-1 text-sm", denied && "text-muted-foreground line-through")}
-                          >
-                            {t(`permissions.${p}`)}
-                            {fromRole && (
-                              <span className="text-muted-foreground"> · {t("form.fromRole")}</span>
-                            )}
-                          </span>
-                          {fromRole ? (
-                            <label className="flex min-h-12 cursor-pointer items-center gap-1.5 text-sm font-medium">
-                              <Checkbox
-                                className="size-6"
-                                checked={denied}
-                                onCheckedChange={() => toggle(p, denies, setDenies, grants, setGrants)}
-                              />
-                              {t("form.deny")}
-                            </label>
-                          ) : (
-                            <label className="flex min-h-12 cursor-pointer items-center gap-1.5 text-sm font-medium">
-                              <Checkbox
-                                className="size-6"
-                                checked={granted}
-                                onCheckedChange={() => toggle(p, grants, setGrants, denies, setDenies)}
-                              />
-                              {t("form.grant")}
-                            </label>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </>
-              )}
-            </fieldset>
 
             {error instanceof CommandError && (
               <p
@@ -781,16 +688,18 @@ function StaffDialog({
             )}
           </div>
 
-          <div className="sticky bottom-0 flex justify-end border-t bg-background/85 px-6 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+          <DialogFooter className="border-t bg-muted/20 px-6 py-4">
+            <Button type="button" variant="outline" size="pos" onClick={onClose} disabled={pending}>
+              {i18n.t("common:actions.cancel", { defaultValue: "Cancel" })}
+            </Button>
             <Button
               type="submit"
               size="pos"
-              className="rounded-xl px-8 shadow-sm transition-all active:scale-[0.98]"
-              disabled={pending || limitBp === undefined}
+              disabled={pending || !name.trim() || (!member && pin.length < minDigits)}
             >
               {member ? t("form.save") : t("form.create")}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
@@ -798,11 +707,13 @@ function StaffDialog({
 }
 
 function PinDialog({ member, roles, onClose }: { member: StaffMember; roles: Role[]; onClose: () => void }) {
-  const { t, i18n } = useTranslation("staff");
+  const { t, i18n } = useTranslation(["staff", "common"]);
   const reset = useResetStaffPin();
   const [pin, setPin] = React.useState("");
+  const minDigits = minPin(roles, member.role_id);
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (pin.length < minDigits) return;
     reset.mutate(
       { id: member.id, pin },
       {
@@ -815,7 +726,7 @@ function PinDialog({ member, roles, onClose }: { member: StaffMember; roles: Rol
   };
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="gap-0 overflow-hidden rounded-2xl p-0">
+      <DialogContent className="gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-md">
         <DialogHeader className="border-b bg-muted/30 px-6 py-5">
           <div className="flex items-center gap-3">
             <span
@@ -824,40 +735,46 @@ function PinDialog({ member, roles, onClose }: { member: StaffMember; roles: Rol
             >
               <KeyRound className="size-5" />
             </span>
-            <DialogTitle className="text-xl tracking-tight">
-              {t("pin.title", { name: member.display_name })}
-            </DialogTitle>
+            <div>
+              <DialogTitle className="text-xl tracking-tight">
+                {t("pin.title", { name: member.display_name })}
+              </DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground mt-0.5">
+                {t("pin.subtitle", "Set a new login PIN")}
+              </DialogDescription>
+            </div>
           </div>
-          <DialogDescription className="sr-only">{t("resetPin")}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={submit} className="flex flex-col gap-4 px-6 py-6">
-          <Label htmlFor="new-pin">{t("pin.label", { min: minPin(roles, member.role_id) })}</Label>
-          <Input
-            id="new-pin"
-            className={cn(FIELD, "text-center text-2xl tracking-[0.5em]")}
-            type="password"
-            inputMode="numeric"
-            autoComplete="new-password"
-            maxLength={8}
-            value={pin}
-            onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-          />
-          {reset.error instanceof CommandError && (
-            <p
-              role="alert"
-              className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-base text-destructive motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1"
-            >
-              {translateError(i18n.t, reset.error.error)}
-            </p>
-          )}
-          <Button
-            type="submit"
-            size="pos"
-            className="rounded-xl shadow-sm transition-all active:scale-[0.98]"
-            disabled={reset.isPending || pin.length === 0}
-          >
-            {t("pin.save")}
-          </Button>
+        <form onSubmit={submit}>
+          <div className="flex flex-col gap-4 px-6 py-6">
+            <Label htmlFor="new-pin">{t("pin.label", { min: minDigits })}</Label>
+            <Input
+              id="new-pin"
+              className={cn(FIELD, "text-center text-2xl tracking-[0.5em]")}
+              type="password"
+              inputMode="numeric"
+              autoComplete="new-password"
+              maxLength={8}
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+            />
+            {reset.error instanceof CommandError && (
+              <p
+                role="alert"
+                className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-base text-destructive motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1"
+              >
+                {translateError(i18n.t, reset.error.error)}
+              </p>
+            )}
+          </div>
+          <DialogFooter className="border-t bg-muted/20 px-6 py-4">
+            <Button type="button" variant="outline" size="pos" onClick={onClose} disabled={reset.isPending}>
+              {i18n.t("common:actions.cancel", { defaultValue: "Cancel" })}
+            </Button>
+            <Button type="submit" size="pos" disabled={reset.isPending || pin.length < minDigits}>
+              {t("pin.save")}
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

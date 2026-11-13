@@ -2,7 +2,14 @@ import { Banknote, Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { PaymentLine_Deserialize as PaymentLine, PaymentMethod } from "@/db/bindings";
@@ -181,9 +188,11 @@ export function PaymentDialog({ open, due, pending, error, onPay, onCancel }: Pa
                 {error}
               </p>
             )}
-            <Button type="submit" size="pos-lg" disabled={!plan.ok || pending}>
-              {pending ? t("pay.processing") : t("pay.complete")}
-            </Button>
+            <DialogFooter className="mt-2">
+              <Button type="submit" size="pos-lg" className="w-full" disabled={!plan.ok || pending}>
+                {pending ? t("pay.processing") : t("pay.complete")}
+              </Button>
+            </DialogFooter>
           </div>
           {touchMode && (
             <div className="hidden w-64 md:block">
