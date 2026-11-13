@@ -1,4 +1,3 @@
-import { Plus, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useSession } from "@/app/session";
@@ -34,6 +33,7 @@ import { CreatableCombobox } from "@/components/common/CreatableCombobox";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { WithTooltip } from "@/components/common/WithTooltip";
+import { cn } from "@/lib/utils";
 
 const FIELD = "h-12 text-base";
 
@@ -285,79 +285,25 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
             {codeField("sku")}
             {codeField("barcode")}
           </div>
-          <fieldset className="flex flex-col gap-2 xl:col-span-2">
-            <legend className="mb-1.5 text-sm font-medium">{t("form.attributes")}</legend>
-            {form.attributes.map((row, i) => (
-              <div key={i} className="flex gap-2">
-                <Input
-                  aria-label={t("form.attrName")}
-                  className={FIELD}
-                  value={row.key}
-                  maxLength={20}
-                  onChange={(e) =>
-                    set(
-                      "attributes",
-                      form.attributes.map((r, j) => (j === i ? { ...r, key: e.target.value } : r)),
-                    )
-                  }
-                />
-                <Input
-                  aria-label={t("form.attrValue")}
-                  className={FIELD}
-                  value={row.value}
-                  maxLength={40}
-                  onChange={(e) =>
-                    set(
-                      "attributes",
-                      form.attributes.map((r, j) => (j === i ? { ...r, value: e.target.value } : r)),
-                    )
-                  }
-                />
-                <WithTooltip label={t("form.removeAttribute", { name: row.key })}>
-                  <Button
-                    type="button"
-                    size="icon-pos"
-                    variant="outline"
-                    aria-label={t("form.removeAttribute", { name: row.key })}
-                    onClick={() =>
-                      set(
-                        "attributes",
-                        form.attributes.filter((_, j) => j !== i),
-                      )
-                    }
-                  >
-                    <X aria-hidden />
-                  </Button>
-                </WithTooltip>
-              </div>
-            ))}
-            {form.attributes.length < 10 && (
-              <Button
-                type="button"
-                size="pos"
-                variant="outline"
-                className="self-start"
-                onClick={() => set("attributes", [...form.attributes, { key: "", value: "" }])}
-              >
-                <Plus aria-hidden />
-                {t("form.addAttribute")}
-              </Button>
+          <div
+            className={cn(
+              "flex items-center justify-between gap-4 rounded-xl border p-3.5 transition-colors xl:col-span-2",
+              form.isActive ? "border-emerald-500/30 bg-emerald-500/5" : "bg-muted/30",
             )}
-          </fieldset>
-          <div className="flex items-center justify-between gap-4 rounded-lg border p-3.5 xl:col-span-2">
+          >
             <div className="flex flex-col gap-0.5">
-              <Label htmlFor="product-active" className="cursor-pointer text-base font-medium">
+              <Label htmlFor="product-active" className="cursor-pointer text-sm font-medium">
                 {t("form.active")}
               </Label>
-              <span className="text-sm text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 {form.isActive ? t("form.activeHint") : t("form.inactiveHint")}
               </span>
             </div>
             <Switch
               id="product-active"
-              size="pos"
               checked={form.isActive}
               onCheckedChange={(v) => set("isActive", v)}
+              aria-label={t("form.active")}
             />
           </div>
           {!product && (
