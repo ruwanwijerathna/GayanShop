@@ -189,7 +189,7 @@ export function StaffScreen() {
   };
 
   return (
-    <section className="mx-auto flex max-w-6xl flex-col gap-6 p-4 sm:p-6">
+    <section className="flex w-full flex-1 flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
@@ -410,7 +410,7 @@ function RolesTab({ roles, staff }: { roles: Role[]; staff: StaffMember[] }) {
   const { t } = useTranslation("staff");
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {roles.map((role) => {
           const members = staff.filter((s) => s.role_id === role.id).length;
           const isOwner = role.is_system && role.name === "Owner";
