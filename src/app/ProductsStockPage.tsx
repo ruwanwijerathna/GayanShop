@@ -57,10 +57,13 @@ export function ProductsStockPage({ tab }: { tab: ProductsTab | undefined }) {
   };
 
   return (
-    <section className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">{t("app:nav.products")}</h1>
-      <Tabs value={current} onValueChange={choose} className="gap-4">
-        <PosTabsList aria-label={t("tabs.label")} className="border-b pb-3">
+    <section className="flex flex-col gap-5">
+      <header className="flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t("app:nav.products")}</h1>
+        <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
+      </header>
+      <Tabs value={current} onValueChange={choose} className="gap-5">
+        <PosTabsList aria-label={t("tabs.label")}>
           {tabs.map((x) => {
             const Icon = ICONS[x];
             return (
@@ -72,7 +75,7 @@ export function ProductsStockPage({ tab }: { tab: ProductsTab | undefined }) {
           })}
         </PosTabsList>
         {tabs.map((x) => (
-          <TabsContent key={x} value={x}>
+          <TabsContent key={x} value={x} className="motion-safe:animate-in motion-safe:fade-in-0">
             {x === "products" ? (
               <ProductsScreen />
             ) : (

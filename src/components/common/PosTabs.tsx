@@ -2,24 +2,23 @@ import type { ComponentProps } from "react";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
-/** shadcn TabsList laid out for the counter: wrapping row of 48 px tabs with 8 px gaps (doc §1.9). */
+/** shadcn TabsList as a segmented control: a muted pill that scrolls sideways when the window is narrow. */
 export function PosTabsList({ className, ...props }: ComponentProps<typeof TabsList>) {
   return (
     <TabsList
-      className={cn("h-auto flex-wrap justify-start gap-2 bg-transparent p-0", className)}
+      className={cn("h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-xl p-1", className)}
       {...props}
     />
   );
 }
 
-/** A 48 px tab; the selected one uses the primary (emerald) fill, the rest an outline. */
+/** A 48 px segment; the selected one lifts onto the background with a soft shadow. */
 export function PosTabsTrigger({ className, ...props }: ComponentProps<typeof TabsTrigger>) {
   return (
     <TabsTrigger
       className={cn(
-        "h-12 flex-none border-input px-4 text-base text-foreground [&_svg:not([class*='size-'])]:size-5",
-        "data-[state=active]:border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground",
-        "dark:data-[state=active]:border-primary dark:data-[state=active]:bg-primary dark:data-[state=active]:text-primary-foreground",
+        "h-12 flex-none rounded-lg px-4 text-sm font-medium text-muted-foreground [&_svg:not([class*='size-'])]:size-4.5",
+        "data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm",
         className,
       )}
       {...props}
