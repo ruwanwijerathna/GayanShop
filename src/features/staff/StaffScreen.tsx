@@ -1,11 +1,34 @@
 import * as React from "react";
-import { Check, KeyRound, Lock, Minus, Pencil, Search, Shield, ShieldCheck, UserPlus } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Check,
+  KeyRound,
+  Lock,
+  Minus,
+  Pencil,
+  RotateCcw,
+  Search,
+  SearchX,
+  Shield,
+  ShieldCheck,
+  UserPlus,
+  X,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import {
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type SortingState,
+} from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -139,7 +162,7 @@ function minPin(roles: Role[], roleId: string): number {
 
 type Tab = "staff" | "roles";
 
-/** Staff management (doc §3.5; `USER_MANAGE`). Modern team overview with role permission matrix. */
+/** Staff management (doc §3.5; `USER_MANAGE`). Modern team overview with shadcn data table. */
 export function StaffScreen() {
   const { t } = useTranslation("staff");
   const staff = useStaffList();
@@ -147,29 +170,12 @@ export function StaffScreen() {
   const update = useUpdateStaff();
 
   const [tab, setTab] = React.useState<Tab>("staff");
-  const [query, setQuery] = React.useState("");
-  const [roleFilter, setRoleFilter] = React.useState("all");
-  const [statusFilter, setStatusFilter] = React.useState("all");
-
   const [editing, setEditing] = React.useState<StaffMember | "new" | null>(null);
-  const [pinFor, setPinFor] = React.useState<StaffMember | null>(null);
 
   const list = staff.data ?? [];
   const rolesList = roles.data ?? [];
   const loading = staff.isLoading;
   const activeCount = list.filter((s) => s.is_active).length;
-
-  const filtered = list.filter((s) => {
-    const q = query.trim().toLowerCase();
-    const matchesQuery =
-      !q || s.display_name.toLowerCase().includes(q) || s.role_name.toLowerCase().includes(q);
-    const matchesRole = roleFilter === "all" || s.role_id === roleFilter;
-    const matchesStatus =
-      statusFilter === "all" ||
-      (statusFilter === "active" && s.is_active) ||
-      (statusFilter === "inactive" && !s.is_active);
-    return matchesQuery && matchesRole && matchesStatus;
-  });
 
   const handleToggleActive = (member: StaffMember, nextActive: boolean) => {
     if (member.last_owner && !nextActive) {
@@ -242,146 +248,13 @@ export function StaffScreen() {
       </div>
 
       {tab === "staff" ? (
-        <Card className="gap-0 py-0 overflow-hidden">
-          <div className="flex flex-col gap-3 border-b p-4 sm:flex-row">
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder={t("searchPlaceholder")}
-                className="h-11 pl-9 text-base"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                aria-label={t("searchPlaceholder")}
-              />
-            </div>
-            <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger className="h-11 sm:w-44" aria-label={t("filters.allRoles")}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("filters.allRoles")}</SelectItem>
-                {rolesList.map((r) => (
-                  <SelectItem key={r.id} value={r.id}>
-                    {r.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-11 sm:w-40" aria-label={t("filters.allStatuses")}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("filters.allStatuses")}</SelectItem>
-                <SelectItem value="active">{t("active")}</SelectItem>
-                <SelectItem value="inactive">{t("inactive")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>{t("columns.name")}</TableHead>
-                  <TableHead>{t("columns.role")}</TableHead>
-                  <TableHead className="hidden sm:table-cell">{t("columns.language")}</TableHead>
-                  <TableHead>{t("columns.status")}</TableHead>
-                  <TableHead className="text-right">{t("columns.actions")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading && Array.from({ length: 3 }, (_, i) => <SkeletonRow key={i} />)}
-                {!loading &&
-                  filtered.map((m) => (
-                    <TableRow key={m.id} className="h-16 hover:bg-muted/40 transition-colors">
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <span
-                            aria-hidden
-                            className={cn(
-                              "flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition-colors",
-                              m.is_active ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
-                            )}
-                          >
-                            {initials(m.display_name)}
-                          </span>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 truncate font-medium">
-                              <span>{m.display_name}</span>
-                              {m.last_owner && (
-                                <ShieldCheck
-                                  className="size-4 shrink-0 text-amber-500"
-                                  aria-label={t("form.lastOwner")}
-                                  role="img"
-                                >
-                                  <title>{t("form.lastOwner")}</title>
-                                </ShieldCheck>
-                              )}
-                            </div>
-                            <div className="truncate text-xs text-muted-foreground">{m.role_name}</div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={m.is_owner ? "secondary" : "outline"} className="gap-1 font-medium">
-                          {m.is_owner && <Shield className="size-3 text-amber-600" />}
-                          {m.role_name}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden text-muted-foreground sm:table-cell">
-                        {t(`languages.${m.ui_language === "si" ? "si" : "en"}`)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={m.is_active}
-                            disabled={m.last_owner}
-                            onCheckedChange={(c) => handleToggleActive(m, c)}
-                            aria-label={`${m.is_active ? "Deactivate" : "Activate"} ${m.display_name}`}
-                          />
-                          <span className="text-xs text-muted-foreground">
-                            {m.is_active ? t("active") : t("inactive")}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="pos"
-                            className="rounded-xl transition-all active:scale-[0.98]"
-                            onClick={() => setEditing(m)}
-                            aria-label={`${t("edit")} ${m.display_name}`}
-                          >
-                            <Pencil aria-hidden />
-                            {t("edit")}
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="pos"
-                            className="rounded-xl transition-all active:scale-[0.98]"
-                            onClick={() => setPinFor(m)}
-                            aria-label={`${t("resetPin")} ${m.display_name}`}
-                          >
-                            <KeyRound aria-hidden />
-                            {t("resetPin")}
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                {!loading && filtered.length === 0 && (
-                  <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={5} className="py-12 text-center text-muted-foreground">
-                      {t("emptySearch")}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </Card>
+        <StaffDataTable
+          data={list}
+          roles={rolesList}
+          loading={loading}
+          onEdit={(m) => setEditing(m)}
+          onToggleActive={handleToggleActive}
+        />
       ) : (
         <RolesTab roles={rolesList} staff={list} />
       )}
@@ -392,9 +265,6 @@ export function StaffScreen() {
           roles={roles.data}
           onClose={() => setEditing(null)}
         />
-      )}
-      {pinFor && roles.data && (
-        <PinDialog member={pinFor} roles={roles.data} onClose={() => setPinFor(null)} />
       )}
     </section>
   );
@@ -409,6 +279,335 @@ function StatCard({ label, value }: { label: string; value: number }) {
       <CardContent className="py-0 px-5 pt-1">
         <div className="text-3xl font-semibold tabular-nums">{value}</div>
       </CardContent>
+    </Card>
+  );
+}
+
+interface StaffDataTableProps {
+  data: StaffMember[];
+  roles: Role[];
+  loading: boolean;
+  onEdit: (member: StaffMember) => void;
+  onToggleActive: (member: StaffMember, nextActive: boolean) => void;
+}
+
+function StaffDataTable({ data, roles, loading, onEdit, onToggleActive }: StaffDataTableProps) {
+  const { t } = useTranslation("staff");
+  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [query, setQuery] = React.useState("");
+  const [roleFilter, setRoleFilter] = React.useState("all");
+  const [statusFilter, setStatusFilter] = React.useState("all");
+
+  const filteredData = React.useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return data.filter((s) => {
+      const matchesQuery =
+        !q || s.display_name.toLowerCase().includes(q) || s.role_name.toLowerCase().includes(q);
+      const matchesRole = roleFilter === "all" || s.role_id === roleFilter;
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "active" && s.is_active) ||
+        (statusFilter === "inactive" && !s.is_active);
+      return matchesQuery && matchesRole && matchesStatus;
+    });
+  }, [data, query, roleFilter, statusFilter]);
+
+  const hasActiveFilters = query.trim() !== "" || roleFilter !== "all" || statusFilter !== "all";
+
+  const resetFilters = () => {
+    setQuery("");
+    setRoleFilter("all");
+    setStatusFilter("all");
+  };
+
+  const columns = React.useMemo<ColumnDef<StaffMember>[]>(
+    () => [
+      {
+        accessorKey: "display_name",
+        id: "name",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-3 h-8 data-[state=open]:bg-accent font-semibold"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            <span>{t("columns.name")}</span>
+            {column.getIsSorted() === "asc" ? (
+              <ArrowUp className="ml-2 size-3.5" />
+            ) : column.getIsSorted() === "desc" ? (
+              <ArrowDown className="ml-2 size-3.5" />
+            ) : (
+              <ArrowUpDown className="ml-2 size-3.5 text-muted-foreground" />
+            )}
+          </Button>
+        ),
+        cell: ({ row }) => {
+          const m = row.original;
+          return (
+            <div className="flex items-center gap-3">
+              <span
+                aria-hidden
+                className={cn(
+                  "flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition-colors",
+                  m.is_active ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
+                )}
+              >
+                {initials(m.display_name)}
+              </span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 truncate font-medium">
+                  <span>{m.display_name}</span>
+                  {m.last_owner && (
+                    <ShieldCheck
+                      className="size-4 shrink-0 text-amber-500"
+                      aria-label={t("form.lastOwner")}
+                      role="img"
+                    >
+                      <title>{t("form.lastOwner")}</title>
+                    </ShieldCheck>
+                  )}
+                </div>
+                <div className="truncate text-xs text-muted-foreground">{m.role_name}</div>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "role_name",
+        id: "role",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-3 h-8 data-[state=open]:bg-accent font-semibold"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            <span>{t("columns.role")}</span>
+            {column.getIsSorted() === "asc" ? (
+              <ArrowUp className="ml-2 size-3.5" />
+            ) : column.getIsSorted() === "desc" ? (
+              <ArrowDown className="ml-2 size-3.5" />
+            ) : (
+              <ArrowUpDown className="ml-2 size-3.5 text-muted-foreground" />
+            )}
+          </Button>
+        ),
+        cell: ({ row }) => {
+          const m = row.original;
+          return (
+            <Badge variant={m.is_owner ? "secondary" : "outline"} className="gap-1 font-medium">
+              {m.is_owner && <Shield className="size-3 text-amber-600" />}
+              {m.role_name}
+            </Badge>
+          );
+        },
+      },
+      {
+        accessorKey: "ui_language",
+        id: "language",
+        header: () => <span className="font-semibold">{t("columns.language")}</span>,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {t(`languages.${row.original.ui_language === "si" ? "si" : "en"}`)}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "is_active",
+        id: "status",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-3 h-8 data-[state=open]:bg-accent font-semibold"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            <span>{t("columns.status")}</span>
+            {column.getIsSorted() === "asc" ? (
+              <ArrowUp className="ml-2 size-3.5" />
+            ) : column.getIsSorted() === "desc" ? (
+              <ArrowDown className="ml-2 size-3.5" />
+            ) : (
+              <ArrowUpDown className="ml-2 size-3.5 text-muted-foreground" />
+            )}
+          </Button>
+        ),
+        cell: ({ row }) => {
+          const m = row.original;
+          return (
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={m.is_active}
+                disabled={m.last_owner}
+                onCheckedChange={(c) => onToggleActive(m, c)}
+                aria-label={`${m.is_active ? "Deactivate" : "Activate"} ${m.display_name}`}
+              />
+              <span className="text-xs text-muted-foreground">
+                {m.is_active ? t("active") : t("inactive")}
+              </span>
+            </div>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: () => <div className="text-right font-semibold">{t("columns.actions")}</div>,
+        cell: ({ row }) => {
+          const m = row.original;
+          return (
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 rounded-lg hover:bg-muted"
+                onClick={() => onEdit(m)}
+                aria-label={`${t("edit")} ${m.display_name}`}
+                title={`${t("edit")} ${m.display_name}`}
+              >
+                <Pencil className="size-4" />
+              </Button>
+            </div>
+          );
+        },
+      },
+    ],
+    [t, onEdit, onToggleActive],
+  );
+
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const table = useReactTable({
+    data: filteredData,
+    columns,
+    state: {
+      sorting,
+    },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
+  return (
+    <Card className="gap-0 py-0 overflow-hidden">
+      <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder={t("searchPlaceholder")}
+            className="h-11 pl-9 pr-9 text-base"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label={t("searchPlaceholder")}
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              aria-label="Clear search"
+            >
+              <X className="size-4" />
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={roleFilter} onValueChange={setRoleFilter}>
+            <SelectTrigger className="h-11 w-full sm:w-44" aria-label={t("filters.allRoles")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("filters.allRoles")}</SelectItem>
+              {roles.map((r) => (
+                <SelectItem key={r.id} value={r.id}>
+                  {r.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-11 w-full sm:w-40" aria-label={t("filters.allStatuses")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("filters.allStatuses")}</SelectItem>
+              <SelectItem value="active">{t("active")}</SelectItem>
+              <SelectItem value="inactive">{t("inactive")}</SelectItem>
+            </SelectContent>
+          </Select>
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={resetFilters}
+              className="h-11 px-3 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <RotateCcw className="mr-1.5 size-3.5" />
+              {t("filters.reset")}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id} className="hover:bg-transparent">
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(header.column.columnDef.header, header.getContext())}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {loading && Array.from({ length: 3 }, (_, i) => <SkeletonRow key={i} />)}
+            {!loading &&
+              table.getRowModel().rows?.length > 0 &&
+              table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id} className="h-16 hover:bg-muted/40 transition-colors">
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            {!loading && table.getRowModel().rows?.length === 0 && (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={columns.length} className="h-48 text-center">
+                  <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                    <SearchX className="size-8 stroke-1 text-muted-foreground/60" />
+                    <p className="text-sm font-medium">{t("emptySearch")}</p>
+                    {hasActiveFilters && (
+                      <Button
+                        variant="link"
+                        size="sm"
+                        onClick={resetFilters}
+                        className="text-xs text-primary"
+                      >
+                        {t("filters.clearAll")}
+                      </Button>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="flex items-center justify-between border-t px-4 py-3 text-xs text-muted-foreground">
+        <span>
+          {hasActiveFilters
+            ? `${filteredData.length} of ${data.length} staff`
+            : `${data.length} staff member${data.length === 1 ? "" : "s"}`}
+        </span>
+      </div>
     </Card>
   );
 }
@@ -530,7 +729,7 @@ function SkeletonRow() {
         <div className="h-7 w-20 animate-pulse rounded-full bg-muted" />
       </td>
       <td className="px-4">
-        <div className="ml-auto h-12 w-40 animate-pulse rounded-xl bg-muted" />
+        <div className="ml-auto h-9 w-9 animate-pulse rounded-lg bg-muted" />
       </td>
     </tr>
   );
@@ -548,21 +747,35 @@ function StaffDialog({
   const { t, i18n } = useTranslation(["staff", "common"]);
   const create = useCreateStaff();
   const update = useUpdateStaff();
+  const resetPin = useResetStaffPin();
+
   const cashier = roles.find((r) => r.name === "Cashier") ?? roles.at(-1);
   const [name, setName] = React.useState(member?.display_name ?? "");
   const [roleId, setRoleId] = React.useState(member?.role_id ?? cashier?.id ?? "");
   const [active, setActive] = React.useState(member?.is_active ?? true);
+
+  // New staff PIN
   const [pin, setPin] = React.useState("");
   const [confirmPin, setConfirmPin] = React.useState("");
 
-  const locked = member?.last_owner === true;
-  const pending = create.isPending || update.isPending;
-  const error = [create.error, update.error].find((e) => e instanceof CommandError);
-  const minDigits = minPin(roles, roleId);
-  const pinMismatch = !member && confirmPin.length > 0 && pin !== confirmPin;
-  const pinValid = member || (pin.length >= minDigits && pin === confirmPin);
+  // Edit staff PIN reset
+  const [resetPinOpen, setResetPinOpen] = React.useState(false);
+  const [newPin, setNewPin] = React.useState("");
+  const [confirmNewPin, setConfirmNewPin] = React.useState("");
 
-  const submit = (e: React.FormEvent) => {
+  const locked = member?.last_owner === true;
+  const pending = create.isPending || update.isPending || resetPin.isPending;
+  const error = [create.error, update.error, resetPin.error].find((e) => e instanceof CommandError);
+  const minDigits = minPin(roles, roleId);
+
+  const pinMismatch = !member && confirmPin.length > 0 && pin !== confirmPin;
+  const editPinMismatch = member && resetPinOpen && confirmNewPin.length > 0 && newPin !== confirmNewPin;
+
+  const pinValid = member
+    ? !resetPinOpen || (newPin.length >= minDigits && newPin === confirmNewPin)
+    : pin.length >= minDigits && pin === confirmPin;
+
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
     if (!pinValid) return;
@@ -576,12 +789,24 @@ function StaffDialog({
       max_discount_bp: member?.max_discount_bp ?? null,
       is_active: active,
     };
+
     const done = () => {
       toast.success(t("saved"));
       onClose();
     };
-    if (member) update.mutate({ id: member.id, input }, { onSuccess: done });
-    else create.mutate({ staff: input, pin }, { onSuccess: done });
+
+    if (member) {
+      if (resetPinOpen && newPin) {
+        try {
+          await resetPin.mutateAsync({ id: member.id, pin: newPin });
+        } catch {
+          return;
+        }
+      }
+      update.mutate({ id: member.id, input }, { onSuccess: done });
+    } else {
+      create.mutate({ staff: input, pin }, { onSuccess: done });
+    }
   };
 
   return (
@@ -601,7 +826,7 @@ function StaffDialog({
               </DialogTitle>
               <DialogDescription className="text-sm text-muted-foreground mt-0.5">
                 {member
-                  ? t("form.editSubtitle", "Update staff details and role.")
+                  ? t("form.editSubtitle", "Update staff details, role, and login credentials.")
                   : t("form.createSubtitle", "Add a new staff member to sign in to the POS.")}
               </DialogDescription>
             </div>
@@ -671,23 +896,91 @@ function StaffDialog({
               </div>
             )}
 
-            <label
-              htmlFor="staff-active"
+            {member && (
+              <div className="rounded-xl border bg-muted/20 p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <KeyRound className="size-4 text-muted-foreground shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium leading-none">{t("pin.sectionTitle")}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{t("pin.sectionHint")}</p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant={resetPinOpen ? "secondary" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setResetPinOpen((v) => !v);
+                      setNewPin("");
+                      setConfirmNewPin("");
+                    }}
+                  >
+                    {resetPinOpen
+                      ? i18n.t("common:actions.cancel", { defaultValue: "Cancel" })
+                      : t("pin.resetButton")}
+                  </Button>
+                </div>
+
+                {resetPinOpen && (
+                  <div className="grid gap-3 pt-2 sm:grid-cols-2">
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="staff-edit-pin">{t("pin.label", { min: minDigits })}</Label>
+                      <Input
+                        id="staff-edit-pin"
+                        className={cn(FIELD, "tracking-[0.3em]")}
+                        type="password"
+                        inputMode="numeric"
+                        autoComplete="new-password"
+                        maxLength={8}
+                        value={newPin}
+                        placeholder="••••"
+                        onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ""))}
+                        required={resetPinOpen}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="staff-edit-confirm-pin">{t("pin.confirmLabel")}</Label>
+                      <Input
+                        id="staff-edit-confirm-pin"
+                        className={cn(FIELD, "tracking-[0.3em]")}
+                        type="password"
+                        inputMode="numeric"
+                        autoComplete="new-password"
+                        maxLength={8}
+                        value={confirmNewPin}
+                        placeholder="••••"
+                        onChange={(e) => setConfirmNewPin(e.target.value.replace(/\D/g, ""))}
+                        required={resetPinOpen}
+                      />
+                      {editPinMismatch && <p className="text-xs text-destructive">{t("pin.mismatch")}</p>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div
               className={cn(
-                "flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border px-4 text-base transition-colors",
+                "flex min-h-14 items-center justify-between rounded-xl border p-4 transition-colors",
                 active ? "border-emerald-500/30 bg-emerald-500/5" : "bg-muted/30",
-                locked && "cursor-not-allowed opacity-70",
+                locked && "opacity-70",
               )}
             >
-              <Checkbox
+              <div className="space-y-0.5">
+                <Label htmlFor="staff-active" className="text-sm font-medium cursor-pointer">
+                  {t("form.activeLabel")}
+                </Label>
+                <p className="text-xs text-muted-foreground">{active ? t("active") : t("inactive")}</p>
+              </div>
+              <Switch
                 id="staff-active"
-                className="size-5"
                 checked={active}
                 disabled={locked}
-                onCheckedChange={(v) => setActive(v === true)}
+                onCheckedChange={setActive}
+                aria-label={t("form.activeLabel")}
               />
-              <span className="text-sm font-medium">{t("form.activeLabel")}</span>
-            </label>
+            </div>
 
             {locked && (
               <p
@@ -715,105 +1008,6 @@ function StaffDialog({
             </Button>
             <Button type="submit" size="pos" disabled={pending || !name.trim() || !pinValid}>
               {member ? t("form.save") : t("form.create")}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function PinDialog({ member, roles, onClose }: { member: StaffMember; roles: Role[]; onClose: () => void }) {
-  const { t, i18n } = useTranslation(["staff", "common"]);
-  const reset = useResetStaffPin();
-  const [pin, setPin] = React.useState("");
-  const [confirmPin, setConfirmPin] = React.useState("");
-  const minDigits = minPin(roles, member.role_id);
-  const pinMismatch = confirmPin.length > 0 && pin !== confirmPin;
-  const valid = pin.length >= minDigits && pin === confirmPin;
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!valid) return;
-    reset.mutate(
-      { id: member.id, pin },
-      {
-        onSuccess: () => {
-          toast.success(t("pin.done", { name: member.display_name }));
-          onClose();
-        },
-      },
-    );
-  };
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-md">
-        <DialogHeader className="border-b bg-muted/30 px-6 py-5">
-          <div className="flex items-center gap-3">
-            <span
-              aria-hidden
-              className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"
-            >
-              <KeyRound className="size-5" />
-            </span>
-            <div>
-              <DialogTitle className="text-xl tracking-tight">
-                {t("pin.title", { name: member.display_name })}
-              </DialogTitle>
-              <DialogDescription className="text-sm text-muted-foreground mt-0.5">
-                {t("pin.subtitle", "Set a new login PIN")}
-              </DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
-        <form onSubmit={submit}>
-          <div className="flex flex-col gap-4 px-6 py-6">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="new-pin">{t("pin.label", { min: minDigits })}</Label>
-              <Input
-                id="new-pin"
-                className={cn(FIELD, "text-center text-xl tracking-[0.4em]")}
-                type="password"
-                inputMode="numeric"
-                autoComplete="new-password"
-                maxLength={8}
-                value={pin}
-                placeholder="••••"
-                onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-                required
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="confirm-new-pin">{t("pin.confirmLabel")}</Label>
-              <Input
-                id="confirm-new-pin"
-                className={cn(FIELD, "text-center text-xl tracking-[0.4em]")}
-                type="password"
-                inputMode="numeric"
-                autoComplete="new-password"
-                maxLength={8}
-                value={confirmPin}
-                placeholder="••••"
-                onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ""))}
-                required
-              />
-              {pinMismatch && <p className="text-xs text-destructive">{t("pin.mismatch")}</p>}
-            </div>
-            {reset.error instanceof CommandError && (
-              <p
-                role="alert"
-                className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-base text-destructive motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1"
-              >
-                {translateError(i18n.t, reset.error.error)}
-              </p>
-            )}
-          </div>
-          <DialogFooter className="border-t bg-muted/20 px-6 py-4">
-            <Button type="button" variant="outline" size="pos" onClick={onClose} disabled={reset.isPending}>
-              {i18n.t("common:actions.cancel", { defaultValue: "Cancel" })}
-            </Button>
-            <Button type="submit" size="pos" disabled={reset.isPending || !valid}>
-              {t("pin.save")}
             </Button>
           </DialogFooter>
         </form>

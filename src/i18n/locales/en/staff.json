@@ -14,7 +14,9 @@
   "searchPlaceholder": "Search by name or role",
   "filters": {
     "allRoles": "All roles",
-    "allStatuses": "All statuses"
+    "allStatuses": "All statuses",
+    "reset": "Reset",
+    "clearAll": "Clear all filters"
   },
   "rolesTab": {
     "matrixTitle": "Permission matrix",
@@ -65,6 +67,9 @@
     "create": "Add"
   },
   "pin": {
+    "sectionTitle": "Login PIN",
+    "sectionHint": "Change or reset login PIN",
+    "resetButton": "Reset PIN",
     "title": "New PIN for {{name}}",
     "label": "New PIN ({{min}}–8 digits)",
     "confirmLabel": "Confirm new PIN",

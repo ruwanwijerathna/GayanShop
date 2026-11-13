@@ -127,11 +127,12 @@ describe("StaffScreen", () => {
 
   it("resets a PIN", async () => {
     renderWithProviders(<StaffScreen />);
-    fireEvent.click(await screen.findByRole("button", { name: "Reset PIN Kasun" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Kasun" }));
     const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reset PIN" }));
     fireEvent.change(within(dialog).getByLabelText("New PIN (4–8 digits)"), { target: { value: "9753" } });
     fireEvent.change(within(dialog).getByLabelText("Confirm new PIN"), { target: { value: "9753" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Set PIN" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(commands.resetStaffPin).toHaveBeenCalledWith("s2", "9753"));
   });
 
