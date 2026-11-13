@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { commands } from "@/db/bindings";
-import { ok, openTab, renderWithProviders, session } from "@/test/render";
+import { ok, renderWithProviders, session } from "@/test/render";
 import App from "./App";
 
 vi.mock("@/db/bindings", () => ({
@@ -283,49 +283,66 @@ describe("Products & Stock", () => {
 
   const OWNER_PERMS = ["SALE_CREATE", "REPORT_FINANCIAL", "PRODUCT_MANAGE"] as const;
 
-  it("opens the catalog tab from the sidebar, with every tab the owner may open", async () => {
-    loggedIn({ staff_id: "owner", role_name: "Owner", permissions: [...OWNER_PERMS] });
+  const openTools = async () => {
+    fireEvent.keyDown(await screen.findByRole("button", { name: "Products & Stock tools" }), {
+      key: "Enter",
+    });
+  };
+
+  it("shows only the catalog (no tabs) with a tools menu beside the title", async () => {
+    loggedIn({ staff_id: "owner", role_name: "Owner", permissions: [...OWNER_PERMS, "DATA_EXPORT"] });
     renderWithProviders(<App />);
     fireEvent.click(await screen.findByRole("link", { name: "Products & Stock" }));
     expect(await screen.findByRole("heading", { level: 1, name: "Products & Stock" })).toBeInTheDocument();
-    const tabs = within(screen.getByRole("tablist", { name: "Products & Stock sections" }));
-    expect(tabs.getAllByRole("tab").map((x) => x.textContent)).toEqual([
-      "All Products",
-      "Stock Adjustments",
-      "Stock Valuation",
-    ]);
-    expect(tabs.getByRole("tab", { name: "All Products" })).toHaveAttribute("aria-selected", "true");
     expect(await screen.findByRole("grid", { name: "Products" })).toBeInTheDocument();
-
-    openTab(tabs.getByRole("tab", { name: "Stock Valuation" }));
-    await waitFor(() => expect(window.location.hash).toContain("tab=valuation"));
-    expect(tabs.getByRole("tab", { name: "Stock Valuation" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("tab", { name: "Stock Adjustments" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Stock Valuation" })).not.toBeInTheDocument();
+    await openTools();
+    expect((await screen.findAllByRole("menuitem")).map((x) => x.textContent)).toEqual([
+      "Stock Valuation",
+      "Export & Import",
+    ]);
   });
 
-  it("falls back to the catalog for the retired history tab link", async () => {
-    window.location.hash = "#/products?tab=history";
+  it("opens stock valuation in a drawer", async () => {
     loggedIn({ staff_id: "owner", role_name: "Owner", permissions: [...OWNER_PERMS] });
     renderWithProviders(<App />);
-    const tabs = within(await screen.findByRole("tablist", { name: "Products & Stock sections" }));
-    expect(tabs.getByRole("tab", { name: "All Products" })).toHaveAttribute("aria-selected", "true");
-    expect(tabs.queryByRole("tab", { name: "Movement History" })).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("link", { name: "Products & Stock" }));
+    await openTools();
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Stock Valuation" }));
+    const drawer = await screen.findByRole("dialog");
+    expect(within(drawer).getByRole("heading", { name: "Stock Valuation" })).toBeInTheDocument();
+    expect(await within(drawer).findByLabelText("As of (business date)")).toBeInTheDocument();
   });
 
-  it("redirects an old /inventory link to the Stock Adjustments tab", async () => {
-    window.location.hash = "#/inventory";
-    loggedIn({ staff_id: "owner", role_name: "Owner", permissions: [...OWNER_PERMS] });
+  it("opens export and import in a drawer for someone who may manage products", async () => {
+    loggedIn({ staff_id: "owner", role_name: "Owner", permissions: [...OWNER_PERMS, "DATA_EXPORT"] });
     renderWithProviders(<App />);
-    const tab = await screen.findByRole("tab", { name: "Stock Adjustments" });
-    await waitFor(() => expect(tab).toHaveAttribute("aria-selected", "true"));
-    expect(window.location.hash).toContain("#/products");
+    fireEvent.click(await screen.findByRole("link", { name: "Products & Stock" }));
+    await openTools();
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Export & Import" }));
+    const drawer = await screen.findByRole("dialog");
+    expect(within(drawer).getByRole("button", { name: "Export products" })).toBeInTheDocument();
+    expect(within(drawer).getByRole("button", { name: "Choose CSV file" })).toBeInTheDocument();
   });
 
-  it("gives a cashier the catalog and adjustments only; other tabs in the URL fall back", async () => {
+  it("ignores retired ?tab= links and redirects /inventory to the catalog", async () => {
     window.location.hash = "#/products?tab=valuation";
+    loggedIn({ staff_id: "owner", role_name: "Owner", permissions: [...OWNER_PERMS] });
+    const first = renderWithProviders(<App />);
+    expect(await screen.findByRole("grid", { name: "Products" })).toBeInTheDocument();
+    first.unmount();
+    window.location.hash = "#/inventory";
+    renderWithProviders(<App />);
+    expect(await screen.findByRole("grid", { name: "Products" })).toBeInTheDocument();
+    await waitFor(() => expect(window.location.hash).toContain("#/products"));
+  });
+
+  it("gives a cashier no tools menu", async () => {
     loggedIn();
     renderWithProviders(<App />);
-    const tabs = within(await screen.findByRole("tablist", { name: "Products & Stock sections" }));
-    expect(tabs.getAllByRole("tab").map((x) => x.textContent)).toEqual(["All Products", "Stock Adjustments"]);
-    expect(tabs.getByRole("tab", { name: "All Products" })).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(await screen.findByRole("link", { name: "Products & Stock" }));
+    expect(await screen.findByRole("grid", { name: "Products" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Products & Stock tools" })).not.toBeInTheDocument();
   });
 });

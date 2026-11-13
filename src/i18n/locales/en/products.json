@@ -53,8 +53,8 @@
     "active": "Active (can be sold)",
     "activeHint": "Available for sale on the POS terminal",
     "inactiveHint": "Hidden from POS and cannot be sold",
-    "quantity": "Stock Quantity",
-    "quantityPlaceholder": "e.g. 50 (optional)",
+    "quantity": "Opening stock",
+    "quantityPlaceholder": "Units on the shelf today (optional)",
     "quantityInvalid": "Enter a whole number of units (0 or more).",
     "note": "Note",
     "notePlaceholder": "e.g. Initial stock / supplier note (optional)",
@@ -68,7 +68,8 @@
     "deleteConfirm": "Delete {{name}}? It leaves the till and the lists; past sales keep it.",
     "confirmDelete": "Yes, delete",
     "moneyInvalid": "Enter an amount such as 450 or 450.50.",
-    "namePlaceholder": "Enter product name"
+    "namePlaceholder": "Enter product name",
+    "stockElsewhere": "On hand: {{count}}. To change stock use Restock or Adjust stock in this product's row menu."
   },
   "categories": {
     "title": "Categories",
@@ -103,12 +104,6 @@
     "out": "0 ($t(outOfStock))",
     "oversold": "{{count}} (Oversold)"
   },
-  "tabs": {
-    "label": "Products & Stock sections",
-    "products": "All Products",
-    "adjustments": "Stock Adjustments",
-    "valuation": "Stock Valuation"
-  },
   "subtitle": "Your catalog, live stock levels, adjustments and valuation in one place.",
   "uncategorized": "Uncategorized",
   "selectPage": "Select all products on this page",
@@ -130,5 +125,70 @@
     "oversold": "Oversold",
     "untracked": "Not tracked"
   },
-  "movementHistory": "Movement history"
+  "movementHistory": "Movement history",
+  "tools": {
+    "label": "Products & Stock tools",
+    "valuation": "Stock Valuation",
+    "valuationHint": "What the stock on hand is worth, now or on a past date.",
+    "data": "Export & Import",
+    "dataHint": "Move product lists in and out of the shop as CSV files.",
+    "export": "Export",
+    "exportHint": "Save all products as a CSV file in a folder you choose.",
+    "import": "Import"
+  },
+  "import": {
+    "hint": "Choose a CSV file with the columns: {{columns}}. Only name and price are required.",
+    "template": "Download template",
+    "choose": "Choose CSV file",
+    "file": "CSV file",
+    "noHeader": "This file needs a header row with at least the columns name and price.",
+    "summary": "{{valid}} row(s) ready, {{invalid}} with problems (skipped).",
+    "rowIssue": "Line {{line}}: {{issue}}",
+    "issues": {
+      "nameMissing": "name is empty",
+      "priceInvalid": "price is not a valid amount",
+      "costInvalid": "cost is not a valid amount",
+      "quantityInvalid": "quantity must be a whole number"
+    },
+    "run": "Import {{count}} product(s)",
+    "done": "Imported {{created}} product(s); {{failed}} failed.",
+    "openingNote": "Opening stock (import)",
+    "unknownError": "Could not save this row."
+  },
+  "stock": {
+    "menuLabel": "Stock",
+    "cancel": "Cancel",
+    "onHandNow": "On hand now",
+    "onHandAfter": "After this change",
+    "restock": {
+      "menu": "Restock",
+      "title": "Restock {{name}}",
+      "description": "Goods arrived from a supplier. This adds to the stock on hand.",
+      "qty": "Units received",
+      "defaultNote": "Restock",
+      "submit": "Add {{count}} to stock",
+      "done": "Added {{count}} to {{name}}."
+    },
+    "adjust": {
+      "menu": "Adjust stock",
+      "title": "Adjust stock: {{name}}",
+      "description": "The shelf and the system disagree, or units can no longer be sold.",
+      "kind": "What do you need to do",
+      "modes": {
+        "recount": {
+          "label": "Recount",
+          "hint": "Set the true count after counting the shelf."
+        },
+        "writeoff": {
+          "label": "Write off",
+          "hint": "Damaged, expired, stolen or faulty units."
+        }
+      },
+      "counted": "Counted quantity",
+      "writeoffQty": "Units to write off",
+      "saveCount": "Save count",
+      "writeOff": "Write off",
+      "done": "Stock updated: {{name}}."
+    }
+  }
 }
