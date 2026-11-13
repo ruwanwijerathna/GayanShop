@@ -1,19 +1,18 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { useEffect, type ReactNode } from "react";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSession } from "@/app/session";
 import { commands, type Perm, type ProductSummary_Serialize as ProductSummary } from "@/db/bindings";
 import { chooseOption, err, ok, openTab, renderWithProviders, session } from "@/test/render";
 import { parseUnits, StockPanel, type StockSection } from "./StockPanel";
 
 /** Every section, damage first (the old Stock screen's opening tab). */
-const ALL: StockSection[] = ["damage", "count", "valuation", "oversold", "history"];
+const ALL: StockSection[] = ["damage", "count", "valuation", "oversold"];
 
 vi.mock("@/db/bindings", () => ({
   commands: {
     stockValuation: vi.fn(),
     oversoldLayers: vi.fn(),
-    stockMovements: vi.fn(),
     searchProducts: vi.fn(),
     recordDamage: vi.fn(),
     adjustStock: vi.fn(),
@@ -58,12 +57,6 @@ async function pickPot(label: string) {
   fireEvent.click(await screen.findByRole("button", { name: /Pot/ }));
 }
 
-beforeAll(() => {
-  // jsdom has no layout: give the virtualised history a viewport.
-  Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 480 });
-  Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 1000 });
-});
-
 beforeEach(() => {
   vi.mocked(commands.searchProducts).mockImplementation(() => ok([POT]));
   vi.mocked(commands.stockValuation).mockImplementation(() =>
@@ -105,45 +98,6 @@ beforeEach(() => {
 });
 
 describe("StockPanel", () => {
-  it("pages a product's movement history on the virtualised table", async () => {
-    const row = (id: string, reason: string, qty: number) => ({
-      id,
-      created_at: "2026-11-08T09:00:00.000Z",
-      business_date: "2026-11-08",
-      reason,
-      qty_delta: qty,
-      unit_cost: 6_000,
-      batch_item_id: "bi1",
-      batch_code: "B-2026-1001",
-      ref_type: null,
-      ref_id: null,
-      note: reason === "damage" ? "cracked" : null,
-      staff_name: "Owner",
-      approved_by_name: null,
-    });
-    vi.mocked(commands.stockMovements)
-      .mockImplementationOnce(() =>
-        ok({
-          rows: [row("m3", "damage", -1), row("m2", "sale", -2)],
-          next_cursor: ["2026-11-08T09:00:00.000Z", "m2"],
-        }),
-      )
-      .mockImplementationOnce(() => ok({ rows: [row("m1", "batch_intake", 10)], next_cursor: null }));
-    renderAs();
-    openTab(screen.getByRole("tab", { name: /History/ }));
-    await pickPot("Product");
-    const grid = await screen.findByRole("grid", { name: /History/ });
-    expect(await within(grid).findByText("cracked")).toBeInTheDocument();
-    await waitFor(() => expect(commands.stockMovements).toHaveBeenCalledTimes(2));
-    expect(commands.stockMovements).toHaveBeenLastCalledWith(
-      "pot",
-      null,
-      { created_at: "2026-11-08T09:00:00.000Z", id: "m2" },
-      100,
-    );
-    expect(await within(grid).findByText("10")).toBeInTheDocument();
-  });
-
   it("values the stock now and as of a date, flagging oversold layers", async () => {
     renderAs();
     openTab(screen.getByRole("tab", { name: /Valuation/ }));
