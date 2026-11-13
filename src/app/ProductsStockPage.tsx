@@ -34,7 +34,7 @@ export function ProductsStockPage() {
 
   return (
     <section className="flex flex-col gap-5">
-      <header className="flex items-start gap-2">
+      <header className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-1">
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t("app:nav.products")}</h1>
           <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
@@ -52,7 +52,7 @@ export function ProductsStockPage() {
                 <MoreVertical aria-hidden />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
+            <DropdownMenuContent align="end">
               {canValue && (
                 <DropdownMenuItem className="min-h-11" onSelect={() => setDrawer("valuation")}>
                   <Scale aria-hidden />
