@@ -107,8 +107,7 @@
     "label": "Products & Stock sections",
     "products": "All Products",
     "adjustments": "Stock Adjustments",
-    "valuation": "Stock Valuation",
-    "history": "Movement History"
+    "valuation": "Stock Valuation"
   },
   "subtitle": "Your catalog, live stock levels, adjustments and valuation in one place.",
   "uncategorized": "Uncategorized",
@@ -130,5 +129,6 @@
     "out": "Out of stock",
     "oversold": "Oversold",
     "untracked": "Not tracked"
-  }
+  },
+  "movementHistory": "Movement history"
 }

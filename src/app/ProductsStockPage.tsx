@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowLeftRight, History, Package, Scale, type LucideIcon } from "lucide-react";
+import { ArrowLeftRight, Package, Scale, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { PosTabsList, PosTabsTrigger } from "@/components/common/PosTabs";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -9,7 +9,7 @@ import { ProductsScreen } from "@/features/products/ProductsScreen";
 import { hasPerm } from "@/lib/permissions";
 import { useSession } from "./session";
 
-export const PRODUCTS_TABS = ["products", "adjustments", "valuation", "history"] as const;
+export const PRODUCTS_TABS = ["products", "adjustments", "valuation"] as const;
 export type ProductsTab = (typeof PRODUCTS_TABS)[number];
 
 export function isProductsTab(value: unknown): value is ProductsTab {
@@ -20,14 +20,12 @@ export function isProductsTab(value: unknown): value is ProductsTab {
 const SECTIONS: Record<Exclude<ProductsTab, "products">, readonly StockSection[]> = {
   adjustments: ["count", "damage"],
   valuation: ["valuation", "oversold"],
-  history: ["history"],
 };
 
 const ICONS: Record<ProductsTab, LucideIcon> = {
   products: Package,
   adjustments: ArrowLeftRight,
   valuation: Scale,
-  history: History,
 };
 
 /** A tab shows when the staff member may open at least one of its sections. */
@@ -49,7 +47,7 @@ export function ProductsStockPage({ tab }: { tab: ProductsTab | undefined }) {
     return perms.length === 0 || perms.some((p) => hasPerm(session, p));
   };
   const tabs = PRODUCTS_TABS.filter(allowed);
-  const current: ProductsTab = tab && allowed(tab) ? tab : "products";
+  const current: ProductsTab = isProductsTab(tab) && allowed(tab) ? tab : "products";
 
   const choose = (v: string) => {
     if (!isProductsTab(v)) return;

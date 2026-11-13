@@ -1,23 +1,15 @@
 // Stock tools for the Products & Stock page (doc §3.1, §5): valuation now or as of a date (by batch and by category), oversold layers, a stock
-// count, damage and adjustments (with a supervisor's approval where the role lacks it), and movement history.
-import { ClipboardList, History, PackageMinus, Scale, TriangleAlert } from "lucide-react";
-import type { ColumnDef } from "@tanstack/react-table";
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+// count, damage and adjustments (with a supervisor's approval where the role lacks it) (movement history lives on each product row).
+import { ClipboardList, PackageMinus, Scale, TriangleAlert } from "lucide-react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useSession } from "@/app/session";
 import { ApprovalDialog } from "@/components/auth/ApprovalDialog";
-import { DataTable } from "@/components/data-table/DataTable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type {
-  DamageReason,
-  MovementRow_Serialize as MovementRow,
-  Perm,
-  ProductSummary,
-  ValuationGroup,
-} from "@/db/bindings";
+import type { DamageReason, Perm, ProductSummary, ValuationGroup } from "@/db/bindings";
 import { CommandError } from "@/db/client";
 import {
   useAdjustStock,
@@ -25,13 +17,11 @@ import {
   useProductSearch,
   useRecordDamage,
   useRecordStockCount,
-  useStockMovements,
   useStockValuation,
 } from "@/db/hooks";
 import { translateError } from "@/i18n";
 import { formatMoney } from "@/lib/money";
 import { hasPerm } from "@/lib/permissions";
-import { cn } from "@/lib/utils";
 import { SelectField } from "@/components/common/SelectField";
 import { PosTabsList, PosTabsTrigger } from "@/components/common/PosTabs";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -40,7 +30,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 export const STOCK_TARGET = "stock";
 const FIELD = "h-12 text-base";
 const REASONS: DamageReason[] = ["broken", "expired", "stolen", "faulty", "other"];
-export type StockSection = "valuation" | "oversold" | "count" | "damage" | "history";
+export type StockSection = "valuation" | "oversold" | "count" | "damage";
 
 /** Whole units: "12" → 12, "-3" → -3 when `signed`. */
 export function parseUnits(text: string, signed = false): number | null {
@@ -430,103 +420,11 @@ function DamageTab() {
   );
 }
 
-function HistoryTab() {
-  const { t } = useTranslation(["inventory", "common"]);
-  const [product, setProduct] = useState<ProductSummary | null>(null);
-  const history = useStockMovements(product?.id ?? null);
-  const rows = useMemo(() => history.data?.pages.flatMap((p) => p.rows) ?? [], [history.data]);
-  const columns = useMemo<ColumnDef<MovementRow>[]>(
-    () => [
-      {
-        id: "when",
-        header: t("history.when"),
-        size: 190,
-        enableSorting: false,
-        accessorFn: (r) => new Date(r.created_at).toLocaleString(),
-      },
-      {
-        id: "reason",
-        header: t("history.reason"),
-        size: 260,
-        enableSorting: false,
-        cell: ({ row }) => (
-          <span>
-            {t(`history.reasons.${row.original.reason}`, { defaultValue: row.original.reason })}
-            {row.original.note && <span className="ml-2 text-muted-foreground">{row.original.note}</span>}
-          </span>
-        ),
-      },
-      {
-        id: "batch",
-        header: t("history.batch"),
-        size: 150,
-        enableSorting: false,
-        accessorFn: (r) => r.batch_code,
-      },
-      {
-        id: "qty",
-        header: t("history.qty"),
-        size: 80,
-        enableSorting: false,
-        cell: ({ row }) => (
-          <span className={cn("font-mono", row.original.qty_delta < 0 && "text-destructive")}>
-            {row.original.qty_delta}
-          </span>
-        ),
-      },
-      {
-        id: "cost",
-        header: t("history.cost"),
-        size: 120,
-        enableSorting: false,
-        accessorFn: (r) => formatMoney(r.unit_cost),
-      },
-      {
-        id: "by",
-        header: t("history.by"),
-        size: 140,
-        enableSorting: false,
-        accessorFn: (r) => r.staff_name ?? "",
-      },
-    ],
-    [t],
-  );
-  return (
-    <div className="flex flex-col gap-3">
-      {product ? (
-        <p className="flex items-center gap-3">
-          <strong className="flex-1">{product.name}</strong>
-          <Button type="button" size="pos" variant="outline" onClick={() => setProduct(null)}>
-            {t("damage.change")}
-          </Button>
-        </p>
-      ) : (
-        <ProductSearch label={t("history.product")} onPick={setProduct} />
-      )}
-      {product && (
-        <DataTable<MovementRow>
-          ariaLabel={t("tabs.history")}
-          columns={columns}
-          data={rows}
-          getRowId={(r) => r.id}
-          height={432}
-          rowHeight={48}
-          emptyLabel={history.isLoading ? t("common:table.loading") : t("history.empty")}
-          onEndReached={() => {
-            if (history.hasNextPage && !history.isFetchingNextPage) void history.fetchNextPage();
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
 const TABS: { id: StockSection; icon: ReactNode; perm: Perm }[] = [
   { id: "valuation", icon: <Scale aria-hidden />, perm: "REPORT_FINANCIAL" },
   { id: "oversold", icon: <TriangleAlert aria-hidden />, perm: "REPORT_FINANCIAL" },
   { id: "count", icon: <ClipboardList aria-hidden />, perm: "SALE_CREATE" },
   { id: "damage", icon: <PackageMinus aria-hidden />, perm: "SALE_CREATE" },
-  { id: "history", icon: <History aria-hidden />, perm: "REPORT_FINANCIAL" },
 ];
 
 /** Who may open a stock section (hides only; Rust enforces, asking a supervisor where needed). */
@@ -556,7 +454,6 @@ export function StockPanel({ sections, label }: { sections: readonly StockSectio
       {id === "oversold" && <OversoldTab />}
       {id === "count" && <CountTab />}
       {id === "damage" && <DamageTab />}
-      {id === "history" && <HistoryTab />}
     </>
   );
   if (visible.length === 1) return body(first.id);

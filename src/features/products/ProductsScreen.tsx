@@ -14,7 +14,7 @@ import {
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { FolderTree, MoreHorizontal, Package, Pencil, Plus, Search, Tag, X } from "lucide-react";
+import { FolderTree, History, MoreHorizontal, Package, Pencil, Plus, Search, Tag, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSession } from "@/app/session";
@@ -46,6 +46,7 @@ import { formatMoney } from "@/lib/money";
 import { hasPerm } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { CategoriesDialog } from "./CategoriesDialog";
+import { MovementHistorySheet } from "./MovementHistorySheet";
 import { categoryPath } from "./categories";
 import { ProductFormDialog } from "./ProductFormDialog";
 import { matchesText } from "./productForm";
@@ -101,12 +102,14 @@ export function ProductsScreen() {
   const { session } = useSession();
   const canManage = hasPerm(session, "PRODUCT_MANAGE");
   const canViewCost = hasPerm(session, "VIEW_COST");
+  const canSeeHistory = hasPerm(session, "REPORT_FINANCIAL");
   const products = useProducts();
   const categories = useCategories();
 
   const [editing, setEditing] = useState<{ product: Product | null } | null>(null);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [printIds, setPrintIds] = useState<string[] | null>(null);
+  const [historyFor, setHistoryFor] = useState<Product | null>(null);
 
   const [sorting, setSorting] = useState<SortingState>([{ id: "name", desc: false }]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(DEFAULT_FILTERS);
@@ -280,6 +283,12 @@ export function ProductsScreen() {
                   {t("edit")}
                 </DropdownMenuItem>
               )}
+              {canSeeHistory && (
+                <DropdownMenuItem className="min-h-11" onSelect={() => setHistoryFor(row.original)}>
+                  <History aria-hidden />
+                  {t("movementHistory")}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem className="min-h-11" onSelect={() => setPrintIds([row.original.id])}>
                 <Tag aria-hidden />
                 {t("printLabel")}
@@ -290,7 +299,7 @@ export function ProductsScreen() {
       },
     );
     return cols;
-  }, [t, canViewCost, canManage, catName]);
+  }, [t, canViewCost, canManage, canSeeHistory, catName]);
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table v8 is not React-Compiler-safe; opted out above
   const table = useReactTable({
@@ -563,6 +572,7 @@ export function ProductsScreen() {
         categories={cats}
         onClose={() => setEditing(null)}
       />
+      {historyFor && <MovementHistorySheet product={historyFor} onClose={() => setHistoryFor(null)} />}
       {printIds && (
         <PrintLabelsDialog
           items={data

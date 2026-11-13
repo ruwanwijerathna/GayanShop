@@ -4,8 +4,7 @@
     "valuation": "Valuation",
     "oversold": "Oversold",
     "count": "Stock count",
-    "damage": "Damage and adjust",
-    "history": "History"
+    "damage": "Damage and adjust"
   },
   "note": "Note (optional)",
   "noteRequired": "Reason (required)",
@@ -56,13 +55,6 @@
     "done": "Stock updated: {{name}}."
   },
   "history": {
-    "product": "Product",
-    "when": "When",
-    "reason": "What",
-    "batch": "Batch",
-    "qty": "Units",
-    "cost": "Cost each",
-    "by": "By",
     "reasons": {
       "batch_intake": "Received",
       "batch_reopen": "Batch reopened",
@@ -72,6 +64,22 @@
       "count_correction": "Count",
       "adjustment": "Adjusted"
     },
-    "empty": "No movements yet."
+    "empty": "No movements yet.",
+    "title": "Movement history",
+    "onHand": "On hand",
+    "stockIn": "Stock in",
+    "stockOut": "Stock out",
+    "net": "Net change",
+    "partial": "Totals cover the {{count}} most recent movements loaded so far.",
+    "filterLabel": "Filter by type",
+    "all": "All",
+    "dayNet": "Net {{value}}",
+    "batchCode": "Batch {{code}}",
+    "costEach": "{{cost}} each",
+    "value": "Value {{value}}",
+    "byName": "By {{name}}",
+    "approvedBy": "Approved by {{name}}",
+    "balance": "Balance {{count}}",
+    "loadMore": "Load older movements"
   }
 }

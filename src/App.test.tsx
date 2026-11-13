@@ -293,7 +293,6 @@ describe("Products & Stock", () => {
       "All Products",
       "Stock Adjustments",
       "Stock Valuation",
-      "Movement History",
     ]);
     expect(tabs.getByRole("tab", { name: "All Products" })).toHaveAttribute("aria-selected", "true");
     expect(await screen.findByRole("grid", { name: "Products" })).toBeInTheDocument();
@@ -301,6 +300,15 @@ describe("Products & Stock", () => {
     openTab(tabs.getByRole("tab", { name: "Stock Valuation" }));
     await waitFor(() => expect(window.location.hash).toContain("tab=valuation"));
     expect(tabs.getByRole("tab", { name: "Stock Valuation" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("falls back to the catalog for the retired history tab link", async () => {
+    window.location.hash = "#/products?tab=history";
+    loggedIn({ staff_id: "owner", role_name: "Owner", permissions: [...OWNER_PERMS] });
+    renderWithProviders(<App />);
+    const tabs = within(await screen.findByRole("tablist", { name: "Products & Stock sections" }));
+    expect(tabs.getByRole("tab", { name: "All Products" })).toHaveAttribute("aria-selected", "true");
+    expect(tabs.queryByRole("tab", { name: "Movement History" })).not.toBeInTheDocument();
   });
 
   it("redirects an old /inventory link to the Stock Adjustments tab", async () => {

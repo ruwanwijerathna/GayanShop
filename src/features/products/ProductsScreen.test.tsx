@@ -23,6 +23,7 @@ vi.mock("@/db/bindings", () => ({
     updateCategory: vi.fn(),
     deleteCategory: vi.fn(),
     adjustStock: vi.fn(),
+    stockMovements: vi.fn(),
   },
 }));
 
@@ -70,7 +71,7 @@ function As({ perms, children }: { perms: Perm[]; children: ReactNode }) {
 }
 
 function renderAs(perms: Perm[]) {
-  renderWithProviders(
+  return renderWithProviders(
     <As perms={perms}>
       <ProductsScreen />
     </As>,
@@ -331,6 +332,23 @@ describe("ProductsScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next page" }));
     expect(await within(grid()).findByText("Item 25")).toBeInTheDocument();
     expect(screen.getByText("Page 2 of 2")).toBeInTheDocument();
+  });
+
+  it("offers movement history in the row menu only with REPORT_FINANCIAL", async () => {
+    vi.mocked(commands.stockMovements).mockImplementation(() => ok({ rows: [], next_cursor: null }));
+    const { unmount } = renderAs(MANAGER);
+    await within(grid()).findByText("Blue Bucket 10L");
+    openMenu(screen.getByRole("button", { name: "Actions for Blue Bucket 10L" }));
+    expect(screen.queryByRole("menuitem", { name: "Movement history" })).not.toBeInTheDocument();
+    unmount();
+
+    renderAs([...MANAGER, "REPORT_FINANCIAL"]);
+    await within(grid()).findByText("Blue Bucket 10L");
+    openMenu(screen.getByRole("button", { name: "Actions for Blue Bucket 10L" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Movement history" }));
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).getByText("Blue Bucket 10L")).toBeInTheDocument();
+    expect(commands.stockMovements).toHaveBeenCalledWith("p1", null, null, 100);
   });
 
   it("opens the editor from the row actions menu", async () => {
