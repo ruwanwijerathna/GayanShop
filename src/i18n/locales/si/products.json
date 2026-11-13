@@ -8,9 +8,6 @@
   "noMatch": "ඔබේ සෙවුමට ගැළපෙන භාණ්ඩ නැත",
   "count_one": "භාණ්ඩ {{count}}",
   "count_other": "භාණ්ඩ {{count}}",
-  "showInactive": "අක්‍රිය ඒවාද පෙන්වන්න",
-  "allCategories": "සියලු වර්ග",
-  "categoryFilter": "වර්ගය අනුව පෙරන්න",
   "columns": {
     "name": "නම",
     "sku": "SKU",
@@ -19,7 +16,8 @@
     "price": "මිල",
     "cost": "පිරිවැය",
     "status": "තත්ත්වය",
-    "stock": "තොගය"
+    "stock": "තොගය",
+    "actions": "ක්‍රියා"
   },
   "status": {
     "active": "සක්‍රියයි",
@@ -82,7 +80,15 @@
     "deleteLabel": "{{name}} මකන්න",
     "products_one": "භාණ්ඩ {{count}}",
     "products_other": "භාණ්ඩ {{count}}",
-    "empty": "තවම වර්ග නැත"
+    "empty": "තවම වර්ග නැත",
+    "description": "භාණ්ඩ වර්ග සහ උප වර්ග වලට කාණ්ඩ කරන්න.",
+    "newTitle": "නව වර්ගය",
+    "editTitle": "වර්ගයේ නම වෙනස් කරන්න",
+    "search": "වර්ග සොයන්න",
+    "noMatch": "ගැළපෙන වර්ග නැත",
+    "confirmDelete": "“{{name}}” මකන්නද?",
+    "confirmYes": "මකන්න",
+    "showLabel": "{{name}} හි භාණ්ඩ පෙන්වන්න"
   },
   "selectForLabels": "ලේබල් සඳහා තෝරන්න",
   "selectProduct": "{{name}} තෝරන්න",
@@ -90,12 +96,6 @@
   "all": "සියල්ල",
   "lowStock": "අඩු තොග",
   "outOfStock": "තොග අවසන්",
-  "stockFilter": {
-    "label": "තොගය අනුව පෙරන්න",
-    "all": "සියලු භාණ්ඩ",
-    "low": "අඩු තොග (≤ {{max}})",
-    "out": "තොග අවසන් (0)"
-  },
   "stockCell": {
     "untracked": "තොගය ගණන් නොකෙරේ",
     "inStock": "තොගයේ {{count}}",
@@ -109,5 +109,26 @@
     "adjustments": "තොග ගැලපීම්",
     "valuation": "තොග තක්සේරුව",
     "history": "චලන ඉතිහාසය"
+  },
+  "subtitle": "ඔබගේ නිෂ්පාදන, සජීවී තොග මට්ටම්, ගැලපීම් සහ තක්සේරුව එක තැනකින්.",
+  "uncategorized": "වර්ගයක් නැත",
+  "selectPage": "මෙම පිටුවේ සියලු භාණ්ඩ තෝරන්න",
+  "selectedCount_one": "{{count}}ක් තෝරා ඇත",
+  "selectedCount_other": "{{count}}ක් තෝරා ඇත",
+  "clearSelection": "තේරීම ඉවත් කරන්න",
+  "rowActions": "{{name}} සඳහා ක්‍රියා",
+  "printLabel": "ලේබලය මුද්‍රණය කරන්න",
+  "filters": {
+    "category": "වර්ගය",
+    "stock": "තොග මට්ටම",
+    "status": "තත්ත්වය",
+    "reset": "යළි සකසන්න"
+  },
+  "stockLevel": {
+    "in_stock": "තොගයේ ඇත",
+    "low": "අඩු තොග (≤ {{max}})",
+    "out": "තොග අවසන්",
+    "oversold": "අධික ලෙස විකුණා ඇත",
+    "untracked": "ගණන් නොකෙරේ"
   }
 }

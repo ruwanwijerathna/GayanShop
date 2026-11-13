@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { commands, type Role, type StaffMember_Serialize as StaffMember } from "@/db/bindings";
-import { chooseOption, err, ok, renderWithProviders } from "@/test/render";
+import { err, ok, renderWithProviders } from "@/test/render";
 import { parseLimit, StaffScreen } from "./StaffScreen";
 
 vi.mock("@/db/bindings", () => ({
@@ -80,7 +80,7 @@ describe("StaffScreen", () => {
     if (row) expect(within(row).getByText("Sinhala")).toBeInTheDocument();
   });
 
-  it("adds a cashier with a PIN, language and a granted void", async () => {
+  it("adds a cashier with a PIN and confirmed PIN", async () => {
     renderWithProviders(<StaffScreen />);
     const add = await screen.findByRole("button", { name: "Add staff" });
     await waitFor(() => expect(add).toBeEnabled());
@@ -88,17 +88,15 @@ describe("StaffScreen", () => {
     const dialog = await screen.findByRole("dialog");
     fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Nimali" } });
     fireEvent.change(within(dialog).getByLabelText("PIN (4–8 digits)"), { target: { value: "48a26" } });
-    chooseOption(within(dialog).getByLabelText("Screen language"), "Sinhala");
-    const voidRow = within(dialog).getByText("Void a sale").closest("li");
-    if (voidRow) fireEvent.click(within(voidRow).getByLabelText("Grant"));
+    fireEvent.change(within(dialog).getByLabelText("Confirm PIN"), { target: { value: "4826" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add" }));
     await waitFor(() =>
       expect(commands.createStaff).toHaveBeenCalledWith({
         staff: {
           display_name: "Nimali",
           role_id: "r_cash",
-          ui_language: "si",
-          grants: ["VOID_ORDER"],
+          ui_language: "en",
+          grants: [],
           denies: [],
           max_discount_bp: null,
           is_active: true,
@@ -115,7 +113,6 @@ describe("StaffScreen", () => {
     expect(within(dialog).getByLabelText("Role")).toBeDisabled();
     expect(within(dialog).getByLabelText("Can log in")).toBeDisabled();
     expect(within(dialog).getByText(/only active Owner/)).toBeInTheDocument();
-    expect(within(dialog).getByText("Owners can do everything.")).toBeInTheDocument();
   });
 
   it("shows Rust's owner-invariant refusal", async () => {
@@ -131,10 +128,12 @@ describe("StaffScreen", () => {
 
   it("resets a PIN", async () => {
     renderWithProviders(<StaffScreen />);
-    fireEvent.click(await screen.findByRole("button", { name: "Reset PIN Kasun" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Kasun" }));
     const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reset PIN" }));
     fireEvent.change(within(dialog).getByLabelText("New PIN (4–8 digits)"), { target: { value: "9753" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Set PIN" }));
+    fireEvent.change(within(dialog).getByLabelText("Confirm new PIN"), { target: { value: "9753" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(commands.resetStaffPin).toHaveBeenCalledWith("s2", "9753"));
   });
 
@@ -178,7 +177,6 @@ describe("StaffScreen", () => {
     await screen.findByText("Kasun");
     fireEvent.change(screen.getByLabelText("Search by name or role"), { target: { value: "zzz" } });
     expect(screen.getByText("No staff match your filters.")).toBeInTheDocument();
-    expect(screen.getByText("Showing 0 of 2")).toBeInTheDocument();
   });
 
   it("closes the editor with Cancel without saving", async () => {

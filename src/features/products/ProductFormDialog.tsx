@@ -20,7 +20,7 @@ import { translateError } from "@/i18n";
 import { Sparkles } from "lucide-react";
 import { playCue } from "@/lib/audio";
 import { hasPerm } from "@/lib/permissions";
-import { categoryPath } from "./CategoryPanel";
+import { categoryPath } from "./categories";
 import { emptyForm, fromProduct, toInput, type MoneyField, type ProductFormState } from "./productForm";
 import { SelectField } from "@/components/common/SelectField";
 import { Switch } from "@/components/ui/switch";

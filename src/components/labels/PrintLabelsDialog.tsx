@@ -7,7 +7,14 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ApprovalDialog } from "@/components/auth/ApprovalDialog";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { LabelJob } from "@/db/bindings";
@@ -157,16 +164,12 @@ export function PrintLabelsDialog({ items, onClose }: { items: LabelItem[]; onCl
               {error}
             </p>
           )}
-          <Button
-            type="button"
-            size="pos"
-            className="self-end"
-            disabled={!job || print.isPending}
-            onClick={() => send(null)}
-          >
-            <Printer aria-hidden />
-            {t("print.submit", { count: total })}
-          </Button>
+          <DialogFooter className="mt-2">
+            <Button type="button" size="pos" disabled={!job || print.isPending} onClick={() => send(null)}>
+              <Printer aria-hidden />
+              {t("print.submit", { count: total })}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       <ApprovalDialog

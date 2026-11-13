@@ -14,7 +14,9 @@
   "searchPlaceholder": "නම හෝ භූමිකාව අනුව සොයන්න",
   "filters": {
     "allRoles": "සියලු භූමිකාවන්",
-    "allStatuses": "සියලු තත්ත්වයන්"
+    "allStatuses": "සියලු තත්ත්වයන්",
+    "reset": "යළි සකසන්න",
+    "clearAll": "සියලු පෙරහන් ඉවත් කරන්න"
   },
   "rolesTab": {
     "matrixTitle": "අවසර වගුව (Permission matrix)",
@@ -55,6 +57,8 @@
     "role": "භූමිකාව",
     "language": "තිර භාෂාව",
     "pin": "PIN (ඉලක්කම් {{min}}–8)",
+    "confirmPin": "PIN එක තහවුරු කරන්න",
+    "pinMismatch": "PIN අංක නොගැළපේ.",
     "activeLabel": "ලොග් විය හැක",
     "limit": "පුද්ගලික වට්ටම් සීමාව (%)",
     "limitHint": "හිස් = භූමිකාවේ {{pct}}%",
@@ -67,12 +71,16 @@
     "ownerAll": "හිමිකරුවන්ට සියල්ල කළ හැක.",
     "save": "සුරකින්න",
     "create": "එක් කරන්න",
-    "cancel": "අවලංගු කරන්න",
-    "details": "විස්තර"
+    "cancel": "අවලංගු කරන්න"
   },
   "pin": {
+    "sectionTitle": "Login PIN අංකය",
+    "sectionHint": "Login PIN අංකය වෙනස් කිරීම හෝ යළි පිහිටුවීම",
+    "resetButton": "PIN යළි පිහිටුවන්න",
     "title": "{{name}} සඳහා නව PIN",
     "label": "නව PIN (ඉලක්කම් {{min}}–8)",
+    "confirmLabel": "නව PIN එක තහවුරු කරන්න",
+    "mismatch": "PIN අංක නොගැළපේ.",
     "save": "PIN සකසන්න",
     "done": "{{name}} සඳහා PIN වෙනස් කළා."
   },
@@ -108,7 +116,6 @@
     "CUSTOMER_VIEW": "පාරිභෝගික ඉතිහාසය බැලීම",
     "BACKUP_CREATE": "උපස්ථ ගැනීම"
   },
-  "showing": "{{total}}න් {{shown}} පෙන්වයි",
   "toggle": {
     "activate": "{{name}} සක්‍රීය කරන්න",
     "deactivate": "{{name}} අක්‍රීය කරන්න"

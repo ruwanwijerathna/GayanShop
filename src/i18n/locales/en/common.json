@@ -25,7 +25,22 @@
     "empty": "Nothing to show yet",
     "loading": "Loading…",
     "rowCount_one": "{{count}} row",
-    "rowCount_other": "{{count}} rows"
+    "rowCount_other": "{{count}} rows",
+    "sortAsc": "Asc",
+    "sortDesc": "Desc",
+    "hide": "Hide",
+    "view": "View",
+    "toggleColumns": "Toggle columns",
+    "clearFilter": "Clear filter",
+    "filterSelected_one": "{{count}} selected",
+    "filterSelected_other": "{{count}} selected",
+    "selectedOf": "{{selected}} of {{total}} selected",
+    "rowsPerPage": "Rows per page",
+    "pageOf": "Page {{page}} of {{pages}}",
+    "firstPage": "First page",
+    "prevPage": "Previous page",
+    "nextPage": "Next page",
+    "lastPage": "Last page"
   },
   "nav": {
     "till": "Till",

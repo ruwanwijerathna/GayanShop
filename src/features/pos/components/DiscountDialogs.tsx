@@ -1,7 +1,14 @@
 import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatMoney, parseMajor, toMajorInput, type Money } from "@/lib/money";
@@ -108,7 +115,7 @@ export function LineEditDialog({ line, onClose }: { line: CartLine; onClose: () 
               aria-invalid={discountN === null || discountN > gross}
             />
           </div>
-          <div className="flex flex-wrap justify-between gap-2">
+          <DialogFooter className="flex flex-row justify-between sm:justify-between">
             <Button
               type="button"
               variant="outline"
@@ -123,7 +130,7 @@ export function LineEditDialog({ line, onClose }: { line: CartLine; onClose: () 
             <Button type="submit" size="pos" disabled={!valid}>
               {t("line.save")}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
@@ -178,7 +185,7 @@ export function BillDiscountDialog({
               <p className="text-base">− {formatMoney(amount)}</p>
             )}
           </div>
-          <div className="flex justify-between gap-2">
+          <DialogFooter className="flex flex-row justify-between sm:justify-between">
             <Button
               type="button"
               variant="outline"
@@ -193,7 +200,7 @@ export function BillDiscountDialog({
             <Button type="submit" size="pos" disabled={error !== null}>
               {t("bill.save")}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

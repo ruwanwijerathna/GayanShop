@@ -3,7 +3,14 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ApprovalDialog } from "@/components/auth/ApprovalDialog";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { VoidReason } from "@/db/bindings";
@@ -141,14 +148,19 @@ export function VoidDialog({ onClose, preselect }: { onClose: () => void; presel
                 {error}
               </p>
             )}
-            <Button
-              type="submit"
-              variant="destructive"
-              size="pos"
-              disabled={!selected || noteMissing || voidOrder.isPending}
-            >
-              {t("void.submit")}
-            </Button>
+            <DialogFooter className="gap-2 sm:justify-end">
+              <Button type="button" variant="outline" size="pos" onClick={onClose}>
+                {i18n.t("common:actions.cancel", { defaultValue: "Cancel" })}
+              </Button>
+              <Button
+                type="submit"
+                variant="destructive"
+                size="pos"
+                disabled={!selected || noteMissing || voidOrder.isPending}
+              >
+                {t("void.submit")}
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

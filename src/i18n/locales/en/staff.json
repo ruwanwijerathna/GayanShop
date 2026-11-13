@@ -14,7 +14,9 @@
   "searchPlaceholder": "Search by name or role",
   "filters": {
     "allRoles": "All roles",
-    "allStatuses": "All statuses"
+    "allStatuses": "All statuses",
+    "reset": "Reset",
+    "clearAll": "Clear all filters"
   },
   "rolesTab": {
     "matrixTitle": "Permission matrix",
@@ -55,6 +57,8 @@
     "role": "Role",
     "language": "Screen language",
     "pin": "PIN ({{min}}–8 digits)",
+    "confirmPin": "Confirm PIN",
+    "pinMismatch": "PINs do not match.",
     "activeLabel": "Can log in",
     "limit": "Personal discount limit (%)",
     "limitHint": "Empty = the role's {{pct}}%",
@@ -67,12 +71,16 @@
     "ownerAll": "Owners can do everything.",
     "save": "Save",
     "create": "Add",
-    "cancel": "Cancel",
-    "details": "Details"
+    "cancel": "Cancel"
   },
   "pin": {
+    "sectionTitle": "Login PIN",
+    "sectionHint": "Change or reset login PIN",
+    "resetButton": "Reset PIN",
     "title": "New PIN for {{name}}",
     "label": "New PIN ({{min}}–8 digits)",
+    "confirmLabel": "Confirm new PIN",
+    "mismatch": "PINs do not match.",
     "save": "Set PIN",
     "done": "PIN changed for {{name}}."
   },
@@ -108,7 +116,6 @@
     "CUSTOMER_VIEW": "See customer history",
     "BACKUP_CREATE": "Take backups"
   },
-  "showing": "Showing {{shown}} of {{total}}",
   "toggle": {
     "activate": "Activate {{name}}",
     "deactivate": "Deactivate {{name}}"

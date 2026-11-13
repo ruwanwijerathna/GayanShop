@@ -8,9 +8,6 @@
   "noMatch": "No products match your search",
   "count_one": "{{count}} product",
   "count_other": "{{count}} products",
-  "showInactive": "Show inactive",
-  "allCategories": "All categories",
-  "categoryFilter": "Filter by category",
   "columns": {
     "name": "Name",
     "sku": "SKU",
@@ -19,7 +16,8 @@
     "price": "Price",
     "cost": "Cost",
     "status": "Status",
-    "stock": "Stock"
+    "stock": "Stock",
+    "actions": "Actions"
   },
   "status": {
     "active": "Active",
@@ -82,7 +80,15 @@
     "deleteLabel": "Delete {{name}}",
     "products_one": "{{count}} product",
     "products_other": "{{count}} products",
-    "empty": "No categories yet"
+    "empty": "No categories yet",
+    "description": "Group products into categories and sub-categories.",
+    "newTitle": "New category",
+    "editTitle": "Rename category",
+    "search": "Search categories",
+    "noMatch": "No categories match",
+    "confirmDelete": "Delete “{{name}}”?",
+    "confirmYes": "Delete",
+    "showLabel": "Show products in {{name}}"
   },
   "selectForLabels": "Select for labels",
   "selectProduct": "Select {{name}}",
@@ -90,12 +96,6 @@
   "all": "All",
   "lowStock": "Low stock",
   "outOfStock": "Out of stock",
-  "stockFilter": {
-    "label": "Filter by stock",
-    "all": "$t(all) Products",
-    "low": "Low Stock (≤ {{max}})",
-    "out": "Out of Stock (0)"
-  },
   "stockCell": {
     "untracked": "Stock not tracked",
     "inStock": "{{count}} in stock",
@@ -109,5 +109,26 @@
     "adjustments": "Stock Adjustments",
     "valuation": "Stock Valuation",
     "history": "Movement History"
+  },
+  "subtitle": "Your catalog, live stock levels, adjustments and valuation in one place.",
+  "uncategorized": "Uncategorized",
+  "selectPage": "Select all products on this page",
+  "selectedCount_one": "{{count}} selected",
+  "selectedCount_other": "{{count}} selected",
+  "clearSelection": "Clear selection",
+  "rowActions": "Actions for {{name}}",
+  "printLabel": "Print label",
+  "filters": {
+    "category": "Category",
+    "stock": "Stock level",
+    "status": "Status",
+    "reset": "Reset"
+  },
+  "stockLevel": {
+    "in_stock": "In stock",
+    "low": "Low stock (≤ {{max}})",
+    "out": "Out of stock",
+    "oversold": "Oversold",
+    "untracked": "Not tracked"
   }
 }
