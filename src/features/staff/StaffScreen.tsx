@@ -13,7 +13,9 @@ import {
   SearchX,
   Shield,
   ShieldCheck,
+  UserCheck,
   UserPlus,
+  Users,
   X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -41,6 +43,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SelectField } from "@/components/common/SelectField";
 import type { Perm, Role, StaffMember_Serialize as StaffMember } from "@/db/bindings";
@@ -84,9 +87,12 @@ export const ALL_PERMS: Perm[] = [
   "BACKUP_CREATE",
 ];
 
-export const PERMISSION_GROUPS: { name: string; perms: Perm[] }[] = [
+export const PERMISSION_GROUPS: {
+  id: "sales" | "cash" | "inventory" | "reports" | "system";
+  perms: Perm[];
+}[] = [
   {
-    name: "Sales & Till",
+    id: "sales",
     perms: [
       "SALE_CREATE",
       "QUICK_SALE",
@@ -100,11 +106,11 @@ export const PERMISSION_GROUPS: { name: string; perms: Perm[] }[] = [
     ],
   },
   {
-    name: "Cash Management",
+    id: "cash",
     perms: ["CASH_PAY_IN_OUT", "CASH_SESSION_MANAGE", "CASH_SESSION_FORCE_CLOSE"],
   },
   {
-    name: "Inventory & Products",
+    id: "inventory",
     perms: [
       "PRODUCT_MANAGE",
       "STOCK_ADJUST",
@@ -116,11 +122,11 @@ export const PERMISSION_GROUPS: { name: string; perms: Perm[] }[] = [
     ],
   },
   {
-    name: "Reports & Financials",
+    id: "reports",
     perms: ["REPORT_SALES", "REPORT_FINANCIAL", "EXPENSE_MANAGE", "AUDIT_VIEW"],
   },
   {
-    name: "System Administration",
+    id: "system",
     perms: [
       "USER_MANAGE",
       "SETTINGS_MANAGE",
@@ -215,49 +221,45 @@ export function StaffScreen() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label={t("stats.total")} value={list.length} />
-        <StatCard label={t("stats.active")} value={activeCount} />
-        <StatCard label={t("stats.roles")} value={rolesList.length} />
-      </div>
-
-      <div role="tablist" className="inline-flex self-start rounded-lg bg-muted p-1 text-sm">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "staff"}
-          onClick={() => setTab("staff")}
-          className={cn(
-            "rounded-md px-4 py-2 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            tab === "staff" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          {t("tabs.staff")}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "roles"}
-          onClick={() => setTab("roles")}
-          className={cn(
-            "rounded-md px-4 py-2 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            tab === "roles" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          {t("tabs.roles")}
-        </button>
-      </div>
-
-      {tab === "staff" ? (
-        <StaffDataTable
-          data={list}
-          roles={rolesList}
-          loading={loading}
-          onEdit={(m) => setEditing(m)}
-          onToggleActive={handleToggleActive}
+        <StatCard label={t("stats.total")} value={list.length} icon={<Users aria-hidden />} tone="primary" />
+        <StatCard
+          label={t("stats.active")}
+          value={activeCount}
+          icon={<UserCheck aria-hidden />}
+          tone="success"
         />
-      ) : (
-        <RolesTab roles={rolesList} staff={list} />
-      )}
+        <StatCard
+          label={t("stats.roles")}
+          value={rolesList.length}
+          icon={<Shield aria-hidden />}
+          tone="warning"
+        />
+      </div>
+
+      <Tabs value={tab} onValueChange={(v) => setTab(v === "roles" ? "roles" : "staff")} className="gap-4">
+        <TabsList className="h-12 self-start rounded-xl p-1">
+          <TabsTrigger value="staff" className="h-full min-w-36 rounded-lg px-5 text-sm">
+            <Users aria-hidden />
+            {t("tabs.staff")}
+          </TabsTrigger>
+          <TabsTrigger value="roles" className="h-full min-w-36 rounded-lg px-5 text-sm">
+            <Shield aria-hidden />
+            {t("tabs.roles")}
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="staff" className="motion-safe:animate-in motion-safe:fade-in-0">
+          <StaffDataTable
+            data={list}
+            roles={rolesList}
+            loading={loading}
+            onEdit={(m) => setEditing(m)}
+            onToggleActive={handleToggleActive}
+          />
+        </TabsContent>
+        <TabsContent value="roles" className="motion-safe:animate-in motion-safe:fade-in-0">
+          <RolesTab roles={rolesList} staff={list} />
+        </TabsContent>
+      </Tabs>
 
       {editing !== null && roles.data && (
         <StaffDialog
@@ -270,15 +272,37 @@ export function StaffScreen() {
   );
 }
 
-function StatCard({ label, value }: { label: string; value: number }) {
+const STAT_TONES = {
+  primary: "bg-primary/10 text-primary",
+  success: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  warning: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+} as const;
+
+function StatCard({
+  label,
+  value,
+  icon,
+  tone,
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  tone: keyof typeof STAT_TONES;
+}) {
   return (
-    <Card className="gap-1 py-4">
-      <CardHeader className="gap-0 py-0 px-5">
-        <CardDescription>{label}</CardDescription>
-      </CardHeader>
-      <CardContent className="py-0 px-5 pt-1">
-        <div className="text-3xl font-semibold tabular-nums">{value}</div>
-      </CardContent>
+    <Card className="flex-row items-center gap-4 px-5 py-4 shadow-sm transition-shadow hover:shadow-md">
+      <span
+        className={cn(
+          "flex size-12 shrink-0 items-center justify-center rounded-xl [&_svg]:size-6",
+          STAT_TONES[tone],
+        )}
+      >
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <div className="truncate text-sm text-muted-foreground">{label}</div>
+        <div className="text-3xl font-semibold leading-tight tabular-nums">{value}</div>
+      </div>
     </Card>
   );
 }
@@ -442,7 +466,9 @@ function StaffDataTable({ data, roles, loading, onEdit, onToggleActive }: StaffD
                 checked={m.is_active}
                 disabled={m.last_owner}
                 onCheckedChange={(c) => onToggleActive(m, c)}
-                aria-label={`${m.is_active ? "Deactivate" : "Activate"} ${m.display_name}`}
+                aria-label={t(m.is_active ? "toggle.deactivate" : "toggle.activate", {
+                  name: m.display_name,
+                })}
               />
               <span className="text-xs text-muted-foreground">
                 {m.is_active ? t("active") : t("inactive")}
@@ -628,21 +654,24 @@ function RolesTab({ roles, staff }: { roles: Role[]; staff: StaffMember[] }) {
                   <CardTitle className="flex items-center gap-2 text-lg">
                     {role.name}
                     {role.is_system && (
-                      <Lock className="size-3.5 text-muted-foreground" aria-label="System role" />
+                      <Lock
+                        className="size-3.5 text-muted-foreground"
+                        aria-label={t("rolesTab.systemRole")}
+                      />
                     )}
                   </CardTitle>
                   <Badge variant="secondary">{t("rolesTab.members", { count: members })}</Badge>
                 </div>
                 <CardDescription className="text-xs pt-1">
                   {t("rolesTab.maxDiscount", { pct: limitText(role.max_discount_bp) || "0" })} ·{" "}
-                  {role.min_pin_len} digit PIN
+                  {t("rolesTab.pinLength", { count: role.min_pin_len })}
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-0 pt-3 flex items-center justify-between text-xs text-muted-foreground border-t">
                 <span>{t("rolesTab.permsCount", { count: permCount, total: ALL_PERMS.length })}</span>
                 {isOwner && (
                   <Badge variant="outline" className="text-amber-600 border-amber-300">
-                    <Shield className="size-3 mr-1" /> Full access
+                    <Shield className="size-3 mr-1" /> {t("rolesTab.fullAccess")}
                   </Badge>
                 )}
               </CardContent>
@@ -670,10 +699,10 @@ function RolesTab({ roles, staff }: { roles: Role[]; staff: StaffMember[] }) {
             </TableHeader>
             <TableBody>
               {PERMISSION_GROUPS.map((group) => (
-                <React.Fragment key={group.name}>
+                <React.Fragment key={group.id}>
                   <TableRow className="bg-muted/40 hover:bg-muted/40 font-semibold text-xs text-muted-foreground uppercase tracking-wider">
                     <TableCell colSpan={roles.length + 1} className="py-2 px-4">
-                      {group.name}
+                      {t(`groups.${group.id}`)}
                     </TableCell>
                   </TableRow>
                   {group.perms.map((p) => (
@@ -688,11 +717,14 @@ function RolesTab({ roles, staff }: { roles: Role[]; staff: StaffMember[] }) {
                         return (
                           <TableCell key={r.id} className="text-center py-3">
                             {on ? (
-                              <Check className="mx-auto size-4 text-emerald-600" aria-label="Allowed" />
+                              <Check
+                                className="mx-auto size-4 text-emerald-600"
+                                aria-label={t("rolesTab.allowed")}
+                              />
                             ) : (
                               <Minus
                                 className="mx-auto size-4 text-muted-foreground/40"
-                                aria-label="Not allowed"
+                                aria-label={t("rolesTab.notAllowed")}
                               />
                             )}
                           </TableCell>

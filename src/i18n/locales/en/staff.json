@@ -24,7 +24,13 @@
     "members_one": "{{count}} member",
     "members_other": "{{count}} members",
     "permsCount": "{{count}} of {{total}} permissions",
-    "maxDiscount": "Max discount: {{pct}}%"
+    "maxDiscount": "Max discount: {{pct}}%",
+    "fullAccess": "Full access",
+    "systemRole": "System role",
+    "allowed": "Allowed",
+    "notAllowed": "Not allowed",
+    "pinLength_one": "{{count}}-digit PIN",
+    "pinLength_other": "{{count}}-digit PIN"
   },
   "emptySearch": "No staff match your filters.",
   "lastOwnerCannotDeactivate": "The only active Owner cannot be deactivated.",
@@ -64,7 +70,8 @@
     "lastOwner": "The only active Owner can't be disabled or moved to another role.",
     "ownerAll": "Owners can do everything.",
     "save": "Save",
-    "create": "Add"
+    "create": "Add",
+    "cancel": "Cancel"
   },
   "pin": {
     "sectionTitle": "Login PIN",
@@ -108,5 +115,16 @@
     "DATA_EXPORT": "Export data",
     "CUSTOMER_VIEW": "See customer history",
     "BACKUP_CREATE": "Take backups"
+  },
+  "toggle": {
+    "activate": "Activate {{name}}",
+    "deactivate": "Deactivate {{name}}"
+  },
+  "groups": {
+    "sales": "Sales & Till",
+    "cash": "Cash Management",
+    "inventory": "Inventory & Products",
+    "reports": "Reports & Financials",
+    "system": "System Administration"
   }
 }
