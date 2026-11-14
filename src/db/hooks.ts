@@ -654,6 +654,7 @@ function useStockMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>)
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["inventory"] });
       await qc.invalidateQueries({ queryKey: ["batches"] });
+      await qc.invalidateQueries({ queryKey: ["catalog"] });
     },
   });
 }

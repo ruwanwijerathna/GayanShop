@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useSession } from "@/app/session";
@@ -64,6 +65,7 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
   const { t, i18n } = useTranslation(["products", "common"]);
   const { session } = useSession();
   const canViewCost = hasPerm(session, "VIEW_COST");
+  const qc = useQueryClient();
   const save = useSaveProduct();
   const remove = useDeleteProduct();
   const adjust = useAdjustStock();
@@ -108,7 +110,7 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
     set(which === "sku" ? "skuMode" : "barcodeMode", "manual");
   };
 
-  const submit = () => {
+  const submit = async () => {
     const qtyText = product ? "" : form.quantity.trim();
     if (qtyText !== "" && !/^\d{1,7}$/.test(qtyText)) {
       setQuantityError(true);
@@ -124,32 +126,31 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
       return;
     }
     setMoneyError(null);
-    save.mutate(
-      { id: product?.id ?? null, input: built.input },
-      {
-        onSuccess: async (saved) => {
-          // Only a NEW product takes opening stock here. Changing stock later is Restock / Adjust stock.
-          if (qtyText !== "" && Number.parseInt(qtyText, 10) > 0) {
-            try {
-              await adjust.mutateAsync({
-                input: {
-                  product_id: saved.id,
-                  qty_delta: Number.parseInt(qtyText, 10),
-                  note: form.note.trim() || "Opening stock",
-                },
-                approvalId: null,
-              });
-            } catch {
-              // A refused stock entry does not roll back the saved product.
-            }
-          }
-          playCue("complete");
-          onSaved?.(saved);
-          onClose();
-        },
-        onError: () => playCue("error"),
-      },
-    );
+
+    const qtyNumber = qtyText !== "" ? Number.parseInt(qtyText, 10) : 0;
+    try {
+      const saved = await save.mutateAsync({ id: product?.id ?? null, input: built.input });
+      if (!product && qtyNumber > 0) {
+        try {
+          await adjust.mutateAsync({
+            input: {
+              product_id: saved.id,
+              qty_delta: qtyNumber,
+              note: form.note.trim() || "Opening stock",
+            },
+            approvalId: null,
+          });
+        } catch {
+          // A refused stock entry does not roll back the saved product.
+        }
+      }
+      await qc.invalidateQueries({ queryKey: ["catalog"] });
+      playCue("complete");
+      onSaved?.(!product && qtyNumber > 0 ? { ...saved, on_hand: qtyNumber } : saved);
+      onClose();
+    } catch {
+      playCue("error");
+    }
   };
 
   const doDelete = () => {

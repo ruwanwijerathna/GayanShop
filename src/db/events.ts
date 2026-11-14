@@ -15,7 +15,7 @@ const TABLE_KEYS: Record<string, readonly string[] | readonly (readonly string[]
   audit_logs: ["audit"],
   batches: [["batches"], ["reports"]],
   batch_items: ["batches"],
-  stock_movements: [["batches"], ["inventory"], ["reports"]],
+  stock_movements: [["catalog"], ["batches"], ["inventory"], ["reports"]],
   cash_sessions: ["cash"],
   cash_movements: ["cash"],
   print_jobs: ["printer"],
