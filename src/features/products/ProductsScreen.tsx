@@ -521,7 +521,12 @@ export function ProductsScreen() {
                           ? "descending"
                           : undefined
                     }
-                    className={cn("h-12", header.column.id === "select" && "w-12 pl-4")}
+                    className={cn(
+                      "h-12",
+                      header.column.id === "select" && "w-12 pl-4",
+                      (header.column.id === "price" || header.column.id === "cost") && "text-right",
+                      header.column.id === "actions" && "w-14 text-right pr-4",
+                    )}
                   >
                     {header.isPlaceholder
                       ? null
@@ -558,7 +563,12 @@ export function ProductsScreen() {
                     return (
                       <TableCell
                         key={cell.id}
-                        className={cn(id === "select" && "w-12 pl-4", id === "name" && "max-w-64")}
+                        className={cn(
+                          id === "select" && "w-12 pl-4",
+                          id === "name" && "max-w-64",
+                          (id === "price" || id === "cost") && "text-right",
+                          id === "actions" && "w-14 text-right pr-4",
+                        )}
                         onClick={id === "select" || id === "actions" ? stop : undefined}
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
