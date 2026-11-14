@@ -175,5 +175,13 @@
     "language": "Switch language"
   },
   "noSession": "Open a cash session before selling.",
-  "openCash": "Go to Cash"
+  "openCash": "Go to Cash",
+  "disambiguation": {
+    "title": "Select product",
+    "description": "{{count}} products share the barcode {{code}}. Which one is it?",
+    "stock": "{{count}} in stock",
+    "move": "move",
+    "add": "add to sale",
+    "cancel": "cancel"
+  }
 }

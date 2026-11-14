@@ -56,8 +56,11 @@ export const commands = {
 	deleteProduct: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_product", { id })),
 	/**  Type-ahead search (English names, SKUs, barcodes; Sinhala names by substring). */
 	searchProducts: (query: string, limit: number) => typedError<ProductSummary_Serialize[], AppError>(__TAURI_INVOKE("search_products", { query, limit })),
-	/**  Scanner lookup: barcode first, then in-store SKU. `None` = unknown code. */
-	lookupProductCode: (code: string) => typedError<ProductSummary_Serialize | null, AppError>(__TAURI_INVOKE("lookup_product_code", { code })),
+	/**
+	 *  Scanner lookup: every active product with this barcode (variants may share one), else the in-store SKU.
+	 *  Empty = unknown code, one = add it, several = the till asks which.
+	 */
+	lookupProductCodeMatches: (code: string) => typedError<ProductSummary_Serialize[], AppError>(__TAURI_INVOKE("lookup_product_code_matches", { code })),
 	listBatches: () => typedError<Batch_Serialize[], AppError>(__TAURI_INVOKE("list_batches")),
 	getBatch: (id: string) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("get_batch", { id })),
 	createBatch: (input: BatchInput_Deserialize) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("create_batch", { input })),

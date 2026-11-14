@@ -7,7 +7,7 @@ mod common;
 use common::{CASHIER, Till, cart, cash, quick, till};
 use gayanshop_lib::clock::stable_id;
 use gayanshop_lib::db::repo::checkout::{self, NoFaults};
-use gayanshop_lib::db::repo::products::lookup_code;
+use gayanshop_lib::db::repo::products::lookup_code_matches;
 use gayanshop_lib::db::repo::quick_sales::{self, PromoteInput, QuickSaleStatus};
 use gayanshop_lib::db::repo::void::{self, VoidInput, VoidReason, Voider};
 use gayanshop_lib::error::AppError;
@@ -95,7 +95,11 @@ async fn promotion_creates_a_scannable_product_with_shelf_stock_in_one_transacti
         ("Blue Bucket 10L", 45_000, Some(20_000), true)
     );
     let barcode = p.barcode.clone().unwrap();
-    assert_eq!(lookup_code(t.pool(), &t.s.store_id, &barcode).await.unwrap().unwrap().id, p.id, "scannable at once");
+    assert_eq!(
+        lookup_code_matches(t.pool(), &t.s.store_id, &barcode).await.unwrap().first().map(|h| h.id.clone()),
+        Some(p.id.clone()),
+        "scannable at once"
+    );
     assert_eq!(t.count(&format!("SELECT on_hand FROM stock_levels WHERE product_id = '{}'", p.id)).await, 6);
     let layer_batch: String = sqlx::query_scalar(
         "SELECT b.code FROM stock_movements m JOIN batch_items bi ON bi.id = m.batch_item_id

@@ -126,7 +126,6 @@ async fn invalid_input_is_rejected_with_specific_codes() {
         (ProductInput { default_cost: Some(-5), ..input("Soap", 100) }, "COST_INVALID"),
         (ProductInput { sku: manual("BB-10"), ..input("Soap", 100) }, "SKU_TAKEN"),
         (ProductInput { sku: manual("a b"), ..input("Soap", 100) }, "SKU_INVALID"),
-        (ProductInput { barcode: manual("4792024015103"), ..input("Soap", 100) }, "BARCODE_TAKEN"),
         (ProductInput { barcode: manual("4792024015108"), ..input("Soap", 100) }, "BARCODE_CHECK_DIGIT"),
         (ProductInput { barcode: manual("12"), ..input("Soap", 100) }, "BARCODE_INVALID"),
         (ProductInput { category_id: Some("nope".into()), ..input("Soap", 100) }, "CATEGORY_INVALID"),
@@ -142,13 +141,32 @@ async fn invalid_input_is_rejected_with_specific_codes() {
     assert_eq!(scalar_i64(t.pool(), "SELECT COUNT(*) FROM products").await, 1, "nothing partial was written");
     assert_eq!(scalar_i64(t.pool(), "SELECT COUNT(*) FROM audit_logs").await, 1);
 
-    // An inactive product may share a barcode (the partial unique index only covers active rows)…
+    // Variants may share a manufacturer barcode: active and inactive products alike (SKUs stay unique).
+    let twin = ProductInput { barcode: manual("4792024015103"), ..input("Blue Bucket Lime", 46_000) };
+    let twin = products::create(&t.db, &ctx(), &owner(), &twin, true).await.unwrap();
+    assert_eq!(twin.barcode.as_deref(), Some("4792024015103"));
     let parked = ProductInput { barcode: manual("4792024015103"), is_active: false, ..input("Old Bucket", 100) };
     let parked = products::create(&t.db, &ctx(), &owner(), &parked, true).await.unwrap();
-    // …but can't be reactivated while the code is taken.
     let reactivate = ProductInput { barcode: manual("4792024015103"), ..input("Old Bucket", 100) };
-    let err = products::update(&t.db, &ctx(), &owner(), &parked.id, &reactivate, true).await.unwrap_err();
-    assert_eq!(validation_code(err), "BARCODE_TAKEN");
+    assert!(products::update(&t.db, &ctx(), &owner(), &parked.id, &reactivate, true).await.unwrap().is_active);
+}
+
+#[tokio::test]
+async fn generated_in_store_barcodes_skip_ones_already_in_use() {
+    let t = open().await;
+    let mut a = input("Blue Bucket", 45_000);
+    a.barcode = CodeChoice::Generate;
+    let a = products::create(&t.db, &ctx(), &owner(), &a, true).await.unwrap();
+    // Someone typed in the barcode the next sequence number would produce.
+    let digit = gayanshop_lib::domain::receipt_no::device_digit("T01").unwrap();
+    let taken = gayanshop_lib::domain::receipt_no::in_store_ean13(digit, 2).unwrap();
+    let squatter = ProductInput { barcode: manual(&taken), ..input("Squatter", 100) };
+    products::create(&t.db, &ctx(), &owner(), &squatter, true).await.unwrap();
+    let mut b = input("Red Bucket", 45_000);
+    b.barcode = CodeChoice::Generate;
+    let b = products::create(&t.db, &ctx(), &owner(), &b, true).await.unwrap();
+    assert_ne!(b.barcode.as_deref(), Some(taken.as_str()), "skipped the code in use");
+    assert_ne!(a.barcode, b.barcode);
 }
 
 #[tokio::test]
@@ -220,15 +238,48 @@ async fn scanner_lookup_prefers_barcode_then_sku_and_ignores_inactive() {
     let b = ProductInput { barcode: manual("100200"), ..input("Odd Label", 1_000) };
     let b = products::create(&t.db, &ctx(), &owner(), &b, true).await.unwrap();
 
-    assert_eq!(products::lookup_code(p, "s", "4792024015103").await.unwrap().unwrap().id, a.id);
-    assert_eq!(products::lookup_code(p, "s", " 100200 ").await.unwrap().unwrap().id, b.id);
-    assert_eq!(products::lookup_code(p, "s", "999999").await.unwrap(), None);
-    assert_eq!(products::lookup_code(p, "s", "").await.unwrap(), None);
+    let ids = |hits: Vec<_>| {
+        hits.into_iter().map(|h: gayanshop_lib::db::repo::products::ProductSummary| h.id).collect::<Vec<_>>()
+    };
+    assert_eq!(ids(products::lookup_code_matches(p, "s", "4792024015103").await.unwrap()), vec![a.id.clone()]);
+    assert_eq!(ids(products::lookup_code_matches(p, "s", " 100200 ").await.unwrap()), vec![b.id.clone()]);
+    assert!(products::lookup_code_matches(p, "s", "999999").await.unwrap().is_empty());
+    assert!(products::lookup_code_matches(p, "s", "").await.unwrap().is_empty());
 
     exec(p, &format!("UPDATE products SET is_active = 0 WHERE id = '{}'", b.id)).await;
-    assert_eq!(products::lookup_code(p, "s", "100200").await.unwrap().unwrap().id, a.id, "falls back to SKU");
+    assert_eq!(
+        ids(products::lookup_code_matches(p, "s", "100200").await.unwrap()),
+        vec![a.id.clone()],
+        "falls back to SKU"
+    );
     exec(p, &format!("UPDATE products SET is_active = 0 WHERE id = '{}'", a.id)).await;
-    assert_eq!(products::lookup_code(p, "s", "100200").await.unwrap(), None);
+    assert!(products::lookup_code_matches(p, "s", "100200").await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_shared_barcode_returns_every_active_variant_by_name() {
+    let t = open().await;
+    let p = t.pool();
+    let shared = "4792024015103";
+    let mut made = Vec::new();
+    for name in ["Lime Soap", "apple Soap", "Mint Soap"] {
+        let v = ProductInput { barcode: manual(shared), ..input(name, 10_000) };
+        made.push(products::create(&t.db, &ctx(), &owner(), &v, true).await.unwrap());
+    }
+    let names = |hits: Vec<gayanshop_lib::db::repo::products::ProductSummary>| {
+        hits.into_iter().map(|h| h.name).collect::<Vec<_>>()
+    };
+    assert_eq!(
+        names(products::lookup_code_matches(p, "s", shared).await.unwrap()),
+        ["apple Soap", "Lime Soap", "Mint Soap"],
+        "all variants, case-insensitive name order"
+    );
+    // Deactivating one drops it from the scan; deleting another too.
+    exec(p, &format!("UPDATE products SET is_active = 0 WHERE id = '{}'", made[0].id)).await;
+    assert_eq!(products::lookup_code_matches(p, "s", shared).await.unwrap().len(), 2);
+    // The till's type-ahead puts every exact-code match first.
+    let hits = products::search(p, "s", shared, 20).await.unwrap();
+    assert_eq!(hits.iter().take(2).map(|h| h.name.as_str()).collect::<Vec<_>>(), ["apple Soap", "Mint Soap"]);
 }
 
 #[tokio::test]

@@ -17,7 +17,7 @@ import type {
 import { CommandError } from "@/db/client";
 import {
   discardCurrentCart,
-  lookupProductCode,
+  lookupProductMatches,
   saveCurrentCart,
   useCheckoutOrder,
   useCurrentCart,
@@ -41,6 +41,7 @@ import { PaymentDialog } from "./components/PaymentDialog";
 import { QuickSaleBar } from "./components/QuickSaleBar";
 import { HeldSalesDialog, HelpDialog } from "./components/TillDialogs";
 import { VoidDialog } from "./components/VoidDialog";
+import { BarcodeDisambiguationDialog } from "./dialogs/BarcodeDisambiguationDialog";
 import { withinLimit } from "./lib/pricing";
 import { routeShortcut, SHORTCUT_LABELS, type PosAction } from "./lib/shortcuts";
 import { cartStore, parsePayload, previewTotals, toCheckoutLines, useCart } from "./store/cart.store";
@@ -94,6 +95,7 @@ function Till() {
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [voidPreselect, setVoidPreselect] = useState<string | null>(null);
   const [approval, setApproval] = useState<{ perm: Perm; payments: PaymentLine[] } | null>(null);
+  const [shared, setShared] = useState<{ code: string; products: ProductSummary[] } | null>(null);
   const [done, setDone] = useState<{ receipt: string; change: number } | null>(null);
 
   const search = useProductSearch(query);
@@ -172,6 +174,7 @@ function Till() {
     setQuery("");
     await routeScan(code, {
       onProduct: addProduct,
+      onMultipleProducts: (products, shownCode) => setShared({ code: shownCode, products }),
       onOrder: (id) => {
         setVoidPreselect(id);
         setDialog("void");
@@ -185,10 +188,15 @@ function Till() {
   const enterQuery = async () => {
     const q = query.trim();
     if (q === "") return;
-    const exact = await lookupProductCode(q).catch(() => null);
-    const pick = exact ?? results[active] ?? null;
+    const exact = await lookupProductMatches(q).catch(() => []);
     setQuery("");
     setActive(0);
+    if (exact.length > 1) {
+      playCue("approval");
+      setShared({ code: q, products: exact });
+      return;
+    }
+    const pick = exact[0] ?? results[active] ?? null;
     if (pick) {
       playCue("tick");
       addProduct(pick);
@@ -570,6 +578,22 @@ function Till() {
         <HeldSalesDialog swapping={lines.length > 0} onRecall={recallSale} onClose={closeDialog} />
       )}
       {dialog === "help" && <HelpDialog onClose={closeDialog} />}
+      {shared && (
+        <BarcodeDisambiguationDialog
+          code={shared.code}
+          products={shared.products}
+          onSelect={(p) => {
+            playCue("tick");
+            addProduct(p);
+            setShared(null);
+            focusScan();
+          }}
+          onClose={() => {
+            setShared(null);
+            focusScan();
+          }}
+        />
+      )}
     </div>
   );
 }

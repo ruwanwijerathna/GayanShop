@@ -19,7 +19,9 @@ vi.mock("@/db/bindings", () => ({
   commands: {
     currentCashSession: vi.fn(),
     searchProducts: vi.fn(),
-    lookupProductCode: vi.fn(),
+    lookupProductCodeMatches: vi.fn(),
+    getProduct: vi.fn(),
+    listCategories: vi.fn(),
     customerLookup: vi.fn(),
     checkoutOrder: vi.fn(),
     cartSaveCurrent: vi.fn(),
@@ -65,6 +67,24 @@ const BUCKET: ProductSummary = {
   price: 45_000,
   min_price: null,
   track_stock: true,
+};
+
+const SHARED = "4792024015103";
+const LIME: ProductSummary = {
+  ...BUCKET,
+  id: "p2",
+  name: "Lime Soap",
+  sku: "100002",
+  barcode: SHARED,
+  price: 12_000,
+};
+const MINT: ProductSummary = {
+  ...BUCKET,
+  id: "p3",
+  name: "Mint Soap",
+  sku: "100003",
+  barcode: SHARED,
+  price: 13_000,
 };
 
 function As({ perms, children }: { perms: Perm[]; children: ReactNode }) {
@@ -122,8 +142,16 @@ beforeEach(() => {
   );
   vi.mocked(commands.currentCashSession).mockImplementation(() => ok(OPEN));
   vi.mocked(commands.searchProducts).mockImplementation(() => ok([BUCKET]));
-  vi.mocked(commands.lookupProductCode).mockImplementation((c: string) =>
-    ok(c === BUCKET.barcode ? BUCKET : null),
+  vi.mocked(commands.lookupProductCodeMatches).mockImplementation((c: string) => {
+    if (c === BUCKET.barcode) return ok([BUCKET]);
+    if (c === SHARED) return ok([LIME, MINT]);
+    return ok([]);
+  });
+  vi.mocked(commands.listCategories).mockImplementation(() =>
+    ok([{ id: "c1", name: "Soap", parent_id: null, product_count: 2 } as never]),
+  );
+  vi.mocked(commands.getProduct).mockImplementation((id: string) =>
+    ok({ id, category_id: "c1", on_hand: id === "p2" ? 12 : 3 } as never),
   );
   vi.mocked(commands.customerLookup).mockImplementation(() =>
     ok({
@@ -155,6 +183,61 @@ beforeEach(() => {
 });
 
 afterEach(() => vi.useRealTimers());
+
+describe("PosScreen: shared barcodes", () => {
+  it("adds a unique barcode straight away, with no dialog", async () => {
+    await renderTill();
+    await scan("4791234567890");
+    await waitFor(() => expect(cartStore.getState().lines).toHaveLength(1));
+    expect(screen.queryByRole("listbox", { name: "Select product" })).not.toBeInTheDocument();
+  });
+
+  it("asks which variant when a scanned barcode matches several, and adds the one chosen with ↓ Enter", async () => {
+    await renderTill();
+    await scan(SHARED);
+    const list = await screen.findByRole("listbox", { name: "Select product" });
+    await waitFor(() => expect(list).toHaveFocus());
+    const options = within(list).getAllByRole("option");
+    expect(options.map((o) => o.getAttribute("aria-selected"))).toEqual(["true", "false"]);
+    expect(options[0]).toHaveTextContent("Lime Soap");
+    expect(await within(list).findByText(/Soap · 100002 · 12 in stock/)).toBeInTheDocument();
+    expect(cartStore.getState().lines).toHaveLength(0);
+    fireEvent.keyDown(list, { key: "ArrowDown" });
+    expect(within(list).getAllByRole("option")[1]).toHaveAttribute("aria-selected", "true");
+    fireEvent.keyDown(list, { key: "Enter" });
+    await waitFor(() => expect(cartStore.getState().lines.map((l) => l.name)).toEqual(["Mint Soap"]));
+    expect(screen.queryByRole("listbox", { name: "Select product" })).not.toBeInTheDocument();
+  });
+
+  it("ArrowUp stops at the first row, and Esc adds nothing", async () => {
+    await renderTill();
+    await scan(SHARED);
+    const list = await screen.findByRole("listbox", { name: "Select product" });
+    fireEvent.keyDown(list, { key: "ArrowUp" });
+    expect(within(list).getAllByRole("option")[0]).toHaveAttribute("aria-selected", "true");
+    fireEvent.keyDown(list, { key: "Escape" });
+    await waitFor(() =>
+      expect(screen.queryByRole("listbox", { name: "Select product" })).not.toBeInTheDocument(),
+    );
+    expect(cartStore.getState().lines).toHaveLength(0);
+  });
+
+  it("lets a click pick a row", async () => {
+    await renderTill();
+    await scan(SHARED);
+    const list = await screen.findByRole("listbox", { name: "Select product" });
+    fireEvent.mouseDown(within(list).getAllByRole("option")[1] as HTMLElement);
+    await waitFor(() => expect(cartStore.getState().lines.map((l) => l.name)).toEqual(["Mint Soap"]));
+  });
+
+  it("does the same for a shared barcode typed into the scan field", async () => {
+    const field = await renderTill();
+    fireEvent.change(field, { target: { value: SHARED } });
+    fireEvent.keyDown(field, { key: "Enter", code: "Enter" });
+    expect(await screen.findByRole("listbox", { name: "Select product" })).toBeInTheDocument();
+    expect(cartStore.getState().lines).toHaveLength(0);
+  });
+});
 
 describe("PosScreen", () => {
   it("hides the on-screen keypad unless touch screen mode is on", async () => {

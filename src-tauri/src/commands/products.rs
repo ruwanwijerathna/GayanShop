@@ -111,10 +111,11 @@ pub async fn search_products(state: State<'_, AppState>, query: String, limit: u
     products::search(&state.db.pool, &store_id(&state)?, &query, limit).await
 }
 
-/// Scanner lookup: barcode first, then in-store SKU. `None` = unknown code.
+/// Scanner lookup: every active product with this barcode (variants may share one), else the in-store SKU.
+/// Empty = unknown code, one = add it, several = the till asks which.
 #[tauri::command]
 #[specta::specta]
-pub async fn lookup_product_code(state: State<'_, AppState>, code: String) -> AppResult<Option<ProductSummary>> {
+pub async fn lookup_product_code_matches(state: State<'_, AppState>, code: String) -> AppResult<Vec<ProductSummary>> {
     session(&state)?;
-    products::lookup_code(&state.db.pool, &store_id(&state)?, &code).await
+    products::lookup_code_matches(&state.db.pool, &store_id(&state)?, &code).await
 }

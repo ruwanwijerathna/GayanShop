@@ -1564,7 +1564,8 @@ CREATE TABLE products (
   deleted_at TEXT, version INTEGER NOT NULL DEFAULT 1
 );
 -- Uniqueness among live products only; sync conflict handling (§6.3) keeps both sides valid.
-CREATE UNIQUE INDEX ux_products_barcode ON products(store_id, barcode)
+-- v4.3 (migration 0003): NOT unique. Variants may share a manufacturer barcode; the till asks which one (§7.1).
+CREATE INDEX idx_products_barcode ON products(store_id, barcode)
   WHERE barcode IS NOT NULL AND deleted_at IS NULL AND is_active = 1;
 CREATE UNIQUE INDEX ux_products_sku ON products(store_id, sku)
   WHERE sku IS NOT NULL AND deleted_at IS NULL;
@@ -2458,6 +2459,7 @@ GROUP BY b.id;
 | `staff` / `roles` owner invariant | A merged change that would leave no active Owner is rejected (`OWNER_INVARIANT`) and surfaced to the owner. Only a change that *removes* the last active Owner counts: while a store's seeds are first arriving there is none yet. |
 | `audit_logs` chain | The server checks `prev_hash` against the device's `last_audit_hash`. A mismatch is still **accepted**, but flagged (`devices.chain_broken_at`) and shown on the Audit screen. Losing audit rows would be worse than storing a broken chain. |
 | Barcode collision (two devices registered the same barcode offline) | It's never a rejection, because a sale must never fail over this. **Server:** before upserting an active product, check for another live, active product with that barcode. If one exists, store the incoming row with `is_active=false`, `barcode_conflict=true`, `updated_at=now()` and `updated_by_device=SYSTEM`, and return `ok`. **Client pull:** before applying a pulled active product, deactivate any *other* local active product with that barcode in the same transaction (`barcode_conflict=1` plus an outbox upsert). The partial unique index can't fail the pull. The owner resolves it in "Barcode conflicts" (`BARCODE_CONFLICT_RESOLVE`). |
+| *v4.3 note on the row above* | Locally, barcodes are no longer unique (migration `0003_shared_barcodes`), so saving a second active product with the same barcode succeeds. **The server's parking rule and the client pull rule above are unchanged and still treat a shared barcode as a collision. They need a follow-up (a Supabase migration plus `sync/apply.rs`) before shared barcodes are safe across counters.** |
 | `quick_sale_links` | The deterministic ID means concurrent promotions of the same key converge on one row. If two managers created *different* products for it, the loser's product stays, and the review screen flags "duplicate product from promotion". |
 | Negative stock after merge | Allowed. Reported in "Oversold layers". The owner fixes it with a `count_correction` movement. |
 | `customers` | Deterministic id `UUIDv5(store_id, phone_e164)`, so two counters registering the same number offline converge on one row (LWW for name and note). An erasure (`erased_at` set) wins over any concurrent edit: the server and the pull both refuse to re-populate an erased row, except through an explicit re-activation by Rust. |
@@ -2497,6 +2499,7 @@ The format is `{device_code}-{YYYYMMDD}-{seq:04}`, e.g. `T01-20261108-0042`. The
   - IME composition events (`isComposing`) are ignored by the scanner and passed through untouched.
 - On the till:
   - A known barcode adds the item, and repeated scans increment qty.
+  - **Shared barcodes (owner decision, 2026-11-14; schema v4.3):** several active products may carry the same manufacturer barcode (flavour, scent or size variants). One match adds at once. Several matches open a keyboard-first **Select product** dialog (`↑` `↓` move, `Enter` adds, `Esc` adds nothing, click or touch also works). The lookup returns every active match ordered by name; SKUs stay unique, and the in-store barcode generator never issues a code already in use.
   - A scanned receipt QR opens that order. Reprint and void are offered only if the order's session is still open.
   - An unknown barcode plays the **error tone**, flashes the scan field red, and shows a non-blocking toast: "Not found: 2000123456781". It then opens the Quick Sale bar pre-filled with the barcode as a note, with a "Register product" shortcut for `PRODUCT_MANAGE`. There's never a modal, so the next scan still works.
 - Serial (COM) scanners are supported through the optional `hardware/scanner_serial.rs`, which emits `scanner://scan`.
@@ -3102,7 +3105,7 @@ Automatically "rebalancing" (moving −2 from L into the next layer) would **rew
 
 | Query | Index / structure | Target (p95) |
 |---|---|---|
-| Barcode scan → product | `ux_products_barcode` (partial unique), then `ux_products_sku` | < 2 ms |
+| Barcode scan → product(s) | `idx_products_barcode` (partial, non-unique), then `ux_products_sku` | < 2 ms |
 | Type-ahead `"blu* buc*"` (LIMIT 20) | `products_fts` unicode61 + `prefix='2 3'` | < 15 ms |
 | Sinhala substring search | `products_fts_si` (trigram) | < 25 ms |
 | Phone → customer | `ux_customers_phone` | < 2 ms |
