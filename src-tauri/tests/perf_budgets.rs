@@ -61,7 +61,7 @@ async fn hot_queries_use_their_indexes() {
     let p = &db.pool;
     let b = seed::barcode(42);
     let s = seed::sku(42);
-    assert_indexed("barcode", &plan(p, &products::SQL_LOOKUP_BARCODE, &["s", &b]).await, "ux_products_barcode");
+    assert_indexed("barcode", &plan(p, &products::SQL_LOOKUP_BARCODE, &["s", &b]).await, "idx_products_barcode");
     assert_indexed("sku", &plan(p, &products::SQL_LOOKUP_SKU, &["s", &s]).await, "ux_products_sku");
     let latin = plan(p, &products::SQL_SEARCH_LATIN, &["\"blu\"* \"buc\"*", "s", "20"]).await;
     assert_indexed("latin search", &latin, "VIRTUAL TABLE INDEX");
@@ -72,8 +72,8 @@ async fn hot_queries_use_their_indexes() {
     assert_indexed("phone", &plan(p, SQL_PHONE, &["s", &seed::phone(7)]).await, "ux_customers_phone");
 
     // The seeded data is what the plans assume: lookups and searches return the expected rows.
-    assert_eq!(products::lookup_code(p, "s", &b).await.unwrap().unwrap().id, "p000042");
-    assert_eq!(products::lookup_code(p, "s", &s).await.unwrap().unwrap().id, "p000042");
+    assert_eq!(products::lookup_code_matches(p, "s", &b).await.unwrap()[0].id, "p000042");
+    assert_eq!(products::lookup_code_matches(p, "s", &s).await.unwrap()[0].id, "p000042");
     assert!(!products::search(p, "s", "blu buc", 20).await.unwrap().is_empty());
     assert!(!products::search(p, "s", "බාල්දි", 20).await.unwrap().is_empty());
 }
@@ -114,7 +114,7 @@ async fn search_and_lookup_budgets() {
     let scan = |code: String| {
         let p = p.clone();
         async move {
-            products::lookup_code(&p, "s", &code).await.unwrap();
+            products::lookup_code_matches(&p, "s", &code).await.unwrap();
         }
     };
     let barcode_p95 = time_all(&barcodes, scan).await;

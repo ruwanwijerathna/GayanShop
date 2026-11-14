@@ -1,5 +1,5 @@
 // TanStack Query hooks over the generated commands. Only src/db and src/hardware call Rust (AGENT.md §2).
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   commands,
   type AdHocPurchase,
@@ -500,9 +500,20 @@ export function useRecallCart() {
   });
 }
 
-/** A typed barcode or SKU (Enter in the scan field). */
-export function lookupProductCode(code: string) {
-  return unwrap(commands.lookupProductCode(code));
+/** A scanned or typed barcode / SKU: every matching active product (variants may share a barcode). */
+export function lookupProductMatches(code: string) {
+  return unwrap(commands.lookupProductCodeMatches(code));
+}
+
+/** Category and stock of a few products the till is asking about (the disambiguation dialog). */
+export function useProductDetails(ids: readonly string[]) {
+  return useQueries({
+    queries: ids.map((id) => ({
+      queryKey: ["catalog", "product", id] as const,
+      queryFn: () => unwrap(commands.getProduct(id)),
+      staleTime: 10_000,
+    })),
+  });
 }
 
 // ───────── backup (doc §3.9) ─────────

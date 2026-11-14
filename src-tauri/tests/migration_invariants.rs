@@ -14,7 +14,7 @@ async fn pragmas_and_schema_version() {
     assert_eq!(mode, "wal");
     assert_eq!(scalar_i64(p, "PRAGMA synchronous").await, 2, "synchronous must be FULL (§13.2)");
     assert_eq!(scalar_i64(p, "PRAGMA foreign_keys").await, 1);
-    assert_eq!(t.db.schema_version().await.unwrap(), 2, "0001_init + 0002_report_indexes");
+    assert_eq!(t.db.schema_version().await.unwrap(), 3, "0001_init + 0002_report_indexes + 0003_shared_barcodes");
     assert_eq!(scalar_i64(p, "SELECT applying FROM sync_ctx WHERE id = 1").await, 0);
 }
 

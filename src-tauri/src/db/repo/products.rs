@@ -158,11 +158,12 @@ const PRODUCT_FROM: &str = "products p LEFT JOIN stock_levels sl ON sl.product_i
 const SUMMARY_COLS: &str = "p.id, p.kind, p.name, p.name_si, p.sku, p.barcode, p.price, p.min_price, p.track_stock";
 
 /// Hot read paths, public so `tests/perf_budgets.rs` can `EXPLAIN QUERY PLAN` the exact SQL (doc §13.4).
-/// Scanner lookup by barcode: `ux_products_barcode` (partial unique index).
+/// Scanner lookup by barcode: `idx_products_barcode` (partial index; several products may share a barcode).
 pub static SQL_LOOKUP_BARCODE: LazyLock<String> = LazyLock::new(|| {
     format!(
         "SELECT {SUMMARY_COLS} FROM products p
-         WHERE p.store_id = ?1 AND p.barcode = ?2 AND p.deleted_at IS NULL AND p.is_active = 1"
+         WHERE p.store_id = ?1 AND p.barcode = ?2 AND p.deleted_at IS NULL AND p.is_active = 1
+         ORDER BY p.name COLLATE NOCASE, p.id"
     )
 });
 /// Scanner lookup by in-store SKU: `ux_products_sku`.
@@ -304,19 +305,19 @@ pub async fn summary(pool: &SqlitePool, store_id: &str, id: &str) -> AppResult<O
     }))
 }
 
-/// Scanner lookup (doc §7.4): `barcode` first, then the in-store `sku`. Active products only.
-pub async fn lookup_code(pool: &SqlitePool, store_id: &str, code: &str) -> AppResult<Option<ProductSummary>> {
+/// Scanner lookup (doc §7.4): every active product with this `barcode` (several variants can share one),
+/// else the single product with this in-store `sku`. Empty = unknown code. Ordered by name.
+pub async fn lookup_code_matches(pool: &SqlitePool, store_id: &str, code: &str) -> AppResult<Vec<ProductSummary>> {
     let code = code.trim();
     if code.is_empty() {
-        return Ok(None);
+        return Ok(Vec::new());
     }
-    let by_barcode: Option<SummaryRow> =
-        sqlx::query_as(&SQL_LOOKUP_BARCODE).bind(store_id).bind(code).fetch_optional(pool).await?;
-    let row = match by_barcode {
-        Some(row) => Some(row),
-        None => sqlx::query_as(&SQL_LOOKUP_SKU).bind(store_id).bind(code).fetch_optional(pool).await?,
-    };
-    row.map(SummaryRow::into_summary).transpose()
+    let mut rows: Vec<SummaryRow> =
+        sqlx::query_as(&SQL_LOOKUP_BARCODE).bind(store_id).bind(code).fetch_all(pool).await?;
+    if rows.is_empty() {
+        rows = sqlx::query_as(&SQL_LOOKUP_SKU).bind(store_id).bind(code).fetch_all(pool).await?;
+    }
+    rows.into_iter().map(SummaryRow::into_summary).collect()
 }
 
 fn is_sinhala(c: char) -> bool {
@@ -373,10 +374,13 @@ pub async fn search(pool: &SqlitePool, store_id: &str, query: &str, limit: u32) 
     };
     let mut hits: Vec<ProductSummary> = rows.into_iter().map(SummaryRow::into_summary).collect::<AppResult<_>>()?;
     let looks_like_code = query.len() >= 4 && query.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
-    if looks_like_code && let Some(exact) = lookup_code(pool, store_id, query).await? {
-        hits.retain(|h| h.id != exact.id);
-        hits.insert(0, exact);
-        hits.truncate(usize::try_from(limit).unwrap_or(usize::MAX));
+    if looks_like_code {
+        let exact = lookup_code_matches(pool, store_id, query).await?;
+        if !exact.is_empty() {
+            hits.retain(|h| !exact.iter().any(|e| e.id == h.id));
+            hits.splice(0..0, exact);
+            hits.truncate(usize::try_from(limit).unwrap_or(usize::MAX));
+        }
     }
     Ok(hits)
 }
@@ -479,6 +483,7 @@ async fn sku_taken(conn: &mut SqliteConnection, store_id: &str, sku: &str, self_
     Ok(hit.is_some())
 }
 
+/// Used only by the in-store code generator, which never hands out a barcode already in use.
 async fn barcode_taken(conn: &mut SqliteConnection, store_id: &str, code: &str, self_id: &str) -> AppResult<bool> {
     let hit: Option<String> = sqlx::query_scalar(
         "SELECT id FROM products
@@ -554,12 +559,6 @@ async fn resolve_codes(
         && sku_taken(conn, &ctx.store_id, s, self_id).await?
     {
         return Err(AppError::validation("SKU_TAKEN", s));
-    }
-    if input.is_active
-        && let Some(b) = barcode.as_deref()
-        && barcode_taken(conn, &ctx.store_id, b, self_id).await?
-    {
-        return Err(AppError::validation("BARCODE_TAKEN", b));
     }
     let want_sku = input.sku == CodeChoice::Generate;
     let want_barcode = input.barcode == CodeChoice::Generate;
