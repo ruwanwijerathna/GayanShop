@@ -79,9 +79,11 @@ describe("PrinterSettings", () => {
   it("saves a network printer and prints the test page", async () => {
     renderAs();
     expect(await screen.findByText("Not set up")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Connection")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Advanced Settings" }));
     chooseOption(await screen.findByLabelText("Connection"), "Network (TCP 9100)");
     fireEvent.change(screen.getByLabelText("IP address or host name"), { target: { value: "192.168.1.50" } });
-    chooseOption(screen.getByLabelText("Paper width"), "58 mm (32 columns)");
+    fireEvent.click(screen.getByRole("radio", { name: /58 mm/ }));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(commands.setPrinterProfile).toHaveBeenCalledWith({
@@ -96,8 +98,9 @@ describe("PrinterSettings", () => {
   it("loads the saved profile and queues a test page", async () => {
     vi.mocked(commands.printerProfile).mockImplementation(() => ok(NET));
     renderAs();
+    fireEvent.click(await screen.findByRole("button", { name: "Advanced Settings" }));
     expect(await screen.findByDisplayValue("192.168.1.50")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Print test page" }));
+    fireEvent.click(screen.getByRole("button", { name: "Print Test Receipt" }));
     await waitFor(() => expect(commands.printTestPage).toHaveBeenCalledTimes(1));
     expect(await screen.findByText("Test page sent to the printer.")).toBeInTheDocument();
   });
@@ -110,6 +113,29 @@ describe("PrinterSettings", () => {
     await screen.findByText("Not set up");
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Check the printer connection details.");
+  });
+
+  it("keeps the technical fields in a closed Advanced Settings section", async () => {
+    renderAs();
+    await screen.findByText("Not set up");
+    const trigger = screen.getByRole("button", { name: "Advanced Settings" });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByLabelText("Cut")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Lines fed before the cut")).not.toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /80 mm/ })).toBeChecked();
+    expect(screen.getByLabelText("Windows printer name")).toBeInTheDocument();
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(await screen.findByLabelText("Cut")).toBeInTheDocument();
+    expect(screen.getByLabelText("Cash drawer pin")).toBeInTheDocument();
+  });
+
+  it("points to Advanced Settings when the printer is not a Windows printer", async () => {
+    vi.mocked(commands.printerProfile).mockImplementation(() => ok(NET));
+    renderAs();
+    expect(await screen.findByText(/connected by Network \(TCP 9100\)/)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Windows printer name")).not.toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /58 mm/ })).toBeChecked();
   });
 
   it("hides the actions without SETTINGS_MANAGE", async () => {

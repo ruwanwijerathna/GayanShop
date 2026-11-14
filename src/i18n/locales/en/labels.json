@@ -52,8 +52,13 @@
     "rowGap": "Gap between rows (mm)",
     "margin": "Left margin (mm)",
     "saveCalibration": "Save",
-    "alignmentTest": "Print alignment test",
     "reset": "Reset to default",
-    "alignQueued": "Alignment test sent to the label printer."
+    "alignQueued": "Alignment test sent to the label printer.",
+    "advanced": "Advanced Calibration",
+    "stickerSize": "Sticker size",
+    "across": "{{count}} across",
+    "stickerHint": "Also the roll chosen by default when printing labels.",
+    "testLabel": "Print Test Label / Alignment Test",
+    "rollCalibration": "Roll calibration: {{name}}"
   }
 }

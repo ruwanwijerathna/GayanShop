@@ -16,6 +16,8 @@ import type {
 import { CommandError } from "@/db/client";
 import { usePrinterProfile, usePrinterStatus, usePrintTestPage, useSetPrinterProfile } from "@/db/hooks";
 import { translateError } from "@/i18n";
+import { AdvancedSection } from "@/components/common/AdvancedSection";
+import { RadioCards } from "@/components/common/RadioCards";
 import { SelectField } from "@/components/common/SelectField";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -145,119 +147,130 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
         </span>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-2 sm:col-span-2">
-          <Label htmlFor="printer-kind">{t("settings.connection")}</Label>
-          <SelectField
-            id="printer-kind"
-            value={form.kind}
-            onValueChange={(v) => set("kind", KINDS.find((k) => k === v) ?? "spooler")}
-            options={KINDS.map((k) => ({ value: k, label: t(`settings.kinds.${k}`) }))}
+      {form.kind === "spooler" ? (
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="printer-name">{t("settings.printerName")}</Label>
+          <Input
+            id="printer-name"
+            className={FIELD}
+            value={form.printerName}
+            onChange={(e) => set("printerName", e.target.value)}
           />
         </div>
-        {form.kind === "spooler" && (
+      ) : (
+        <p className="rounded-lg border bg-muted/40 p-3 text-base">
+          {t("settings.otherConnection", { kind: t(`settings.kinds.${form.kind}`) })}
+        </p>
+      )}
+
+      <RadioCards
+        name="printer-width"
+        aria-label={t("settings.paper")}
+        value={form.width}
+        onValueChange={(v) => set("width", v)}
+        options={WIDTHS.map((w) => ({
+          value: w,
+          label: t(`settings.widths.${w}`),
+          description: t(`settings.widthHints.${w}`),
+        }))}
+      />
+
+      <AdvancedSection title={t("settings.advanced")}>
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-2 sm:col-span-2">
-            <Label htmlFor="printer-name">{t("settings.printerName")}</Label>
-            <Input
-              id="printer-name"
-              className={FIELD}
-              value={form.printerName}
-              onChange={(e) => set("printerName", e.target.value)}
+            <Label htmlFor="printer-kind">{t("settings.connection")}</Label>
+            <SelectField
+              id="printer-kind"
+              value={form.kind}
+              onValueChange={(v) => set("kind", KINDS.find((k) => k === v) ?? "spooler")}
+              options={KINDS.map((k) => ({ value: k, label: t(`settings.kinds.${k}`) }))}
             />
           </div>
-        )}
-        {form.kind === "network" && (
-          <>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="printer-host">{t("settings.host")}</Label>
-              <Input
-                id="printer-host"
-                className={FIELD}
-                value={form.host}
-                onChange={(e) => set("host", e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="printer-port">{t("settings.port")}</Label>
-              <Input
-                id="printer-port"
-                className={FIELD}
-                inputMode="numeric"
-                value={form.port}
-                onChange={(e) => set("port", e.target.value)}
-              />
-            </div>
-          </>
-        )}
-        {form.kind === "serial" && (
-          <>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="printer-com">{t("settings.comPort")}</Label>
-              <Input
-                id="printer-com"
-                className={FIELD}
-                value={form.comPort}
-                onChange={(e) => set("comPort", e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="printer-baud">{t("settings.baud")}</Label>
-              <SelectField
-                id="printer-baud"
-                value={String(form.baud)}
-                onValueChange={(v) => set("baud", BAUDS.find((b) => String(b) === v) ?? 9600)}
-                options={BAUDS.map((b) => ({ value: String(b), label: String(b) }))}
-              />
-            </div>
-          </>
-        )}
-        <Choice
-          id="printer-width"
-          label={t("settings.paper")}
-          value={form.width}
-          options={WIDTHS}
-          render={(w) => t(`settings.widths.${w}`)}
-          onChange={(v) => set("width", v)}
-        />
-        <Choice
-          id="printer-codepage"
-          label={t("settings.codepage")}
-          value={form.codepage}
-          options={CODEPAGES}
-          render={(c) => c.toUpperCase()}
-          onChange={(v) => set("codepage", v)}
-        />
-        <Choice
-          id="printer-cut"
-          label={t("settings.cut")}
-          value={form.cut}
-          options={CUTS}
-          render={(c) => t(`settings.cuts.${c}`)}
-          onChange={(v) => set("cut", v)}
-        />
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="printer-feed">{t("settings.feed")}</Label>
-          <Input
-            id="printer-feed"
-            className={FIELD}
-            inputMode="numeric"
-            value={form.feedLines}
-            onChange={(e) => set("feedLines", e.target.value)}
+          {form.kind === "network" && (
+            <>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="printer-host">{t("settings.host")}</Label>
+                <Input
+                  id="printer-host"
+                  className={FIELD}
+                  value={form.host}
+                  onChange={(e) => set("host", e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="printer-port">{t("settings.port")}</Label>
+                <Input
+                  id="printer-port"
+                  className={FIELD}
+                  inputMode="numeric"
+                  value={form.port}
+                  onChange={(e) => set("port", e.target.value)}
+                />
+              </div>
+            </>
+          )}
+          {form.kind === "serial" && (
+            <>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="printer-com">{t("settings.comPort")}</Label>
+                <Input
+                  id="printer-com"
+                  className={FIELD}
+                  value={form.comPort}
+                  onChange={(e) => set("comPort", e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="printer-baud">{t("settings.baud")}</Label>
+                <SelectField
+                  id="printer-baud"
+                  value={String(form.baud)}
+                  onValueChange={(v) => set("baud", BAUDS.find((b) => String(b) === v) ?? 9600)}
+                  options={BAUDS.map((b) => ({ value: String(b), label: String(b) }))}
+                />
+              </div>
+            </>
+          )}
+          <Choice
+            id="printer-codepage"
+            label={t("settings.codepage")}
+            value={form.codepage}
+            options={CODEPAGES}
+            render={(c) => c.toUpperCase()}
+            onChange={(v) => set("codepage", v)}
           />
+          <Choice
+            id="printer-cut"
+            label={t("settings.cut")}
+            value={form.cut}
+            options={CUTS}
+            render={(c) => t(`settings.cuts.${c}`)}
+            onChange={(v) => set("cut", v)}
+          />
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="printer-feed">{t("settings.feed")}</Label>
+            <Input
+              id="printer-feed"
+              className={FIELD}
+              inputMode="numeric"
+              value={form.feedLines}
+              onChange={(e) => set("feedLines", e.target.value)}
+            />
+          </div>
+          <Choice
+            id="printer-pin"
+            label={t("settings.drawerPin")}
+            value={form.drawerPin}
+            options={PINS}
+            render={(p) => t(`settings.pins.${p}`)}
+            onChange={(v) => set("drawerPin", v)}
+          />
+          <label className="flex min-h-12 items-center gap-3 text-base sm:col-span-2">
+            <Checkbox className="size-6" checked={form.qr} onCheckedChange={(v) => set("qr", v === true)} />
+            {t("settings.qr")}
+          </label>
         </div>
-        <Choice
-          id="printer-pin"
-          label={t("settings.drawerPin")}
-          value={form.drawerPin}
-          options={PINS}
-          render={(p) => t(`settings.pins.${p}`)}
-          onChange={(v) => set("drawerPin", v)}
-        />
-        <label className="flex min-h-12 items-center gap-3 text-base sm:col-span-2">
-          <Checkbox className="size-6" checked={form.qr} onCheckedChange={(v) => set("qr", v === true)} />
-          {t("settings.qr")}
-        </label>
-      </div>
+      </AdvancedSection>
 
       {error instanceof CommandError && (
         <p role="alert" className="text-base text-destructive">

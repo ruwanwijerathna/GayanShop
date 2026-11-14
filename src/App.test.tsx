@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { commands } from "@/db/bindings";
-import { ok, renderWithProviders, session } from "@/test/render";
+import { ok, openTab, renderWithProviders, session } from "@/test/render";
 import App from "./App";
 
 vi.mock("@/db/bindings", () => ({
@@ -271,7 +271,8 @@ describe("App sidebar", () => {
     fireEvent.pointerDown(trigger, { button: 0 });
     fireEvent.click(await screen.findByRole("menuitem", { name: "Settings" }));
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Appearance & Language" })).toBeInTheDocument();
+    openTab(await screen.findByRole("tab", { name: "General" }));
+    expect(await screen.findByRole("heading", { name: "Appearance & Language" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "සිං" })).toBeInTheDocument();
   });
 });

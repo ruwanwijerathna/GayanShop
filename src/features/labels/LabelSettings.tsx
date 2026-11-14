@@ -1,8 +1,8 @@
-// Settings → Labels (doc §7.4): this counter's label printer (connection, TSPL/ZPL, dpi, darkness, speed,
-// calibration offsets) and each roll template's gaps and margin, with the alignment test that makes
-// calibration a one-minute job.
-import { Ruler, Tag } from "lucide-react";
-import { useState, type FormEvent } from "react";
+// Settings → Labels (doc §7.4): the label printer and the sticker size up front, with the alignment test;
+// connection, TSPL/ZPL, dpi, darkness, speed, offsets and the chosen roll's gaps and margin under "Advanced
+// Calibration".
+import { Tag } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Can } from "@/components/auth/Can";
@@ -19,7 +19,10 @@ import {
   useSetLabelPrinterProfile,
 } from "@/db/hooks";
 import { translateError } from "@/i18n";
+import { AdvancedSection } from "@/components/common/AdvancedSection";
+import { RadioCards } from "@/components/common/RadioCards";
 import { SelectField } from "@/components/common/SelectField";
+import { lastTemplate, rememberTemplate } from "@/components/labels/templatePreference";
 
 const FIELD = "h-12 text-base";
 
@@ -105,30 +108,57 @@ export function toProfile(f: LabelPrinterForm): LabelPrinterProfile | null {
 export function LabelSettings() {
   const profile = useLabelPrinterProfile();
   const templates = useLabelTemplates();
-  if (profile.data === undefined || !templates.data) return null;
+  if (profile.data === undefined || !templates.data || templates.data.length === 0) return null;
+  return <LabelCard profile={profile.data} templates={templates.data} />;
+}
+
+function Field({ id, label, children }: { id: string; label: string; children: ReactNode }) {
   return (
-    <>
-      <PrinterCard profile={profile.data} />
-      {templates.data.map((tpl) => (
-        <TemplateCard
-          key={`${tpl.id}:${tpl.col_gap_mm}:${tpl.row_gap_mm}:${tpl.left_margin_mm}`}
-          template={tpl}
-        />
-      ))}
-    </>
+    <div className="flex flex-col gap-2">
+      <Label htmlFor={id}>{label}</Label>
+      {children}
+    </div>
   );
 }
 
-function PrinterCard({ profile }: { profile: LabelPrinterProfile | null }) {
+/** A to-scale row of the roll's labels, so the two sizes are told apart at a glance. */
+function RollVisual({ template }: { template: LabelTemplate }) {
+  return (
+    <span aria-hidden className="mb-1 flex gap-1.5">
+      {Array.from({ length: template.columns }, (_, i) => (
+        <span
+          key={i}
+          className="rounded-sm border-2 border-foreground/60 bg-muted"
+          style={{ width: `${template.label_w_mm * 1.4}px`, height: `${template.label_h_mm * 1.4}px` }}
+        />
+      ))}
+    </span>
+  );
+}
+
+function LabelCard({
+  profile,
+  templates,
+}: {
+  profile: LabelPrinterProfile | null;
+  templates: LabelTemplate[];
+}) {
   const { t, i18n } = useTranslation("labels");
   const save = useSetLabelPrinterProfile();
+  const align = useLabelAlignmentTest();
   const [form, setForm] = useState(() => toForm(profile));
   const [invalid, setInvalid] = useState(false);
+  const [chosen, setChosen] = useState(lastTemplate);
+  const selected = templates.find((tpl) => tpl.id === chosen) ?? templates[0];
   const set = <K extends keyof LabelPrinterForm>(k: K, v: LabelPrinterForm[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
+  const choose = (id: string) => {
+    setChosen(id);
+    rememberTemplate(id);
+  };
+
+  const savePrinter = () => {
     const p = toProfile(form);
     setInvalid(p === null);
     if (p) save.mutate(p, { onSuccess: () => toast.success(t("settings.saved")) });
@@ -140,157 +170,190 @@ function PrinterCard({ profile }: { profile: LabelPrinterProfile | null }) {
       : form.kind === "network"
         ? t("settings.host")
         : t("settings.comPort");
+  const error = [save.error, align.error].find((e) => e instanceof CommandError);
 
   return (
-    <form
-      onSubmit={submit}
-      className="flex flex-col gap-4 rounded-lg border bg-card p-5"
+    <section
+      className="flex flex-col gap-5 rounded-lg border bg-card p-5"
       aria-labelledby="label-printer-title"
     >
       <h2 id="label-printer-title" className="flex items-center gap-3 text-xl font-semibold">
         <Tag aria-hidden className="size-6" />
         {t("settings.printerTitle")}
       </h2>
-      <div className="grid gap-4 sm:grid-cols-2">
+
+      <Field id="lp-target" label={targetLabel}>
+        <Input
+          id="lp-target"
+          className={FIELD}
+          value={form.target}
+          onChange={(e) => set("target", e.target.value)}
+        />
+      </Field>
+
+      {selected && (
         <div className="flex flex-col gap-2">
-          <Label htmlFor="lp-kind">{t("settings.connection")}</Label>
-          <SelectField
-            id="lp-kind"
-            value={form.kind}
-            onValueChange={(v) => set("kind", KINDS.find((k) => k === v) ?? "spooler")}
-            options={KINDS.map((k) => ({ value: k, label: t(`settings.kinds.${k}`) }))}
+          <p className="text-base font-medium">{t("settings.stickerSize")}</p>
+          <RadioCards
+            name="sticker-size"
+            aria-label={t("settings.stickerSize")}
+            value={selected.id}
+            onValueChange={choose}
+            options={templates.map((tpl) => ({
+              value: tpl.id,
+              visual: <RollVisual template={tpl} />,
+              label: t(`templates.${tpl.id}`, { defaultValue: tpl.name }),
+              description: t("settings.across", { count: tpl.columns }),
+            }))}
           />
+          <p className="text-sm text-muted-foreground">{t("settings.stickerHint")}</p>
         </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="lp-target">{targetLabel}</Label>
-          <Input
-            id="lp-target"
-            className={FIELD}
-            value={form.target}
-            onChange={(e) => set("target", e.target.value)}
-          />
-        </div>
-        {form.kind === "network" && (
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="lp-port">{t("settings.port")}</Label>
-            <Input
-              id="lp-port"
-              className={FIELD}
-              inputMode="numeric"
-              value={form.port}
-              onChange={(e) => set("port", e.target.value)}
-            />
-          </div>
-        )}
-        {form.kind === "serial" && (
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="lp-baud">{t("settings.baud")}</Label>
-            <SelectField
-              id="lp-baud"
-              value={String(form.baud)}
-              onValueChange={(v) => set("baud", BAUDS.find((b) => String(b) === v) ?? 9600)}
-              options={BAUDS.map((b) => ({ value: String(b), label: String(b) }))}
-            />
-          </div>
-        )}
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="lp-language">{t("settings.language")}</Label>
-          <SelectField
-            id="lp-language"
-            value={form.language}
-            onValueChange={(v) => set("language", v === "zpl" ? "zpl" : "tspl")}
-            options={[
-              { value: "tspl", label: t("settings.languages.tspl") },
-              { value: "zpl", label: t("settings.languages.zpl") },
-            ]}
-          />
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="lp-dpi">{t("settings.dpi")}</Label>
-          <SelectField
-            id="lp-dpi"
-            value={String(form.dpi)}
-            onValueChange={(v) => set("dpi", v === "300" ? 300 : 203)}
-            options={[
-              { value: "203", label: "203 dpi" },
-              { value: "300", label: "300 dpi" },
-            ]}
-          />
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="lp-darkness">{t("settings.darkness")}</Label>
-          <Input
-            id="lp-darkness"
-            className={FIELD}
-            inputMode="numeric"
-            value={form.darkness}
-            onChange={(e) => set("darkness", e.target.value)}
-          />
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="lp-speed">{t("settings.speed")}</Label>
-          <Input
-            id="lp-speed"
-            className={FIELD}
-            inputMode="numeric"
-            value={form.speed}
-            onChange={(e) => set("speed", e.target.value)}
-          />
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="lp-ox">{t("settings.offsetX")}</Label>
-          <Input
-            id="lp-ox"
-            className={FIELD}
-            inputMode="decimal"
-            value={form.offsetX}
-            onChange={(e) => set("offsetX", e.target.value)}
-          />
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="lp-oy">{t("settings.offsetY")}</Label>
-          <Input
-            id="lp-oy"
-            className={FIELD}
-            inputMode="decimal"
-            value={form.offsetY}
-            onChange={(e) => set("offsetY", e.target.value)}
-          />
-        </div>
-      </div>
+      )}
+
       {invalid && (
         <p role="alert" className="text-base text-destructive">
           {t("settings.invalid")}
         </p>
       )}
-      {save.error instanceof CommandError && (
+      {error instanceof CommandError && (
         <p role="alert" className="text-base text-destructive">
-          {translateError(i18n.t, save.error.error)}
+          {translateError(i18n.t, error.error)}
         </p>
       )}
+
       <Can perm="SETTINGS_MANAGE">
-        <Button type="submit" size="pos" className="self-start" disabled={save.isPending}>
-          {t("settings.save")}
-        </Button>
+        <div className="flex flex-wrap gap-3">
+          <Button type="button" size="pos" disabled={save.isPending} onClick={savePrinter}>
+            {t("settings.save")}
+          </Button>
+          <Button
+            type="button"
+            size="pos"
+            variant="outline"
+            disabled={!selected || align.isPending}
+            onClick={() =>
+              selected &&
+              align.mutate(selected.id, { onSuccess: () => toast.success(t("settings.alignQueued")) })
+            }
+          >
+            {t("settings.testLabel")}
+          </Button>
+        </div>
       </Can>
-    </form>
+
+      <AdvancedSection title={t("settings.advanced")}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field id="lp-kind" label={t("settings.connection")}>
+            <SelectField
+              id="lp-kind"
+              value={form.kind}
+              onValueChange={(v) => set("kind", KINDS.find((k) => k === v) ?? "spooler")}
+              options={KINDS.map((k) => ({ value: k, label: t(`settings.kinds.${k}`) }))}
+            />
+          </Field>
+          {form.kind === "network" && (
+            <Field id="lp-port" label={t("settings.port")}>
+              <Input
+                id="lp-port"
+                className={FIELD}
+                inputMode="numeric"
+                value={form.port}
+                onChange={(e) => set("port", e.target.value)}
+              />
+            </Field>
+          )}
+          {form.kind === "serial" && (
+            <Field id="lp-baud" label={t("settings.baud")}>
+              <SelectField
+                id="lp-baud"
+                value={String(form.baud)}
+                onValueChange={(v) => set("baud", BAUDS.find((b) => String(b) === v) ?? 9600)}
+                options={BAUDS.map((b) => ({ value: String(b), label: String(b) }))}
+              />
+            </Field>
+          )}
+          <Field id="lp-language" label={t("settings.language")}>
+            <SelectField
+              id="lp-language"
+              value={form.language}
+              onValueChange={(v) => set("language", v === "zpl" ? "zpl" : "tspl")}
+              options={[
+                { value: "tspl", label: t("settings.languages.tspl") },
+                { value: "zpl", label: t("settings.languages.zpl") },
+              ]}
+            />
+          </Field>
+          <Field id="lp-dpi" label={t("settings.dpi")}>
+            <SelectField
+              id="lp-dpi"
+              value={String(form.dpi)}
+              onValueChange={(v) => set("dpi", v === "300" ? 300 : 203)}
+              options={[
+                { value: "203", label: "203 dpi" },
+                { value: "300", label: "300 dpi" },
+              ]}
+            />
+          </Field>
+          <Field id="lp-darkness" label={t("settings.darkness")}>
+            <Input
+              id="lp-darkness"
+              className={FIELD}
+              inputMode="numeric"
+              value={form.darkness}
+              onChange={(e) => set("darkness", e.target.value)}
+            />
+          </Field>
+          <Field id="lp-speed" label={t("settings.speed")}>
+            <Input
+              id="lp-speed"
+              className={FIELD}
+              inputMode="numeric"
+              value={form.speed}
+              onChange={(e) => set("speed", e.target.value)}
+            />
+          </Field>
+          <Field id="lp-ox" label={t("settings.offsetX")}>
+            <Input
+              id="lp-ox"
+              className={FIELD}
+              inputMode="decimal"
+              value={form.offsetX}
+              onChange={(e) => set("offsetX", e.target.value)}
+            />
+          </Field>
+          <Field id="lp-oy" label={t("settings.offsetY")}>
+            <Input
+              id="lp-oy"
+              className={FIELD}
+              inputMode="decimal"
+              value={form.offsetY}
+              onChange={(e) => set("offsetY", e.target.value)}
+            />
+          </Field>
+        </div>
+        {selected && (
+          <RollCalibration
+            key={`${selected.id}:${selected.col_gap_mm}:${selected.row_gap_mm}:${selected.left_margin_mm}`}
+            template={selected}
+          />
+        )}
+      </AdvancedSection>
+    </section>
   );
 }
 
-function TemplateCard({ template }: { template: LabelTemplate }) {
+/** The chosen roll's gaps and left margin: save, or go back to the template's own values. */
+function RollCalibration({ template }: { template: LabelTemplate }) {
   const { t, i18n } = useTranslation("labels");
   const calibrate = useCalibrateLabelTemplate();
-  const align = useLabelAlignmentTest();
   const [colGap, setColGap] = useState(String(template.col_gap_mm));
   const [rowGap, setRowGap] = useState(String(template.row_gap_mm));
   const [margin, setMargin] = useState(String(template.left_margin_mm));
   const values = [parseMm(colGap), parseMm(rowGap), parseMm(margin)];
   const ok = values.every((v) => v !== null && v >= 0);
   const name = t(`templates.${template.id}`, { defaultValue: template.name });
-  const error = [calibrate.error, align.error].find((e) => e instanceof CommandError);
 
-  const save = (e: FormEvent) => {
-    e.preventDefault();
+  const saveRoll = () => {
     const [c, r, m] = values;
     if (c === null || r === null || m === null || c === undefined || r === undefined || m === undefined)
       return;
@@ -298,11 +361,8 @@ function TemplateCard({ template }: { template: LabelTemplate }) {
   };
 
   return (
-    <form onSubmit={save} className="flex flex-col gap-4 rounded-lg border bg-card p-5" aria-label={name}>
-      <h2 className="flex items-center gap-3 text-xl font-semibold">
-        <Ruler aria-hidden className="size-6" />
-        {name}
-      </h2>
+    <div role="group" aria-label={name} className="flex flex-col gap-4 border-t pt-4">
+      <p className="text-base font-medium">{t("settings.rollCalibration", { name })}</p>
       <p className="text-sm text-muted-foreground">
         {t("settings.templateHint", { dpi: template.dpi, cols: template.columns })}
       </p>
@@ -314,8 +374,7 @@ function TemplateCard({ template }: { template: LabelTemplate }) {
             ["margin", margin, setMargin],
           ] as const
         ).map(([key, value, setter]) => (
-          <div key={key} className="flex flex-col gap-2">
-            <Label htmlFor={`${template.id}-${key}`}>{t(`settings.${key}`)}</Label>
+          <Field key={key} id={`${template.id}-${key}`} label={t(`settings.${key}`)}>
             <Input
               id={`${template.id}-${key}`}
               className={FIELD}
@@ -323,28 +382,18 @@ function TemplateCard({ template }: { template: LabelTemplate }) {
               value={value}
               onChange={(e) => setter(e.target.value)}
             />
-          </div>
+          </Field>
         ))}
       </div>
-      {error instanceof CommandError && (
+      {calibrate.error instanceof CommandError && (
         <p role="alert" className="text-base text-destructive">
-          {translateError(i18n.t, error.error)}
+          {translateError(i18n.t, calibrate.error.error)}
         </p>
       )}
       <Can perm="SETTINGS_MANAGE">
-        <div className="flex flex-wrap gap-2">
-          <Button type="submit" size="pos" disabled={!ok || calibrate.isPending}>
+        <div className="flex flex-wrap gap-3">
+          <Button type="button" size="pos" disabled={!ok || calibrate.isPending} onClick={saveRoll}>
             {t("settings.saveCalibration")}
-          </Button>
-          <Button
-            type="button"
-            size="pos"
-            variant="outline"
-            onClick={() =>
-              align.mutate(template.id, { onSuccess: () => toast.success(t("settings.alignQueued")) })
-            }
-          >
-            {t("settings.alignmentTest")}
           </Button>
           <Button
             type="button"
@@ -356,6 +405,6 @@ function TemplateCard({ template }: { template: LabelTemplate }) {
           </Button>
         </div>
       </Can>
-    </form>
+    </div>
   );
 }

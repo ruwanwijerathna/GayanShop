@@ -45,8 +45,8 @@
     "baud": "Baud rate",
     "paper": "Paper width",
     "widths": {
-      "mm58": "58 mm (32 columns)",
-      "mm80": "80 mm (48 columns)"
+      "mm80": "80 mm",
+      "mm58": "58 mm"
     },
     "codepage": "Code page",
     "cut": "Cut",
@@ -64,7 +64,13 @@
     },
     "save": "Save",
     "saved": "Printer settings saved.",
-    "testPage": "Print test page",
-    "testQueued": "Test page sent to the printer."
+    "testPage": "Print Test Receipt",
+    "testQueued": "Test page sent to the printer.",
+    "widthHints": {
+      "mm80": "Standard · 48 columns",
+      "mm58": "Compact · 32 columns"
+    },
+    "advanced": "Advanced Settings",
+    "otherConnection": "This printer is connected by {{kind}}. Change it under Advanced Settings."
   }
 }
