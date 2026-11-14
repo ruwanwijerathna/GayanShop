@@ -1,5 +1,6 @@
 import { Moon, Palette, Sun } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { SettingsCard } from "@/components/common/SettingsCard";
 import { Button } from "@/components/ui/button";
 import { LanguageToggle } from "@/components/common/LanguageToggle";
 import { useDevicePrefs, useSetDeviceTheme, useSetUiLanguage } from "@/db/hooks";
@@ -15,14 +16,7 @@ export function AppearanceSettings() {
   const busy = !prefs.data || setTheme.isPending;
 
   return (
-    <section className="flex flex-col gap-4 rounded-lg border bg-card p-5" aria-labelledby="appearance-title">
-      <div className="flex items-center gap-3">
-        <Palette aria-hidden className="size-6" />
-        <h2 id="appearance-title" className="text-xl font-semibold">
-          {t("appearance.title")}
-        </h2>
-      </div>
-
+    <SettingsCard id="appearance-title" icon={<Palette />} title={t("appearance.title")}>
       <div className="flex flex-col gap-4 divide-y divide-border">
         <div className="flex flex-col justify-between gap-4 pt-1 sm:flex-row sm:items-center">
           <div className="flex flex-col gap-1">
@@ -73,6 +67,6 @@ export function AppearanceSettings() {
           <LanguageToggle onChange={(lng) => setLanguage.mutate(lng)} />
         </div>
       </div>
-    </section>
+    </SettingsCard>
   );
 }

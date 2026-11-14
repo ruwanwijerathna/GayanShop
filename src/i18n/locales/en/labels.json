@@ -59,6 +59,7 @@
     "across": "{{count}} across",
     "stickerHint": "Also the roll chosen by default when printing labels.",
     "testLabel": "Print Test Label / Alignment Test",
-    "rollCalibration": "Roll calibration: {{name}}"
+    "rollCalibration": "Roll calibration: {{name}}",
+    "printerHint": "Prints price stickers for your products."
   }
 }

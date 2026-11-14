@@ -91,6 +91,7 @@
       "backup": "Backup",
       "sync": "Sync",
       "maintenance": "Maintenance"
-    }
+    },
+    "subtitle": "Set up this counter: printers, appearance, backups and sync."
   }
 }

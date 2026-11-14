@@ -1,5 +1,6 @@
 import { Hand } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { SettingsCard } from "@/components/common/SettingsCard";
 import { useDevicePrefs, useSetDeviceTouchMode } from "@/db/hooks";
 import { Switch } from "@/components/ui/switch";
 
@@ -12,13 +13,7 @@ export function TouchModeSettings() {
   const busy = !prefs.data || set.isPending;
 
   return (
-    <section className="flex flex-col gap-4 rounded-lg border bg-card p-5" aria-labelledby="touch-title">
-      <div className="flex items-center gap-3">
-        <Hand aria-hidden className="size-6" />
-        <h2 id="touch-title" className="text-xl font-semibold">
-          {t("touchMode.title")}
-        </h2>
-      </div>
+    <SettingsCard id="touch-title" icon={<Hand />} title={t("touchMode.title")}>
       <div className="flex items-center justify-between gap-6">
         <div className="flex flex-col gap-1">
           <span id="touch-label" className="text-base font-medium">
@@ -37,6 +32,6 @@ export function TouchModeSettings() {
           onCheckedChange={(v) => set.mutate(v)}
         />
       </div>
-    </section>
+    </SettingsCard>
   );
 }

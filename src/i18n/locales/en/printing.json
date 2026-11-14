@@ -71,6 +71,7 @@
       "mm58": "Compact · 32 columns"
     },
     "advanced": "Advanced Settings",
-    "otherConnection": "This printer is connected by {{kind}}. Change it under Advanced Settings."
+    "otherConnection": "This printer is connected by {{kind}}. Change it under Advanced Settings.",
+    "printerHint": "Prints bills and opens the cash drawer."
   }
 }
