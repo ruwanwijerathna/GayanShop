@@ -82,5 +82,15 @@
     "title": "Touch screen",
     "label": "Touch screen mode",
     "description": "Show on-screen touch keypads and number pads for touch-enabled devices"
+  },
+  "settings": {
+    "tabsLabel": "Settings sections",
+    "tabs": {
+      "printers": "Printers",
+      "general": "General",
+      "backup": "Backup",
+      "sync": "Sync",
+      "maintenance": "Maintenance"
+    }
   }
 }

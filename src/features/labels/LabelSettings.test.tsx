@@ -36,6 +36,8 @@ const TEMPLATE = {
   elements: [],
 } as unknown as LabelTemplate;
 
+const TWO_UP = { ...TEMPLATE, id: "two_up_2x1", name: "2-up", columns: 2 } as unknown as LabelTemplate;
+
 const PROFILE: LabelPrinterProfile = {
   transport: { kind: "network", host: "192.168.1.60", port: 9100 },
   language: "zpl",
@@ -73,13 +75,15 @@ describe("label settings mapping", () => {
 });
 
 describe("LabelSettings", () => {
+  beforeEach(() => localStorage.clear());
+
   it("saves a TSPL USB label printer", async () => {
     renderWithProviders(
       <As>
         <LabelSettings />
       </As>,
     );
-    const card = await screen.findByRole("form", { name: "Label printer" });
+    const card = await screen.findByRole("region", { name: "Label printer" });
     fireEvent.change(within(card).getByLabelText("Windows printer name"), {
       target: { value: "Xprinter XP-365B" },
     });
@@ -97,15 +101,39 @@ describe("LabelSettings", () => {
     );
   });
 
-  it("calibrates a roll, prints the alignment test and resets", async () => {
+  it("keeps calibration in a closed Advanced Calibration section", async () => {
     renderWithProviders(
       <As>
         <LabelSettings />
       </As>,
     );
-    const card = await screen.findByRole("form", { name: '3 across, 1" x 1"' });
-    fireEvent.change(within(card).getByLabelText("Gap between labels (mm)"), { target: { value: "2.5" } });
-    fireEvent.click(within(card).getByRole("button", { name: "Save" }));
+    const trigger = await screen.findByRole("button", { name: "Advanced Calibration" });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByLabelText("Darkness (0–15)")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Gap between labels (mm)")).not.toBeInTheDocument();
+    fireEvent.click(trigger);
+    expect(await screen.findByLabelText("Darkness (0–15)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Gap between labels (mm)")).toBeInTheDocument();
+  });
+
+  it("chooses the sticker size, remembers it, and tests, calibrates and resets that roll", async () => {
+    vi.mocked(commands.labelTemplates).mockImplementation(() => ok([TWO_UP, TEMPLATE]));
+    renderWithProviders(
+      <As>
+        <LabelSettings />
+      </As>,
+    );
+    const two = await screen.findByRole("radio", { name: /2 across, 2" x 1"/ });
+    expect(two).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: /3 across, 1" x 1"/ }));
+    expect(localStorage.getItem("gayanshop.label.template")).toBe("three_up_1x1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Print Test Label / Alignment Test" }));
+    await waitFor(() => expect(commands.labelAlignmentTest).toHaveBeenCalledWith("three_up_1x1"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Advanced Calibration" }));
+    fireEvent.change(await screen.findByLabelText("Gap between labels (mm)"), { target: { value: "2.5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(commands.calibrateLabelTemplate).toHaveBeenCalledWith("three_up_1x1", {
         col_gap_mm: 2.5,
@@ -113,9 +141,7 @@ describe("LabelSettings", () => {
         left_margin_mm: 1.5,
       }),
     );
-    fireEvent.click(within(card).getByRole("button", { name: "Print alignment test" }));
-    await waitFor(() => expect(commands.labelAlignmentTest).toHaveBeenCalledWith("three_up_1x1"));
-    fireEvent.click(within(card).getByRole("button", { name: "Reset to default" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset to default" }));
     await waitFor(() =>
       expect(commands.calibrateLabelTemplate).toHaveBeenLastCalledWith("three_up_1x1", null),
     );

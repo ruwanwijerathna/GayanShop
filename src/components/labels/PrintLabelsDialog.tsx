@@ -22,6 +22,7 @@ import { CommandError } from "@/db/client";
 import { useLabelPreview, useLabelTemplates, usePrintLabels } from "@/db/hooks";
 import { translateError } from "@/i18n";
 import { LabelPreviewSvg } from "./LabelPreviewSvg";
+import { lastTemplate, rememberTemplate } from "./templatePreference";
 import { SelectField } from "@/components/common/SelectField";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -31,25 +32,8 @@ export interface LabelItem {
   copies: number;
 }
 
-const TEMPLATE_KEY = "gayanshop.label.template";
 /** Must match `commands::labels`'s approval target. */
 export const LABELS_TARGET = "labels";
-
-function lastTemplate(): string {
-  try {
-    return localStorage.getItem(TEMPLATE_KEY) ?? "two_up_2x1";
-  } catch {
-    return "two_up_2x1";
-  }
-}
-
-function rememberTemplate(id: string) {
-  try {
-    localStorage.setItem(TEMPLATE_KEY, id);
-  } catch {
-    // A private window or blocked storage: the choice simply isn't remembered.
-  }
-}
 
 export function PrintLabelsDialog({ items, onClose }: { items: LabelItem[]; onClose: () => void }) {
   const { t, i18n } = useTranslation("labels");
