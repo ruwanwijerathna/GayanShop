@@ -5,6 +5,7 @@ import { Wrench } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { SettingsCard } from "@/components/common/SettingsCard";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,8 +24,7 @@ export function MaintenanceSettings() {
   const rebuild = useRebuildDerived();
   const [confirm, setConfirm] = useState(false);
   return (
-    <section className="flex flex-col gap-3 rounded-lg border p-4" aria-label={t("maintenance.title")}>
-      <h2 className="text-xl font-semibold">{t("maintenance.title")}</h2>
+    <SettingsCard id="maintenance-title" icon={<Wrench />} title={t("maintenance.title")}>
       <p className="text-base text-muted-foreground">{t("maintenance.explain")}</p>
       <Button
         type="button"
@@ -86,6 +86,6 @@ export function MaintenanceSettings() {
           </DialogContent>
         </Dialog>
       )}
-    </section>
+    </SettingsCard>
   );
 }

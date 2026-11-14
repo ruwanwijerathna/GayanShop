@@ -2,6 +2,7 @@ import { CloudCog } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Can } from "@/components/auth/Can";
+import { SettingsCard } from "@/components/common/SettingsCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -144,17 +145,7 @@ export function SyncSettings() {
   const registered = info.data?.registered ?? false;
   const showForm = !registered || s?.state === "unauthorized" || registerAgain;
   return (
-    <section
-      id="sync"
-      className="flex flex-col gap-4 rounded-lg border bg-card p-5"
-      aria-labelledby="sync-title"
-    >
-      <div className="flex items-center gap-3">
-        <CloudCog aria-hidden className="size-6" />
-        <h2 id="sync-title" className="text-xl font-semibold">
-          {t("settings.title")}
-        </h2>
-      </div>
+    <SettingsCard sectionId="sync" id="sync-title" icon={<CloudCog />} title={t("settings.title")}>
       <p className="text-base text-muted-foreground">{t("settings.intro")}</p>
       {s && (
         <dl className="grid grid-cols-1 gap-1 text-base sm:grid-cols-2">
@@ -237,6 +228,6 @@ export function SyncSettings() {
           <p className="text-sm text-muted-foreground">{t("settings.noLog")}</p>
         )}
       </section>
-    </section>
+    </SettingsCard>
   );
 }

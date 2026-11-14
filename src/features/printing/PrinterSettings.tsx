@@ -17,6 +17,7 @@ import { CommandError } from "@/db/client";
 import { usePrinterProfile, usePrinterStatus, usePrintTestPage, useSetPrinterProfile } from "@/db/hooks";
 import { translateError } from "@/i18n";
 import { AdvancedSection } from "@/components/common/AdvancedSection";
+import { SettingsCard, StatusPill } from "@/components/common/SettingsCard";
 import { RadioCards } from "@/components/common/RadioCards";
 import { SelectField } from "@/components/common/SelectField";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -130,23 +131,33 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
   const error = [save.error, test.error].find((x) => x instanceof CommandError);
   const health = status.data?.health ?? "not_configured";
 
-  return (
-    <form
-      onSubmit={submit}
-      className="flex flex-col gap-4 rounded-lg border bg-card p-5"
-      aria-labelledby="printer-title"
-    >
-      <div className="flex items-center gap-3">
-        <Printer aria-hidden className="size-6" />
-        <h2 id="printer-title" className="flex-1 text-xl font-semibold">
-          {t("settings.printerTitle")}
-        </h2>
-        <span className="text-base text-muted-foreground">
-          {t("settings.status")}:{" "}
-          <strong className="text-foreground">{t(`settings.health.${health}`)}</strong>
-        </span>
-      </div>
+  const tone = health === "ready" ? "ok" : health === "not_configured" ? "idle" : "bad";
 
+  return (
+    <SettingsCard
+      id="printer-title"
+      icon={<Printer />}
+      title={t("settings.printerTitle")}
+      description={t("settings.printerHint")}
+      badge={<StatusPill tone={tone}>{t(`settings.health.${health}`)}</StatusPill>}
+      onSubmit={submit}
+      footer={
+        <Can perm="SETTINGS_MANAGE">
+          <Button type="submit" size="pos" disabled={save.isPending}>
+            {t("settings.save")}
+          </Button>
+          <Button
+            type="button"
+            size="pos"
+            variant="outline"
+            disabled={test.isPending || profile === null}
+            onClick={() => test.mutate()}
+          >
+            {t("settings.testPage")}
+          </Button>
+        </Can>
+      }
+    >
       {form.kind === "spooler" ? (
         <div className="flex flex-col gap-2">
           <Label htmlFor="printer-name">{t("settings.printerName")}</Label>
@@ -279,24 +290,7 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
       )}
       {saved && <p role="status">{t("settings.saved")}</p>}
       {test.isSuccess && <p role="status">{t("settings.testQueued")}</p>}
-
-      <Can perm="SETTINGS_MANAGE">
-        <div className="flex flex-wrap gap-3">
-          <Button type="submit" size="pos" disabled={save.isPending}>
-            {t("settings.save")}
-          </Button>
-          <Button
-            type="button"
-            size="pos"
-            variant="outline"
-            disabled={test.isPending || profile === null}
-            onClick={() => test.mutate()}
-          >
-            {t("settings.testPage")}
-          </Button>
-        </div>
-      </Can>
-    </form>
+    </SettingsCard>
   );
 }
 

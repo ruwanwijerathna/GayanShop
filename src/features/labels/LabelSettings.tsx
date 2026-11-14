@@ -20,6 +20,7 @@ import {
 } from "@/db/hooks";
 import { translateError } from "@/i18n";
 import { AdvancedSection } from "@/components/common/AdvancedSection";
+import { SettingsCard } from "@/components/common/SettingsCard";
 import { RadioCards } from "@/components/common/RadioCards";
 import { SelectField } from "@/components/common/SelectField";
 import { lastTemplate, rememberTemplate } from "@/components/labels/templatePreference";
@@ -173,15 +174,31 @@ function LabelCard({
   const error = [save.error, align.error].find((e) => e instanceof CommandError);
 
   return (
-    <section
-      className="flex flex-col gap-5 rounded-lg border bg-card p-5"
-      aria-labelledby="label-printer-title"
+    <SettingsCard
+      id="label-printer-title"
+      icon={<Tag />}
+      title={t("settings.printerTitle")}
+      description={t("settings.printerHint")}
+      footer={
+        <Can perm="SETTINGS_MANAGE">
+          <Button type="button" size="pos" disabled={save.isPending} onClick={savePrinter}>
+            {t("settings.save")}
+          </Button>
+          <Button
+            type="button"
+            size="pos"
+            variant="outline"
+            disabled={!selected || align.isPending}
+            onClick={() =>
+              selected &&
+              align.mutate(selected.id, { onSuccess: () => toast.success(t("settings.alignQueued")) })
+            }
+          >
+            {t("settings.testLabel")}
+          </Button>
+        </Can>
+      }
     >
-      <h2 id="label-printer-title" className="flex items-center gap-3 text-xl font-semibold">
-        <Tag aria-hidden className="size-6" />
-        {t("settings.printerTitle")}
-      </h2>
-
       <Field id="lp-target" label={targetLabel}>
         <Input
           id="lp-target"
@@ -220,26 +237,6 @@ function LabelCard({
           {translateError(i18n.t, error.error)}
         </p>
       )}
-
-      <Can perm="SETTINGS_MANAGE">
-        <div className="flex flex-wrap gap-3">
-          <Button type="button" size="pos" disabled={save.isPending} onClick={savePrinter}>
-            {t("settings.save")}
-          </Button>
-          <Button
-            type="button"
-            size="pos"
-            variant="outline"
-            disabled={!selected || align.isPending}
-            onClick={() =>
-              selected &&
-              align.mutate(selected.id, { onSuccess: () => toast.success(t("settings.alignQueued")) })
-            }
-          >
-            {t("settings.testLabel")}
-          </Button>
-        </div>
-      </Can>
 
       <AdvancedSection title={t("settings.advanced")}>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -338,7 +335,7 @@ function LabelCard({
           />
         )}
       </AdvancedSection>
-    </section>
+    </SettingsCard>
   );
 }
 

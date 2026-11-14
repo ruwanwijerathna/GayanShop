@@ -3,6 +3,7 @@ import { HardDriveDownload, ShieldAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Can } from "@/components/auth/Can";
+import { SettingsCard } from "@/components/common/SettingsCard";
 import { Button } from "@/components/ui/button";
 import { CommandError } from "@/db/client";
 import { pickBackupFolder, useBackupNow, useBackupStatus } from "@/db/hooks";
@@ -68,13 +69,7 @@ export function BackupSettings() {
   const s = status.data;
   const error = backup.error instanceof CommandError ? translateError(i18n.t, backup.error.error) : null;
   return (
-    <section className="flex flex-col gap-4 rounded-lg border bg-card p-5" aria-labelledby="backup-title">
-      <div className="flex items-center gap-3">
-        <HardDriveDownload aria-hidden className="size-6" />
-        <h2 id="backup-title" className="text-xl font-semibold">
-          {t("title")}
-        </h2>
-      </div>
+    <SettingsCard id="backup-title" icon={<HardDriveDownload />} title={t("title")}>
       <p className="text-base">
         {s?.last_at
           ? t("last", { when: relativeTime(s.last_at, status.dataUpdatedAt, i18n.resolvedLanguage ?? "en") })
@@ -123,7 +118,7 @@ export function BackupSettings() {
           {backup.isPending ? t("running", { seconds: elapsed }) : choosing ? t("choosing") : t("button")}
         </Button>
       </Can>
-    </section>
+    </SettingsCard>
   );
 }
 

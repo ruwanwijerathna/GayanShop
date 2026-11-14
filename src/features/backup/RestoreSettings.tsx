@@ -1,6 +1,7 @@
 import { History, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { SettingsCard } from "@/components/common/SettingsCard";
 import { Button } from "@/components/ui/button";
 import { CommandError } from "@/db/client";
 import { pickRestoreFile, useRestoreCandidates, useRestoreStage } from "@/db/hooks";
@@ -39,13 +40,7 @@ export function RestoreSettings() {
   };
 
   return (
-    <section className="flex flex-col gap-4 rounded-lg border bg-card p-5" aria-labelledby="restore-title">
-      <div className="flex items-center gap-3">
-        <History aria-hidden className="size-6" />
-        <h2 id="restore-title" className="text-xl font-semibold">
-          {t("restore.title")}
-        </h2>
-      </div>
+    <SettingsCard id="restore-title" icon={<History />} title={t("restore.title")}>
       <p className="text-base text-muted-foreground">{t("restore.intro")}</p>
       {candidates.data && candidates.data.length > 0 ? (
         <ul className="flex max-h-72 flex-col gap-2 overflow-y-auto">
@@ -127,6 +122,6 @@ export function RestoreSettings() {
           )}
         </div>
       )}
-    </section>
+    </SettingsCard>
   );
 }
