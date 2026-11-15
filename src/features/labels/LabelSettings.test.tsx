@@ -8,7 +8,7 @@ import {
   type LabelTemplate_Serialize as LabelTemplate,
   type Perm,
 } from "@/db/bindings";
-import { ok, renderWithProviders, session } from "@/test/render";
+import { chooseOption, ok, renderWithProviders, session } from "@/test/render";
 import { LabelSettings, parseMm, toForm, toProfile } from "./LabelSettings";
 
 vi.mock("@/db/bindings", () => ({
@@ -18,6 +18,7 @@ vi.mock("@/db/bindings", () => ({
     setLabelPrinterProfile: vi.fn(),
     calibrateLabelTemplate: vi.fn(),
     labelAlignmentTest: vi.fn(),
+    listSystemPrinters: vi.fn(),
   },
 }));
 
@@ -62,6 +63,9 @@ beforeEach(() => {
   vi.mocked(commands.setLabelPrinterProfile).mockImplementation(() => ok(null));
   vi.mocked(commands.calibrateLabelTemplate).mockImplementation(() => ok(TEMPLATE));
   vi.mocked(commands.labelAlignmentTest).mockImplementation(() => ok(null));
+  vi.mocked(commands.listSystemPrinters).mockImplementation(() =>
+    ok(["Xprinter XP-365B", "Microsoft Print to PDF"]),
+  );
 });
 
 describe("label settings mapping", () => {
@@ -84,9 +88,7 @@ describe("LabelSettings", () => {
       </As>,
     );
     const card = await screen.findByRole("region", { name: "Label printer" });
-    fireEvent.change(within(card).getByLabelText("Windows printer name"), {
-      target: { value: "Xprinter XP-365B" },
-    });
+    chooseOption(await within(card).findByLabelText("Printer"), "Xprinter XP-365B");
     fireEvent.click(within(card).getByRole("button", { name: "Save label printer" }));
     await waitFor(() =>
       expect(commands.setLabelPrinterProfile).toHaveBeenCalledWith({

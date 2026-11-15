@@ -66,6 +66,7 @@ export const queryKeys = {
   cashSession: ["cash", "current"] as const,
   printerStatus: ["printer", "status"] as const,
   printerProfile: ["printer", "profile"] as const,
+  systemPrinters: ["system-printers"] as const,
   customer: (phone: string) => ["customers", "lookup", phone] as const,
   customerList: (search: string, sort: CustomerSort) => ["customers", "list", search, sort] as const,
   customerProfile: (id: string) => ["customers", "profile", id] as const,
@@ -387,6 +388,15 @@ export function usePrinterStatus() {
     queryKey: queryKeys.printerStatus,
     queryFn: () => unwrap(commands.printerStatus()),
     refetchInterval: 5_000,
+  });
+}
+
+/** The printers installed in Windows, for the Settings dropdowns; `refetch()` is the Refresh button. */
+export function useSystemPrinters() {
+  return useQuery({
+    queryKey: queryKeys.systemPrinters,
+    queryFn: () => unwrap(commands.listSystemPrinters()),
+    staleTime: 30_000,
   });
 }
 

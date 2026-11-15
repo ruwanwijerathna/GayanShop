@@ -119,6 +119,8 @@ pub struct Layout {
     /// `GS ( k` QR; `false` falls back to a Code128 barcode of the same data.
     pub qr: bool,
     pub drawer_pin: DrawerPin,
+    /// `false`: this counter has no cash drawer on the printer, so nothing sends the drawer kick.
+    pub open_drawer: bool,
 }
 
 impl Default for Layout {
@@ -130,6 +132,7 @@ impl Default for Layout {
             feed_lines: 4,
             qr: true,
             drawer_pin: DrawerPin::Pin2,
+            open_drawer: true,
         }
     }
 }

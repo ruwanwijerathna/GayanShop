@@ -100,6 +100,14 @@ pub struct ReceiptPrinterProfile {
     pub feed_lines: u8,
     pub qr: bool,
     pub drawer_pin: DrawerPin,
+    /// Kick the cash drawer with the bill (cash sales, voids, pay-in/out, no-sale, test page). Profiles saved
+    /// before this field existed keep the drawer on.
+    #[serde(default = "drawer_on")]
+    pub open_drawer: bool,
+}
+
+fn drawer_on() -> bool {
+    true
 }
 
 impl ReceiptPrinterProfile {
@@ -111,6 +119,7 @@ impl ReceiptPrinterProfile {
             feed_lines: self.feed_lines.min(10),
             qr: self.qr,
             drawer_pin: self.drawer_pin,
+            open_drawer: self.open_drawer,
         }
     }
 }

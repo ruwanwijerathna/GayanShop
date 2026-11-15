@@ -101,8 +101,8 @@ async fn eight_hour_scripted_selling_at_three_counters() {
         order_idx += 5;
 
         // Midday void on T03 (Hour 3)
-        if hour == 3 && void_target.is_some() {
-            c.void(void_target.as_ref().unwrap()).await;
+        if let Some(target) = void_target.as_ref().filter(|_| hour == 3) {
+            c.void(target).await;
         }
 
         // Periodic sync rounds every 2 hours (simulating reconnection after offline periods)
