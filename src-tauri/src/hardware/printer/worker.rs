@@ -361,6 +361,12 @@ impl Worker {
             let (job, wait) = self.next_job().await?;
             let Some(job) = job else { return Ok(wait) };
 
+            // No drawer on this counter: the kick is done without sending a byte.
+            if job.kind == "drawer_kick" && matches!(&profile, AnyProfile::Receipt(p) if !p.open_drawer) {
+                self.set_job(&job.id, "done", None, None).await?;
+                continue;
+            }
+
             // Paper and cover first, where the transport can tell (network, serial; receipt printers only).
             match self.call(transport.clone(), move |t| if reads_status { t.status() } else { Ok(None) }).await {
                 Call::TimedOut(stuck) => {

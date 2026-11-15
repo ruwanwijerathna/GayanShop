@@ -73,3 +73,72 @@ impl PrinterTransport for Spooler {
         Ok(None)
     }
 }
+
+/// Every printer queue Windows knows about (local and connected), sorted, for the Settings dropdown.
+pub fn list_printers() -> Result<Vec<String>, PrintFault> {
+    let mut names = enumerate()?;
+    names.sort_by_key(|n| n.to_lowercase());
+    names.dedup();
+    Ok(names)
+}
+
+#[cfg(windows)]
+#[allow(unsafe_code)]
+fn enumerate() -> Result<Vec<String>, PrintFault> {
+    use windows_sys::Win32::Graphics::Printing::{
+        EnumPrintersW, PRINTER_ENUM_CONNECTIONS, PRINTER_ENUM_LOCAL, PRINTER_INFO_4W,
+    };
+    let flags = PRINTER_ENUM_LOCAL | PRINTER_ENUM_CONNECTIONS;
+    let (mut needed, mut returned) = (0u32, 0u32);
+    // SAFETY: a sizing call with a null buffer; `needed` and `returned` are live locals.
+    unsafe {
+        EnumPrintersW(flags, std::ptr::null(), 4, std::ptr::null_mut(), 0, &mut needed, &mut returned);
+    }
+    if needed == 0 {
+        return Ok(Vec::new());
+    }
+    // A `u64` buffer keeps the structs it receives 8-byte aligned.
+    let words = usize::try_from(needed).map_err(|e| PrintFault::new("STATUS_FAILED", e))?.div_ceil(8);
+    let mut buf = vec![0u64; words];
+    // SAFETY: `buf` is at least `needed` bytes and lives past every read below; on success it holds
+    // `returned` PRINTER_INFO_4W records whose name pointers point into the same buffer.
+    unsafe {
+        if EnumPrintersW(flags, std::ptr::null(), 4, buf.as_mut_ptr().cast(), needed, &mut needed, &mut returned) == 0 {
+            return Err(PrintFault::new("STATUS_FAILED", std::io::Error::last_os_error()));
+        }
+        let count = usize::try_from(returned).map_err(|e| PrintFault::new("STATUS_FAILED", e))?;
+        let infos = std::slice::from_raw_parts(buf.as_ptr().cast::<PRINTER_INFO_4W>(), count);
+        let mut names = Vec::with_capacity(count);
+        for info in infos {
+            let p = info.pPrinterName;
+            if p.is_null() {
+                continue;
+            }
+            let mut len = 0usize;
+            while *p.add(len) != 0 {
+                len += 1;
+            }
+            names.push(String::from_utf16_lossy(std::slice::from_raw_parts(p, len)));
+        }
+        Ok(names)
+    }
+}
+
+#[cfg(not(windows))]
+fn enumerate() -> Result<Vec<String>, PrintFault> {
+    Ok(Vec::new())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn listing_never_fails_and_is_sorted_and_unique() {
+        let names = list_printers().unwrap_or_default();
+        let mut sorted = names.clone();
+        sorted.sort_by_key(|n| n.to_lowercase());
+        sorted.dedup();
+        assert_eq!(names, sorted);
+    }
+}

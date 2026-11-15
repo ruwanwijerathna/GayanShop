@@ -188,7 +188,9 @@ pub fn test_page(store: &str, layout: Layout, printed_at: &str) -> Vec<u8> {
     p.pair("Total", &rs(125_000));
     p.align(Align::Center).qr("GAYANSHOP-TEST").line(printed_at).align(Align::Left);
     p.cut();
-    p.kick();
+    if layout.open_drawer {
+        p.kick();
+    }
     p.finish()
 }
 

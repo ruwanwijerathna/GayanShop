@@ -151,8 +151,13 @@ export const commands = {
 	orderHistory: (filter: OrderFilter_Deserialize, cursor: OrderCursor | null, limit: number) => typedError<OrderPage_Serialize, AppError>(__TAURI_INVOKE("order_history", { filter, cursor, limit })),
 	orderReceipt: (orderId: string) => typedError<ReceiptData_Serialize, AppError>(__TAURI_INVOKE("order_receipt", { orderId })),
 	printerStatus: () => typedError<PrinterStatusView_Serialize, AppError>(__TAURI_INVOKE("printer_status")),
-	printerProfile: () => typedError<ReceiptPrinterProfile | null, AppError>(__TAURI_INVOKE("printer_profile")),
-	setPrinterProfile: (profile: ReceiptPrinterProfile) => typedError<null, AppError>(__TAURI_INVOKE("set_printer_profile", { profile })),
+	/**
+	 *  The printers Windows has installed (Settings → printer dropdown and its Refresh button). Enumeration
+	 *  runs off the async thread under a timeout, because a frozen spooler can hang it.
+	 */
+	listSystemPrinters: () => typedError<string[], AppError>(__TAURI_INVOKE("list_system_printers")),
+	printerProfile: () => typedError<ReceiptPrinterProfile_Serialize | null, AppError>(__TAURI_INVOKE("printer_profile")),
+	setPrinterProfile: (profile: ReceiptPrinterProfile_Deserialize) => typedError<null, AppError>(__TAURI_INVOKE("set_printer_profile", { profile })),
 	/**  Ruler, code-page sample, QR and cut, then the drawer kick (doc §7.2). */
 	printTestPage: () => typedError<null, AppError>(__TAURI_INVOKE("print_test_page")),
 	/**  The banner's Retry: failed jobs go back to the queue. */
@@ -2261,7 +2266,10 @@ export type ReceiptPayment_Serialize = {
 };
 
 /**  This counter's receipt printer (and the drawer on its RJ11 port). Device-local, not synced. */
-export type ReceiptPrinterProfile = {
+export type ReceiptPrinterProfile = ReceiptPrinterProfile_Serialize | ReceiptPrinterProfile_Deserialize;
+
+/**  This counter's receipt printer (and the drawer on its RJ11 port). Device-local, not synced. */
+export type ReceiptPrinterProfile_Deserialize = {
 	transport: TransportConfig,
 	width: PaperWidth,
 	codepage: CodePage,
@@ -2269,6 +2277,27 @@ export type ReceiptPrinterProfile = {
 	feed_lines: number,
 	qr: boolean,
 	drawer_pin: DrawerPin,
+	/**
+	 *  Kick the cash drawer with the bill (cash sales, voids, pay-in/out, no-sale, test page). Profiles saved
+	 *  before this field existed keep the drawer on.
+	 */
+	open_drawer?: boolean,
+};
+
+/**  This counter's receipt printer (and the drawer on its RJ11 port). Device-local, not synced. */
+export type ReceiptPrinterProfile_Serialize = {
+	transport: TransportConfig,
+	width: PaperWidth,
+	codepage: CodePage,
+	cut: CutMode,
+	feed_lines: number,
+	qr: boolean,
+	drawer_pin: DrawerPin,
+	/**
+	 *  Kick the cash drawer with the bill (cash sales, voids, pay-in/out, no-sale, test page). Profiles saved
+	 *  before this field existed keep the drawer on.
+	 */
+	open_drawer: boolean,
 };
 
 export type RecoverInput = {

@@ -22,6 +22,7 @@ vi.mock("@/db/bindings", () => ({
     printerStatus: vi.fn(),
     labelPrinterProfile: vi.fn(),
     labelTemplates: vi.fn(),
+    listSystemPrinters: vi.fn(),
   },
 }));
 
@@ -46,6 +47,7 @@ beforeEach(() => {
   );
   vi.mocked(commands.labelPrinterProfile).mockImplementation(() => ok(null));
   vi.mocked(commands.labelTemplates).mockImplementation(() => ok([]));
+  vi.mocked(commands.listSystemPrinters).mockImplementation(() => ok([]));
 });
 
 describe("SettingsPage", () => {

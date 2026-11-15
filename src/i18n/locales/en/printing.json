@@ -38,7 +38,7 @@
       "network": "Network (TCP 9100)",
       "serial": "Serial (COM port)"
     },
-    "printerName": "Windows printer name",
+    "printerName": "Printer",
     "host": "IP address or host name",
     "port": "Port",
     "comPort": "COM port",
@@ -72,6 +72,8 @@
     },
     "advanced": "Advanced Settings",
     "otherConnection": "This printer is connected by {{kind}}. Change it under Advanced Settings.",
-    "printerHint": "Prints bills and opens the cash drawer."
+    "printerHint": "Prints bills and opens the cash drawer.",
+    "drawer": "Open cash drawer",
+    "drawerHint": "Opens the cash drawer connected to this printer when a bill is printed."
   }
 }

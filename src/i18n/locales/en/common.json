@@ -89,5 +89,12 @@
     "done_one": "Exported {{count}} row to {{path}}",
     "done_other": "Exported {{count}} rows to {{path}}",
     "failed": "The export failed."
+  },
+  "printerSelect": {
+    "refresh": "Refresh printer list",
+    "choose": "Select a printer",
+    "none": "No printers found. Install the printer in Windows, plug it in, then press Refresh.",
+    "missing": "{{name}} (not installed)",
+    "failed": "Couldn't read the printer list. Press Refresh to try again."
   }
 }

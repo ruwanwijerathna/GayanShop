@@ -2,7 +2,12 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { useEffect, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSession } from "@/app/session";
-import { commands, type Perm, type ReceiptPrinterProfile } from "@/db/bindings";
+import {
+  commands,
+  type Perm,
+  type ReceiptPrinterProfile,
+  type ReceiptPrinterProfile_Serialize,
+} from "@/db/bindings";
 import { chooseOption, err, ok, renderWithProviders, session } from "@/test/render";
 import { DEFAULT_FORM, PrinterSettings, toForm, toProfile } from "./PrinterSettings";
 
@@ -12,10 +17,11 @@ vi.mock("@/db/bindings", () => ({
     printerStatus: vi.fn(),
     setPrinterProfile: vi.fn(),
     printTestPage: vi.fn(),
+    listSystemPrinters: vi.fn(),
   },
 }));
 
-const NET: ReceiptPrinterProfile = {
+const NET: ReceiptPrinterProfile_Serialize = {
   transport: { kind: "network", host: "192.168.1.50", port: 9100 },
   width: "mm58",
   codepage: "wpc1252",
@@ -23,6 +29,7 @@ const NET: ReceiptPrinterProfile = {
   feed_lines: 3,
   qr: false,
   drawer_pin: "pin5",
+  open_drawer: false,
 };
 
 function As({ perms, children }: { perms: Perm[]; children: ReactNode }) {
@@ -46,6 +53,7 @@ beforeEach(() => {
   );
   vi.mocked(commands.setPrinterProfile).mockImplementation(() => ok(null));
   vi.mocked(commands.printTestPage).mockImplementation(() => ok(null));
+  vi.mocked(commands.listSystemPrinters).mockImplementation(() => ok(["XP-80C", "Microsoft Print to PDF"]));
 });
 
 describe("printer form mapping", () => {
@@ -66,6 +74,7 @@ describe("printer form mapping", () => {
       feed_lines: 4,
       qr: true,
       drawer_pin: "pin2",
+      open_drawer: true,
     });
   });
 
@@ -115,6 +124,41 @@ describe("PrinterSettings", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Check the printer connection details.");
   });
 
+  it("picks the printer from the installed ones, refreshes the list and saves the drawer switch", async () => {
+    renderAs();
+    await screen.findByText("Not set up");
+    chooseOption(await screen.findByLabelText("Printer"), "XP-80C");
+    vi.mocked(commands.listSystemPrinters).mockImplementation(() => ok(["XP-80C", "Zebra ZD220"]));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh printer list" }));
+    await waitFor(() => expect(commands.listSystemPrinters).toHaveBeenCalledTimes(2));
+    const drawer = screen.getByRole("switch", { name: "Open cash drawer" });
+    expect(drawer).toBeChecked();
+    fireEvent.click(drawer);
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(commands.setPrinterProfile).toHaveBeenCalledWith({
+        ...toProfile(DEFAULT_FORM),
+        transport: { kind: "spooler", printer_name: "XP-80C" },
+        open_drawer: false,
+      }),
+    );
+  });
+
+  it("keeps a saved printer that is no longer installed in the list", async () => {
+    vi.mocked(commands.printerProfile).mockImplementation(() =>
+      ok({ ...NET, transport: { kind: "spooler", printer_name: "Old Printer" } }),
+    );
+    renderAs();
+    const select = await screen.findByRole("combobox", { name: "Printer" });
+    await waitFor(() => expect(select).toHaveTextContent("Old Printer (not installed)"));
+  });
+
+  it("explains an empty printer list", async () => {
+    vi.mocked(commands.listSystemPrinters).mockImplementation(() => ok([]));
+    renderAs();
+    expect(await screen.findByText(/No printers found/)).toBeInTheDocument();
+  });
+
   it("keeps the technical fields in a closed Advanced Settings section", async () => {
     renderAs();
     await screen.findByText("Not set up");
@@ -123,7 +167,7 @@ describe("PrinterSettings", () => {
     expect(screen.queryByLabelText("Cut")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Lines fed before the cut")).not.toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /80 mm/ })).toBeChecked();
-    expect(screen.getByLabelText("Windows printer name")).toBeInTheDocument();
+    expect(screen.getByLabelText("Printer")).toBeInTheDocument();
     fireEvent.click(trigger);
     expect(trigger).toHaveAttribute("aria-expanded", "true");
     expect(await screen.findByLabelText("Cut")).toBeInTheDocument();
@@ -134,7 +178,7 @@ describe("PrinterSettings", () => {
     vi.mocked(commands.printerProfile).mockImplementation(() => ok(NET));
     renderAs();
     expect(await screen.findByText(/connected by Network \(TCP 9100\)/)).toBeInTheDocument();
-    expect(screen.queryByLabelText("Windows printer name")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Printer")).not.toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /58 mm/ })).toBeChecked();
   });
 

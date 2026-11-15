@@ -21,6 +21,7 @@ import {
 import { translateError } from "@/i18n";
 import { AdvancedSection } from "@/components/common/AdvancedSection";
 import { SettingsCard } from "@/components/common/SettingsCard";
+import { PrinterSelect } from "@/components/common/PrinterSelect";
 import { RadioCards } from "@/components/common/RadioCards";
 import { SelectField } from "@/components/common/SelectField";
 import { lastTemplate, rememberTemplate } from "@/components/labels/templatePreference";
@@ -199,14 +200,15 @@ function LabelCard({
         </Can>
       }
     >
-      <Field id="lp-target" label={targetLabel}>
-        <Input
-          id="lp-target"
-          className={FIELD}
-          value={form.target}
-          onChange={(e) => set("target", e.target.value)}
-        />
-      </Field>
+      {form.kind === "spooler" ? (
+        <Field id="lp-target" label={t("settings.printerName")}>
+          <PrinterSelect id="lp-target" value={form.target} onChange={(v) => set("target", v)} />
+        </Field>
+      ) : (
+        <p className="rounded-lg border bg-muted/40 p-3 text-base">
+          {t("settings.otherConnection", { kind: t(`settings.kinds.${form.kind}`) })}
+        </p>
+      )}
 
       {selected && (
         <div className="flex flex-col gap-2">
@@ -244,10 +246,27 @@ function LabelCard({
             <SelectField
               id="lp-kind"
               value={form.kind}
-              onValueChange={(v) => set("kind", KINDS.find((k) => k === v) ?? "spooler")}
+              onValueChange={(v) => {
+                const kind = KINDS.find((k) => k === v) ?? "spooler";
+                setForm((f) => ({
+                  ...f,
+                  kind,
+                  target: (kind === "spooler") === (f.kind === "spooler") ? f.target : "",
+                }));
+              }}
               options={KINDS.map((k) => ({ value: k, label: t(`settings.kinds.${k}`) }))}
             />
           </Field>
+          {form.kind !== "spooler" && (
+            <Field id="lp-target" label={targetLabel}>
+              <Input
+                id="lp-target"
+                className={FIELD}
+                value={form.target}
+                onChange={(e) => set("target", e.target.value)}
+              />
+            </Field>
+          )}
           {form.kind === "network" && (
             <Field id="lp-port" label={t("settings.port")}>
               <Input

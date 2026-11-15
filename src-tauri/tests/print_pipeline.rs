@@ -129,6 +129,7 @@ fn profile() -> ReceiptPrinterProfile {
         feed_lines: 4,
         qr: true,
         drawer_pin: DrawerPin::Pin2,
+        open_drawer: true,
     }
 }
 
@@ -224,6 +225,36 @@ async fn a_cash_sale_kicks_the_drawer_then_prints_the_receipt() {
     assert!(receipt.ends_with(&[0x1B, b'd', 4, 0x1D, b'V', 1]), "feed then partial cut");
     assert_eq!(hub.health().unwrap().health, PrinterHealth::Ready);
     assert_eq!(fake.max_in_flight.load(Ordering::SeqCst), 1, "one call at a time");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn with_the_drawer_off_a_cash_sale_prints_the_receipt_and_sends_no_kick() {
+    let t = till().await;
+    t.login(CASHIER, CASHIER_PIN).await;
+    let mut tx = t.t.db.write().await.unwrap();
+    let no_drawer = ReceiptPrinterProfile { open_drawer: false, ..profile() };
+    settings::device_set(tx.conn(), &profile_key(RECEIPT_PRINTER), &no_drawer).await.unwrap();
+    tx.commit().await.unwrap();
+    let mug = t.product("Mug", 25_000, false, 0, None).await;
+    let fake = Fake::new(Mode::Print);
+    let hub = hub(&t, &fake).await;
+
+    sell_now(&t, &cash_sale(&t, "p1", &mug)).await;
+    hub.notify();
+    wait_until("both jobs done", || async { status_count(&t, "done").await == 2 }).await;
+
+    let sent = fake.sent();
+    assert_eq!(sent.len(), 1, "only the receipt reaches the printer");
+    assert!(contains(&sent[0], b"Mug"));
+    assert!(!contains(&sent[0], &drawer_kick(DrawerPin::Pin2)), "no kick bytes anywhere");
+    assert_eq!(status_count(&t, "failed").await, 0);
+}
+
+#[test]
+fn a_profile_saved_before_the_drawer_switch_keeps_the_drawer_on() {
+    let old = r#"{"transport":{"kind":"network","host":"h","port":9100},"width":"mm80","codepage":"pc437","cut":"partial","feed_lines":4,"qr":true,"drawer_pin":"pin2"}"#;
+    let p: ReceiptPrinterProfile = serde_json::from_str(old).unwrap();
+    assert!(p.open_drawer);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

@@ -10,9 +10,9 @@ use super::{emit_changed, session, write_ctx};
 use crate::auth::guard::{Actor, require};
 use crate::db::repo::print_jobs::{self, PrintKind, RECEIPT_PRINTER};
 use crate::domain::permissions::Perm;
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::hardware::printer::worker::PrinterHealth;
-use crate::hardware::printer::{self, ReceiptPrinterProfile};
+use crate::hardware::printer::{self, ReceiptPrinterProfile, transport_spooler};
 use crate::state::AppState;
 
 #[derive(Debug, Clone, Serialize, Type, PartialEq, Eq)]
@@ -45,6 +45,21 @@ pub async fn printer_status(state: State<'_, AppState>) -> AppResult<PrinterStat
     let (queued, failed) = print_jobs::counts(&state.db.pool, RECEIPT_PRINTER, &held).await?;
     let recovered = i64::try_from(held.len()).unwrap_or(i64::MAX);
     Ok(PrinterStatusView { health: h.health, fault: h.fault, queued, failed, recovered })
+}
+
+/// The printers Windows has installed (Settings → printer dropdown and its Refresh button). Enumeration
+/// runs off the async thread under a timeout, because a frozen spooler can hang it.
+#[tauri::command]
+#[specta::specta]
+pub async fn list_system_printers(state: State<'_, AppState>) -> AppResult<Vec<String>> {
+    session(&state)?;
+    let listing = tokio::task::spawn_blocking(transport_spooler::list_printers);
+    match tokio::time::timeout(std::time::Duration::from_secs(5), listing).await {
+        Ok(Ok(Ok(names))) => Ok(names),
+        Ok(Ok(Err(fault))) => Err(AppError::internal(format!("{}: {}", fault.code, fault.detail))),
+        Ok(Err(e)) => Err(AppError::internal(format!("printer listing task: {e}"))),
+        Err(_) => Err(AppError::internal("printer listing timed out")),
+    }
 }
 
 #[tauri::command]

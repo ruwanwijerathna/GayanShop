@@ -18,9 +18,11 @@ import { usePrinterProfile, usePrinterStatus, usePrintTestPage, useSetPrinterPro
 import { translateError } from "@/i18n";
 import { AdvancedSection } from "@/components/common/AdvancedSection";
 import { SettingsCard, StatusPill } from "@/components/common/SettingsCard";
+import { PrinterSelect } from "@/components/common/PrinterSelect";
 import { RadioCards } from "@/components/common/RadioCards";
 import { SelectField } from "@/components/common/SelectField";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 
 const FIELD = "h-12 text-base";
 
@@ -45,6 +47,7 @@ export interface PrinterForm {
   feedLines: string;
   qr: boolean;
   drawerPin: DrawerPin;
+  openDrawer: boolean;
 }
 
 export const DEFAULT_FORM: PrinterForm = {
@@ -60,6 +63,7 @@ export const DEFAULT_FORM: PrinterForm = {
   feedLines: "4",
   qr: true,
   drawerPin: "pin2",
+  openDrawer: true,
 };
 
 export function toForm(p: ReceiptPrinterProfile | null): PrinterForm {
@@ -78,6 +82,7 @@ export function toForm(p: ReceiptPrinterProfile | null): PrinterForm {
     feedLines: String(p.feed_lines),
     qr: p.qr,
     drawerPin: p.drawer_pin,
+    openDrawer: p.open_drawer ?? true,
   };
 }
 
@@ -101,6 +106,7 @@ export function toProfile(f: PrinterForm): ReceiptPrinterProfile {
     feed_lines: Math.min(255, Math.max(0, int(f.feedLines))),
     qr: f.qr,
     drawer_pin: f.drawerPin,
+    open_drawer: f.openDrawer,
   };
 }
 
@@ -161,12 +167,7 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
       {form.kind === "spooler" ? (
         <div className="flex flex-col gap-2">
           <Label htmlFor="printer-name">{t("settings.printerName")}</Label>
-          <Input
-            id="printer-name"
-            className={FIELD}
-            value={form.printerName}
-            onChange={(e) => set("printerName", e.target.value)}
-          />
+          <PrinterSelect id="printer-name" value={form.printerName} onChange={(v) => set("printerName", v)} />
         </div>
       ) : (
         <p className="rounded-lg border bg-muted/40 p-3 text-base">
@@ -185,6 +186,24 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
           description: t(`settings.widthHints.${w}`),
         }))}
       />
+
+      <div className="flex items-center justify-between gap-6 rounded-lg border p-4">
+        <div className="flex flex-col gap-1">
+          <span id="printer-drawer-label" className="text-base font-medium">
+            {t("settings.drawer")}
+          </span>
+          <span id="printer-drawer-hint" className="text-sm text-muted-foreground">
+            {t("settings.drawerHint")}
+          </span>
+        </div>
+        <Switch
+          size="pos"
+          checked={form.openDrawer}
+          aria-labelledby="printer-drawer-label"
+          aria-describedby="printer-drawer-hint"
+          onCheckedChange={(v) => set("openDrawer", v)}
+        />
+      </div>
 
       <AdvancedSection title={t("settings.advanced")}>
         <div className="grid gap-4 sm:grid-cols-2">

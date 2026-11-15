@@ -29,7 +29,7 @@
       "network": "Network (TCP 9100)",
       "serial": "Serial (COM port)"
     },
-    "printerName": "Windows printer name",
+    "printerName": "Printer",
     "host": "IP address or host name",
     "comPort": "COM port",
     "port": "Port",
@@ -60,6 +60,7 @@
     "stickerHint": "Also the roll chosen by default when printing labels.",
     "testLabel": "Print Test Label / Alignment Test",
     "rollCalibration": "Roll calibration: {{name}}",
-    "printerHint": "Prints price stickers for your products."
+    "printerHint": "Prints price stickers for your products.",
+    "otherConnection": "This printer is connected by {{kind}}. Change it under Advanced Calibration."
   }
 }
