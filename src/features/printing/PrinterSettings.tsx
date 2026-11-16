@@ -197,7 +197,6 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
           </span>
         </div>
         <Switch
-          size="pos"
           checked={form.openDrawer}
           aria-labelledby="printer-drawer-label"
           aria-describedby="printer-drawer-hint"
