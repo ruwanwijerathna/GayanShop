@@ -1569,8 +1569,6 @@ export type LabelPrinterProfile_Deserialize = {
 	 *  Profiles saved before this field existed keep it off.
 	 */
 	auto_print_on_receive?: boolean,
-	/**  The shop name printed at the top of every sticker; empty means [`DEFAULT_SHOP_NAME`]. */
-	shop_name?: string,
 };
 
 export type LabelPrinterProfile_Serialize = {
@@ -1590,8 +1588,6 @@ export type LabelPrinterProfile_Serialize = {
 	 *  Profiles saved before this field existed keep it off.
 	 */
 	auto_print_on_receive: boolean,
-	/**  The shop name printed at the top of every sticker; empty means [`DEFAULT_SHOP_NAME`]. */
-	shop_name: string,
 };
 
 export type LabelTemplate = LabelTemplate_Serialize | LabelTemplate_Deserialize;
