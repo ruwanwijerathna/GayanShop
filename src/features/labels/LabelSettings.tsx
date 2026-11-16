@@ -9,12 +9,15 @@ import { Can } from "@/components/auth/Can";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LabelPreviewSvg } from "@/components/labels/LabelPreviewSvg";
 import type { LabelLanguage, LabelPrinterProfile, LabelTemplate, TransportConfig } from "@/db/bindings";
 import { CommandError } from "@/db/client";
 import {
   useCalibrateLabelTemplate,
   useLabelAlignmentTest,
   useLabelPrinterProfile,
+  useLabelSamplePreview,
+  useLabelSamplePrint,
   useLabelTemplates,
   useSetLabelPrinterProfile,
 } from "@/db/hooks";
@@ -148,6 +151,7 @@ function LabelCard({
   const { t, i18n } = useTranslation("labels");
   const save = useSetLabelPrinterProfile();
   const align = useLabelAlignmentTest();
+  const sample = useLabelSamplePrint();
   const [form, setForm] = useState(() => toForm(profile));
   const [invalid, setInvalid] = useState(false);
   const [chosen, setChosen] = useState(lastTemplate);
@@ -172,7 +176,8 @@ function LabelCard({
       : form.kind === "network"
         ? t("settings.host")
         : t("settings.comPort");
-  const error = [save.error, align.error].find((e) => e instanceof CommandError);
+  const samplePreview = useLabelSamplePreview(selected?.id ?? null);
+  const error = [save.error, align.error, sample.error].find((e) => e instanceof CommandError);
 
   return (
     <SettingsCard
@@ -189,10 +194,10 @@ function LabelCard({
             type="button"
             size="pos"
             variant="outline"
-            disabled={!selected || align.isPending}
+            disabled={!selected || sample.isPending}
             onClick={() =>
               selected &&
-              align.mutate(selected.id, { onSuccess: () => toast.success(t("settings.alignQueued")) })
+              sample.mutate(selected.id, { onSuccess: () => toast.success(t("settings.testQueued")) })
             }
           >
             {t("settings.testLabel")}
@@ -200,159 +205,188 @@ function LabelCard({
         </Can>
       }
     >
-      {form.kind === "spooler" ? (
-        <Field id="lp-target" label={t("settings.printerName")}>
-          <PrinterSelect id="lp-target" value={form.target} onChange={(v) => set("target", v)} />
-        </Field>
-      ) : (
-        <p className="rounded-lg border bg-muted/40 p-3 text-base">
-          {t("settings.otherConnection", { kind: t(`settings.kinds.${form.kind}`) })}
-        </p>
-      )}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
+        <div className="flex min-w-0 flex-col gap-5">
+          {form.kind === "spooler" ? (
+            <Field id="lp-target" label={t("settings.printerName")}>
+              <PrinterSelect id="lp-target" value={form.target} onChange={(v) => set("target", v)} />
+            </Field>
+          ) : (
+            <p className="rounded-lg border bg-muted/40 p-3 text-base">
+              {t("settings.otherConnection", { kind: t(`settings.kinds.${form.kind}`) })}
+            </p>
+          )}
 
-      {selected && (
-        <div className="flex flex-col gap-2">
-          <p className="text-base font-medium">{t("settings.stickerSize")}</p>
-          <RadioCards
-            name="sticker-size"
-            aria-label={t("settings.stickerSize")}
-            value={selected.id}
-            onValueChange={choose}
-            options={templates.map((tpl) => ({
-              value: tpl.id,
-              visual: <RollVisual template={tpl} />,
-              label: t(`templates.${tpl.id}`, { defaultValue: tpl.name }),
-            }))}
-          />
-          <p className="text-sm text-muted-foreground">{t("settings.stickerHint")}</p>
+          {selected && (
+            <div className="flex flex-col gap-2">
+              <p className="text-base font-medium">{t("settings.stickerSize")}</p>
+              <RadioCards
+                name="sticker-size"
+                aria-label={t("settings.stickerSize")}
+                value={selected.id}
+                onValueChange={choose}
+                options={templates.map((tpl) => ({
+                  value: tpl.id,
+                  visual: <RollVisual template={tpl} />,
+                  label: t(`templates.${tpl.id}`, { defaultValue: tpl.name }),
+                }))}
+              />
+              <p className="text-sm text-muted-foreground">{t("settings.stickerHint")}</p>
+            </div>
+          )}
+
+          {invalid && (
+            <p role="alert" className="text-base text-destructive">
+              {t("settings.invalid")}
+            </p>
+          )}
+          {error instanceof CommandError && (
+            <p role="alert" className="text-base text-destructive">
+              {translateError(i18n.t, error.error)}
+            </p>
+          )}
+
+          <AdvancedSection title={t("settings.advanced")}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field id="lp-kind" label={t("settings.connection")}>
+                <SelectField
+                  id="lp-kind"
+                  value={form.kind}
+                  onValueChange={(v) => {
+                    const kind = KINDS.find((k) => k === v) ?? "spooler";
+                    setForm((f) => ({
+                      ...f,
+                      kind,
+                      target: (kind === "spooler") === (f.kind === "spooler") ? f.target : "",
+                    }));
+                  }}
+                  options={KINDS.map((k) => ({ value: k, label: t(`settings.kinds.${k}`) }))}
+                />
+              </Field>
+              {form.kind !== "spooler" && (
+                <Field id="lp-target" label={targetLabel}>
+                  <Input
+                    id="lp-target"
+                    className={FIELD}
+                    value={form.target}
+                    onChange={(e) => set("target", e.target.value)}
+                  />
+                </Field>
+              )}
+              {form.kind === "network" && (
+                <Field id="lp-port" label={t("settings.port")}>
+                  <Input
+                    id="lp-port"
+                    className={FIELD}
+                    inputMode="numeric"
+                    value={form.port}
+                    onChange={(e) => set("port", e.target.value)}
+                  />
+                </Field>
+              )}
+              {form.kind === "serial" && (
+                <Field id="lp-baud" label={t("settings.baud")}>
+                  <SelectField
+                    id="lp-baud"
+                    value={String(form.baud)}
+                    onValueChange={(v) => set("baud", BAUDS.find((b) => String(b) === v) ?? 9600)}
+                    options={BAUDS.map((b) => ({ value: String(b), label: String(b) }))}
+                  />
+                </Field>
+              )}
+              <Field id="lp-language" label={t("settings.language")}>
+                <SelectField
+                  id="lp-language"
+                  value={form.language}
+                  onValueChange={(v) => set("language", v === "zpl" ? "zpl" : "tspl")}
+                  options={[
+                    { value: "tspl", label: t("settings.languages.tspl") },
+                    { value: "zpl", label: t("settings.languages.zpl") },
+                  ]}
+                />
+              </Field>
+              <Field id="lp-dpi" label={t("settings.dpi")}>
+                <SelectField
+                  id="lp-dpi"
+                  value={String(form.dpi)}
+                  onValueChange={(v) => set("dpi", v === "300" ? 300 : 203)}
+                  options={[
+                    { value: "203", label: "203 dpi" },
+                    { value: "300", label: "300 dpi" },
+                  ]}
+                />
+              </Field>
+              <Field id="lp-darkness" label={t("settings.darkness")}>
+                <Input
+                  id="lp-darkness"
+                  className={FIELD}
+                  inputMode="numeric"
+                  value={form.darkness}
+                  onChange={(e) => set("darkness", e.target.value)}
+                />
+              </Field>
+              <Field id="lp-speed" label={t("settings.speed")}>
+                <Input
+                  id="lp-speed"
+                  className={FIELD}
+                  inputMode="numeric"
+                  value={form.speed}
+                  onChange={(e) => set("speed", e.target.value)}
+                />
+              </Field>
+              <Field id="lp-ox" label={t("settings.offsetX")}>
+                <Input
+                  id="lp-ox"
+                  className={FIELD}
+                  inputMode="decimal"
+                  value={form.offsetX}
+                  onChange={(e) => set("offsetX", e.target.value)}
+                />
+              </Field>
+              <Field id="lp-oy" label={t("settings.offsetY")}>
+                <Input
+                  id="lp-oy"
+                  className={FIELD}
+                  inputMode="decimal"
+                  value={form.offsetY}
+                  onChange={(e) => set("offsetY", e.target.value)}
+                />
+              </Field>
+            </div>
+            {selected && (
+              <Can perm="SETTINGS_MANAGE">
+                <div className="flex flex-col items-start gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={align.isPending}
+                    onClick={() =>
+                      align.mutate(selected.id, { onSuccess: () => toast.success(t("settings.alignQueued")) })
+                    }
+                  >
+                    {t("settings.alignTest")}
+                  </Button>
+                  <p className="text-sm text-muted-foreground">{t("settings.alignTestHint")}</p>
+                </div>
+              </Can>
+            )}
+            {selected && (
+              <RollCalibration
+                key={`${selected.id}:${selected.col_gap_mm}:${selected.row_gap_mm}:${selected.left_margin_mm}`}
+                template={selected}
+              />
+            )}
+          </AdvancedSection>
         </div>
-      )}
-
-      {invalid && (
-        <p role="alert" className="text-base text-destructive">
-          {t("settings.invalid")}
-        </p>
-      )}
-      {error instanceof CommandError && (
-        <p role="alert" className="text-base text-destructive">
-          {translateError(i18n.t, error.error)}
-        </p>
-      )}
-
-      <AdvancedSection title={t("settings.advanced")}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field id="lp-kind" label={t("settings.connection")}>
-            <SelectField
-              id="lp-kind"
-              value={form.kind}
-              onValueChange={(v) => {
-                const kind = KINDS.find((k) => k === v) ?? "spooler";
-                setForm((f) => ({
-                  ...f,
-                  kind,
-                  target: (kind === "spooler") === (f.kind === "spooler") ? f.target : "",
-                }));
-              }}
-              options={KINDS.map((k) => ({ value: k, label: t(`settings.kinds.${k}`) }))}
-            />
-          </Field>
-          {form.kind !== "spooler" && (
-            <Field id="lp-target" label={targetLabel}>
-              <Input
-                id="lp-target"
-                className={FIELD}
-                value={form.target}
-                onChange={(e) => set("target", e.target.value)}
-              />
-            </Field>
+        <aside aria-label={t("settings.previewTitle")} className="flex flex-col gap-2">
+          {samplePreview.data ? (
+            <LabelPreviewSvg preview={samplePreview.data} title={t("settings.previewTitle")} maxRows={1} />
+          ) : (
+            <div className="aspect-[2/1] rounded-md border border-dashed bg-muted/40" aria-hidden />
           )}
-          {form.kind === "network" && (
-            <Field id="lp-port" label={t("settings.port")}>
-              <Input
-                id="lp-port"
-                className={FIELD}
-                inputMode="numeric"
-                value={form.port}
-                onChange={(e) => set("port", e.target.value)}
-              />
-            </Field>
-          )}
-          {form.kind === "serial" && (
-            <Field id="lp-baud" label={t("settings.baud")}>
-              <SelectField
-                id="lp-baud"
-                value={String(form.baud)}
-                onValueChange={(v) => set("baud", BAUDS.find((b) => String(b) === v) ?? 9600)}
-                options={BAUDS.map((b) => ({ value: String(b), label: String(b) }))}
-              />
-            </Field>
-          )}
-          <Field id="lp-language" label={t("settings.language")}>
-            <SelectField
-              id="lp-language"
-              value={form.language}
-              onValueChange={(v) => set("language", v === "zpl" ? "zpl" : "tspl")}
-              options={[
-                { value: "tspl", label: t("settings.languages.tspl") },
-                { value: "zpl", label: t("settings.languages.zpl") },
-              ]}
-            />
-          </Field>
-          <Field id="lp-dpi" label={t("settings.dpi")}>
-            <SelectField
-              id="lp-dpi"
-              value={String(form.dpi)}
-              onValueChange={(v) => set("dpi", v === "300" ? 300 : 203)}
-              options={[
-                { value: "203", label: "203 dpi" },
-                { value: "300", label: "300 dpi" },
-              ]}
-            />
-          </Field>
-          <Field id="lp-darkness" label={t("settings.darkness")}>
-            <Input
-              id="lp-darkness"
-              className={FIELD}
-              inputMode="numeric"
-              value={form.darkness}
-              onChange={(e) => set("darkness", e.target.value)}
-            />
-          </Field>
-          <Field id="lp-speed" label={t("settings.speed")}>
-            <Input
-              id="lp-speed"
-              className={FIELD}
-              inputMode="numeric"
-              value={form.speed}
-              onChange={(e) => set("speed", e.target.value)}
-            />
-          </Field>
-          <Field id="lp-ox" label={t("settings.offsetX")}>
-            <Input
-              id="lp-ox"
-              className={FIELD}
-              inputMode="decimal"
-              value={form.offsetX}
-              onChange={(e) => set("offsetX", e.target.value)}
-            />
-          </Field>
-          <Field id="lp-oy" label={t("settings.offsetY")}>
-            <Input
-              id="lp-oy"
-              className={FIELD}
-              inputMode="decimal"
-              value={form.offsetY}
-              onChange={(e) => set("offsetY", e.target.value)}
-            />
-          </Field>
-        </div>
-        {selected && (
-          <RollCalibration
-            key={`${selected.id}:${selected.col_gap_mm}:${selected.row_gap_mm}:${selected.left_margin_mm}`}
-            template={selected}
-          />
-        )}
-      </AdvancedSection>
+          <p className="text-center text-sm text-muted-foreground">{t("settings.previewTitle")}</p>
+        </aside>
+      </div>
     </SettingsCard>
   );
 }

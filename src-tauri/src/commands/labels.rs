@@ -93,6 +93,14 @@ pub async fn label_preview(state: State<'_, AppState>, job: LabelJob) -> AppResu
     label::preview(&state.db.pool, &store_id(&state)?, &job).await
 }
 
+/// One sample sticker row on a roll, for the Settings preview.
+#[tauri::command]
+#[specta::specta]
+pub async fn label_sample_preview(state: State<'_, AppState>, template_id: String) -> AppResult<LabelPreview> {
+    super::session(&state)?;
+    label::sample_preview(&state.db.pool, &template_id).await
+}
+
 /// Queue a label job for the label printer (audited `LABEL_PRINT`: template, products, labels).
 #[tauri::command]
 #[specta::specta]
@@ -140,9 +148,20 @@ pub async fn print_labels(
 #[tauri::command]
 #[specta::specta]
 pub async fn label_alignment_test(app: AppHandle, state: State<'_, AppState>, template_id: String) -> AppResult<()> {
+    queue_test(&app, &state, template_id, false).await
+}
+
+/// Settings → Labels "Print test label": one sample sticker row on the chosen roll, as real labels print.
+#[tauri::command]
+#[specta::specta]
+pub async fn label_sample_print(app: AppHandle, state: State<'_, AppState>, template_id: String) -> AppResult<()> {
+    queue_test(&app, &state, template_id, true).await
+}
+
+async fn queue_test(app: &AppHandle, state: &State<'_, AppState>, template_id: String, sample: bool) -> AppResult<()> {
     require(&state.auth, state.clock.as_ref(), Perm::SETTINGS_MANAGE, "labels", None)?;
     label::template(&state.db.pool, &template_id).await?;
-    let ctx = write_ctx(&state)?;
+    let ctx = write_ctx(state)?;
     let mut tx = state.db.write().await?;
     print_jobs::enqueue_for(
         tx.conn(),
@@ -150,11 +169,11 @@ pub async fn label_alignment_test(app: AppHandle, state: State<'_, AppState>, te
         LABEL_PRINTER,
         PrintKind::Test,
         None,
-        &json!({ "template_id": template_id }),
+        &json!({ "template_id": template_id, "sample": sample }),
     )
     .await?;
     tx.commit().await?;
     state.label_printer.notify();
-    emit_changed(&app, &["print_jobs"]);
+    emit_changed(app, &["print_jobs"]);
     Ok(())
 }

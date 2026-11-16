@@ -4,6 +4,8 @@
 
 pub mod render;
 
+use crate::error::{AppError, AppResult};
+
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -137,6 +139,36 @@ impl Default for Layout {
     }
 }
 
+/// Widest header image, in dots: the 58 mm printer's printable width (the 80 mm printer centres it).
+pub const LOGO_MAX_WIDTH: u16 = 384;
+/// Tallest header image, in dots: keeps the receipt short and the stored setting small.
+pub const LOGO_MAX_HEIGHT: u16 = 240;
+
+/// The receipt's header image (Settings → Receipt printer): a 1-bit bitmap, `width / 8` bytes per row, most
+/// significant bit first, `1` = black. The webview converts the picture; Rust checks it before it is stored.
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+pub struct Logo {
+    pub width: u16,
+    pub height: u16,
+    pub data: Vec<u8>,
+}
+
+impl Logo {
+    pub fn validate(&self) -> AppResult<()> {
+        let bad = |why: &str| Err(AppError::validation("LOGO_INVALID", why.to_owned()));
+        if self.width == 0 || self.height == 0 {
+            return bad("empty");
+        }
+        if !self.width.is_multiple_of(8) || self.width > LOGO_MAX_WIDTH || self.height > LOGO_MAX_HEIGHT {
+            return bad("size");
+        }
+        if self.data.len() != usize::from(self.width / 8) * usize::from(self.height) {
+            return bad("data");
+        }
+        Ok(())
+    }
+}
+
 /// The drawer kick on its own: `ESC p m t1 t2` = `1B 70 00 19 FA` (pin 2, 50 ms on, 500 ms off).
 pub fn drawer_kick(pin: DrawerPin) -> Vec<u8> {
     let m = match pin {
@@ -243,6 +275,17 @@ impl EscPos {
         self.buf.extend_from_slice(&[GS, b'(', b'k', pl, ph, 49, 80, 48]); // store
         self.buf.extend_from_slice(&bytes);
         self.buf.extend_from_slice(&[GS, b'(', b'k', 3, 0, 49, 81, 48]); // print
+        self.text("\n")
+    }
+
+    /// `GS v 0`: the header image as a raster bit image, centred, then a blank line under it.
+    pub fn logo(&mut self, logo: &Logo) -> &mut Self {
+        let bytes_per_row = logo.width / 8;
+        let [xl, xh] = bytes_per_row.to_le_bytes();
+        let [yl, yh] = logo.height.to_le_bytes();
+        self.align(Align::Center);
+        self.buf.extend_from_slice(&[GS, b'v', b'0', 0, xl, xh, yl, yh]);
+        self.buf.extend_from_slice(&logo.data);
         self.text("\n")
     }
 

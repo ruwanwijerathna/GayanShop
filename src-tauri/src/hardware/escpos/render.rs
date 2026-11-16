@@ -6,8 +6,8 @@ use chrono_tz::Tz;
 use serde_json::Value;
 use sqlx::SqlitePool;
 
-use super::{Align, EscPos, Layout, drawer_kick, wrap};
-use crate::db::repo::receipts::{self, ReceiptData};
+use super::{Align, EscPos, Layout, Logo, drawer_kick, wrap};
+use crate::db::repo::receipts::{self, ReceiptData, ReceiptLine, ReceiptPayment};
 use crate::db::settings;
 use crate::domain::money::format_lkr;
 use crate::error::{AppError, AppResult};
@@ -45,10 +45,21 @@ fn header(p: &mut EscPos, store: &str) {
 
 /// The sale receipt (doc §6.4): lines, totals, payments, masked customer phone, QR of the order id, the
 /// "All sales are final" footer, then the cut. Never the drawer kick (that's its own job, sent first).
-pub fn receipt(r: &ReceiptData, layout: Layout, tz: Tz) -> Vec<u8> {
+pub fn receipt(r: &ReceiptData, layout: Layout, tz: Tz, logo: Option<&Logo>) -> Vec<u8> {
+    receipt_with_banner(r, layout, tz, logo, None)
+}
+
+/// [`receipt`] with an optional bold line under the store name (the sample receipt marks itself as not a sale).
+fn receipt_with_banner(r: &ReceiptData, layout: Layout, tz: Tz, logo: Option<&Logo>, banner: Option<&str>) -> Vec<u8> {
     let mut p = EscPos::new(layout);
     let cols = p.columns();
+    if let Some(l) = logo {
+        p.logo(l);
+    }
     header(&mut p, &r.store_name);
+    if let Some(b) = banner {
+        p.bold(true).wrapped(b, cols).bold(false);
+    }
     if r.status == "voided" {
         p.bold(true).line("*** VOIDED - NOT A VALID RECEIPT ***").bold(false);
     }
@@ -173,25 +184,58 @@ pub fn z_report(store: &str, z: &Value, layout: Layout, tz: Tz) -> Vec<u8> {
     p.finish()
 }
 
-/// Settings → "Print test page" (doc §7.2): column ruler, code-page sample, QR, cut, then the drawer kick.
-pub fn test_page(store: &str, layout: Layout, printed_at: &str) -> Vec<u8> {
-    let mut p = EscPos::new(layout);
-    let cols = p.columns();
-    header(&mut p, store);
-    p.line("PRINTER TEST PAGE").align(Align::Left);
-    p.line(&format!("{cols} columns:"));
-    let ruler: String = (1..=cols).map(|i| char::from(b'0' + u8::try_from(i % 10).unwrap_or(0))).collect();
-    p.line(&ruler);
-    p.line("ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789");
-    p.line("abcdefghijklmnopqrstuvwxyz .,:;!?-+/()");
-    p.line("Code page: é ü £ ñ");
-    p.pair("Total", &rs(125_000));
-    p.align(Align::Center).qr("GAYANSHOP-TEST").line(printed_at).align(Align::Left);
-    p.cut();
+/// Settings → "Print test page" (doc §7.2): a sample receipt (header image, store name, a few made-up lines,
+/// totals, QR and the real footer) so the owner sees exactly how a bill will look, then the drawer kick.
+pub fn test_page(store: &str, footer: &str, layout: Layout, tz: Tz, now: &str, logo: Option<&Logo>) -> Vec<u8> {
+    let line = |name: &str, qty: i64, unit: i64| ReceiptLine {
+        name: name.to_owned(),
+        qty,
+        list_price: unit,
+        unit_price: unit,
+        line_gross: qty * unit,
+        line_discount: 0,
+        line_total: qty * unit,
+    };
+    let lines =
+        vec![line("Sample item A", 2, 45_000), line("Sample item B", 1, 125_000), line("Sample item C", 3, 9_500)];
+    let total: i64 = lines.iter().map(|l| l.line_total).sum();
+    let tendered = 300_000;
+    let sample = ReceiptData {
+        order_id: "SAMPLE-RECEIPT".into(),
+        store_name: store.to_owned(),
+        receipt_no: "SAMPLE".into(),
+        status: "completed".into(),
+        business_date: String::new(),
+        completed_at: now.to_owned(),
+        cashier: "Sample".into(),
+        item_count: lines.iter().map(|l| l.qty).sum(),
+        gross_sales: total,
+        discount_total: 0,
+        grand_total: total,
+        payments: vec![ReceiptPayment {
+            method: "cash".into(),
+            amount: total,
+            tendered: Some(tendered),
+            reference: None,
+        }],
+        change_due: tendered - total,
+        customer_masked: None,
+        footer: footer.to_owned(),
+        lines,
+    };
+    let mut bytes = receipt_with_banner(&sample, layout, tz, logo, Some("*** SAMPLE RECEIPT - NOT A SALE ***"));
     if layout.open_drawer {
-        p.kick();
+        bytes.extend(drawer_kick(layout.drawer_pin));
     }
-    p.finish()
+    bytes
+}
+
+/// Device setting that holds the receipt header image.
+pub const LOGO_KEY: &str = "receipt.logo";
+
+/// This counter's receipt header image, if one was set.
+pub async fn load_logo(pool: &SqlitePool) -> AppResult<Option<Logo>> {
+    settings::device_get(pool, LOGO_KEY).await
 }
 
 /// Bytes for one queued job.
@@ -209,7 +253,8 @@ pub async fn job(
                 .get("order_id")
                 .and_then(Value::as_str)
                 .ok_or_else(|| AppError::internal("receipt job without order_id"))?;
-            Ok(receipt(&receipts::load(pool, order_id).await?, layout, tz))
+            let logo = load_logo(pool).await?;
+            Ok(receipt(&receipts::load(pool, order_id).await?, layout, tz, logo.as_ref()))
         }
         "drawer_kick" => Ok(drawer_kick(layout.drawer_pin)),
         "void_slip" => void_slip(pool, payload, layout, tz, now).await,
@@ -219,7 +264,9 @@ pub async fn job(
         }
         "test" => {
             let store: String = settings::store_get(pool, settings::keys::STORE_NAME).await?.unwrap_or_default();
-            Ok(test_page(&store, layout, &local(now, tz)))
+            let footer: String = settings::store_get(pool, "receipt.footer").await?.unwrap_or_default();
+            let logo = load_logo(pool).await?;
+            Ok(test_page(&store, &footer, layout, tz, now, logo.as_ref()))
         }
         other => Err(AppError::internal(format!("not a receipt-printer job: {other}"))),
     }

@@ -2514,7 +2514,9 @@ The models aren't purchased yet, so everything targets **generic ESC/POS**, with
   2. **Network**: TCP 9100.
   3. **Serial**: COM port.
 
-A **"Print test page"** in Settings prints the column ruler, code page sample, QR and cut, then kicks the drawer. It qualifies a new printer in under a minute.
+A **"Print Test Receipt"** in Settings prints a **sample receipt** (header image, store name, three made-up lines, totals, QR and the real footer, marked "SAMPLE RECEIPT - NOT A SALE"), cuts, then kicks the drawer, so the owner sees exactly how a bill will look. The Settings card shows the same sample as a preview beside the form at the chosen paper width.
+
+**Header image.** The receipt card can carry a header image (device setting `receipt.logo`): a 1-bit raster at most 384 × 240 dots (`width` a multiple of 8). The webview scales and thresholds the picture; `set_receipt_logo` validates it (`LOGO_INVALID`), audits the change (size only) and stores it. It prints centred above the store name on sale receipts and the sample receipt, as `GS v 0`.
 
 Sinhala/Tamil text: most printers lack those code pages. Render such lines as a raster bitmap (`GS v 0`) in Phase 5. Receipts are English-first until then.
 
@@ -2545,7 +2547,7 @@ Sinhala/Tamil text: most printers lack those code pages. Render such lines as a 
 - Stores that seeded the earlier rolls are moved to the new ones when the template list is read (`label::reconcile`); calibrated current rolls and custom templates are kept.
 - The row gap goes straight into TSPL `GAP 3 mm,0` and the ZPL label length.
 - The column gap and left margin vary between roll suppliers. They default to 2.0 mm and 1.5 mm, and are corrected per device in Settings → Labels.
-- An **alignment test** prints the outline of every cell, which makes calibration take a minute.
+- **Print Test Label** prints one sample sticker row on the chosen roll (the store name, a sample price and a 6-digit code), and the Settings card previews the same layout beside the form. The **alignment test** (under Advanced Calibration) prints the outline of every cell, which makes calibration take a minute.
 
 **Printable elements** (each template positions these, in mm relative to one label's top-left corner):
 
