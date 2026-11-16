@@ -57,9 +57,13 @@
     "advanced": "Advanced Calibration",
     "stickerSize": "Sticker size",
     "stickerHint": "Also the roll chosen by default when printing labels.",
-    "testLabel": "Print Test Label / Alignment Test",
+    "testLabel": "Print Test Label",
     "rollCalibration": "Roll calibration: {{name}}",
     "printerHint": "Prints price stickers for your products.",
-    "otherConnection": "This printer is connected by {{kind}}. Change it under Advanced Calibration."
+    "otherConnection": "This printer is connected by {{kind}}. Change it under Advanced Calibration.",
+    "previewTitle": "Sticker preview",
+    "testQueued": "A sample sticker row was sent to the label printer.",
+    "alignTest": "Print alignment test",
+    "alignTestHint": "Prints only the outline of each label, to check the gaps and margins."
   }
 }

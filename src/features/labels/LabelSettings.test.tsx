@@ -5,6 +5,7 @@ import { useSession } from "@/app/session";
 import {
   commands,
   type LabelPrinterProfile,
+  type LabelPreview_Serialize as LabelPreview,
   type LabelTemplate_Serialize as LabelTemplate,
   type Perm,
 } from "@/db/bindings";
@@ -18,6 +19,8 @@ vi.mock("@/db/bindings", () => ({
     setLabelPrinterProfile: vi.fn(),
     calibrateLabelTemplate: vi.fn(),
     labelAlignmentTest: vi.fn(),
+    labelSamplePreview: vi.fn(),
+    labelSamplePrint: vi.fn(),
     listSystemPrinters: vi.fn(),
   },
 }));
@@ -49,6 +52,40 @@ const PROFILE: LabelPrinterProfile = {
   offset_y_mm: -0.25,
 };
 
+const SAMPLE = {
+  template_id: "three_up_30x16",
+  dpi: 203,
+  columns: 3,
+  rows: 1,
+  roll_width_mm: 97,
+  label_w_mm: 30,
+  label_h_mm: 16,
+  row_gap_mm: 3,
+  labels: [
+    {
+      row: 0,
+      col: 0,
+      product_id: "sample",
+      x_mm: 1.5,
+      texts: [
+        {
+          kind: "price",
+          x_mm: 2.5,
+          y_mm: 10.4,
+          w_mm: 28,
+          h_mm: 4,
+          font_size: 4,
+          bold: true,
+          align: "center",
+          lines: ["Rs. 1,250"],
+        },
+      ],
+      barcode: null,
+    },
+  ],
+  warnings: [],
+} as unknown as LabelPreview;
+
 const MANAGER: Perm[] = ["SETTINGS_MANAGE"];
 
 function As({ children }: { children: ReactNode }) {
@@ -63,6 +100,8 @@ beforeEach(() => {
   vi.mocked(commands.setLabelPrinterProfile).mockImplementation(() => ok(null));
   vi.mocked(commands.calibrateLabelTemplate).mockImplementation(() => ok(TEMPLATE));
   vi.mocked(commands.labelAlignmentTest).mockImplementation(() => ok(null));
+  vi.mocked(commands.labelSamplePrint).mockImplementation(() => ok(null));
+  vi.mocked(commands.labelSamplePreview).mockImplementation(() => ok(SAMPLE));
   vi.mocked(commands.listSystemPrinters).mockImplementation(() =>
     ok(["Xprinter XP-365B", "Microsoft Print to PDF"]),
   );
@@ -103,6 +142,20 @@ describe("LabelSettings", () => {
     );
   });
 
+  it("previews a sample sticker for the chosen roll beside the form", async () => {
+    vi.mocked(commands.labelTemplates).mockImplementation(() => ok([TWO_UP, TEMPLATE]));
+    renderWithProviders(
+      <As>
+        <LabelSettings />
+      </As>,
+    );
+    const preview = await screen.findByRole("img", { name: "Sticker preview" });
+    expect(preview).toHaveTextContent("Rs. 1,250");
+    expect(commands.labelSamplePreview).toHaveBeenCalledWith("two_up_50x25");
+    fireEvent.click(screen.getByRole("radio", { name: /30 x 16 mm, 3 across/ }));
+    await waitFor(() => expect(commands.labelSamplePreview).toHaveBeenCalledWith("three_up_30x16"));
+  });
+
   it("keeps calibration in a closed Advanced Calibration section", async () => {
     renderWithProviders(
       <As>
@@ -130,10 +183,13 @@ describe("LabelSettings", () => {
     fireEvent.click(screen.getByRole("radio", { name: /30 x 16 mm, 3 across/ }));
     expect(localStorage.getItem("gayanshop.label.template")).toBe("three_up_30x16");
 
-    fireEvent.click(screen.getByRole("button", { name: "Print Test Label / Alignment Test" }));
-    await waitFor(() => expect(commands.labelAlignmentTest).toHaveBeenCalledWith("three_up_30x16"));
+    fireEvent.click(screen.getByRole("button", { name: "Print Test Label" }));
+    await waitFor(() => expect(commands.labelSamplePrint).toHaveBeenCalledWith("three_up_30x16"));
+    expect(commands.labelAlignmentTest).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Advanced Calibration" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Print alignment test" }));
+    await waitFor(() => expect(commands.labelAlignmentTest).toHaveBeenCalledWith("three_up_30x16"));
     fireEvent.change(await screen.findByLabelText("Gap between labels (mm)"), { target: { value: "2.5" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>

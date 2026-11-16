@@ -3,14 +3,18 @@
 //! Reading the status and acting on stuck receipts only needs a login; the profile needs `SETTINGS_MANAGE`.
 
 use serde::Serialize;
+use serde_json::json;
 use specta::Type;
 use tauri::{AppHandle, State};
 
 use super::{emit_changed, session, write_ctx};
+use crate::audit::{self, AuditAction, AuditCtx, AuditEntry};
 use crate::auth::guard::{Actor, require};
 use crate::db::repo::print_jobs::{self, PrintKind, RECEIPT_PRINTER};
+use crate::db::settings;
 use crate::domain::permissions::Perm;
 use crate::error::{AppError, AppResult};
+use crate::hardware::escpos::{Logo, render};
 use crate::hardware::printer::worker::PrinterHealth;
 use crate::hardware::printer::{self, ReceiptPrinterProfile, transport_spooler};
 use crate::state::AppState;
@@ -134,5 +138,65 @@ pub async fn print_recovery_resolve(app: AppHandle, state: State<'_, AppState>, 
         emit_changed(&app, &["audit_logs"]);
     }
     changed(&app, &state);
+    Ok(())
+}
+
+/// What the receipt preview draws: the header image, the store name and the footer as the printer prints them.
+#[derive(Debug, Clone, Serialize, Type, PartialEq, Eq)]
+pub struct ReceiptHeaderView {
+    pub logo: Option<Logo>,
+    pub store_name: String,
+    pub footer: String,
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn receipt_header(state: State<'_, AppState>) -> AppResult<ReceiptHeaderView> {
+    session(&state)?;
+    let pool = &state.db.pool;
+    Ok(ReceiptHeaderView {
+        logo: render::load_logo(pool).await?,
+        store_name: settings::store_get(pool, settings::keys::STORE_NAME).await?.unwrap_or_default(),
+        footer: settings::store_get(pool, "receipt.footer").await?.unwrap_or_default(),
+    })
+}
+
+/// Set (or, with `None`, remove) the receipt header image. Audited as a settings change; the log keeps the
+/// image's size, not its bytes.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_receipt_logo(app: AppHandle, state: State<'_, AppState>, logo: Option<Logo>) -> AppResult<()> {
+    let actor = require(&state.auth, state.clock.as_ref(), Perm::SETTINGS_MANAGE, "printer", None)?;
+    if let Some(l) = &logo {
+        l.validate()?;
+    }
+    let ctx = write_ctx(&state)?;
+    let size = |l: &Option<Logo>| l.as_ref().map(|l| json!({ "width": l.width, "height": l.height }));
+    let before = size(&render::load_logo(&state.db.pool).await?);
+    let mut tx = state.db.write().await?;
+    match &logo {
+        Some(l) => settings::device_set(tx.conn(), render::LOGO_KEY, l).await?,
+        None => settings::device_delete(tx.conn(), render::LOGO_KEY).await?,
+    }
+    audit::record(
+        tx.conn(),
+        &AuditCtx {
+            store_id: &ctx.store_id,
+            device_id: &ctx.device_id,
+            business_date: &ctx.business_date,
+            now: &ctx.now,
+        },
+        AuditEntry {
+            action: AuditAction::SETTINGS_CHANGE,
+            staff_id: Some(&actor.staff_id),
+            approved_by: None,
+            entity_type: Some("device_setting"),
+            entity_id: Some(render::LOGO_KEY),
+            metadata: json!({ "before": before, "after": size(&logo) }),
+        },
+    )
+    .await?;
+    tx.commit().await?;
+    emit_changed(&app, &["audit_logs"]);
     Ok(())
 }

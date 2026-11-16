@@ -65,7 +65,7 @@
     "save": "Save",
     "saved": "Printer settings saved.",
     "testPage": "Print Test Receipt",
-    "testQueued": "Test page sent to the printer.",
+    "testQueued": "A sample receipt was sent to the printer.",
     "widthHints": {
       "mm80": "Standard · 48 columns",
       "mm58": "Compact · 32 columns"
@@ -74,6 +74,26 @@
     "otherConnection": "This printer is connected by {{kind}}. Change it under Advanced Settings.",
     "printerHint": "Prints bills and opens the cash drawer.",
     "drawer": "Open cash drawer",
-    "drawerHint": "Opens the cash drawer connected to this printer when a bill is printed."
+    "drawerHint": "Opens the cash drawer connected to this printer when a bill is printed.",
+    "logo": "Header image",
+    "logoHint": "Printed at the top of every receipt, in black and white. Leave it empty for a text-only header.",
+    "logoChoose": "Choose image",
+    "logoReplace": "Replace image",
+    "logoRemove": "Remove image",
+    "logoSaved": "Header image saved.",
+    "logoRemoved": "Header image removed.",
+    "logoUnreadable": "That file could not be read as a picture. Try a PNG or JPG."
+  },
+  "preview": {
+    "title": "Receipt preview",
+    "banner": "*** SAMPLE RECEIPT - NOT A SALE ***",
+    "receipt": "Receipt",
+    "itemA": "Sample item A",
+    "itemB": "Sample item B",
+    "itemC": "Sample item C",
+    "subtotal": "Subtotal",
+    "total": "TOTAL",
+    "cash": "Cash",
+    "change": "Change"
   }
 }

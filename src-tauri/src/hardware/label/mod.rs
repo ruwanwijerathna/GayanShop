@@ -251,6 +251,32 @@ pub fn for_printer(mut t: LabelTemplate, profile: Option<&LabelPrinterProfile>) 
     t
 }
 
+/// One sample sticker on the given roll, as this counter prints it (Settings → Label printer preview): the
+/// store's real name and printer calibration, a made-up price and a 6-digit code.
+pub async fn sample_preview(pool: &SqlitePool, template_id: &str) -> AppResult<LabelPreview> {
+    let profile = load_profile(pool).await?;
+    sample_layout(pool, template_id, profile.as_ref()).await
+}
+
+async fn sample_layout(
+    pool: &SqlitePool,
+    template_id: &str,
+    profile: Option<&LabelPrinterProfile>,
+) -> AppResult<LabelPreview> {
+    let t = for_printer(template(pool, template_id).await?, profile);
+    let store_name: String = settings::store_get(pool, settings::keys::STORE_NAME).await?.unwrap_or_default();
+    let cell = LabelCell {
+        product_id: "sample".into(),
+        store_name,
+        name: "Sample item".into(),
+        attributes: String::new(),
+        price: format_label_price(125_000),
+        codes: vec!["100001".into()],
+    };
+    let offset = profile.map_or((0.0, 0.0), LabelPrinterProfile::offset);
+    Ok(layout::layout(&t, &vec![cell; usize::from(t.columns)], offset, false))
+}
+
 pub async fn preview(pool: &SqlitePool, store_id: &str, job: &LabelJob) -> AppResult<LabelPreview> {
     job.validate()?;
     let profile = load_profile(pool).await?;
@@ -268,7 +294,7 @@ pub fn emit(preview: &LabelPreview, profile: &LabelPrinterProfile) -> Vec<u8> {
     }
 }
 
-/// The print worker's renderer for the label printer: `labels` jobs and the `test` (alignment) job.
+/// The print worker's renderer for the label printer: `labels` jobs and the `test` job: a sample sticker row, or the alignment outline.
 pub async fn render_job(
     pool: &SqlitePool,
     kind: &str,
@@ -285,6 +311,9 @@ pub async fn render_job(
         }
         "test" => {
             let id = payload.get("template_id").and_then(Value::as_str).unwrap_or("two_up_50x25");
+            if payload.get("sample").and_then(Value::as_bool) == Some(true) {
+                return Ok(emit(&sample_layout(pool, id, Some(profile)).await?, profile));
+            }
             let t = for_printer(template(pool, id).await?, Some(profile));
             Ok(match profile.language {
                 LabelLanguage::Tspl => tspl::alignment_test(&t, profile.offset(), profile.darkness, profile.speed),
