@@ -213,7 +213,26 @@ function LabelCard({
         <div className="flex min-w-0 flex-col gap-5">
           {form.kind === "spooler" ? (
             <Field id="lp-target" label={t("settings.printerName")}>
-              <PrinterSelect id="lp-target" value={form.target} onChange={(v) => set("target", v)} />
+              <PrinterSelect
+                id="lp-target"
+                value={form.target}
+                onChange={(v) => {
+                  const lower = v.toLowerCase();
+                  const detectedDpi = lower.includes("300") ? 300 : lower.includes("203") ? 203 : undefined;
+                  const detectedLang =
+                    lower.includes("zpl") || lower.includes("zebra")
+                      ? "zpl"
+                      : lower.includes("tspl") || lower.includes("tsc") || lower.includes("xprinter")
+                        ? "tspl"
+                        : undefined;
+                  setForm((f) => ({
+                    ...f,
+                    target: v,
+                    ...(detectedDpi !== undefined ? { dpi: detectedDpi } : {}),
+                    ...(detectedLang !== undefined ? { language: detectedLang } : {}),
+                  }));
+                }}
+              />
             </Field>
           ) : (
             <p className="rounded-lg border bg-muted/40 p-3 text-base">
