@@ -1,6 +1,7 @@
-import { Printer } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { ImagePlus, Printer, Trash2 } from "lucide-react";
+import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import { Can } from "@/components/auth/Can";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +15,16 @@ import type {
   TransportConfig,
 } from "@/db/bindings";
 import { CommandError } from "@/db/client";
-import { usePrinterProfile, usePrinterStatus, usePrintTestPage, useSetPrinterProfile } from "@/db/hooks";
+import {
+  usePrinterProfile,
+  usePrinterStatus,
+  usePrintTestPage,
+  useReceiptHeader,
+  useSetPrinterProfile,
+  useSetReceiptLogo,
+} from "@/db/hooks";
+import { logoFromFile } from "@/lib/logoBitmap";
+import { ReceiptPreview } from "./ReceiptPreview";
 import { translateError } from "@/i18n";
 import { AdvancedSection } from "@/components/common/AdvancedSection";
 import { SettingsCard, StatusPill } from "@/components/common/SettingsCard";
@@ -121,6 +131,9 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
   const status = usePrinterStatus();
   const save = useSetPrinterProfile();
   const test = usePrintTestPage();
+  const header = useReceiptHeader();
+  const setLogo = useSetReceiptLogo();
+  const fileInput = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<PrinterForm>(() => toForm(profile));
   const [saved, setSaved] = useState(false);
 
@@ -134,8 +147,20 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
     save.mutate(toProfile(form), { onSuccess: () => setSaved(true) });
   };
 
-  const error = [save.error, test.error].find((x) => x instanceof CommandError);
+  const error = [save.error, test.error, setLogo.error].find((x) => x instanceof CommandError);
   const health = status.data?.health ?? "not_configured";
+
+  const chooseImage = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const logo = await logoFromFile(file);
+    if (!logo) {
+      toast.error(t("settings.logoUnreadable"));
+      return;
+    }
+    setLogo.mutate(logo, { onSuccess: () => toast.success(t("settings.logoSaved")) });
+  };
 
   const tone = health === "ready" ? "ok" : health === "not_configured" ? "idle" : "bad";
 
@@ -164,150 +189,209 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
         </Can>
       }
     >
-      {form.kind === "spooler" ? (
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="printer-name">{t("settings.printerName")}</Label>
-          <PrinterSelect id="printer-name" value={form.printerName} onChange={(v) => set("printerName", v)} />
-        </div>
-      ) : (
-        <p className="rounded-lg border bg-muted/40 p-3 text-base">
-          {t("settings.otherConnection", { kind: t(`settings.kinds.${form.kind}`) })}
-        </p>
-      )}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="flex min-w-0 flex-col gap-5">
+          {form.kind === "spooler" ? (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="printer-name">{t("settings.printerName")}</Label>
+              <PrinterSelect
+                id="printer-name"
+                value={form.printerName}
+                onChange={(v) => set("printerName", v)}
+              />
+            </div>
+          ) : (
+            <p className="rounded-lg border bg-muted/40 p-3 text-base">
+              {t("settings.otherConnection", { kind: t(`settings.kinds.${form.kind}`) })}
+            </p>
+          )}
 
-      <RadioCards
-        name="printer-width"
-        aria-label={t("settings.paper")}
-        value={form.width}
-        onValueChange={(v) => set("width", v)}
-        options={WIDTHS.map((w) => ({
-          value: w,
-          label: t(`settings.widths.${w}`),
-          description: t(`settings.widthHints.${w}`),
-        }))}
-      />
+          <RadioCards
+            name="printer-width"
+            aria-label={t("settings.paper")}
+            value={form.width}
+            onValueChange={(v) => set("width", v)}
+            options={WIDTHS.map((w) => ({
+              value: w,
+              label: t(`settings.widths.${w}`),
+              description: t(`settings.widthHints.${w}`),
+            }))}
+          />
 
-      <div className="flex items-center justify-between gap-6 rounded-lg border p-4">
-        <div className="flex flex-col gap-1">
-          <span id="printer-drawer-label" className="text-base font-medium">
-            {t("settings.drawer")}
-          </span>
-          <span id="printer-drawer-hint" className="text-sm text-muted-foreground">
-            {t("settings.drawerHint")}
-          </span>
-        </div>
-        <Switch
-          checked={form.openDrawer}
-          aria-labelledby="printer-drawer-label"
-          aria-describedby="printer-drawer-hint"
-          onCheckedChange={(v) => set("openDrawer", v)}
-        />
-      </div>
-
-      <AdvancedSection title={t("settings.advanced")}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-2 sm:col-span-2">
-            <Label htmlFor="printer-kind">{t("settings.connection")}</Label>
-            <SelectField
-              id="printer-kind"
-              value={form.kind}
-              onValueChange={(v) => set("kind", KINDS.find((k) => k === v) ?? "spooler")}
-              options={KINDS.map((k) => ({ value: k, label: t(`settings.kinds.${k}`) }))}
+          <div className="flex items-center justify-between gap-6 rounded-lg border p-4">
+            <div className="flex flex-col gap-1">
+              <span id="printer-drawer-label" className="text-base font-medium">
+                {t("settings.drawer")}
+              </span>
+              <span id="printer-drawer-hint" className="text-sm text-muted-foreground">
+                {t("settings.drawerHint")}
+              </span>
+            </div>
+            <Switch
+              checked={form.openDrawer}
+              aria-labelledby="printer-drawer-label"
+              aria-describedby="printer-drawer-hint"
+              onCheckedChange={(v) => set("openDrawer", v)}
             />
           </div>
-          {form.kind === "network" && (
-            <>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="printer-host">{t("settings.host")}</Label>
-                <Input
-                  id="printer-host"
-                  className={FIELD}
-                  value={form.host}
-                  onChange={(e) => set("host", e.target.value)}
+
+          <div className="flex flex-col gap-3 rounded-lg border p-4">
+            <div className="flex flex-col gap-1">
+              <span id="printer-logo-label" className="text-base font-medium">
+                {t("settings.logo")}
+              </span>
+              <span className="text-sm text-muted-foreground">{t("settings.logoHint")}</span>
+            </div>
+            <Can perm="SETTINGS_MANAGE">
+              <div className="flex flex-wrap gap-3">
+                <input
+                  ref={fileInput}
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  aria-labelledby="printer-logo-label"
+                  tabIndex={-1}
+                  onChange={(e) => void chooseImage(e)}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={setLogo.isPending}
+                  onClick={() => fileInput.current?.click()}
+                >
+                  <ImagePlus aria-hidden />
+                  {header.data?.logo ? t("settings.logoReplace") : t("settings.logoChoose")}
+                </Button>
+                {header.data?.logo && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={setLogo.isPending}
+                    onClick={() =>
+                      setLogo.mutate(null, { onSuccess: () => toast.success(t("settings.logoRemoved")) })
+                    }
+                  >
+                    <Trash2 aria-hidden />
+                    {t("settings.logoRemove")}
+                  </Button>
+                )}
+              </div>
+            </Can>
+          </div>
+
+          <AdvancedSection title={t("settings.advanced")}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-2 sm:col-span-2">
+                <Label htmlFor="printer-kind">{t("settings.connection")}</Label>
+                <SelectField
+                  id="printer-kind"
+                  value={form.kind}
+                  onValueChange={(v) => set("kind", KINDS.find((k) => k === v) ?? "spooler")}
+                  options={KINDS.map((k) => ({ value: k, label: t(`settings.kinds.${k}`) }))}
                 />
               </div>
+              {form.kind === "network" && (
+                <>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="printer-host">{t("settings.host")}</Label>
+                    <Input
+                      id="printer-host"
+                      className={FIELD}
+                      value={form.host}
+                      onChange={(e) => set("host", e.target.value)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="printer-port">{t("settings.port")}</Label>
+                    <Input
+                      id="printer-port"
+                      className={FIELD}
+                      inputMode="numeric"
+                      value={form.port}
+                      onChange={(e) => set("port", e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+              {form.kind === "serial" && (
+                <>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="printer-com">{t("settings.comPort")}</Label>
+                    <Input
+                      id="printer-com"
+                      className={FIELD}
+                      value={form.comPort}
+                      onChange={(e) => set("comPort", e.target.value)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="printer-baud">{t("settings.baud")}</Label>
+                    <SelectField
+                      id="printer-baud"
+                      value={String(form.baud)}
+                      onValueChange={(v) => set("baud", BAUDS.find((b) => String(b) === v) ?? 9600)}
+                      options={BAUDS.map((b) => ({ value: String(b), label: String(b) }))}
+                    />
+                  </div>
+                </>
+              )}
+              <Choice
+                id="printer-codepage"
+                label={t("settings.codepage")}
+                value={form.codepage}
+                options={CODEPAGES}
+                render={(c) => c.toUpperCase()}
+                onChange={(v) => set("codepage", v)}
+              />
+              <Choice
+                id="printer-cut"
+                label={t("settings.cut")}
+                value={form.cut}
+                options={CUTS}
+                render={(c) => t(`settings.cuts.${c}`)}
+                onChange={(v) => set("cut", v)}
+              />
               <div className="flex flex-col gap-2">
-                <Label htmlFor="printer-port">{t("settings.port")}</Label>
+                <Label htmlFor="printer-feed">{t("settings.feed")}</Label>
                 <Input
-                  id="printer-port"
+                  id="printer-feed"
                   className={FIELD}
                   inputMode="numeric"
-                  value={form.port}
-                  onChange={(e) => set("port", e.target.value)}
+                  value={form.feedLines}
+                  onChange={(e) => set("feedLines", e.target.value)}
                 />
               </div>
-            </>
-          )}
-          {form.kind === "serial" && (
-            <>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="printer-com">{t("settings.comPort")}</Label>
-                <Input
-                  id="printer-com"
-                  className={FIELD}
-                  value={form.comPort}
-                  onChange={(e) => set("comPort", e.target.value)}
+              <Choice
+                id="printer-pin"
+                label={t("settings.drawerPin")}
+                value={form.drawerPin}
+                options={PINS}
+                render={(p) => t(`settings.pins.${p}`)}
+                onChange={(v) => set("drawerPin", v)}
+              />
+              <label className="flex min-h-12 items-center gap-3 text-base sm:col-span-2">
+                <Checkbox
+                  className="size-6"
+                  checked={form.qr}
+                  onCheckedChange={(v) => set("qr", v === true)}
                 />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="printer-baud">{t("settings.baud")}</Label>
-                <SelectField
-                  id="printer-baud"
-                  value={String(form.baud)}
-                  onValueChange={(v) => set("baud", BAUDS.find((b) => String(b) === v) ?? 9600)}
-                  options={BAUDS.map((b) => ({ value: String(b), label: String(b) }))}
-                />
-              </div>
-            </>
-          )}
-          <Choice
-            id="printer-codepage"
-            label={t("settings.codepage")}
-            value={form.codepage}
-            options={CODEPAGES}
-            render={(c) => c.toUpperCase()}
-            onChange={(v) => set("codepage", v)}
-          />
-          <Choice
-            id="printer-cut"
-            label={t("settings.cut")}
-            value={form.cut}
-            options={CUTS}
-            render={(c) => t(`settings.cuts.${c}`)}
-            onChange={(v) => set("cut", v)}
-          />
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="printer-feed">{t("settings.feed")}</Label>
-            <Input
-              id="printer-feed"
-              className={FIELD}
-              inputMode="numeric"
-              value={form.feedLines}
-              onChange={(e) => set("feedLines", e.target.value)}
-            />
-          </div>
-          <Choice
-            id="printer-pin"
-            label={t("settings.drawerPin")}
-            value={form.drawerPin}
-            options={PINS}
-            render={(p) => t(`settings.pins.${p}`)}
-            onChange={(v) => set("drawerPin", v)}
-          />
-          <label className="flex min-h-12 items-center gap-3 text-base sm:col-span-2">
-            <Checkbox className="size-6" checked={form.qr} onCheckedChange={(v) => set("qr", v === true)} />
-            {t("settings.qr")}
-          </label>
-        </div>
-      </AdvancedSection>
+                {t("settings.qr")}
+              </label>
+            </div>
+          </AdvancedSection>
 
-      {error instanceof CommandError && (
-        <p role="alert" className="text-base text-destructive">
-          {translateError(i18n.t, error.error)}
-        </p>
-      )}
-      {saved && <p role="status">{t("settings.saved")}</p>}
-      {test.isSuccess && <p role="status">{t("settings.testQueued")}</p>}
+          {error instanceof CommandError && (
+            <p role="alert" className="text-base text-destructive">
+              {translateError(i18n.t, error.error)}
+            </p>
+          )}
+          {saved && <p role="status">{t("settings.saved")}</p>}
+          {test.isSuccess && <p role="status">{t("settings.testQueued")}</p>}
+        </div>
+        <aside aria-label={t("preview.title")} className="flex justify-center lg:justify-end">
+          <ReceiptPreview header={header.data} width={form.width} />
+        </aside>
+      </div>
     </SettingsCard>
   );
 }

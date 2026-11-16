@@ -273,6 +273,32 @@ fn calibration_offsets_shift_everything() {
 }
 
 #[tokio::test]
+async fn the_test_label_is_a_sample_sticker_row_and_the_alignment_job_stays_an_outline() {
+    let t = till().await;
+    let sample = label::sample_preview(t.pool(), "three_up_30x16").await.unwrap();
+    assert_eq!(sample.labels.len(), 3, "one full row of the roll");
+    assert!(sample.warnings.is_empty());
+    let prices: Vec<_> = sample.labels[0].texts.iter().map(|x| x.lines[0].clone()).collect();
+    assert_eq!(prices[1], "Rs. 1,250");
+
+    let profile = tspl_profile();
+    let bytes = label::render_job(
+        t.pool(),
+        "test",
+        &serde_json::json!({"template_id": "three_up_30x16", "sample": true}),
+        &profile,
+    )
+    .await
+    .unwrap();
+    let text = String::from_utf8(bytes).unwrap();
+    assert!(text.contains("\"Rs. 1,250\"") && text.contains("BARCODE") && text.contains("\"100001\""));
+    let outline = label::render_job(t.pool(), "test", &serde_json::json!({"template_id": "three_up_30x16"}), &profile)
+        .await
+        .unwrap();
+    assert!(!String::from_utf8(outline).unwrap().contains("BARCODE"));
+}
+
+#[tokio::test]
 async fn templates_calibrate_per_device_and_reset_to_default() {
     let t = till().await;
     let cal = TemplateCalibration { col_gap_mm: 3.0, row_gap_mm: 2.5, left_margin_mm: 1.0 };

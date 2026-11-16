@@ -12,6 +12,7 @@ import {
   type DamageInput,
   type LabelJob,
   type LabelPrinterProfile,
+  type Logo,
   type LateItemInput,
   type CheckoutInput_Deserialize as CheckoutInput,
   type CloseInput,
@@ -66,6 +67,7 @@ export const queryKeys = {
   cashSession: ["cash", "current"] as const,
   printerStatus: ["printer", "status"] as const,
   printerProfile: ["printer", "profile"] as const,
+  receiptHeader: ["printer", "header"] as const,
   systemPrinters: ["system-printers"] as const,
   customer: (phone: string) => ["customers", "lookup", phone] as const,
   customerList: (search: string, sort: CustomerSort) => ["customers", "list", search, sort] as const,
@@ -110,6 +112,7 @@ export const queryKeys = {
   quickSaleHint: (name: string) => ["quickSales", "hint", name] as const,
   movements: (productId: string) => ["inventory", "movements", productId] as const,
   labelProfile: ["labels", "profile"] as const,
+  labelSample: (templateId: string) => ["labels", "sample", templateId] as const,
   labelPreview: (job: LabelJob) => ["labels", "preview", JSON.stringify(job)] as const,
   roles: ["staff", "roles"] as const,
 };
@@ -413,6 +416,14 @@ export function useSetPrinterProfile() {
   return usePrinterMutation((profile: ReceiptPrinterProfile) => unwrap(commands.setPrinterProfile(profile)));
 }
 
+export function useReceiptHeader() {
+  return useQuery({ queryKey: queryKeys.receiptHeader, queryFn: () => unwrap(commands.receiptHeader()) });
+}
+
+export function useSetReceiptLogo() {
+  return usePrinterMutation((logo: Logo | null) => unwrap(commands.setReceiptLogo(logo)));
+}
+
 export function usePrintTestPage() {
   return usePrinterMutation(() => unwrap(commands.printTestPage()));
 }
@@ -608,6 +619,20 @@ export function useCalibrateLabelTemplate() {
   return useLabelMutation(({ id, calibration }: { id: string; calibration: TemplateCalibration | null }) =>
     unwrap(commands.calibrateLabelTemplate(id, calibration)),
   );
+}
+
+/** One sample sticker row on a roll, laid out by Rust exactly as it prints. */
+export function useLabelSamplePreview(templateId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.labelSample(templateId ?? ""),
+    queryFn: () => unwrap(commands.labelSamplePreview(templateId ?? "")),
+    enabled: templateId !== null,
+    retry: false,
+  });
+}
+
+export function useLabelSamplePrint() {
+  return useLabelMutation((templateId: string) => unwrap(commands.labelSamplePrint(templateId)));
 }
 
 export function useLabelAlignmentTest() {

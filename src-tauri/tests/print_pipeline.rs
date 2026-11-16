@@ -331,7 +331,7 @@ async fn write_errors_retry_with_backoff_then_fail_until_retried() {
     hub.notify();
     wait_until("the retried job prints", || async { status_count(&t, "done").await == 1 }).await;
     let page = &fake.sent()[0];
-    assert!(contains(page, b"PRINTER TEST PAGE") && page.ends_with(&drawer_kick(DrawerPin::Pin2)));
+    assert!(contains(page, b"SAMPLE RECEIPT") && page.ends_with(&drawer_kick(DrawerPin::Pin2)));
     assert_eq!(hub.health().unwrap().health, PrinterHealth::Ready);
 }
 

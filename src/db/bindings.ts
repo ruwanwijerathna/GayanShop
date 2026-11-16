@@ -88,10 +88,14 @@ export const commands = {
 	calibrateLabelTemplate: (id: string, calibration: TemplateCalibration | null) => typedError<LabelTemplate_Serialize, AppError>(__TAURI_INVOKE("calibrate_label_template", { id, calibration })),
 	/**  The Rust-computed layout the UI draws as SVG: exactly what will print, with warnings. */
 	labelPreview: (job: LabelJob_Deserialize) => typedError<LabelPreview_Serialize, AppError>(__TAURI_INVOKE("label_preview", { job })),
+	/**  One sample sticker row on a roll, for the Settings preview. */
+	labelSamplePreview: (templateId: string) => typedError<LabelPreview_Serialize, AppError>(__TAURI_INVOKE("label_sample_preview", { templateId })),
 	/**  Queue a label job for the label printer (audited `LABEL_PRINT`: template, products, labels). */
 	printLabels: (job: LabelJob_Deserialize, approvalId: string | null) => typedError<LabelPreview_Serialize, AppError>(__TAURI_INVOKE("print_labels", { job, approvalId })),
 	/**  Settings → Labels "Alignment test": every cell's outline, for calibrating gaps and margins. */
 	labelAlignmentTest: (templateId: string) => typedError<null, AppError>(__TAURI_INVOKE("label_alignment_test", { templateId })),
+	/**  Settings → Labels "Print test label": one sample sticker row on the chosen roll, as real labels print. */
+	labelSamplePrint: (templateId: string) => typedError<null, AppError>(__TAURI_INVOKE("label_sample_print", { templateId })),
 	recordDamage: (input: DamageInput_Deserialize, approvalId: string | null) => typedError<StockChange, AppError>(__TAURI_INVOKE("record_damage", { input, approvalId })),
 	adjustStock: (input: AdjustmentInput, approvalId: string | null) => typedError<StockChange, AppError>(__TAURI_INVOKE("adjust_stock", { input, approvalId })),
 	recordStockCount: (input: CountInput_Deserialize, approvalId: string | null) => typedError<CountResult, AppError>(__TAURI_INVOKE("record_stock_count", { input, approvalId })),
@@ -158,6 +162,12 @@ export const commands = {
 	listSystemPrinters: () => typedError<string[], AppError>(__TAURI_INVOKE("list_system_printers")),
 	printerProfile: () => typedError<ReceiptPrinterProfile_Serialize | null, AppError>(__TAURI_INVOKE("printer_profile")),
 	setPrinterProfile: (profile: ReceiptPrinterProfile_Deserialize) => typedError<null, AppError>(__TAURI_INVOKE("set_printer_profile", { profile })),
+	receiptHeader: () => typedError<ReceiptHeaderView_Serialize, AppError>(__TAURI_INVOKE("receipt_header")),
+	/**
+	 *  Set (or, with `None`, remove) the receipt header image. Audited as a settings change; the log keeps the
+	 *  image's size, not its bytes.
+	 */
+	setReceiptLogo: (logo: Logo | null) => typedError<null, AppError>(__TAURI_INVOKE("set_receipt_logo", { logo })),
 	/**  Ruler, code-page sample, QR and cut, then the drawer kick (doc §7.2). */
 	printTestPage: () => typedError<null, AppError>(__TAURI_INVOKE("print_test_page")),
 	/**  The banner's Retry: failed jobs go back to the queue. */
@@ -1680,6 +1690,16 @@ export type LoginStaff = {
 	role_name: string,
 };
 
+/**
+ *  The receipt's header image (Settings → Receipt printer): a 1-bit bitmap, `width / 8` bytes per row, most
+ *  significant bit first, `1` = black. The webview converts the picture; Rust checks it before it is stored.
+ */
+export type Logo = {
+	width: number,
+	height: number,
+	data: number[],
+};
+
 export type MethodTotal = {
 	method: string,
 	amount: number,
@@ -2262,6 +2282,23 @@ export type ReceiptData_Serialize = {
 	change_due: number,
 	/**  `07X XXX X123`, or `None` when no customer was attached (or the profile was erased). */
 	customer_masked: string | null,
+	footer: string,
+};
+
+/**  What the receipt preview draws: the header image, the store name and the footer as the printer prints them. */
+export type ReceiptHeaderView = ReceiptHeaderView_Serialize | ReceiptHeaderView_Deserialize;
+
+/**  What the receipt preview draws: the header image, the store name and the footer as the printer prints them. */
+export type ReceiptHeaderView_Deserialize = {
+	logo?: Logo | null,
+	store_name: string,
+	footer: string,
+};
+
+/**  What the receipt preview draws: the header image, the store name and the footer as the printer prints them. */
+export type ReceiptHeaderView_Serialize = {
+	logo: Logo | null,
+	store_name: string,
 	footer: string,
 };
 

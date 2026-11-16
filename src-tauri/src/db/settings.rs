@@ -37,6 +37,11 @@ pub async fn device_set<T: Serialize>(conn: &mut SqliteConnection, key: &str, va
     Ok(())
 }
 
+pub async fn device_delete(conn: &mut SqliteConnection, key: &str) -> AppResult<()> {
+    sqlx::query("DELETE FROM device_settings WHERE key = ?1").bind(key).execute(&mut *conn).await?;
+    Ok(())
+}
+
 pub async fn store_get<T: DeserializeOwned>(pool: &SqlitePool, key: &str) -> AppResult<Option<T>> {
     let raw: Option<String> =
         sqlx::query_scalar("SELECT value FROM store_settings WHERE key = ?1 AND deleted_at IS NULL")

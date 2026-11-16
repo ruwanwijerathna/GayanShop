@@ -1,10 +1,11 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { useEffect, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSession } from "@/app/session";
 import {
   commands,
   type Perm,
+  type ReceiptHeaderView_Serialize,
   type ReceiptPrinterProfile,
   type ReceiptPrinterProfile_Serialize,
 } from "@/db/bindings";
@@ -18,6 +19,8 @@ vi.mock("@/db/bindings", () => ({
     setPrinterProfile: vi.fn(),
     printTestPage: vi.fn(),
     listSystemPrinters: vi.fn(),
+    receiptHeader: vi.fn(),
+    setReceiptLogo: vi.fn(),
   },
 }));
 
@@ -30,6 +33,12 @@ const NET: ReceiptPrinterProfile_Serialize = {
   qr: false,
   drawer_pin: "pin5",
   open_drawer: false,
+};
+
+const HEADER: ReceiptHeaderView_Serialize = {
+  logo: null,
+  store_name: "Sale Center",
+  footer: "All sales are final. No refunds or exchanges. Thank you, come again!",
 };
 
 function As({ perms, children }: { perms: Perm[]; children: ReactNode }) {
@@ -53,6 +62,8 @@ beforeEach(() => {
   );
   vi.mocked(commands.setPrinterProfile).mockImplementation(() => ok(null));
   vi.mocked(commands.printTestPage).mockImplementation(() => ok(null));
+  vi.mocked(commands.receiptHeader).mockImplementation(() => ok(HEADER));
+  vi.mocked(commands.setReceiptLogo).mockImplementation(() => ok(null));
   vi.mocked(commands.listSystemPrinters).mockImplementation(() => ok(["XP-80C", "Microsoft Print to PDF"]));
 });
 
@@ -111,7 +122,34 @@ describe("PrinterSettings", () => {
     expect(await screen.findByDisplayValue("192.168.1.50")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Print Test Receipt" }));
     await waitFor(() => expect(commands.printTestPage).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText("Test page sent to the printer.")).toBeInTheDocument();
+    expect(await screen.findByText("A sample receipt was sent to the printer.")).toBeInTheDocument();
+  });
+
+  it("previews the sample receipt beside the form with the shop name and footer", async () => {
+    renderAs();
+    const preview = await screen.findByRole("img", { name: "Receipt preview" });
+    expect(await within(preview).findByText("Sale Center")).toBeInTheDocument();
+    expect(within(preview).getByText("*** SAMPLE RECEIPT - NOT A SALE ***")).toBeInTheDocument();
+    expect(within(preview).getByText(HEADER.footer)).toBeInTheDocument();
+    const narrow = Number.parseInt(preview.style.width, 10);
+    fireEvent.click(screen.getByRole("radio", { name: /58 mm/ }));
+    await waitFor(() => expect(Number.parseInt(preview.style.width, 10)).toBeLessThan(narrow));
+  });
+
+  it("offers to choose a header image while none is saved", async () => {
+    renderAs();
+    expect(await screen.findByRole("button", { name: "Choose image" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove image" })).not.toBeInTheDocument();
+  });
+
+  it("removes a saved header image", async () => {
+    vi.mocked(commands.receiptHeader).mockImplementation(() =>
+      ok({ ...HEADER, logo: { width: 8, height: 1, data: [0xff] } }),
+    );
+    renderAs();
+    fireEvent.click(await screen.findByRole("button", { name: "Remove image" }));
+    await waitFor(() => expect(commands.setReceiptLogo).toHaveBeenCalledWith(null));
+    expect(screen.getByRole("button", { name: "Replace image" })).toBeInTheDocument();
   });
 
   it("shows Rust's validation message", async () => {
