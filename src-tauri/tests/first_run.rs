@@ -148,8 +148,8 @@ async fn seeds_label_templates_at_203_dpi_with_3mm_gap() {
     let list = templates.as_array().unwrap();
     assert_eq!(list.len(), 2);
     for (tpl, id, cols, w, h, kinds) in [
-        (&list[0], "two_up_50x25", 2, 50.0, 25.0, vec!["store_name", "product_name", "attributes", "price", "barcode"]),
-        (&list[1], "three_up_30x16", 3, 30.0, 16.0, vec!["product_name", "price", "barcode"]),
+        (&list[0], "two_up_50x25", 2, 50.0, 25.0, vec!["store_name", "barcode", "price"]),
+        (&list[1], "three_up_30x16", 3, 30.0, 16.0, vec!["store_name", "barcode", "price"]),
     ] {
         assert_eq!(tpl["id"], json!(id));
         assert_eq!(tpl["columns"], json!(cols));
