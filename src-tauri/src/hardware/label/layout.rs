@@ -199,12 +199,23 @@ pub fn mm_text(mm: f64) -> String {
 }
 
 /// The built-in font cell for a font step, in dots (TSPL fonts "1"–"4": 8×12, 12×20, 16×24, 24×32).
-pub fn font_dots(step: u8) -> (i64, i64) {
-    match step {
-        0 | 1 => (8, 12),
-        2 => (12, 20),
-        3 => (16, 24),
-        _ => (24, 32),
+pub fn font_dots(step: u8, dpi: u16) -> (i64, i64) {
+    // The printers' built-in bitmap fonts are drawn in dots, so the same font is larger in dots on a 300 dpi
+    // head (TSPL font table); either way each step measures about the same on the label.
+    if dpi >= 300 {
+        match step {
+            0 | 1 => (12, 20),
+            2 => (16, 28),
+            3 => (24, 32),
+            _ => (32, 48),
+        }
+    } else {
+        match step {
+            0 | 1 => (8, 12),
+            2 => (12, 20),
+            3 => (16, 24),
+            _ => (24, 32),
+        }
     }
 }
 
@@ -284,7 +295,7 @@ pub fn fit_lines(s: &str, max: usize, lines: usize) -> (Vec<String>, bool) {
 }
 
 fn chars_per_line(w_mm: f64, step: u8, dpi: u16) -> usize {
-    let (cw, _) = font_dots(step);
+    let (cw, _) = font_dots(step, dpi);
     usize::try_from((dots(w_mm, dpi) / cw).max(1)).unwrap_or(1)
 }
 
@@ -432,7 +443,7 @@ pub fn layout(t: &LabelTemplate, cells: &[LabelCell], offset_mm: (f64, f64), fil
 
 /// The x position (dots) of a text line inside its box, by alignment and built-in font width.
 pub fn text_x_dots(t: &PlacedText, line: &str, dpi: u16) -> i64 {
-    let (cw, _) = font_dots(t.font_size);
+    let (cw, _) = font_dots(t.font_size, dpi);
     let text = i64::try_from(line.chars().count()).unwrap_or(0) * cw;
     let x = dots(t.x_mm, dpi);
     let w = dots(t.w_mm, dpi);
@@ -445,7 +456,7 @@ pub fn text_x_dots(t: &PlacedText, line: &str, dpi: u16) -> i64 {
 
 /// The y position (dots) of line `i` of a text box.
 pub fn text_y_dots(t: &PlacedText, i: usize, dpi: u16) -> i64 {
-    let (_, ch) = font_dots(t.font_size);
+    let (_, ch) = font_dots(t.font_size, dpi);
     dots(t.y_mm, dpi) + i64::try_from(i).unwrap_or(0) * (ch + 2)
 }
 

@@ -51,7 +51,6 @@ const PROFILE: LabelPrinterProfile = {
   offset_x_mm: 0.5,
   offset_y_mm: -0.25,
   auto_print_on_receive: true,
-  shop_name: "Sale Center",
 };
 
 const SAMPLE = {
@@ -141,28 +140,7 @@ describe("LabelSettings", () => {
         offset_x_mm: 0,
         offset_y_mm: 0,
         auto_print_on_receive: false,
-        shop_name: "",
       }),
-    );
-  });
-
-  it("saves the shop name printed on the stickers", async () => {
-    renderWithProviders(
-      <As>
-        <LabelSettings />
-      </As>,
-    );
-    const card = await screen.findByRole("region", { name: "Label printer" });
-    chooseOption(await within(card).findByLabelText("Printer"), "Xprinter XP-365B");
-    const name = within(card).getByLabelText("Shop name on stickers");
-    expect(name).toHaveValue("");
-    expect(name).toHaveAttribute("placeholder", "Sale Center");
-    fireEvent.change(name, { target: { value: "  Sale Center Kandy " } });
-    fireEvent.click(within(card).getByRole("button", { name: "Save label printer" }));
-    await waitFor(() =>
-      expect(commands.setLabelPrinterProfile).toHaveBeenCalledWith(
-        expect.objectContaining({ shop_name: "Sale Center Kandy" }),
-      ),
     );
   });
 

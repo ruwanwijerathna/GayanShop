@@ -17,7 +17,7 @@ fn row_open(p: &LabelPreview, darkness: u8) -> String {
 fn label_body(l: &PlacedLabel, dpi: u16) -> String {
     let mut out = String::new();
     for t in &l.texts {
-        let (cw, ch) = layout::font_dots(t.font_size);
+        let (cw, ch) = layout::font_dots(t.font_size, dpi);
         for (i, line) in t.lines.iter().enumerate() {
             let x = layout::text_x_dots(t, line, dpi);
             let y = layout::text_y_dots(t, i, dpi);

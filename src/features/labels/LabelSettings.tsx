@@ -58,7 +58,6 @@ export interface LabelPrinterForm {
   offsetX: string;
   offsetY: string;
   autoPrint: boolean;
-  shopName: string;
 }
 
 export function toForm(p: LabelPrinterProfile | null): LabelPrinterForm {
@@ -82,7 +81,6 @@ export function toForm(p: LabelPrinterProfile | null): LabelPrinterForm {
     offsetX: String(p?.offset_x_mm ?? 0),
     offsetY: String(p?.offset_y_mm ?? 0),
     autoPrint: p?.auto_print_on_receive ?? false,
-    shopName: p?.shop_name ?? "",
   };
 }
 
@@ -113,7 +111,6 @@ export function toProfile(f: LabelPrinterForm): LabelPrinterProfile | null {
     offset_x_mm: offsetX,
     offset_y_mm: offsetY,
     auto_print_on_receive: f.autoPrint,
-    shop_name: f.shopName.trim(),
   };
 }
 
@@ -224,16 +221,17 @@ function LabelCard({
             </p>
           )}
 
-          <Field id="lp-shop" label={t("settings.shopName")}>
-            <Input
-              id="lp-shop"
-              className={FIELD}
-              maxLength={28}
-              placeholder={t("settings.shopNameDefault")}
-              value={form.shopName}
-              onChange={(e) => set("shopName", e.target.value)}
+          <Field id="lp-dpi" label={t("settings.dpi")}>
+            <SelectField
+              id="lp-dpi"
+              value={String(form.dpi)}
+              onValueChange={(v) => set("dpi", v === "300" ? 300 : 203)}
+              options={[
+                { value: "203", label: "203 dpi" },
+                { value: "300", label: "300 dpi" },
+              ]}
             />
-            <p className="text-sm text-muted-foreground">{t("settings.shopNameHint")}</p>
+            <p className="text-sm text-muted-foreground">{t("settings.dpiHint")}</p>
           </Field>
 
           {selected && (
@@ -341,17 +339,6 @@ function LabelCard({
                   ]}
                 />
               </Field>
-              <Field id="lp-dpi" label={t("settings.dpi")}>
-                <SelectField
-                  id="lp-dpi"
-                  value={String(form.dpi)}
-                  onValueChange={(v) => set("dpi", v === "300" ? 300 : 203)}
-                  options={[
-                    { value: "203", label: "203 dpi" },
-                    { value: "300", label: "300 dpi" },
-                  ]}
-                />
-              </Field>
               <Field id="lp-darkness" label={t("settings.darkness")}>
                 <Input
                   id="lp-darkness"
@@ -442,7 +429,10 @@ function RollCalibration({ template }: { template: LabelTemplate }) {
     const [c, r, m] = values;
     if (c === null || r === null || m === null || c === undefined || r === undefined || m === undefined)
       return;
-    calibrate.mutate({ id: template.id, calibration: { col_gap_mm: c, row_gap_mm: r, left_margin_mm: m } });
+    calibrate.mutate(
+      { id: template.id, calibration: { col_gap_mm: c, row_gap_mm: r, left_margin_mm: m } },
+      { onSuccess: () => toast.success(t("settings.calibrationSaved")) },
+    );
   };
 
   return (
@@ -484,7 +474,13 @@ function RollCalibration({ template }: { template: LabelTemplate }) {
             type="button"
             size="pos"
             variant="outline"
-            onClick={() => calibrate.mutate({ id: template.id, calibration: null })}
+            disabled={calibrate.isPending}
+            onClick={() =>
+              calibrate.mutate(
+                { id: template.id, calibration: null },
+                { onSuccess: () => toast.success(t("settings.calibrationReset")) },
+              )
+            }
           >
             {t("settings.reset")}
           </Button>
