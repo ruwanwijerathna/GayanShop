@@ -201,6 +201,7 @@ fn tspl_profile() -> LabelPrinterProfile {
         offset_x_mm: 0.0,
         offset_y_mm: 0.0,
         auto_print_on_receive: false,
+        shop_name: String::new(),
     }
 }
 
@@ -278,8 +279,8 @@ async fn the_test_label_is_a_sample_sticker_row_and_the_alignment_job_stays_an_o
     let sample = label::sample_preview(t.pool(), "three_up_30x16").await.unwrap();
     assert_eq!(sample.labels.len(), 3, "one full row of the roll");
     assert!(sample.warnings.is_empty());
-    let prices: Vec<_> = sample.labels[0].texts.iter().map(|x| x.lines[0].clone()).collect();
-    assert_eq!(prices[1], "Rs. 1,250");
+    let texts: Vec<_> = sample.labels[0].texts.iter().map(|x| x.lines[0].clone()).collect();
+    assert_eq!(texts, vec!["Sale Center", "Rs. 1,250"], "the default sticker name, not the store's own");
 
     let profile = tspl_profile();
     let bytes = label::render_job(
@@ -296,6 +297,32 @@ async fn the_test_label_is_a_sample_sticker_row_and_the_alignment_job_stays_an_o
         .await
         .unwrap();
     assert!(!String::from_utf8(outline).unwrap().contains("BARCODE"));
+}
+
+#[tokio::test]
+async fn the_sticker_prints_the_shop_name_set_for_the_label_printer() {
+    let t = till().await;
+    let named = LabelPrinterProfile { shop_name: "  Sale Centre Kandy ".into(), ..tspl_profile() };
+    let mut tx = t.t.db.write().await.unwrap();
+    settings::device_set(tx.conn(), &gayanshop_lib::hardware::printer::profile_key(LABEL_PRINTER), &named)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let sample = label::sample_preview(t.pool(), "two_up_50x25").await.unwrap();
+    assert_eq!(sample.labels[0].texts[0].lines[0], "Sale Centre Kandy");
+
+    assert!(named.validate().is_ok());
+    let long = LabelPrinterProfile { shop_name: "x".repeat(label::MAX_SHOP_NAME + 1), ..tspl_profile() };
+    assert_eq!(validation(long.validate().unwrap_err()), "LABEL_PROFILE_INVALID");
+}
+
+#[test]
+fn the_barcode_boxes_are_short_so_the_price_stays_the_big_thing() {
+    for (id, bars_mm) in [("two_up_50x25", 4.5), ("three_up_30x16", 2.5)] {
+        let t = builtin(id);
+        let bar = t.elements.iter().find(|e| e.kind == layout::ElementKind::Barcode).unwrap();
+        assert!((bar.h_mm - 2.0 - bars_mm).abs() < 1e-9, "{id}: bars are {bars_mm} mm tall plus the 2 mm digits");
+    }
 }
 
 #[tokio::test]
