@@ -1384,10 +1384,10 @@ export interface LabelElement {       // positions in mm, relative to ONE label'
 }
 
 export interface LabelTemplate {
-  id: string;                         // 'two_up_2x1' | 'three_up_1x1' | custom
+  id: string;                         // 'two_up_50x25' | 'three_up_30x16' | custom
   name: string;
   columns: 2 | 3;                     // labels per row on the roll
-  label_w_mm: number; label_h_mm: number;     // 50.8×25.4 (2″×1″) or 25.4×25.4 (1″×1″)
+  label_w_mm: number; label_h_mm: number;     // 50×25 mm or 30×16 mm
   col_gap_mm: number;                 // horizontal gap between labels in a row
   row_gap_mm: number;                 // vertical gap (die-cut gap) between rows
   left_margin_mm: number;             // liner edge → first label
@@ -2268,7 +2268,7 @@ CREATE INDEX ix_sync_logs_started ON sync_logs(started_at);
 - Expense categories: Rent, Electricity, Water, Wages, Transport (non-batch), Tea & sundries, Repairs, Other.
 - System batches `OPENING-STOCK` (draft until go-live) and `ADJUSTMENTS` (received, so it can take layers).
 - The owner-confirmed store settings from §11, including `store.name = GayanShop` and `receipt.footer`.
-- Device settings: `ui.default_language = en`, and the two built-in label templates (`two_up_2x1`, `three_up_1x1`).
+- Device settings: `ui.default_language = en`, and the two built-in label templates (`two_up_50x25`, `three_up_30x16`).
 - Every seeded row goes to the outbox. One `STORE_INITIALIZED` audit row starts this device's hash chain. `STORE_INITIALIZED` is the first entry in `AuditAction`, and it's appended to the §3.6 System actions.
 
 **Migrations after `0001_init.sql`** (append-only; doc and `rebuild_derived` updated with each):
@@ -2538,11 +2538,12 @@ Sinhala/Tamil text: most printers lack those code pages. Render such lines as a 
 
 | Template id | Layout | Label size | Default gaps | Typical roll width | Use |
 |---|---|---|---|---|---|
-| `two_up_2x1` | **2 labels per row** | **2″ × 1″ = 50.8 × 25.4 mm** | **row (die-cut) gap 2.0 mm**, column gap 2.0 mm, left margin 1.5 mm, **203 dpi** | ≈ 106.6 mm (≈ 4.2″) | General merchandise: shoes, plasticware, clothing |
-| `three_up_1x1` | **3 labels per row** | **1″ × 1″ = 25.4 × 25.4 mm** | **row (die-cut) gap 2.0 mm**, column gap 2.0 mm, left margin 1.5 mm, **203 dpi** | ≈ 83.2 mm (≈ 3.3″) | Small items: jewellery, accessories |
+| `two_up_50x25` | **2 labels per row** | **5 cm × 2.5 cm = 50 × 25 mm** | **row (die-cut) gap 3.0 mm**, column gap 2.0 mm, left margin 1.5 mm, **203 dpi** | ≈ 105.0 mm | General merchandise: shoes, plasticware, clothing |
+| `three_up_30x16` | **3 labels per row** | **3 cm × 1.6 cm = 30 × 16 mm** | **row (die-cut) gap 3.0 mm**, column gap 2.0 mm, left margin 1.5 mm, **203 dpi** | ≈ 97.0 mm | Small items: jewellery, accessories |
 
-**The defaults are owner-confirmed: 203 dpi and the standard 2 mm gap.**
-- The row gap goes straight into TSPL `GAP 2 mm,0` and the ZPL label length.
+**The defaults are owner-confirmed: 203 dpi and the ~3 mm row gap of the owner's sticker rolls (50 × 25 mm 2-up and 30 × 16 mm 3-up; replaced the earlier 2″×1″ and 1″×1″ rolls in November 2026).**
+- Stores that seeded the earlier rolls are moved to the new ones when the template list is read (`label::reconcile`); calibrated current rolls and custom templates are kept.
+- The row gap goes straight into TSPL `GAP 3 mm,0` and the ZPL label length.
 - The column gap and left margin vary between roll suppliers. They default to 2.0 mm and 1.5 mm, and are corrected per device in Settings → Labels.
 - An **alignment test** prints the outline of every cell, which makes calibration take a minute.
 
@@ -2754,7 +2755,7 @@ Each phase ends with **exit criteria**. Don't start the next phase until they pa
 ### Phase 2: Batches, labels, customers, expenses and reports (≈ 4 weeks)
 - **Batch intake wizard:** header (supplier, invoice ref, total cost, extra costs) → quick-entry grid (name, qty, retail price, attributes; create products inline) → allocation (even / by retail value / manual, with live variance) → receive → generate barcodes and SKUs → **print labels**.
 - **Labels (§7.4):**
-  - The `two_up_2x1` and `three_up_1x1` templates.
+  - The `two_up_50x25` and `three_up_30x16` templates.
   - TSPL and ZPL emitters, the WYSIWYG SVG preview, and the alignment test and calibration offsets.
   - Barcode-fit warnings.
   - Printing from batch receive and from product lists.
@@ -2987,7 +2988,7 @@ cargo add --dev proptest
 | `customer.capture` | `optional`, with **verbal consent at the counter**. There's no popup, no notice dialog and no blocking step. Enter or Esc on an empty phone field skips it. |
 | `ui.default_language` (device) | `en`. Staff can switch to `si` (Sinhala), and the choice is saved per staff member. |
 | `ui.touch_mode` (device) | `false` when absent (not seeded). Settings → Touch screen turns on the on-screen keypads and PIN-pad digit keys for touch counters (§1.9). |
-| `label.templates` (device) | The `two_up_2x1` and `three_up_1x1` built-ins (§7.4). **Default 203 dpi, with a 2 mm row (die-cut) gap.** Column gap and left margin are roll-specific and set by calibration. |
+| `label.templates` (device) | The `two_up_50x25` and `three_up_30x16` built-ins (§7.4). **Default 203 dpi, with a 3 mm row (die-cut) gap.** Column gap and left margin are roll-specific and set by calibration. |
 | `backup.reminder_days` | `7` |
 | Stores | 1 store with 2–3 counters for the next 12 months. Multi-store stays in the design, and delivery is in Phase 5. |
 

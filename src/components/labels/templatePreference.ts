@@ -1,5 +1,5 @@
 const TEMPLATE_KEY = "gayanshop.label.template";
-const FALLBACK = "two_up_2x1";
+const FALLBACK = "two_up_50x25";
 
 /** The sticker roll this counter used last (or chose in Settings); both Settings and the print dialog read it. */
 export function lastTemplate(): string {

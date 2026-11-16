@@ -23,11 +23,11 @@ vi.mock("@/db/bindings", () => ({
 }));
 
 const TEMPLATE = {
-  id: "three_up_1x1",
+  id: "three_up_30x16",
   name: "3-up",
   columns: 3,
-  label_w_mm: 25.4,
-  label_h_mm: 25.4,
+  label_w_mm: 30,
+  label_h_mm: 16,
   col_gap_mm: 2,
   row_gap_mm: 2,
   left_margin_mm: 1.5,
@@ -37,7 +37,7 @@ const TEMPLATE = {
   elements: [],
 } as unknown as LabelTemplate;
 
-const TWO_UP = { ...TEMPLATE, id: "two_up_2x1", name: "2-up", columns: 2 } as unknown as LabelTemplate;
+const TWO_UP = { ...TEMPLATE, id: "two_up_50x25", name: "2-up", columns: 2 } as unknown as LabelTemplate;
 
 const PROFILE: LabelPrinterProfile = {
   transport: { kind: "network", host: "192.168.1.60", port: 9100 },
@@ -125,19 +125,19 @@ describe("LabelSettings", () => {
         <LabelSettings />
       </As>,
     );
-    const two = await screen.findByRole("radio", { name: /2 across, 2" x 1"/ });
+    const two = await screen.findByRole("radio", { name: /50 x 25 mm, 2 across/ });
     expect(two).toBeChecked();
-    fireEvent.click(screen.getByRole("radio", { name: /3 across, 1" x 1"/ }));
-    expect(localStorage.getItem("gayanshop.label.template")).toBe("three_up_1x1");
+    fireEvent.click(screen.getByRole("radio", { name: /30 x 16 mm, 3 across/ }));
+    expect(localStorage.getItem("gayanshop.label.template")).toBe("three_up_30x16");
 
     fireEvent.click(screen.getByRole("button", { name: "Print Test Label / Alignment Test" }));
-    await waitFor(() => expect(commands.labelAlignmentTest).toHaveBeenCalledWith("three_up_1x1"));
+    await waitFor(() => expect(commands.labelAlignmentTest).toHaveBeenCalledWith("three_up_30x16"));
 
     fireEvent.click(screen.getByRole("button", { name: "Advanced Calibration" }));
     fireEvent.change(await screen.findByLabelText("Gap between labels (mm)"), { target: { value: "2.5" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
-      expect(commands.calibrateLabelTemplate).toHaveBeenCalledWith("three_up_1x1", {
+      expect(commands.calibrateLabelTemplate).toHaveBeenCalledWith("three_up_30x16", {
         col_gap_mm: 2.5,
         row_gap_mm: 2,
         left_margin_mm: 1.5,
@@ -145,7 +145,7 @@ describe("LabelSettings", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Reset to default" }));
     await waitFor(() =>
-      expect(commands.calibrateLabelTemplate).toHaveBeenLastCalledWith("three_up_1x1", null),
+      expect(commands.calibrateLabelTemplate).toHaveBeenLastCalledWith("three_up_30x16", null),
     );
   });
 });

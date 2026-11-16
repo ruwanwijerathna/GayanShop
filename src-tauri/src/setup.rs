@@ -73,31 +73,29 @@ pub fn store_setting_seeds(store_name: &str) -> Vec<(&'static str, Value)> {
     ]
 }
 
-/// The two built-in label templates (§7.4): 203 dpi, 2 mm die-cut gap, column gap/margin calibrated later.
+/// The two built-in label rolls (§7.4): 203 dpi, 3 mm die-cut gap, column gap/margin calibrated later.
 pub fn builtin_label_templates() -> Value {
     json!([
         {
-            "id": "two_up_2x1", "name": "2-up 2\" x 1\"", "columns": 2,
-            "label_w_mm": 50.8, "label_h_mm": 25.4, "col_gap_mm": 2.0, "row_gap_mm": 2.0, "left_margin_mm": 1.5,
+            "id": "two_up_50x25", "name": "2-up 50 x 25 mm", "columns": 2,
+            "label_w_mm": 50.0, "label_h_mm": 25.0, "col_gap_mm": 2.0, "row_gap_mm": 3.0, "left_margin_mm": 1.5,
             "dpi": 203, "language": "tspl", "symbology": "auto",
             "elements": [
-                { "kind": "store_name",   "x_mm": 2.0,  "y_mm": 1.5,  "w_mm": 46.8, "h_mm": 2.5, "font_size": 1, "align": "center" },
-                { "kind": "product_name", "x_mm": 2.0,  "y_mm": 4.5,  "w_mm": 46.8, "h_mm": 6.0, "font_size": 2, "bold": true, "max_lines": 2 },
-                { "kind": "attributes",   "x_mm": 2.0,  "y_mm": 11.0, "w_mm": 28.0, "h_mm": 2.5, "font_size": 1 },
-                { "kind": "price",        "x_mm": 30.0, "y_mm": 10.5, "w_mm": 18.8, "h_mm": 4.0, "font_size": 3, "bold": true, "align": "right" },
-                { "kind": "barcode",      "x_mm": 3.0,  "y_mm": 15.0, "w_mm": 44.8, "h_mm": 8.5, "font_size": 1 }
+                { "kind": "store_name",   "x_mm": 2.0,  "y_mm": 1.5,  "w_mm": 46.0, "h_mm": 2.5, "font_size": 1, "align": "center" },
+                { "kind": "product_name", "x_mm": 2.0,  "y_mm": 4.5,  "w_mm": 46.0, "h_mm": 6.0, "font_size": 2, "bold": true, "max_lines": 2 },
+                { "kind": "attributes",   "x_mm": 2.0,  "y_mm": 11.0, "w_mm": 27.0, "h_mm": 2.5, "font_size": 1 },
+                { "kind": "price",        "x_mm": 29.0, "y_mm": 10.5, "w_mm": 19.0, "h_mm": 4.0, "font_size": 3, "bold": true, "align": "right" },
+                { "kind": "barcode",      "x_mm": 3.0,  "y_mm": 15.0, "w_mm": 44.0, "h_mm": 8.5, "font_size": 1 }
             ]
         },
         {
-            "id": "three_up_1x1", "name": "3-up 1\" x 1\"", "columns": 3,
-            "label_w_mm": 25.4, "label_h_mm": 25.4, "col_gap_mm": 2.0, "row_gap_mm": 2.0, "left_margin_mm": 1.5,
+            "id": "three_up_30x16", "name": "3-up 30 x 16 mm", "columns": 3,
+            "label_w_mm": 30.0, "label_h_mm": 16.0, "col_gap_mm": 2.0, "row_gap_mm": 3.0, "left_margin_mm": 1.5,
             "dpi": 203, "language": "tspl", "symbology": "code128",
             "elements": [
-                { "kind": "store_name",   "x_mm": 1.0, "y_mm": 1.0,  "w_mm": 23.4, "h_mm": 2.0, "font_size": 1, "align": "center" },
-                { "kind": "product_name", "x_mm": 1.0, "y_mm": 3.5,  "w_mm": 23.4, "h_mm": 5.0, "font_size": 1, "max_lines": 2 },
-                { "kind": "attributes",   "x_mm": 1.0, "y_mm": 9.0,  "w_mm": 23.4, "h_mm": 2.2, "font_size": 1 },
-                { "kind": "price",        "x_mm": 1.0, "y_mm": 11.5, "w_mm": 23.4, "h_mm": 3.5, "font_size": 2, "bold": true, "align": "center" },
-                { "kind": "barcode",      "x_mm": 1.0, "y_mm": 15.5, "w_mm": 23.4, "h_mm": 9.0, "font_size": 1 }
+                { "kind": "product_name", "x_mm": 1.0, "y_mm": 0.8, "w_mm": 28.0, "h_mm": 5.0, "font_size": 1, "max_lines": 2 },
+                { "kind": "price",        "x_mm": 1.0, "y_mm": 6.0, "w_mm": 28.0, "h_mm": 3.2, "font_size": 2, "bold": true, "align": "center" },
+                { "kind": "barcode",      "x_mm": 1.0, "y_mm": 9.6, "w_mm": 28.0, "h_mm": 5.4, "font_size": 1 }
             ]
         }
     ])

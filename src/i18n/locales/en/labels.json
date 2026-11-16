@@ -1,7 +1,7 @@
 {
   "templates": {
-    "two_up_2x1": "2 across, 2\" x 1\"",
-    "three_up_1x1": "3 across, 1\" x 1\""
+    "two_up_50x25": "50 x 25 mm, 2 across",
+    "three_up_30x16": "30 x 16 mm, 3 across"
   },
   "print": {
     "title": "Print labels",
@@ -56,7 +56,6 @@
     "alignQueued": "Alignment test sent to the label printer.",
     "advanced": "Advanced Calibration",
     "stickerSize": "Sticker size",
-    "across": "{{count}} across",
     "stickerHint": "Also the roll chosen by default when printing labels.",
     "testLabel": "Print Test Label / Alignment Test",
     "rollCalibration": "Roll calibration: {{name}}",

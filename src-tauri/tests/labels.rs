@@ -1,4 +1,4 @@
-//! Block 2.2 — the label engine (doc §7.4): barcode-fit rules on the 2-up 2″×1″ and 3-up 1″×1″ templates,
+//! Block 2.2 — the label engine (doc §7.4): barcode-fit rules on the 2-up 50 × 25 mm and 3-up 30 × 16 mm templates,
 //! golden TSPL / ZPL byte snapshots, multi-column rows, calibration, and a label job through the label
 //! printer's own print worker. Regenerate the snapshots with `UPDATE_FIXTURES=1 cargo test --test labels`
 //! (and review the diff: these bytes go to a real printer).
@@ -54,20 +54,21 @@ fn golden(name: &str, bytes: &[u8]) {
 
 #[test]
 fn the_built_in_templates_are_the_owner_confirmed_rolls() {
-    let two = builtin("two_up_2x1");
-    let three = builtin("three_up_1x1");
-    assert_eq!((two.columns, two.label_w_mm, two.label_h_mm, two.dpi), (2, 50.8, 25.4, 203));
-    assert_eq!((three.columns, three.label_w_mm, three.label_h_mm, three.dpi), (3, 25.4, 25.4, 203));
-    assert_eq!((two.row_gap_mm, two.col_gap_mm, two.left_margin_mm), (2.0, 2.0, 1.5));
-    // Roll widths from the doc: ≈ 106.6 mm and ≈ 83.2 mm.
-    assert_eq!(layout::mm_text(layout::roll_width_mm(&two)), "106.6");
-    assert_eq!(layout::mm_text(layout::roll_width_mm(&three)), "83.2");
+    let two = builtin("two_up_50x25");
+    let three = builtin("three_up_30x16");
+    assert_eq!((two.columns, two.label_w_mm, two.label_h_mm, two.dpi), (2, 50.0, 25.0, 203));
+    assert_eq!((three.columns, three.label_w_mm, three.label_h_mm, three.dpi), (3, 30.0, 16.0, 203));
+    assert_eq!((two.row_gap_mm, two.col_gap_mm, two.left_margin_mm), (3.0, 2.0, 1.5));
+    assert_eq!((three.row_gap_mm, three.col_gap_mm, three.left_margin_mm), (3.0, 2.0, 1.5));
+    // Roll widths (a margin each side): 105.0 mm and 97.0 mm.
+    assert_eq!(layout::mm_text(layout::roll_width_mm(&two)), "105.0");
+    assert_eq!(layout::mm_text(layout::roll_width_mm(&three)), "97.0");
 }
 
 #[test]
 fn ean13_fits_a_2x1_label_at_a_three_dot_module() {
     let p =
-        layout::layout(&builtin("two_up_2x1"), &[cell("p1", "Ladies Sandal", &["2000123456782"])], (0.0, 0.0), false);
+        layout::layout(&builtin("two_up_50x25"), &[cell("p1", "Ladies Sandal", &["2000123456782"])], (0.0, 0.0), false);
     let b = p.labels[0].barcode.as_ref().unwrap();
     assert_eq!((b.symbology, b.module_dots, b.fits), (Symbology::Ean13, 3, true));
     assert_eq!(b.data, "2000123456782");
@@ -77,16 +78,16 @@ fn ean13_fits_a_2x1_label_at_a_three_dot_module() {
 #[test]
 fn a_13_digit_code128_fits_a_2x1_label_at_two_dots() {
     // Not a valid EAN (bad check digit) ⇒ Code128: 143 modules with quiet zones ≈ 35.8 mm at 2 dots.
-    let p = layout::layout(&builtin("two_up_2x1"), &[cell("p1", "Thing", &["2000123456781"])], (0.0, 0.0), false);
+    let p = layout::layout(&builtin("two_up_50x25"), &[cell("p1", "Thing", &["2000123456781"])], (0.0, 0.0), false);
     let b = p.labels[0].barcode.as_ref().unwrap();
     assert_eq!((b.symbology, b.module_dots, b.fits), (Symbology::Code128, 2, true));
     assert_eq!(b.widths.iter().map(|w| u32::from(*w)).sum::<u32>() + 2 * layout::QUIET_MODULES, 143);
 }
 
 #[test]
-fn a_1x1_label_prints_the_six_digit_sku_as_code128_c() {
+fn a_30x16_label_prints_the_six_digit_sku_as_code128_c() {
     let p = layout::layout(
-        &builtin("three_up_1x1"),
+        &builtin("three_up_30x16"),
         &[cell("p1", "Ear Stud", &["2000123456782", "104523"])],
         (0.0, 0.0),
         false,
@@ -98,14 +99,14 @@ fn a_1x1_label_prints_the_six_digit_sku_as_code128_c() {
 
 #[test]
 fn codes_that_cannot_fit_print_flagged_and_300_dpi_allows_8_digits() {
-    let t = builtin("three_up_1x1");
+    let t = builtin("three_up_30x16");
     let ean_only = layout::layout(&t, &[cell("p1", "Ear Stud", &["2000123456782"])], (0.0, 0.0), false);
     assert_eq!(codes(&ean_only), vec!["BARCODE_TOO_LONG"]);
     let b = ean_only.labels[0].barcode.as_ref().unwrap();
     assert_eq!((b.module_dots, b.fits), (2, false), "still printed, at the smallest scannable module");
 
     let seven = layout::layout(&t, &[cell("p1", "Ring", &["1045231"])], (0.0, 0.0), false);
-    assert_eq!(codes(&seven), vec!["BARCODE_TOO_LONG"], "7 digits don't fit 1x1 at 203 dpi");
+    assert!(seven.warnings.is_empty(), "7 digits fit the 28 mm barcode box at 203 dpi: {:?}", codes(&seven));
     let mut t300 = t.clone();
     t300.dpi = 300;
     let eight = layout::layout(&t300, &[cell("p1", "Ring", &["10452311"])], (0.0, 0.0), false);
@@ -118,7 +119,7 @@ fn codes_that_cannot_fit_print_flagged_and_300_dpi_allows_8_digits() {
 #[test]
 fn names_wrap_and_unprintable_text_is_flagged() {
     let p = layout::layout(
-        &builtin("two_up_2x1"),
+        &builtin("two_up_50x25"),
         &[
             cell("p1", "Ladies Leather Sandal Comfort Fit Wide Black Extra Soft Sole With Strap", &["104523"]),
             cell("p2", "නිල් බාල්දිය", &["104524"]),
@@ -143,13 +144,13 @@ fn attributes_put_size_first() {
 
 #[test]
 fn cells_fill_rows_left_to_right_and_the_last_row_can_be_filled() {
-    let t = builtin("two_up_2x1");
+    let t = builtin("two_up_50x25");
     let cells = vec![cell("a", "A", &["104523"]), cell("a", "A", &["104523"]), cell("b", "B", &["104524"])];
     let p = layout::layout(&t, &cells, (0.0, 0.0), false);
     assert_eq!((p.rows, p.labels.len()), (2, 3));
     assert_eq!(p.labels.iter().map(|l| (l.row, l.col)).collect::<Vec<_>>(), vec![(0, 0), (0, 1), (1, 0)]);
-    // Column 2 starts after the label and the gap: 1.5 + 50.8 + 2.0 = 54.3 mm.
-    assert_eq!(layout::mm_text(p.labels[1].x_mm), "54.3");
+    // Column 2 starts after the label and the gap: 1.5 + 50.0 + 2.0 = 53.5 mm.
+    assert_eq!(layout::mm_text(p.labels[1].x_mm), "53.5");
     let filled = layout::layout(&t, &cells, (0.0, 0.0), true);
     assert_eq!(filled.labels.len(), 4);
     assert_eq!(filled.labels[3].product_id, "b");
@@ -174,7 +175,7 @@ fn sample_job() -> (LabelTemplate, Vec<LabelCell>) {
     // Four sandals (two identical rows ⇒ PRINT 2) and one stud.
     let mut cells = vec![sandal.clone(), sandal.clone(), sandal.clone(), sandal];
     cells.push(stud);
-    (builtin("two_up_2x1"), cells)
+    (builtin("two_up_50x25"), cells)
 }
 
 #[test]
@@ -183,22 +184,22 @@ fn tspl_golden_two_up() {
     let p = layout::layout(&t, &cells, (0.0, 0.0), false);
     let bytes = label::emit(&p, &tspl_profile());
     let text = String::from_utf8(bytes.clone()).unwrap();
-    assert!(text.starts_with("SIZE 106.6 mm,25.4 mm\r\nGAP 2.0 mm,0 mm\r\nDIRECTION 1\r\nREFERENCE 0,0\r\n"));
+    assert!(text.starts_with("SIZE 105.0 mm,25.0 mm\r\nGAP 3.0 mm,0 mm\r\nDIRECTION 1\r\nREFERENCE 0,0\r\n"));
     assert!(text.contains("PRINT 2\r\n"), "identical rows collapse");
     assert_eq!(text.matches("CLS\r\n").count(), 2);
     assert!(text.contains("BARCODE") && text.contains("\"EAN13\"") && text.contains("\"200012345678\""));
     assert!(text.contains("\"Rs. 1,250\"") && text.contains("\"GayanShop\""));
-    golden("two_up_2x1.tspl", &bytes);
+    golden("two_up_50x25.tspl", &bytes);
 }
 
 #[test]
 fn tspl_golden_three_up() {
-    let t = builtin("three_up_1x1");
+    let t = builtin("three_up_30x16");
     let cells = vec![cell("p1", "Silver Ear Stud Round 6mm", &["2000123456782", "104523"]); 3];
     let p = layout::layout(&t, &cells, (0.0, 0.0), false);
     let bytes = label::emit(&p, &tspl_profile());
     assert!(String::from_utf8(bytes.clone()).unwrap().contains("\"128\""));
-    golden("three_up_1x1.tspl", &bytes);
+    golden("three_up_30x16.tspl", &bytes);
 }
 
 #[test]
@@ -208,15 +209,15 @@ fn zpl_golden_two_up() {
     let zpl = LabelPrinterProfile { language: LabelLanguage::Zpl, ..tspl_profile() };
     let bytes = label::emit(&p, &zpl);
     let text = String::from_utf8(bytes.clone()).unwrap();
-    assert!(text.starts_with("~SD16^XA^PW852^LL203^LH0,0"), "{}", &text[..40]);
+    assert!(text.starts_with("~SD16^XA^PW839^LL200^LH0,0"), "{}", &text[..40]);
     assert!(text.contains("^PQ2\r\n^XZ"), "identical rows collapse");
     assert!(text.contains("^BEN,") && text.contains("^BY3"));
-    golden("two_up_2x1.zpl", &bytes);
+    golden("two_up_50x25.zpl", &bytes);
 }
 
 #[test]
 fn the_alignment_test_outlines_every_cell() {
-    let t = builtin("three_up_1x1");
+    let t = builtin("three_up_30x16");
     let tspl = String::from_utf8(label::tspl::alignment_test(&t, (0.0, 0.0), 8, 4)).unwrap();
     assert_eq!(tspl.matches("BOX ").count(), 3);
     golden("align_three_up.tspl", tspl.as_bytes());
@@ -240,17 +241,17 @@ async fn templates_calibrate_per_device_and_reset_to_default() {
     let t = till().await;
     let cal = TemplateCalibration { col_gap_mm: 3.0, row_gap_mm: 2.5, left_margin_mm: 1.0 };
     let mut tx = t.t.db.write().await.unwrap();
-    let saved = label::calibrate(tx.conn(), t.pool(), "two_up_2x1", Some(&cal)).await.unwrap();
+    let saved = label::calibrate(tx.conn(), t.pool(), "two_up_50x25", Some(&cal)).await.unwrap();
     tx.commit().await.unwrap();
     assert_eq!((saved.col_gap_mm, saved.row_gap_mm, saved.left_margin_mm), (3.0, 2.5, 1.0));
-    assert_eq!(label::template(t.pool(), "two_up_2x1").await.unwrap().col_gap_mm, 3.0);
+    assert_eq!(label::template(t.pool(), "two_up_50x25").await.unwrap().col_gap_mm, 3.0);
 
     let bad = TemplateCalibration { col_gap_mm: 12.0, ..cal };
     let mut tx = t.t.db.write().await.unwrap();
-    assert!(label::calibrate(tx.conn(), t.pool(), "two_up_2x1", Some(&bad)).await.is_err());
-    let reset = label::calibrate(tx.conn(), t.pool(), "two_up_2x1", None).await.unwrap();
+    assert!(label::calibrate(tx.conn(), t.pool(), "two_up_50x25", Some(&bad)).await.is_err());
+    let reset = label::calibrate(tx.conn(), t.pool(), "two_up_50x25", None).await.unwrap();
     tx.commit().await.unwrap();
-    assert_eq!(reset, builtin("two_up_2x1"));
+    assert_eq!(reset, builtin("two_up_50x25"));
 }
 
 #[tokio::test]
@@ -258,7 +259,7 @@ async fn a_job_previews_from_products_and_validates_copies() {
     let t = till().await;
     let p = product_with_codes(&t, "Ladies Sandal", 125_000, Some("2000123456782")).await;
     let job = LabelJob {
-        template_id: "two_up_2x1".into(),
+        template_id: "two_up_50x25".into(),
         items: vec![LabelJobItem { product_id: p.clone(), copies: 3 }],
         fill_last_row: false,
     };
@@ -321,7 +322,7 @@ async fn a_label_job_prints_through_the_label_printers_own_queue() {
         let mut tx = t.t.db.write().await.unwrap();
         settings::device_set(tx.conn(), &profile_key(LABEL_PRINTER), &tspl_profile()).await.unwrap();
         let job = LabelJob {
-            template_id: "two_up_2x1".into(),
+            template_id: "two_up_50x25".into(),
             items: vec![LabelJobItem { product_id: p, copies: 2 }],
             fill_last_row: false,
         };
@@ -334,7 +335,7 @@ async fn a_label_job_prints_through_the_label_printers_own_queue() {
             LABEL_PRINTER,
             PrintKind::Test,
             None,
-            &serde_json::json!({"template_id": "three_up_1x1"}),
+            &serde_json::json!({"template_id": "three_up_30x16"}),
         )
         .await
         .unwrap();
@@ -367,4 +368,23 @@ async fn a_label_job_prints_through_the_label_printers_own_queue() {
     assert!(all.iter().any(|s| s.contains("\"EAN13\"") && s.contains("PRINT 1")), "{all:?}");
     assert!(all.iter().any(|s| s.matches("BOX ").count() == 3), "the alignment test");
     assert_eq!(t.count("SELECT COUNT(*) FROM print_jobs WHERE printer_key = 'receipt'").await, 0, "receipts untouched");
+}
+
+#[test]
+fn a_store_seeded_with_the_old_rolls_moves_to_the_new_ones_and_keeps_calibration_and_custom_rolls() {
+    let builtins = label::builtin_templates().unwrap();
+    let old_two = LabelTemplate { id: "two_up_2x1".into(), ..builtin("two_up_50x25") };
+    let old_three = LabelTemplate { id: "three_up_1x1".into(), ..builtin("three_up_30x16") };
+    let calibrated = LabelTemplate { col_gap_mm: 3.5, ..builtin("three_up_30x16") };
+    let custom = LabelTemplate { id: "mine".into(), ..builtin("two_up_50x25") };
+
+    let migrated = label::reconcile(vec![old_two, old_three, custom.clone()], builtins.clone());
+    let ids: Vec<&str> = migrated.iter().map(|t| t.id.as_str()).collect();
+    assert_eq!(ids, vec!["two_up_50x25", "three_up_30x16", "mine"]);
+    assert_eq!(migrated[2], custom);
+
+    let kept = label::reconcile(vec![calibrated.clone(), builtin("two_up_50x25")], builtins.clone());
+    assert_eq!(kept.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), vec!["two_up_50x25", "three_up_30x16"]);
+    assert_eq!(kept[1].col_gap_mm, 3.5, "a calibrated current roll is not overwritten");
+    assert_eq!(label::reconcile(builtins.clone(), builtins.clone()), builtins);
 }
