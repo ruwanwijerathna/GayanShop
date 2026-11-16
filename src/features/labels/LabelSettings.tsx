@@ -58,6 +58,7 @@ export interface LabelPrinterForm {
   offsetX: string;
   offsetY: string;
   autoPrint: boolean;
+  shopName: string;
 }
 
 export function toForm(p: LabelPrinterProfile | null): LabelPrinterForm {
@@ -81,6 +82,7 @@ export function toForm(p: LabelPrinterProfile | null): LabelPrinterForm {
     offsetX: String(p?.offset_x_mm ?? 0),
     offsetY: String(p?.offset_y_mm ?? 0),
     autoPrint: p?.auto_print_on_receive ?? false,
+    shopName: p?.shop_name ?? "",
   };
 }
 
@@ -111,6 +113,7 @@ export function toProfile(f: LabelPrinterForm): LabelPrinterProfile | null {
     offset_x_mm: offsetX,
     offset_y_mm: offsetY,
     auto_print_on_receive: f.autoPrint,
+    shop_name: f.shopName.trim(),
   };
 }
 
@@ -220,6 +223,18 @@ function LabelCard({
               {t("settings.otherConnection", { kind: t(`settings.kinds.${form.kind}`) })}
             </p>
           )}
+
+          <Field id="lp-shop" label={t("settings.shopName")}>
+            <Input
+              id="lp-shop"
+              className={FIELD}
+              maxLength={28}
+              placeholder={t("settings.shopNameDefault")}
+              value={form.shopName}
+              onChange={(e) => set("shopName", e.target.value)}
+            />
+            <p className="text-sm text-muted-foreground">{t("settings.shopNameHint")}</p>
+          </Field>
 
           {selected && (
             <div className="flex flex-col gap-2">

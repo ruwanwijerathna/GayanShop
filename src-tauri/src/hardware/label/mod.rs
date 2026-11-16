@@ -47,11 +47,27 @@ pub struct LabelPrinterProfile {
     /// Profiles saved before this field existed keep it off.
     #[serde(default)]
     pub auto_print_on_receive: bool,
+    /// The shop name printed at the top of every sticker; empty means [`DEFAULT_SHOP_NAME`].
+    #[serde(default)]
+    pub shop_name: String,
 }
+
+/// What the stickers say when no shop name was entered under Settings → Label printer.
+pub const DEFAULT_SHOP_NAME: &str = "Sale Center";
+/// Longest shop name the stickers accept (the 30 x 16 mm roll fits about 28 characters at the smallest font).
+pub const MAX_SHOP_NAME: usize = 28;
 
 impl LabelPrinterProfile {
     pub fn offset(&self) -> (f64, f64) {
         (self.offset_x_mm, self.offset_y_mm)
+    }
+
+    /// The shop name as the stickers print it.
+    pub fn sticker_name(&self) -> &str {
+        match self.shop_name.trim() {
+            "" => DEFAULT_SHOP_NAME,
+            name => name,
+        }
     }
 
     pub fn validate(&self) -> AppResult<()> {
@@ -62,11 +78,19 @@ impl LabelPrinterProfile {
         if self.darkness > 15 || !(1..=6).contains(&self.speed) {
             return bad("darkness or speed");
         }
+        if self.shop_name.trim().chars().count() > MAX_SHOP_NAME {
+            return bad("shop name");
+        }
         if !(-10.0..=10.0).contains(&self.offset_x_mm) || !(-10.0..=10.0).contains(&self.offset_y_mm) {
             return bad("offset");
         }
         Ok(())
     }
+}
+
+/// The shop name for stickers: this counter's label-printer setting, or the default.
+pub async fn sticker_name(pool: &SqlitePool) -> AppResult<String> {
+    Ok(load_profile(pool).await?.map_or_else(|| DEFAULT_SHOP_NAME.to_owned(), |p| p.sticker_name().to_owned()))
 }
 
 pub async fn load_profile(pool: &SqlitePool) -> AppResult<Option<LabelPrinterProfile>> {
@@ -224,7 +248,7 @@ pub fn attributes_line(json: &str) -> String {
 
 /// One cell per copy, in job order.
 pub async fn cells(pool: &SqlitePool, store_id: &str, job: &LabelJob) -> AppResult<Vec<LabelCell>> {
-    let store_name: String = settings::store_get(pool, settings::keys::STORE_NAME).await?.unwrap_or_default();
+    let store_name = sticker_name(pool).await?;
     let mut out = Vec::new();
     for item in &job.items {
         let p: ProductRow = sqlx::query_as(
@@ -273,7 +297,7 @@ async fn sample_layout(
     profile: Option<&LabelPrinterProfile>,
 ) -> AppResult<LabelPreview> {
     let t = for_printer(template(pool, template_id).await?, profile);
-    let store_name: String = settings::store_get(pool, settings::keys::STORE_NAME).await?.unwrap_or_default();
+    let store_name = sticker_name(pool).await?;
     let cell = LabelCell {
         product_id: "sample".into(),
         store_name,
