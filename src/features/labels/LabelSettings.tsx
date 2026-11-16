@@ -133,7 +133,7 @@ function Field({ id, label, children }: { id: string; label: string; children: R
 /** A to-scale row of the roll's labels, so the two sizes are told apart at a glance. */
 function RollVisual({ template }: { template: LabelTemplate }) {
   return (
-    <span aria-hidden className="mb-1 flex gap-1.5">
+    <span aria-hidden className="mb-1 flex h-9 items-center gap-1.5">
       {Array.from({ length: template.columns }, (_, i) => (
         <span
           key={i}
@@ -420,7 +420,7 @@ function LabelCard({
             )}
           </AdvancedSection>
         </div>
-        <aside aria-label={t("settings.previewTitle")} className="flex flex-col gap-2">
+        <aside aria-label={t("settings.previewTitle")} className="flex flex-col gap-2 self-start">
           {samplePreview.data ? (
             <LabelPreviewSvg preview={samplePreview.data} title={t("settings.previewTitle")} maxRows={1} />
           ) : (

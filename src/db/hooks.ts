@@ -1,5 +1,5 @@
 // TanStack Query hooks over the generated commands. Only src/db and src/hardware call Rust (AGENT.md §2).
-import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   commands,
   type AdHocPurchase,
@@ -628,6 +628,7 @@ export function useLabelSamplePreview(templateId: string | null) {
     queryFn: () => unwrap(commands.labelSamplePreview(templateId ?? "")),
     enabled: templateId !== null,
     retry: false,
+    placeholderData: keepPreviousData,
   });
 }
 
