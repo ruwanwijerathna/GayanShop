@@ -82,8 +82,8 @@ export const commands = {
 	/**  Close an empty batch: read-only afterwards, final P&L (audited `BATCH_CLOSE`). */
 	closeBatch: (id: string) => typedError<BatchDetail_Serialize, AppError>(__TAURI_INVOKE("close_batch", { id })),
 	labelTemplates: () => typedError<LabelTemplate_Serialize[], AppError>(__TAURI_INVOKE("label_templates")),
-	labelPrinterProfile: () => typedError<LabelPrinterProfile | null, AppError>(__TAURI_INVOKE("label_printer_profile")),
-	setLabelPrinterProfile: (profile: LabelPrinterProfile) => typedError<null, AppError>(__TAURI_INVOKE("set_label_printer_profile", { profile })),
+	labelPrinterProfile: () => typedError<LabelPrinterProfile_Serialize | null, AppError>(__TAURI_INVOKE("label_printer_profile")),
+	setLabelPrinterProfile: (profile: LabelPrinterProfile_Deserialize) => typedError<null, AppError>(__TAURI_INVOKE("set_label_printer_profile", { profile })),
 	/**  Correct a template's column gap, row gap and left margin for this counter's roll; `None` = reset to default. */
 	calibrateLabelTemplate: (id: string, calibration: TemplateCalibration | null) => typedError<LabelTemplate_Serialize, AppError>(__TAURI_INVOKE("calibrate_label_template", { id, calibration })),
 	/**  The Rust-computed layout the UI draws as SVG: exactly what will print, with warnings. */
@@ -1540,7 +1540,9 @@ export type LabelPreview_Serialize = {
 	warnings: LabelWarning[],
 };
 
-export type LabelPrinterProfile = {
+export type LabelPrinterProfile = LabelPrinterProfile_Serialize | LabelPrinterProfile_Deserialize;
+
+export type LabelPrinterProfile_Deserialize = {
 	transport: TransportConfig,
 	language: LabelLanguage,
 	/**  203 or 300. */
@@ -1552,6 +1554,30 @@ export type LabelPrinterProfile = {
 	/**  Calibration: shift everything right / down, mm. */
 	offset_x_mm: number,
 	offset_y_mm: number,
+	/**
+	 *  Print a sticker for every unit that arrives in stock (batch receive, quick purchase, late item).
+	 *  Profiles saved before this field existed keep it off.
+	 */
+	auto_print_on_receive?: boolean,
+};
+
+export type LabelPrinterProfile_Serialize = {
+	transport: TransportConfig,
+	language: LabelLanguage,
+	/**  203 or 300. */
+	dpi: number,
+	/**  TSPL `DENSITY` 0–15 / ZPL darkness. */
+	darkness: number,
+	/**  Inches per second, 1–6. */
+	speed: number,
+	/**  Calibration: shift everything right / down, mm. */
+	offset_x_mm: number,
+	offset_y_mm: number,
+	/**
+	 *  Print a sticker for every unit that arrives in stock (batch receive, quick purchase, late item).
+	 *  Profiles saved before this field existed keep it off.
+	 */
+	auto_print_on_receive: boolean,
 };
 
 export type LabelTemplate = LabelTemplate_Serialize | LabelTemplate_Deserialize;

@@ -200,6 +200,7 @@ fn tspl_profile() -> LabelPrinterProfile {
         speed: 4,
         offset_x_mm: 0.0,
         offset_y_mm: 0.0,
+        auto_print_on_receive: false,
     }
 }
 

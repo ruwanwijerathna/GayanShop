@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { AllocationMethod, Batch, BatchPnl, ProductSummary } from "@/db/bindings";
 import { CommandError } from "@/db/client";
+import { useAutoPrintLabels } from "@/components/labels/useAutoPrintLabels";
 import {
   useAddLateBatchItem,
   useBatchAllocationPreview,
@@ -245,6 +246,7 @@ export function ReceivedActions({ batch }: { batch: Batch }) {
   const reopen = useReopenBatch();
   const close = useCloseBatch();
   const late = useAddLateBatchItem();
+  const autoPrint = useAutoPrintLabels();
   const writeOff = useWriteOffBatch();
   const [confirm, setConfirm] = useState<"reopen" | "close" | "writeOff" | null>(null);
   const [product, setProduct] = useState<ProductSummary | null>(null);
@@ -265,6 +267,7 @@ export function ReceivedActions({ batch }: { batch: Batch }) {
       { batchId: batch.id, input: { product_id: product.id, qty: units, retail_price: null } },
       {
         onSuccess: () => {
+          autoPrint([{ product_id: product.id, qty: units }]);
           setProduct(null);
           setQty("");
         },

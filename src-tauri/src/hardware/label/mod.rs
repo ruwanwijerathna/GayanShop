@@ -43,6 +43,10 @@ pub struct LabelPrinterProfile {
     pub offset_x_mm: f64,
     #[specta(type = specta_typescript::Number)]
     pub offset_y_mm: f64,
+    /// Print a sticker for every unit that arrives in stock (batch receive, quick purchase, late item).
+    /// Profiles saved before this field existed keep it off.
+    #[serde(default)]
+    pub auto_print_on_receive: bool,
 }
 
 impl LabelPrinterProfile {

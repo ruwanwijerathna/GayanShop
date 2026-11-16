@@ -20,6 +20,7 @@ import { translateError } from "@/i18n";
 import { playCue } from "@/lib/audio";
 import { formatMoney, parseMajor } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { useAutoPrintLabels } from "@/components/labels/useAutoPrintLabels";
 import { PrintLabelsDialog } from "@/components/labels/PrintLabelsDialog";
 import { NewBatchDialog, QuickPurchaseDialog } from "./BatchDialogs";
 import { AllocationReview, ClosedNote, HeaderStep, PnlCard, ReceivedActions, Step } from "./IntakeWizard";
@@ -140,6 +141,7 @@ function AddItemForm({ batchId, method }: { batchId: string; method: AllocationM
 function Detail({ detail }: { detail: BatchDetail }) {
   const { t, i18n } = useTranslation(["batches", "common"]);
   const receive = useReceiveBatch();
+  const autoPrint = useAutoPrintLabels();
   const remove = useRemoveBatchItem();
   const [confirming, setConfirming] = useState(false);
   const [labels, setLabels] = useState(false);
@@ -319,8 +321,11 @@ function Detail({ detail }: { detail: BatchDetail }) {
                 disabled={receive.isPending}
                 onClick={() =>
                   receive.mutate(batch.id, {
-                    onSuccess: () => {
+                    onSuccess: (received) => {
                       playCue("complete");
+                      autoPrint(
+                        received.items.map((i) => ({ product_id: i.product_id, qty: i.qty_received })),
+                      );
                       setConfirming(false);
                     },
                     onError: () => playCue("error"),

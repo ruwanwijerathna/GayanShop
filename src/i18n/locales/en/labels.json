@@ -60,6 +60,12 @@
     "testLabel": "Print Test Label / Alignment Test",
     "rollCalibration": "Roll calibration: {{name}}",
     "printerHint": "Prints price stickers for your products.",
-    "otherConnection": "This printer is connected by {{kind}}. Change it under Advanced Calibration."
+    "otherConnection": "This printer is connected by {{kind}}. Change it under Advanced Calibration.",
+    "autoPrint": "Print labels when stock arrives",
+    "autoPrintHint": "Prints one sticker for every unit you receive: a batch, a quick purchase or a late item. Uses the roll chosen below."
+  },
+  "auto": {
+    "queued": "{{count}} sticker(s) sent to the printer",
+    "failed": "Stock was added, but the stickers did not print."
   }
 }
