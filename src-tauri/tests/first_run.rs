@@ -142,21 +142,23 @@ async fn seeds_roles_owner_categories_and_system_batches() {
 }
 
 #[tokio::test]
-async fn seeds_label_templates_at_203_dpi_with_2mm_gap() {
+async fn seeds_label_templates_at_203_dpi_with_3mm_gap() {
     let (t, _) = setup().await;
     let templates = device_setting(&t, "label.templates").await;
     let list = templates.as_array().unwrap();
     assert_eq!(list.len(), 2);
-    for (tpl, id, cols, w) in [(&list[0], "two_up_2x1", 2, 50.8), (&list[1], "three_up_1x1", 3, 25.4)] {
+    for (tpl, id, cols, w, h, kinds) in [
+        (&list[0], "two_up_50x25", 2, 50.0, 25.0, vec!["store_name", "product_name", "attributes", "price", "barcode"]),
+        (&list[1], "three_up_30x16", 3, 30.0, 16.0, vec!["product_name", "price", "barcode"]),
+    ] {
         assert_eq!(tpl["id"], json!(id));
         assert_eq!(tpl["columns"], json!(cols));
         assert_eq!(tpl["label_w_mm"], json!(w));
-        assert_eq!(tpl["label_h_mm"], json!(25.4));
+        assert_eq!(tpl["label_h_mm"], json!(h));
         assert_eq!(tpl["dpi"], json!(203));
-        assert_eq!(tpl["row_gap_mm"], json!(2.0));
-        let kinds: Vec<&str> =
-            tpl["elements"].as_array().unwrap().iter().map(|e| e["kind"].as_str().unwrap()).collect();
-        assert_eq!(kinds, vec!["store_name", "product_name", "attributes", "price", "barcode"]);
+        assert_eq!(tpl["row_gap_mm"], json!(3.0));
+        let got: Vec<&str> = tpl["elements"].as_array().unwrap().iter().map(|e| e["kind"].as_str().unwrap()).collect();
+        assert_eq!(got, kinds);
     }
     assert_eq!(list[1]["symbology"], json!("code128"), "3-up 1x1 prints the 6-digit SKU as Code128");
 }

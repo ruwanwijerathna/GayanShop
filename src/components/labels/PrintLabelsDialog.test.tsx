@@ -19,18 +19,18 @@ vi.mock("@/db/bindings", () => ({
 }));
 
 const TEMPLATES = [
-  { id: "two_up_2x1", name: "2-up", columns: 2, dpi: 203 },
-  { id: "three_up_1x1", name: "3-up", columns: 3, dpi: 203 },
+  { id: "two_up_50x25", name: "2-up", columns: 2, dpi: 203 },
+  { id: "three_up_30x16", name: "3-up", columns: 3, dpi: 203 },
 ] as unknown as LabelTemplate[];
 
 const PREVIEW: LabelPreview = {
-  template_id: "two_up_2x1",
+  template_id: "two_up_50x25",
   dpi: 203,
   columns: 2,
   rows: 1,
   roll_width_mm: 106.6,
-  label_w_mm: 50.8,
-  label_h_mm: 25.4,
+  label_w_mm: 50,
+  label_h_mm: 25,
   row_gap_mm: 2,
   labels: [
     {
@@ -96,22 +96,22 @@ describe("PrintLabelsDialog", () => {
     expect(within(svg).getByTestId("barcode")).toHaveAttribute("data-fits", "true");
     expect(screen.getByText(/Ladies Sandal: the code is too long/)).toBeInTheDocument();
     expect(commands.labelPreview).toHaveBeenCalledWith({
-      template_id: "two_up_2x1",
+      template_id: "two_up_50x25",
       items: [{ product_id: "p1", copies: 12 }],
       fill_last_row: false,
     });
 
     fireEvent.change(screen.getByLabelText("Copies of Ladies Sandal"), { target: { value: "3" } });
-    chooseOption(screen.getByLabelText("Label roll"), '3 across, 1" x 1"');
+    chooseOption(screen.getByLabelText("Label roll"), "30 x 16 mm, 3 across");
     fireEvent.click(screen.getByRole("button", { name: "Print 3 label(s)" }));
     await waitFor(() =>
       expect(commands.printLabels).toHaveBeenCalledWith(
-        { template_id: "three_up_1x1", items: [{ product_id: "p1", copies: 3 }], fill_last_row: false },
+        { template_id: "three_up_30x16", items: [{ product_id: "p1", copies: 3 }], fill_last_row: false },
         null,
       ),
     );
     await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(localStorage.getItem("gayanshop.label.template")).toBe("three_up_1x1");
+    expect(localStorage.getItem("gayanshop.label.template")).toBe("three_up_30x16");
   });
 
   it("refuses zero copies", async () => {

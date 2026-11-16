@@ -74,10 +74,29 @@ pub fn builtin_templates() -> AppResult<Vec<LabelTemplate>> {
     Ok(serde_json::from_value(crate::setup::builtin_label_templates())?)
 }
 
+/// Built-in rolls this app used before the 50 x 25 mm and 30 x 16 mm stickers; stores that seeded them
+/// are moved to the current ones the next time the list is read.
+const RETIRED_IDS: [&str; 2] = ["two_up_2x1", "three_up_1x1"];
+
+/// A stored list brought up to date: retired built-ins dropped, any current built-in that is missing added
+/// (calibrated copies the store already has are kept as they are), custom templates untouched.
+pub fn reconcile(stored: Vec<LabelTemplate>, builtin: Vec<LabelTemplate>) -> Vec<LabelTemplate> {
+    let mut kept: Vec<LabelTemplate> = stored.into_iter().filter(|t| !RETIRED_IDS.contains(&t.id.as_str())).collect();
+    let mut out = Vec::with_capacity(kept.len() + builtin.len());
+    for b in builtin {
+        match kept.iter().position(|t| t.id == b.id) {
+            Some(i) => out.push(kept.remove(i)),
+            None => out.push(b),
+        }
+    }
+    out.extend(kept);
+    out
+}
+
 pub async fn templates(pool: &SqlitePool) -> AppResult<Vec<LabelTemplate>> {
     let stored: Option<Vec<LabelTemplate>> = settings::device_get(pool, TEMPLATES_KEY).await?;
     match stored {
-        Some(t) if !t.is_empty() => Ok(t),
+        Some(t) if !t.is_empty() => Ok(reconcile(t, builtin_templates()?)),
         _ => builtin_templates(),
     }
 }
@@ -265,7 +284,7 @@ pub async fn render_job(
             Ok(emit(&layout::layout(&t, &cells, profile.offset(), job.fill_last_row), profile))
         }
         "test" => {
-            let id = payload.get("template_id").and_then(Value::as_str).unwrap_or("two_up_2x1");
+            let id = payload.get("template_id").and_then(Value::as_str).unwrap_or("two_up_50x25");
             let t = for_printer(template(pool, id).await?, Some(profile));
             Ok(match profile.language {
                 LabelLanguage::Tspl => tspl::alignment_test(&t, profile.offset(), profile.darkness, profile.speed),

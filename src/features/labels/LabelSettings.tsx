@@ -222,7 +222,6 @@ function LabelCard({
               value: tpl.id,
               visual: <RollVisual template={tpl} />,
               label: t(`templates.${tpl.id}`, { defaultValue: tpl.name }),
-              description: t("settings.across", { count: tpl.columns }),
             }))}
           />
           <p className="text-sm text-muted-foreground">{t("settings.stickerHint")}</p>
