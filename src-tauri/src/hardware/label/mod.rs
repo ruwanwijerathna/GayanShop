@@ -43,6 +43,10 @@ pub struct LabelPrinterProfile {
     pub offset_x_mm: f64,
     #[specta(type = specta_typescript::Number)]
     pub offset_y_mm: f64,
+    /// Print a sticker for every unit that arrives in stock (batch receive, quick purchase, late item).
+    /// Profiles saved before this field existed keep it off.
+    #[serde(default)]
+    pub auto_print_on_receive: bool,
 }
 
 impl LabelPrinterProfile {
@@ -79,13 +83,18 @@ pub fn builtin_templates() -> AppResult<Vec<LabelTemplate>> {
 const RETIRED_IDS: [&str; 2] = ["two_up_2x1", "three_up_1x1"];
 
 /// A stored list brought up to date: retired built-ins dropped, any current built-in that is missing added
-/// (calibrated copies the store already has are kept as they are), custom templates untouched.
+/// (a calibrated copy keeps its roll geometry but always takes the built-in's element layout), custom templates
+/// untouched.
 pub fn reconcile(stored: Vec<LabelTemplate>, builtin: Vec<LabelTemplate>) -> Vec<LabelTemplate> {
     let mut kept: Vec<LabelTemplate> = stored.into_iter().filter(|t| !RETIRED_IDS.contains(&t.id.as_str())).collect();
     let mut out = Vec::with_capacity(kept.len() + builtin.len());
     for b in builtin {
         match kept.iter().position(|t| t.id == b.id) {
-            Some(i) => out.push(kept.remove(i)),
+            Some(i) => {
+                let mut t = kept.remove(i);
+                t.elements = b.elements;
+                out.push(t);
+            }
             None => out.push(b),
         }
     }

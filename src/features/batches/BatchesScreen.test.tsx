@@ -25,6 +25,8 @@ vi.mock("@/db/bindings", () => ({
     addLateBatchItem: vi.fn(),
     adHocPurchase: vi.fn(),
     searchProducts: vi.fn(),
+    labelPrinterProfile: vi.fn(),
+    printLabels: vi.fn(),
   },
 }));
 
@@ -128,7 +130,22 @@ beforeEach(() => {
   vi.mocked(commands.setBatchItem).mockReset();
   vi.mocked(commands.receiveBatch).mockReset();
   vi.mocked(commands.adHocPurchase).mockReset();
+  vi.mocked(commands.labelPrinterProfile).mockReset();
+  vi.mocked(commands.labelPrinterProfile).mockImplementation(() => ok(null));
+  vi.mocked(commands.printLabels).mockReset();
+  vi.mocked(commands.printLabels).mockImplementation(() => ok({} as never));
 });
+
+const AUTO_PROFILE = {
+  transport: { kind: "spooler", printer_name: "Xprinter" },
+  language: "tspl",
+  dpi: 203,
+  darkness: 8,
+  speed: 4,
+  offset_x_mm: 0,
+  offset_y_mm: 0,
+  auto_print_on_receive: true,
+} as const;
 
 async function openDraft() {
   renderWithProviders(<BatchesScreen />);
@@ -198,6 +215,33 @@ describe("BatchesScreen", () => {
     expect(within(detail).getByText(/Receive 10 units\? Costs lock/)).toBeInTheDocument();
     fireEvent.click(within(detail).getByRole("button", { name: "Yes, receive" }));
     await waitFor(() => expect(commands.receiveBatch).toHaveBeenCalledWith("b1"));
+  });
+
+  it("prints a sticker for every unit received when the label printer switch is on", async () => {
+    vi.mocked(commands.labelPrinterProfile).mockImplementation(() => ok(AUTO_PROFILE));
+    vi.mocked(commands.receiveBatch).mockImplementation(() =>
+      ok({ ...draft, batch: batch({ status: "received", received_at: "2026-11-08T09:30:00.000Z" }) }),
+    );
+    const detail = await openDraft();
+    fireEvent.click(within(detail).getByRole("button", { name: "Receive stock" }));
+    fireEvent.click(within(detail).getByRole("button", { name: "Yes, receive" }));
+    await waitFor(() =>
+      expect(commands.printLabels).toHaveBeenCalledWith(
+        { template_id: "two_up_50x25", items: [{ product_id: "p1", copies: 10 }], fill_last_row: false },
+        null,
+      ),
+    );
+  });
+
+  it("prints nothing on receive while the switch is off", async () => {
+    vi.mocked(commands.receiveBatch).mockImplementation(() =>
+      ok({ ...draft, batch: batch({ status: "received", received_at: "2026-11-08T09:30:00.000Z" }) }),
+    );
+    const detail = await openDraft();
+    fireEvent.click(within(detail).getByRole("button", { name: "Receive stock" }));
+    fireEvent.click(within(detail).getByRole("button", { name: "Yes, receive" }));
+    await waitFor(() => expect(commands.receiveBatch).toHaveBeenCalled());
+    expect(commands.printLabels).not.toHaveBeenCalled();
   });
 
   it("records a quick one-item purchase", async () => {

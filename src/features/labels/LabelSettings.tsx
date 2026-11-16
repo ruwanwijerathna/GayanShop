@@ -9,6 +9,7 @@ import { Can } from "@/components/auth/Can";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { LabelPreviewSvg } from "@/components/labels/LabelPreviewSvg";
 import type { LabelLanguage, LabelPrinterProfile, LabelTemplate, TransportConfig } from "@/db/bindings";
 import { CommandError } from "@/db/client";
@@ -56,6 +57,7 @@ export interface LabelPrinterForm {
   speed: string;
   offsetX: string;
   offsetY: string;
+  autoPrint: boolean;
 }
 
 export function toForm(p: LabelPrinterProfile | null): LabelPrinterForm {
@@ -78,6 +80,7 @@ export function toForm(p: LabelPrinterProfile | null): LabelPrinterForm {
     speed: String(p?.speed ?? 4),
     offsetX: String(p?.offset_x_mm ?? 0),
     offsetY: String(p?.offset_y_mm ?? 0),
+    autoPrint: p?.auto_print_on_receive ?? false,
   };
 }
 
@@ -107,6 +110,7 @@ export function toProfile(f: LabelPrinterForm): LabelPrinterProfile | null {
     speed,
     offset_x_mm: offsetX,
     offset_y_mm: offsetY,
+    auto_print_on_receive: f.autoPrint,
   };
 }
 
@@ -234,6 +238,23 @@ function LabelCard({
               <p className="text-sm text-muted-foreground">{t("settings.stickerHint")}</p>
             </div>
           )}
+
+          <div className="flex items-center justify-between gap-6 rounded-lg border p-4">
+            <div className="flex flex-col gap-1">
+              <span id="label-auto-label" className="text-base font-medium">
+                {t("settings.autoPrint")}
+              </span>
+              <span id="label-auto-hint" className="text-sm text-muted-foreground">
+                {t("settings.autoPrintHint")}
+              </span>
+            </div>
+            <Switch
+              checked={form.autoPrint}
+              aria-labelledby="label-auto-label"
+              aria-describedby="label-auto-hint"
+              onCheckedChange={(v) => set("autoPrint", v)}
+            />
+          </div>
 
           {invalid && (
             <p role="alert" className="text-base text-destructive">

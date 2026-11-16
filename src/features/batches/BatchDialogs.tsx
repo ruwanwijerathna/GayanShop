@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { AllocationMethod, BatchDetail, ProductSummary } from "@/db/bindings";
 import { CommandError } from "@/db/client";
+import { useAutoPrintLabels } from "@/components/labels/useAutoPrintLabels";
 import { useAdHocPurchase, useCreateBatch } from "@/db/hooks";
 import { translateError } from "@/i18n";
 import { playCue } from "@/lib/audio";
@@ -199,6 +200,7 @@ export function QuickPurchaseDialog({
 }) {
   const { t, i18n } = useTranslation(["batches", "common"]);
   const buy = useAdHocPurchase();
+  const autoPrint = useAutoPrintLabels();
   const [product, setProduct] = useState<ProductSummary | null>(null);
   const [qty, setQty] = useState("");
   const [cost, setCost] = useState("");
@@ -223,6 +225,7 @@ export function QuickPurchaseDialog({
         {
           onSuccess: (detail) => {
             playCue("complete");
+            autoPrint([{ product_id: product.id, qty: units }]);
             onDone(detail);
             onClose();
           },

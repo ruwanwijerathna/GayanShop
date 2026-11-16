@@ -28,7 +28,7 @@ fn builtin(id: &str) -> LabelTemplate {
 fn cell(id: &str, name: &str, codes: &[&str]) -> LabelCell {
     LabelCell {
         product_id: id.into(),
-        store_name: "GayanShop".into(),
+        store_name: "Sale Center".into(),
         name: name.into(),
         attributes: "Size 38 - Black".into(),
         price: "Rs. 1,250".into(),
@@ -118,8 +118,20 @@ fn codes_that_cannot_fit_print_flagged_and_300_dpi_allows_8_digits() {
 
 #[test]
 fn names_wrap_and_unprintable_text_is_flagged() {
+    let mut with_name = builtin("two_up_50x25");
+    with_name.elements.push(layout::LabelElement {
+        kind: layout::ElementKind::ProductName,
+        x_mm: 2.0,
+        y_mm: 4.5,
+        w_mm: 46.0,
+        h_mm: 6.0,
+        font_size: 2,
+        bold: true,
+        align: layout::Align::Left,
+        max_lines: Some(2),
+    });
     let p = layout::layout(
-        &builtin("two_up_50x25"),
+        &with_name,
         &[
             cell("p1", "Ladies Leather Sandal Comfort Fit Wide Black Extra Soft Sole With Strap", &["104523"]),
             cell("p2", "නිල් බාල්දිය", &["104524"]),
@@ -134,6 +146,29 @@ fn names_wrap_and_unprintable_text_is_flagged() {
     assert_eq!(p.warnings[0].product_id, "p2");
     let si = p.labels[1].texts.iter().find(|t| t.kind == layout::ElementKind::ProductName).unwrap();
     assert!(si.lines[0].chars().all(|c| c == '?' || c == ' '));
+}
+
+#[test]
+fn the_stickers_read_shop_name_then_barcode_then_a_large_price() {
+    use layout::ElementKind::{Barcode, Price, StoreName};
+    for id in ["two_up_50x25", "three_up_30x16"] {
+        let t = builtin(id);
+        let kinds: Vec<_> = t.elements.iter().map(|e| e.kind).collect();
+        assert_eq!(kinds, vec![StoreName, Barcode, Price], "{id}");
+        let ys: Vec<f64> = t.elements.iter().map(|e| e.y_mm).collect();
+        assert!(ys.windows(2).all(|w| w[0] < w[1]), "{id}: top to bottom");
+        let (store, bar, price) = (&t.elements[0], &t.elements[1], &t.elements[2]);
+        assert!(store.y_mm + store.h_mm <= bar.y_mm && bar.y_mm + bar.h_mm <= price.y_mm, "{id}: no overlap");
+        assert!(price.y_mm + price.h_mm <= t.label_h_mm, "{id}: price inside the label");
+        assert_eq!(price.font_size, 4, "{id}: the price is the largest text");
+        assert!(price.bold);
+        assert!(store.font_size < price.font_size);
+
+        let p = layout::layout(&t, &[cell("p1", "Sandal", &["104523"])], (0.0, 0.0), false);
+        assert!(p.warnings.is_empty(), "{id}: {:?}", codes(&p));
+        let texts: Vec<&str> = p.labels[0].texts.iter().map(|x| x.lines[0].as_str()).collect();
+        assert_eq!(texts, vec!["Sale Center", "Rs. 1,250"], "{id}");
+    }
 }
 
 #[test]
@@ -165,6 +200,7 @@ fn tspl_profile() -> LabelPrinterProfile {
         speed: 4,
         offset_x_mm: 0.0,
         offset_y_mm: 0.0,
+        auto_print_on_receive: false,
     }
 }
 
@@ -188,7 +224,7 @@ fn tspl_golden_two_up() {
     assert!(text.contains("PRINT 2\r\n"), "identical rows collapse");
     assert_eq!(text.matches("CLS\r\n").count(), 2);
     assert!(text.contains("BARCODE") && text.contains("\"EAN13\"") && text.contains("\"200012345678\""));
-    assert!(text.contains("\"Rs. 1,250\"") && text.contains("\"GayanShop\""));
+    assert!(text.contains("\"Rs. 1,250\"") && text.contains("\"Sale Center\""));
     golden("two_up_50x25.tspl", &bytes);
 }
 
@@ -293,8 +329,6 @@ async fn a_job_previews_from_products_and_validates_copies() {
     assert_eq!((preview.rows, preview.labels.len()), (2, 3));
     let price = preview.labels[0].texts.iter().find(|x| x.kind == layout::ElementKind::Price).unwrap();
     assert_eq!(price.lines, vec!["Rs. 1,250"]);
-    let attrs = preview.labels[0].texts.iter().find(|x| x.kind == layout::ElementKind::Attributes).unwrap();
-    assert_eq!(attrs.lines, vec!["Size 38 - Black"]);
 
     for (copies, code) in [(0, "LABEL_COPIES_INVALID"), (1_000, "LABEL_COPIES_INVALID")] {
         let bad = LabelJob { items: vec![LabelJobItem { product_id: p.clone(), copies }], ..job.clone() };
@@ -412,5 +446,9 @@ fn a_store_seeded_with_the_old_rolls_moves_to_the_new_ones_and_keeps_calibration
     let kept = label::reconcile(vec![calibrated.clone(), builtin("two_up_50x25")], builtins.clone());
     assert_eq!(kept.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), vec!["two_up_50x25", "three_up_30x16"]);
     assert_eq!(kept[1].col_gap_mm, 3.5, "a calibrated current roll is not overwritten");
+    let stale = LabelTemplate { elements: vec![], col_gap_mm: 3.5, ..builtin("three_up_30x16") };
+    let refreshed = label::reconcile(vec![stale], builtins.clone());
+    assert_eq!(refreshed[1].col_gap_mm, 3.5, "calibration survives");
+    assert_eq!(refreshed[1].elements, builtin("three_up_30x16").elements, "the sticker design is refreshed");
     assert_eq!(label::reconcile(builtins.clone(), builtins.clone()), builtins);
 }

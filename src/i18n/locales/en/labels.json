@@ -64,6 +64,12 @@
     "previewTitle": "Sticker preview",
     "testQueued": "A sample sticker row was sent to the label printer.",
     "alignTest": "Print alignment test",
-    "alignTestHint": "Prints only the outline of each label, to check the gaps and margins."
+    "alignTestHint": "Prints only the outline of each label, to check the gaps and margins.",
+    "autoPrint": "Print labels when stock arrives",
+    "autoPrintHint": "Prints one sticker for every unit you receive: a batch, a quick purchase or a late item. Uses the roll chosen below."
+  },
+  "auto": {
+    "queued": "{{count}} sticker(s) sent to the printer",
+    "failed": "Stock was added, but the stickers did not print."
   }
 }

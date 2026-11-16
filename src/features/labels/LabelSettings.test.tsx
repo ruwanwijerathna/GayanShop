@@ -50,6 +50,7 @@ const PROFILE: LabelPrinterProfile = {
   speed: 3,
   offset_x_mm: 0.5,
   offset_y_mm: -0.25,
+  auto_print_on_receive: true,
 };
 
 const SAMPLE = {
@@ -138,7 +139,28 @@ describe("LabelSettings", () => {
         speed: 4,
         offset_x_mm: 0,
         offset_y_mm: 0,
+        auto_print_on_receive: false,
       }),
+    );
+  });
+
+  it("saves the print-when-stock-arrives switch with the printer", async () => {
+    renderWithProviders(
+      <As>
+        <LabelSettings />
+      </As>,
+    );
+    const card = await screen.findByRole("region", { name: "Label printer" });
+    chooseOption(await within(card).findByLabelText("Printer"), "Xprinter XP-365B");
+    const toggle = within(card).getByRole("switch", { name: "Print labels when stock arrives" });
+    expect(toggle).not.toBeChecked();
+    fireEvent.click(toggle);
+    expect(toggle).toBeChecked();
+    fireEvent.click(within(card).getByRole("button", { name: "Save label printer" }));
+    await waitFor(() =>
+      expect(commands.setLabelPrinterProfile).toHaveBeenCalledWith(
+        expect.objectContaining({ auto_print_on_receive: true }),
+      ),
     );
   });
 
