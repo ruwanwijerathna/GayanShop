@@ -55,7 +55,7 @@ export function SettingsPage() {
         </TabsList>
         <TabsContent
           value="printers"
-          className="grid items-start gap-6 motion-safe:animate-in motion-safe:fade-in-0 xl:grid-cols-2"
+          className="flex flex-col gap-6 motion-safe:animate-in motion-safe:fade-in-0"
         >
           <PrinterSettings />
           <LabelSettings />

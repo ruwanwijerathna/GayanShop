@@ -60,6 +60,16 @@ describe("SettingsPage", () => {
     expect(screen.queryByText("backup-panel")).not.toBeInTheDocument();
   });
 
+  it("stacks the Label printer card below the Receipt printer card", async () => {
+    const roll = { id: "two_up_50x25", name: "2-up", columns: 2, label_w_mm: 50, label_h_mm: 25 };
+    vi.mocked(commands.labelTemplates).mockImplementation(() => ok([roll] as never));
+    renderAs(["SETTINGS_MANAGE", "BACKUP_RESTORE"]);
+    const receipt = await screen.findByRole("heading", { name: "Receipt printer and cash drawer" });
+    const label = await screen.findByRole("heading", { name: "Label printer" });
+    expect(receipt.compareDocumentPosition(label) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(receipt.closest("[role=tabpanel]")?.className).toContain("flex-col");
+  });
+
   it("switches between the sections", async () => {
     renderAs(["SETTINGS_MANAGE", "BACKUP_RESTORE"]);
     openTab(await screen.findByRole("tab", { name: "General" }));
