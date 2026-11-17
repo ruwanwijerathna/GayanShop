@@ -2,13 +2,13 @@
 // emitters print) as SVG in millimetres: the roll, each label, its fitted text lines and the real bars.
 import type { LabelPreview, PlacedBarcode, PlacedText } from "@/db/bindings";
 
-/** Built-in font cell heights in dots for steps 1–4 (mirrors `layout::font_dots`). */
-const FONT_DOTS_H_203 = [12, 12, 20, 24, 32];
-const FONT_DOTS_H_300 = [20, 20, 28, 32, 48];
+/** Built-in font cell heights in dots for steps 1–5 (mirrors `layout::font_dots`). */
+const FONT_DOTS_H_203 = [12, 12, 20, 24, 32, 40];
+const FONT_DOTS_H_300 = [20, 20, 28, 32, 48, 60];
 
 function fontMm(step: number, dpi: number): number {
   const table = dpi >= 300 ? FONT_DOTS_H_300 : FONT_DOTS_H_203;
-  return ((table[step] ?? 32) * 25.4) / dpi;
+  return ((table[step] ?? 40) * 25.4) / dpi;
 }
 
 function Text({ t, dpi }: { t: PlacedText; dpi: number }) {

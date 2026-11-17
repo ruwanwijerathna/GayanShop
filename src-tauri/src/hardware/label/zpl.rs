@@ -14,15 +14,27 @@ fn row_open(p: &LabelPreview, darkness: u8) -> String {
     )
 }
 
-fn label_body(l: &PlacedLabel, dpi: u16) -> String {
+fn label_body(l: &PlacedLabel, dpi: u16, label_w_mm: f64) -> String {
     let mut out = String::new();
     for t in &l.texts {
         let (cw, ch) = layout::font_dots(t.font_size, dpi);
+        let w = if t.bold { cw + cw / 4 } else { cw };
+        let box_w = layout::dots(t.w_mm, dpi);
+        let box_x = layout::dots(t.x_mm, dpi);
         for (i, line) in t.lines.iter().enumerate() {
-            let x = layout::text_x_dots(t, line, dpi);
             let y = layout::text_y_dots(t, i, dpi);
-            let w = if t.bold { cw + cw / 4 } else { cw };
-            out.push_str(&format!("^FO{x},{y}^A0N,{ch},{w}^FD{line}^FS\r\n"));
+            match t.align {
+                layout::Align::Center => {
+                    out.push_str(&format!("^FO{box_x},{y}^A0N,{ch},{w}^FB{box_w},1,0,C^FD{line}^FS\r\n"));
+                }
+                layout::Align::Right => {
+                    out.push_str(&format!("^FO{box_x},{y}^A0N,{ch},{w}^FB{box_w},1,0,R^FD{line}^FS\r\n"));
+                }
+                layout::Align::Left => {
+                    let x = layout::text_x_dots(t, line, dpi);
+                    out.push_str(&format!("^FO{x},{y}^A0N,{ch},{w}^FD{line}^FS\r\n"));
+                }
+            }
         }
     }
     if let Some(b) = &l.barcode {
@@ -30,10 +42,15 @@ fn label_body(l: &PlacedLabel, dpi: u16) -> String {
         let m = b.module_dots;
         match b.symbology {
             Symbology::Ean13 => {
-                out.push_str(&format!("^FO{x},{y}^BY{m}^BEN,{h},Y,N^FD{}^FS\r\n", b.data.get(..12).unwrap_or(&b.data)))
+                out.push_str(&format!("^FO{x},{y}^BY{m}^BEN,{h},Y,N^FD{}^FS\r\n", b.data.get(..12).unwrap_or(&b.data)));
             }
             Symbology::Code128 => {
-                out.push_str(&format!("^FO{x},{y}^BY{m}^BCN,{h},Y,N,N,A^FD{}^FS\r\n", b.data));
+                out.push_str(&format!("^FO{x},{y}^BY{m}^BCN,{h},N,N,N,A^FD{}^FS\r\n", b.data));
+                let (cw, ch) = (layout::dots(1.2, dpi), layout::dots(1.7, dpi));
+                let text_y = y + h + layout::dots(0.5, dpi);
+                let col_x = layout::dots(l.x_mm, dpi);
+                let label_w = layout::dots(label_w_mm, dpi);
+                out.push_str(&format!("^FO{col_x},{text_y}^A0N,{ch},{cw}^FB{label_w},1,0,C^FD{}^FS\r\n", b.data));
             }
         }
     }
@@ -43,7 +60,7 @@ fn label_body(l: &PlacedLabel, dpi: u16) -> String {
 /// ZPL bytes for a laid-out job (each printed row is one ZPL label as wide as the roll).
 pub fn emit(p: &LabelPreview, darkness: u8) -> Vec<u8> {
     let rows: Vec<String> = (0..p.rows)
-        .map(|r| p.labels.iter().filter(|l| l.row == r).map(|l| label_body(l, p.dpi)).collect::<String>())
+        .map(|r| p.labels.iter().filter(|l| l.row == r).map(|l| label_body(l, p.dpi, p.label_w_mm)).collect::<String>())
         .collect();
     let mut out = String::new();
     let mut i = 0;

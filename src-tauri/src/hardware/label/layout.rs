@@ -207,14 +207,16 @@ pub fn font_dots(step: u8, dpi: u16) -> (i64, i64) {
             0 | 1 => (12, 20),
             2 => (16, 28),
             3 => (24, 32),
-            _ => (32, 48),
+            4 => (32, 48),
+            _ => (40, 60),
         }
     } else {
         match step {
             0 | 1 => (8, 12),
             2 => (12, 20),
             3 => (16, 24),
-            _ => (24, 32),
+            4 => (24, 32),
+            _ => (28, 40),
         }
     }
 }
@@ -444,7 +446,8 @@ pub fn layout(t: &LabelTemplate, cells: &[LabelCell], offset_mm: (f64, f64), fil
 /// The x position (dots) of a text line inside its box, by alignment and built-in font width.
 pub fn text_x_dots(t: &PlacedText, line: &str, dpi: u16) -> i64 {
     let (cw, _) = font_dots(t.font_size, dpi);
-    let text = i64::try_from(line.chars().count()).unwrap_or(0) * cw;
+    let char_w = if t.bold { cw + cw / 4 } else { cw };
+    let text = i64::try_from(line.chars().count()).unwrap_or(0) * char_w;
     let x = dots(t.x_mm, dpi);
     let w = dots(t.w_mm, dpi);
     match t.align {
