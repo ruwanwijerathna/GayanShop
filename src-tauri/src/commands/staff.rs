@@ -5,8 +5,9 @@ use tauri::{AppHandle, State};
 use super::{emit_changed, write_ctx};
 use crate::auth::guard::{Actor, require};
 use crate::db::repo::staff::{self, NewStaff, Role, StaffInput, StaffMember};
+use crate::db::repo::staff_sales::{self, StaffSales};
 use crate::domain::permissions::Perm;
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 
 const STAFF_TABLES: [&str; 2] = ["staff", "audit_logs"];
@@ -59,4 +60,14 @@ pub async fn reset_staff_pin(app: AppHandle, state: State<'_, AppState>, id: Str
     staff::reset_pin(&state.db, &write_ctx(&state)?, &actor, &state.auth.hasher, &id, &pin).await?;
     emit_changed(&app, &STAFF_TABLES);
     Ok(())
+}
+
+/// One person's daily sales for the chart plus their week, month and year totals (Staff → ⋮ → Sales performance).
+#[tauri::command]
+#[specta::specta]
+pub async fn staff_sales(state: State<'_, AppState>, id: String) -> AppResult<StaffSales> {
+    manager(&state)?;
+    let identity = state.identity()?.ok_or(AppError::NotInitialized)?;
+    let today = identity.calendar.business_date(state.clock.now());
+    staff_sales::sales(&state.db.pool, &identity.calendar, today, &id).await
 }

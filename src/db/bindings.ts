@@ -191,6 +191,8 @@ export const commands = {
 	listRoles: () => typedError<Role[], AppError>(__TAURI_INVOKE("list_roles")),
 	createStaff: (input: NewStaff_Deserialize) => typedError<StaffMember_Serialize, AppError>(__TAURI_INVOKE("create_staff", { input })),
 	updateStaff: (id: string, input: StaffInput_Deserialize) => typedError<StaffMember_Serialize, AppError>(__TAURI_INVOKE("update_staff", { id, input })),
+	/**  One person's daily sales for the chart plus their week, month and year totals (Staff → ⋮ → Sales performance). */
+	staffSales: (id: string) => typedError<StaffSales, AppError>(__TAURI_INVOKE("staff_sales", { id })),
 	resetStaffPin: (id: string, pin: string) => typedError<null, AppError>(__TAURI_INVOKE("reset_staff_pin", { id, pin })),
 	voidOrder: (input: VoidInput_Deserialize) => typedError<VoidResult, AppError>(__TAURI_INVOKE("void_order", { input })),
 	/**  The open session's orders on this counter (the void list). */
@@ -809,6 +811,8 @@ export type CheckoutInput_Deserialize = {
 	customer_phone?: string | null,
 	customer_name?: string | null,
 	note?: string | null,
+	/**  The staff number (1, 2, 3 …) of the person who made the sale; required on every sale. */
+	sold_by_no: number,
 	/**  A supervisor's single-use approval bound to (perm, `checkout_token`, this cashier). */
 	approval_id?: string | null,
 };
@@ -822,6 +826,8 @@ export type CheckoutInput_Serialize = {
 	customer_phone: string | null,
 	customer_name: string | null,
 	note: string | null,
+	/**  The staff number (1, 2, 3 …) of the person who made the sale; required on every sale. */
+	sold_by_no: number,
 	/**  A supervisor's single-use approval bound to (perm, `checkout_token`, this cashier). */
 	approval_id: string | null,
 };
@@ -1077,6 +1083,13 @@ export type CustomerUpdate_Serialize = {
 };
 
 export type CutMode = "full" | "partial" | "none";
+
+export type DailySales = {
+	/**  Business date, `YYYY-MM-DD`. */
+	date: string,
+	total: number,
+	orders: number,
+};
 
 export type DamageInput = DamageInput_Serialize | DamageInput_Deserialize;
 
@@ -1914,6 +1927,11 @@ export type PeriodReport_Serialize = {
 	previous: FinancialSummary_Serialize | null,
 };
 
+export type PeriodSales = {
+	total: number,
+	orders: number,
+};
+
 /**  Permission key as seen by the UI and stored in audit metadata. */
 export type Perm = "SALE_CREATE" | "QUICK_SALE" | "PRICE_OVERRIDE" | "LINE_DISCOUNT" | "ORDER_DISCOUNT" | "VOID_ORDER" | "DRAWER_NO_SALE" | "CASH_PAY_IN_OUT" | "CASH_SESSION_MANAGE" | "CASH_SESSION_FORCE_CLOSE" | "REPRINT_RECEIPT" | "STOCK_ADJUST" | "STOCK_DAMAGE" | "BATCH_MANAGE" | "PRODUCT_MANAGE" | "QUICK_SALE_PROMOTE" | "LABEL_PRINT" | "VIEW_COST" | "REPORT_SALES" | "REPORT_FINANCIAL" | "EXPENSE_MANAGE" | "SETTINGS_MANAGE" | "USER_MANAGE" | "AUDIT_VIEW" | "SYNC_MANAGE" | "BACKUP_RESTORE" | "DATA_EXPORT" | "CUSTOMER_VIEW" | "BACKUP_CREATE";
 
@@ -2591,6 +2609,8 @@ export type StaffMember_Deserialize = {
 	effective: Perm[],
 	/**  The only active Owner: can't be disabled or moved to another role (owner invariant). */
 	last_owner: boolean,
+	/**  The small number (1, 2, 3 …) the cashier types at the till to credit a sale; never reused. */
+	staff_no?: number | null,
 };
 
 /**  A staff member as the back office sees them (never the PIN hash). */
@@ -2610,6 +2630,22 @@ export type StaffMember_Serialize = {
 	effective: Perm[],
 	/**  The only active Owner: can't be disabled or moved to another role (owner invariant). */
 	last_owner: boolean,
+	/**  The small number (1, 2, 3 …) the cashier types at the till to credit a sale; never reused. */
+	staff_no: number | null,
+};
+
+export type StaffSales = {
+	staff_id: string,
+	/**  The business date the figures are relative to. */
+	today: string,
+	/**  Every day of the last [`CHART_DAYS`], oldest first; days without sales are zero. */
+	daily: DailySales[],
+	/**  The store week (Monday start by default) containing today. */
+	week: PeriodSales,
+	/**  The calendar month containing today. */
+	month: PeriodSales,
+	/**  The calendar year containing today. */
+	year: PeriodSales,
 };
 
 /**  What a write did: the units and their cost, per layer touched. */

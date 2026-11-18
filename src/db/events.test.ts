@@ -20,7 +20,13 @@ describe("db://changed → query invalidation", () => {
   });
 
   it("refreshes customer figures after a sale or void", () => {
-    expect(keysForTables(["orders"])).toEqual([["orders"], ["quickSales"], ["customers"], ["reports"]]);
+    expect(keysForTables(["orders"])).toEqual([
+      ["orders"],
+      ["quickSales"],
+      ["customers"],
+      ["reports"],
+      ["staff"],
+    ]);
   });
 
   it("ignores tables no screen shows yet", () => {
