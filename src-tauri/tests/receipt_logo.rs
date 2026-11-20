@@ -27,9 +27,10 @@ fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
 #[test]
 fn only_well_formed_images_within_the_paper_width_are_accepted() {
     assert!(logo(384, 100).validate().is_ok());
+    assert!(logo(576, 100).validate().is_ok());
     assert!(logo(LOGO_MAX_WIDTH, LOGO_MAX_HEIGHT).validate().is_ok());
     for bad in [
-        logo(392, 10),
+        logo(LOGO_MAX_WIDTH + 8, 10),
         logo(380, 10),
         logo(0, 10),
         logo(64, 0),

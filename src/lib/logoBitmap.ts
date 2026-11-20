@@ -3,8 +3,8 @@
 import type { Logo } from "@/db/bindings";
 
 /** Mirrors `LOGO_MAX_WIDTH` / `LOGO_MAX_HEIGHT` in `hardware::escpos`. */
-export const LOGO_MAX_WIDTH = 384;
-export const LOGO_MAX_HEIGHT = 240;
+export const LOGO_MAX_WIDTH = 576;
+export const LOGO_MAX_HEIGHT = 480;
 
 /** A pixel prints black when it is opaque enough and darker than mid-grey. */
 const DARK = 128;
@@ -47,7 +47,7 @@ export function maxLogoDimensions(srcW: number, srcH: number): { width: number; 
   return { width, height };
 }
 
-/** The scaled size for a given zoom percentage (20% to 100%). */
+/** The scaled size for a given zoom percentage (10% to 100%). */
 export function scaleLogoDimensions(
   srcW: number,
   srcH: number,
@@ -55,7 +55,7 @@ export function scaleLogoDimensions(
 ): { width: number; height: number } | null {
   const maxDim = maxLogoDimensions(srcW, srcH);
   if (!maxDim) return null;
-  const p = Math.max(20, Math.min(100, percent)) / 100;
+  const p = Math.max(10, Math.min(100, percent)) / 100;
   const rawW = maxDim.width * p;
   const width = Math.max(8, Math.floor(rawW / 8) * 8);
   const height = Math.max(1, Math.min(LOGO_MAX_HEIGHT, Math.round(srcH * (width / srcW))));

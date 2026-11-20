@@ -104,7 +104,7 @@
     "BATCH_SYSTEM": "The opening-stock and adjustment batches can't be reopened or closed.",
     "BATCH_ITEM_EXISTS": "That product is already in this batch.",
     "BATCH_HAS_STOCK": "{{detail}} unit(s) are still on hand: sell or write them off before closing.",
-    "LOGO_INVALID": "That header image can't be used: it must be at most 384 dots wide and 240 dots tall.",
+    "LOGO_INVALID": "That header image can't be used: it must be at most 576 dots wide and 480 dots tall.",
     "LABEL_PROFILE_INVALID": "Check the label printer settings (dpi 203 or 300, darkness 0–15, speed 1–6, shifts within 10 mm).",
     "LABEL_CALIBRATION_INVALID": "Gaps and margins must be between 0 and 10 mm.",
     "LABEL_JOB_EMPTY": "Choose at least one product.",

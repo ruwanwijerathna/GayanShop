@@ -139,10 +139,10 @@ impl Default for Layout {
     }
 }
 
-/// Widest header image, in dots: the 58 mm printer's printable width (the 80 mm printer centres it).
-pub const LOGO_MAX_WIDTH: u16 = 384;
-/// Tallest header image, in dots: keeps the receipt short and the stored setting small.
-pub const LOGO_MAX_HEIGHT: u16 = 240;
+/// Widest header image, in dots: the 80 mm printer's printable width (576 dots).
+pub const LOGO_MAX_WIDTH: u16 = 576;
+/// Tallest header image, in dots: up to 480 dots (60 mm).
+pub const LOGO_MAX_HEIGHT: u16 = 480;
 
 /// The receipt's header image (Settings → Receipt printer): a 1-bit bitmap, `width / 8` bytes per row, most
 /// significant bit first, `1` = black. The webview converts the picture; Rust checks it before it is stored.
