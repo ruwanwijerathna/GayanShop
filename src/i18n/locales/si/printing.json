@@ -99,5 +99,9 @@
     "total": "TOTAL",
     "cash": "Cash",
     "change": "Change"
+  },
+  "receiptImage": {
+    "sent": "බිල්පත මුද්‍රණයට යවන ලදී.",
+    "failed": "බිල්පත මුද්‍රණයට සූදානම් කළ නොහැකි විය."
   }
 }

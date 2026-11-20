@@ -14,7 +14,7 @@ use crate::db::repo::print_jobs::{self, PrintKind, RECEIPT_PRINTER};
 use crate::db::settings;
 use crate::domain::permissions::Perm;
 use crate::error::{AppError, AppResult};
-use crate::hardware::escpos::{Logo, render};
+use crate::hardware::escpos::{Logo, ReceiptImage, render};
 use crate::hardware::printer::worker::PrinterHealth;
 use crate::hardware::printer::{self, ReceiptPrinterProfile, transport_spooler};
 use crate::state::AppState;
@@ -95,6 +95,21 @@ pub async fn print_test_page(app: AppHandle, state: State<'_, AppState>) -> AppR
     let ctx = write_ctx(&state)?;
     let mut tx = state.db.write().await?;
     print_jobs::enqueue(tx.conn(), &ctx, PrintKind::Test, None, &serde_json::json!({})).await?;
+    tx.commit().await?;
+    changed(&app, &state);
+    Ok(())
+}
+
+/// A receipt the webview drew (the Sinhala template) goes through the same queue as every other receipt, so
+/// the till never waits on the printer and a stuck printer shows in the banner. Needs `REPRINT_RECEIPT`.
+#[tauri::command]
+#[specta::specta]
+pub async fn print_receipt_image(app: AppHandle, state: State<'_, AppState>, image: ReceiptImage) -> AppResult<()> {
+    require(&state.auth, state.clock.as_ref(), Perm::REPRINT_RECEIPT, "receipt", None)?;
+    image.validate()?;
+    let ctx = write_ctx(&state)?;
+    let mut tx = state.db.write().await?;
+    print_jobs::enqueue(tx.conn(), &ctx, PrintKind::Receipt, None, &json!({ "image": image })).await?;
     tx.commit().await?;
     changed(&app, &state);
     Ok(())

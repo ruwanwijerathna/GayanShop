@@ -169,6 +169,36 @@ impl Logo {
     }
 }
 
+/// Tallest receipt image, in dots (about 740 mm at 203 dpi).
+pub const RECEIPT_IMAGE_MAX_HEIGHT: u16 = 6000;
+/// Rows per `GS v 0` band: a tall picture goes to the printer in slices its buffer can take.
+const IMAGE_BAND_ROWS: usize = 256;
+
+/// A whole receipt drawn by the webview (the Sinhala template) and printed as a picture: a 1-bit bitmap,
+/// `width / 8` bytes per row, most significant bit first, `1` = black.
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+pub struct ReceiptImage {
+    pub width: u16,
+    pub height: u16,
+    pub data: Vec<u8>,
+}
+
+impl ReceiptImage {
+    pub fn validate(&self) -> AppResult<()> {
+        let bad = |why: &str| Err(AppError::validation("RECEIPT_IMAGE_INVALID", why.to_owned()));
+        if self.width == 0 || self.height == 0 {
+            return bad("empty");
+        }
+        if !self.width.is_multiple_of(8) || self.width > LOGO_MAX_WIDTH || self.height > RECEIPT_IMAGE_MAX_HEIGHT {
+            return bad("size");
+        }
+        if self.data.len() != usize::from(self.width / 8) * usize::from(self.height) {
+            return bad("data");
+        }
+        Ok(())
+    }
+}
+
 /// The drawer kick on its own: `ESC p m t1 t2` = `1B 70 00 19 FA` (pin 2, 50 ms on, 500 ms off).
 pub fn drawer_kick(pin: DrawerPin) -> Vec<u8> {
     let m = match pin {
@@ -289,6 +319,20 @@ impl EscPos {
         self.text("\n")
     }
 
+    /// `GS v 0` bands of a receipt picture, centred when narrower than the paper. No blank line after it.
+    pub fn image(&mut self, image: &ReceiptImage) -> &mut Self {
+        let bytes_per_row = usize::from(image.width / 8).max(1);
+        let [xl, xh] = image.width.div_euclid(8).to_le_bytes();
+        self.align(Align::Center);
+        for band in image.data.chunks(bytes_per_row * IMAGE_BAND_ROWS) {
+            let rows = u16::try_from(band.len() / bytes_per_row).unwrap_or(u16::MAX);
+            let [yl, yh] = rows.to_le_bytes();
+            self.buf.extend_from_slice(&[GS, b'v', b'0', 0, xl, xh, yl, yh]);
+            self.buf.extend_from_slice(band);
+        }
+        self
+    }
+
     /// Code128 (code set B) with HRI below: `GS h`, `GS w`, `GS H`, `GS k 73`.
     pub fn code128(&mut self, data: &[u8]) -> &mut Self {
         let body: Vec<u8> = [b"{B".as_slice(), data].concat();
@@ -364,7 +408,8 @@ mod tests {
 
     #[test]
     fn init_codepage_cut_and_qr() {
-        let mut p = EscPos::new(Layout { codepage: CodePage::Wpc1252, cut: CutMode::Full, qr: true, ..Layout::default() });
+        let mut p =
+            EscPos::new(Layout { codepage: CodePage::Wpc1252, cut: CutMode::Full, qr: true, ..Layout::default() });
         p.qr("abc").cut();
         let b = p.finish();
         assert_eq!(&b[..5], &[0x1B, b'@', 0x1B, b't', 16]);

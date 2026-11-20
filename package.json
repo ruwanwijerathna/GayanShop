@@ -37,6 +37,7 @@
     "@tauri-apps/plugin-updater": "^2.14.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "html-to-image": "^1.11.13",
     "i18next": "^27.0.0",
     "lucide-react": "^1.70.0",
     "radix-ui": "^1.8.1",

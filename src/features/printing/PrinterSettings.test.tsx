@@ -115,7 +115,7 @@ describe("PrinterSettings", () => {
 
   it("loads the saved profile and prints the sample test receipt", async () => {
     vi.mocked(commands.printerProfile).mockImplementation(() => ok(NET));
-    const spy = vi.spyOn(usePrintReceiptStore.getState(), "print");
+    const spy = vi.spyOn(usePrintReceiptStore.getState(), "print").mockImplementation(() => undefined);
     renderAs();
     fireEvent.click(await screen.findByRole("button", { name: "Print Test Receipt" }));
     expect(spy).toHaveBeenCalledWith(

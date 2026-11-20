@@ -20,6 +20,7 @@ import {
   type LabelJob,
   type LabelPrinterProfile,
   type Logo,
+  type ReceiptImage,
   type LateItemInput,
   type CheckoutInput_Deserialize as CheckoutInput,
   type CloseInput,
@@ -457,6 +458,10 @@ export function useSetReceiptLogo() {
 
 export function usePrintTestPage() {
   return usePrinterMutation(() => unwrap(commands.printTestPage()));
+}
+
+export function usePrintReceiptImage() {
+  return usePrinterMutation((image: ReceiptImage) => unwrap(commands.printReceiptImage(image)));
 }
 
 export function usePrintRetry() {

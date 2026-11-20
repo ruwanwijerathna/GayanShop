@@ -179,6 +179,11 @@ export const commands = {
 	setReceiptLogo: (logo: Logo | null) => typedError<null, AppError>(__TAURI_INVOKE("set_receipt_logo", { logo })),
 	/**  Ruler, code-page sample, QR and cut, then the drawer kick (doc §7.2). */
 	printTestPage: () => typedError<null, AppError>(__TAURI_INVOKE("print_test_page")),
+	/**
+	 *  A receipt the webview drew (the Sinhala template) goes through the same queue as every other receipt, so
+	 *  the till never waits on the printer and a stuck printer shows in the banner. Needs `REPRINT_RECEIPT`.
+	 */
+	printReceiptImage: (image: ReceiptImage) => typedError<null, AppError>(__TAURI_INVOKE("print_receipt_image", { image })),
 	/**  The banner's Retry: failed jobs go back to the queue. */
 	printRetry: () => typedError<null, AppError>(__TAURI_INVOKE("print_retry")),
 	/**  The banner's "Reprint later": failed jobs are dropped (abandoned, audited). The sales stand. */
@@ -2400,6 +2405,16 @@ export type ReceiptHeaderView_Serialize = {
 	logo: Logo | null,
 	store_name: string,
 	footer: string,
+};
+
+/**
+ *  A whole receipt drawn by the webview (the Sinhala template) and printed as a picture: a 1-bit bitmap,
+ *  `width / 8` bytes per row, most significant bit first, `1` = black.
+ */
+export type ReceiptImage = {
+	width: number,
+	height: number,
+	data: number[],
 };
 
 export type ReceiptLine = {
