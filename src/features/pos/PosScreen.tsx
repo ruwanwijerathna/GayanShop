@@ -1,5 +1,19 @@
 import { Link } from "@tanstack/react-router";
-import { CircleHelp, Hand, History, Percent, Printer, Search, SquarePen, Undo2 } from "lucide-react";
+import {
+  ArrowLeftRight,
+  CircleHelp,
+  Ellipsis,
+  Hand,
+  History,
+  Percent,
+  Phone,
+  Printer,
+  Search,
+  SquarePen,
+  Undo2,
+  X,
+  Zap,
+} from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -7,6 +21,13 @@ import { useSession } from "@/app/session";
 import { ApprovalDialog } from "@/components/auth/ApprovalDialog";
 import { Kbd } from "@/components/common/Kbd";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import type {
   HeldCart_Serialize as HeldCart,
@@ -26,7 +47,6 @@ import {
   useHoldCart,
   useProductSearch,
   useRecallCart,
-  useTouchMode,
 } from "@/db/hooks";
 import { usePrintReceiptStore } from "@/components/receipt/PrintableReceiptPortal";
 import { notFoundToast, routeScan } from "@/hardware/scanner/feedback";
@@ -36,14 +56,15 @@ import { playCue } from "@/lib/audio";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { Cart } from "./components/Cart";
-import { CustomerPhoneField } from "./components/CustomerPhoneField";
+import { CustomerPhoneField, formatTyped } from "./components/CustomerPhoneField";
+import { ExchangeDialog } from "./components/ExchangeDialog";
 import { BillDiscountDialog, LineEditDialog } from "./components/DiscountDialogs";
-import { NumericKeypad } from "./components/NumericKeypad";
 import { PaymentDialog } from "./components/PaymentDialog";
 import { QuickSaleBar } from "./components/QuickSaleBar";
 import { HeldSalesDialog, HelpDialog } from "./components/TillDialogs";
 import { VoidDialog } from "./components/VoidDialog";
 import { BarcodeDisambiguationDialog } from "./dialogs/BarcodeDisambiguationDialog";
+import { amountDue, toExchangeInput, totalCredit } from "./lib/exchange";
 import { withinLimit } from "./lib/pricing";
 import { routeShortcut, SHORTCUT_LABELS, type PosAction } from "./lib/shortcuts";
 import { cartStore, parsePayload, previewTotals, toCheckoutLines, useCart } from "./store/cart.store";
@@ -52,7 +73,7 @@ import { cartStore, parsePayload, previewTotals, toCheckoutLines, useCart } from
 export const SAVE_DEBOUNCE_MS = 500;
 const DONE_BANNER_MS = 2_000;
 
-type Dialog = "pay" | "line" | "bill" | "void" | "recall" | "help";
+type Dialog = "pay" | "line" | "bill" | "void" | "recall" | "help" | "exchange";
 
 /** The till (doc §1.9). Needs an open cash session on this counter. */
 export function PosScreen() {
@@ -80,13 +101,17 @@ function isTextField(el: Element | null): boolean {
 
 function Till() {
   const { t, i18n } = useTranslation("pos");
-  const touchMode = useTouchMode();
   const { session } = useSession();
   const scanner = useScanner();
   const lines = useCart((s) => s.lines);
   const billDiscount = useCart((s) => s.billDiscount);
   const selectedKey = useCart((s) => s.selectedKey);
+  const exchange = useCart((s) => s.exchange);
+  const customerPhone = useCart((s) => s.customerPhone);
   const priced = previewTotals({ lines, billDiscount });
+  // An exchange: the cart is the replacement; the customer pays only what exceeds the returned goods' value.
+  const credit = exchange ? totalCredit(exchange.source, exchange.picks) : 0;
+  const owed = amountDue(priced?.grand_total ?? 0, credit);
 
   const scanRef = useRef<HTMLInputElement>(null);
   const phoneRef = useRef<HTMLInputElement>(null);
@@ -94,13 +119,20 @@ function Till() {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [quickText, setQuickText] = useState("");
+  // The optional phone / quick-sale fields live in one inline panel that is closed until asked for (F4 / F2).
+  const [extra, setExtra] = useState<{ kind: "phone" | "quick"; n: number } | null>(null);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [voidPreselect, setVoidPreselect] = useState<string | null>(null);
   const [approval, setApproval] = useState<{ perm: Perm; payments: PaymentLine[]; soldByNo: number } | null>(
     null,
   );
   const [shared, setShared] = useState<{ code: string; products: ProductSummary[] } | null>(null);
-  const [done, setDone] = useState<{ receipt: string; change: number; orderId?: string } | null>(null);
+  const [done, setDone] = useState<{
+    receipt: string;
+    change: number;
+    exchange: boolean;
+    orderId?: string;
+  } | null>(null);
 
   const search = useProductSearch(query);
   const results = query.trim() === "" ? [] : (search.data ?? []);
@@ -120,6 +152,17 @@ function Till() {
     scanRef.current?.focus();
   }, []);
 
+  const openExtra = (kind: "phone" | "quick") => setExtra((e) => ({ kind, n: (e?.n ?? 0) + 1 }));
+  const closeExtra = () => {
+    setExtra(null);
+    focusScan();
+  };
+  // Opening the panel (or pressing its key again) puts the cursor in its field.
+  useEffect(() => {
+    if (!extra) return;
+    (extra.kind === "phone" ? phoneRef : quickRef).current?.focus();
+  }, [extra]);
+
   // "Recover cart?" while the till is still empty, if the app closed with a sale in progress.
   const [recoverDismissed, setRecoverDismissed] = useState(false);
   const recoverable = current.data ? parsePayload(current.data.payload) : null;
@@ -137,9 +180,16 @@ function Till() {
         s.billDiscount === prev.billDiscount &&
         s.customerPhone === prev.customerPhone &&
         s.customerName === prev.customerName &&
-        s.token === prev.token
+        s.token === prev.token &&
+        s.exchange === prev.exchange
       )
         return;
+      // An exchange is never saved for recovery: a restored cart without it would be a plain sale.
+      if (s.exchange) {
+        if (timer !== null) window.clearTimeout(timer);
+        timer = null;
+        return;
+      }
       if (timer !== null) window.clearTimeout(timer);
       timer = window.setTimeout(() => {
         const snap = cartStore.getState().snapshot();
@@ -171,7 +221,7 @@ function Till() {
   const notFound = (code: string) => {
     notFoundToast(t("scanner.notFound", { code }));
     setQuickText(`${code} `);
-    window.setTimeout(() => quickRef.current?.focus(), 0);
+    openExtra("quick");
   };
 
   useScanHandler(async (code) => {
@@ -236,13 +286,20 @@ function Till() {
         note: null,
         sold_by_no: soldByNo,
         approval_id: approvalId,
+        exchange: s.exchange ? toExchangeInput(s.exchange.source, s.exchange.picks) : null,
       },
       {
         onSuccess: (r) => {
           playCue("complete");
+          const wasExchange = cartStore.getState().exchange !== null;
           cartStore.getState().clear();
           setApproval(null);
-          setDone({ receipt: r.receipt_no, change: r.change_due, orderId: r.order_id });
+          setDone({
+            receipt: r.receipt_no,
+            change: r.change_due,
+            exchange: wasExchange,
+            orderId: r.order_id,
+          });
           closeDialog();
         },
         onError: (e) => {
@@ -258,6 +315,11 @@ function Till() {
   };
 
   const holdSale = (after?: () => void) => {
+    if (cartStore.getState().exchange) {
+      playCue("error");
+      toast.error(t("exchange.finishFirst"));
+      return;
+    }
     const snap = cartStore.getState().snapshot();
     if (snap.lines.length === 0) {
       after?.();
@@ -299,13 +361,13 @@ function Till() {
         setDialog("help");
         break;
       case "quickSale":
-        quickRef.current?.focus();
+        openExtra("quick");
         break;
       case "search":
         scanRef.current?.focus();
         break;
       case "phone":
-        phoneRef.current?.focus();
+        openExtra("phone");
         break;
       case "lineDiscount":
         if (cartStore.getState().selectedKey) setDialog("line");
@@ -316,8 +378,12 @@ function Till() {
       case "hold":
         holdSale();
         break;
+      case "exchange":
+        checkout.reset();
+        setDialog("exchange");
+        break;
       case "pay":
-        if (has && priced) {
+        if (has && priced && !owed.short) {
           checkout.reset();
           setDialog("pay");
         }
@@ -327,11 +393,15 @@ function Till() {
         setDialog("void");
         break;
       case "recall":
-        setDialog("recall");
+        if (cartStore.getState().exchange) {
+          playCue("error");
+          toast.error(t("exchange.finishFirst"));
+        } else setDialog("recall");
         break;
       case "cancel":
         setQuery("");
         setQuickText("");
+        setExtra(null);
         focusScan();
         break;
     }
@@ -371,12 +441,20 @@ function Till() {
       ? translateError(i18n.t, checkout.error.error)
       : null;
 
-  const action = (a: PosAction, label: string, icon: React.ReactNode, disabled = false) => (
-    <Button type="button" variant="outline" size="pos" onClick={() => run(a)} disabled={disabled}>
+  const menuItem = (a: PosAction, label: string, icon: React.ReactNode, disabled = false) => (
+    <DropdownMenuItem
+      key={a}
+      disabled={disabled}
+      className="min-h-12 gap-3 text-base"
+      onSelect={() => {
+        // Let the menu close and give focus back before the action opens its own field or dialog.
+        window.setTimeout(() => run(a), 0);
+      }}
+    >
       {icon}
-      <span>{label}</span>
+      <span className="flex-1">{label}</span>
       <Kbd>{SHORTCUT_LABELS[a]}</Kbd>
-    </Button>
+    </DropdownMenuItem>
   );
 
   return (
@@ -416,7 +494,8 @@ function Till() {
           className="flex flex-wrap items-center justify-between gap-3 border-b bg-success-surface px-4 py-2 text-lg font-semibold text-success-foreground"
         >
           <div>
-            {t("done.title")} · {t("done.receipt", { receipt: done.receipt })}
+            {done.exchange ? t("exchange.done") : t("done.title")} ·{" "}
+            {t("done.receipt", { receipt: done.receipt })}
             {done.change > 0 && ` · ${t("done.change", { change: formatMoney(done.change) })}`}
           </div>
           {done.orderId && (
@@ -442,81 +521,94 @@ function Till() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-start gap-3 border-b p-3">
-        <div className="flex min-w-72 flex-[2] flex-col gap-1">
-          <label htmlFor="scan-field" className="flex items-center gap-2 text-sm font-medium">
-            <Search aria-hidden className="size-4" />
-            {t("scan.label")}
-            <Kbd>F3</Kbd>
-          </label>
-          <Input
-            id="scan-field"
-            ref={scanRef}
-            className="h-14 text-lg"
-            autoComplete="off"
-            placeholder={t("scan.placeholder")}
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setActive(0);
-            }}
-            onKeyDown={onScanKey}
-            aria-describedby="scan-hint"
-          />
-          <p id="scan-hint" className="text-sm text-muted-foreground">
-            {t("scan.hint")}
-          </p>
-        </div>
-        <CustomerPhoneField inputRef={phoneRef} onDone={focusScan} />
-        <QuickSaleBar
-          inputRef={quickRef}
-          value={quickText}
-          onChange={setQuickText}
-          onAdd={(q) => {
-            cartStore.getState().addQuickSale(q);
-            playCue("tick");
-          }}
-          onAddProduct={(p) => {
-            addProduct(p);
-            playCue("tick");
-          }}
-          onDone={focusScan}
-        />
-      </div>
-
-      <div className="grid min-h-0 flex-1 grid-cols-[58fr_42fr]">
+      <div className="grid min-h-0 flex-1 grid-cols-[3fr_2fr]">
         <section className="flex min-h-0 flex-col border-r" aria-label={t("cart.title")}>
+          <header className="flex h-14 shrink-0 items-center justify-between border-b px-4">
+            <h1 className="text-xl font-semibold">{t("cart.title")}</h1>
+            <span className="text-base text-muted-foreground tabular-nums">
+              {t("totals.items")}: {itemCount}
+            </span>
+          </header>
           <Cart priced={priced} />
-          <div className="border-t p-3">
-            <dl className="grid grid-cols-2 gap-x-4 text-base">
-              <dt className="text-muted-foreground">{t("totals.items")}</dt>
-              <dd className="text-right tabular-nums">{itemCount}</dd>
-              <dt className="text-muted-foreground">{t("totals.subtotal")}</dt>
-              <dd className="text-right tabular-nums">{formatMoney(priced?.gross_sales ?? 0)}</dd>
-              {(priced?.discount_total ?? 0) > 0 && (
-                <>
-                  <dt className="text-muted-foreground">{t("totals.discounts")}</dt>
-                  <dd className="text-right tabular-nums">− {formatMoney(priced?.discount_total ?? 0)}</dd>
-                </>
-              )}
-            </dl>
-            <div className="mt-1 flex items-baseline justify-between">
-              <span className="text-xl font-semibold">{t("totals.total")}</span>
-              <span className="text-[40px] leading-tight font-bold tabular-nums" data-testid="grand-total">
-                {formatMoney(priced?.grand_total ?? 0)}
-              </span>
-            </div>
-            {overLimit && <p className="text-sm text-muted-foreground">{t("totals.needsApproval")}</p>}
-            <p className="sr-only" aria-live="polite">
-              {t("cart.announce", { count: itemCount, total: formatMoney(priced?.grand_total ?? 0) })}
-            </p>
-          </div>
+          <p className="sr-only" aria-live="polite">
+            {t("cart.announce", { count: itemCount, total: formatMoney(priced?.grand_total ?? 0) })}
+          </p>
         </section>
 
-        <section className="flex min-h-0 flex-col gap-3 overflow-hidden p-3">
-          {query.trim() !== "" ? (
-            <div className="min-h-0 flex-1 overflow-y-auto" aria-label={t("scan.results")}>
-              {results.length === 0 && !search.isPending ? (
+        <section className="flex min-h-0 flex-col gap-3 bg-muted/40 p-4">
+          <div className="flex flex-col gap-1">
+            <label htmlFor="scan-field" className="flex items-center gap-2 text-base font-medium">
+              <Search aria-hidden className="size-4" />
+              {t("scan.label")}
+              <Kbd>F3</Kbd>
+            </label>
+            <Input
+              id="scan-field"
+              ref={scanRef}
+              className="h-14 bg-background text-lg"
+              autoComplete="off"
+              placeholder={t("scan.placeholder")}
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setActive(0);
+              }}
+              onKeyDown={onScanKey}
+              aria-describedby="scan-hint"
+            />
+            <p id="scan-hint" className="text-sm text-muted-foreground">
+              {t("scan.hint")}
+            </p>
+          </div>
+
+          {extra && (
+            <div className="relative rounded-lg border bg-background p-3">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-pos"
+                className="absolute top-1 right-1"
+                aria-label={t("common:close")}
+                onClick={closeExtra}
+              >
+                <X aria-hidden />
+              </Button>
+              {extra.kind === "phone" ? (
+                <CustomerPhoneField inputRef={phoneRef} onDone={closeExtra} />
+              ) : (
+                <QuickSaleBar
+                  inputRef={quickRef}
+                  value={quickText}
+                  onChange={setQuickText}
+                  onAdd={(q) => {
+                    cartStore.getState().addQuickSale(q);
+                    playCue("tick");
+                  }}
+                  onAddProduct={(p) => {
+                    addProduct(p);
+                    playCue("tick");
+                  }}
+                  onDone={closeExtra}
+                />
+              )}
+            </div>
+          )}
+          {!extra && customerPhone !== "" && (
+            <Button
+              type="button"
+              variant="outline"
+              size="pos"
+              className="justify-start font-mono"
+              onClick={() => openExtra("phone")}
+            >
+              <Phone aria-hidden />
+              {formatTyped(customerPhone)}
+            </Button>
+          )}
+
+          <div className="min-h-0 flex-1 overflow-y-auto" aria-label={t("scan.results")}>
+            {query.trim() !== "" &&
+              (results.length === 0 && !search.isPending ? (
                 <p className="p-2 text-base text-muted-foreground">
                   {t("scan.noResults", { query: query.trim() })}
                 </p>
@@ -527,8 +619,8 @@ function Till() {
                       <button
                         type="button"
                         className={cn(
-                          "flex min-h-12 w-full items-center gap-3 rounded-md border px-3 text-left text-base",
-                          i === active && "border-primary bg-accent",
+                          "flex min-h-12 w-full items-center gap-3 rounded-md border bg-background px-3 text-left text-base",
+                          i === active && "border-primary ring-2 ring-primary/40",
                         )}
                         onClick={() => {
                           addProduct(p);
@@ -544,39 +636,131 @@ function Till() {
                     </li>
                   ))}
                 </ul>
-              )}
-            </div>
-          ) : (
-            <div className="flex-1" />
-          )}
-          {touchMode && <NumericKeypad />}
-        </section>
-      </div>
+              ))}
+          </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-t p-3">
-        {action("hold", t("actions.hold"), <Hand aria-hidden />, lines.length === 0 || hold.isPending)}
-        {action("recall", t("actions.recall"), <History aria-hidden />)}
-        {action("lineDiscount", t("actions.lineDiscount"), <SquarePen aria-hidden />, !selected)}
-        {action("billDiscount", t("actions.billDiscount"), <Percent aria-hidden />, lines.length === 0)}
-        {action("void", t("actions.void"), <Undo2 aria-hidden />)}
-        {action("help", t("actions.help"), <CircleHelp aria-hidden />)}
-        <span className="flex-1" />
-        <Button
-          type="button"
-          size="pos-lg"
-          className="min-w-56 text-xl"
-          disabled={lines.length === 0 || priced === null}
-          onClick={() => run("pay")}
-        >
-          {t("actions.pay")}
-          <Kbd className="border-primary-foreground/40 bg-transparent text-primary-foreground">F9</Kbd>
-        </Button>
+          <div className="flex flex-col gap-2 rounded-lg border bg-background p-4">
+            {(priced?.discount_total ?? 0) > 0 && (
+              <dl className="grid grid-cols-2 gap-x-4 text-base">
+                <dt className="text-muted-foreground">{t("totals.subtotal")}</dt>
+                <dd className="text-right tabular-nums">{formatMoney(priced?.gross_sales ?? 0)}</dd>
+                <dt className="text-muted-foreground">{t("totals.discounts")}</dt>
+                <dd className="text-right tabular-nums">− {formatMoney(priced?.discount_total ?? 0)}</dd>
+              </dl>
+            )}
+            <div className="flex items-baseline justify-between">
+              <span className="text-xl font-semibold">{t("totals.total")}</span>
+              <span className="text-[40px] leading-tight font-bold tabular-nums" data-testid="grand-total">
+                {formatMoney(priced?.grand_total ?? 0)}
+              </span>
+            </div>
+            {exchange && (
+              <div className="flex flex-col gap-1 rounded-md border bg-accent/40 p-2" role="status">
+                <p className="flex flex-wrap items-center gap-2 text-base font-semibold">
+                  <ArrowLeftRight aria-hidden className="size-4" />
+                  {t("exchange.banner", { receipt: exchange.source.receipt_no })}
+                  <span className="font-normal text-muted-foreground">
+                    {t("exchange.returned", {
+                      units: Object.values(exchange.picks).reduce((a, q) => a + q, 0),
+                    })}
+                  </span>
+                </p>
+                <p className="flex justify-between text-base">
+                  <span>{t("exchange.creditLine")}</span>
+                  <span className="tabular-nums" data-testid="exchange-credit-line">
+                    − {formatMoney(credit)}
+                  </span>
+                </p>
+                <p className="flex items-baseline justify-between text-xl font-bold">
+                  <span>{t("exchange.toPay")}</span>
+                  <span className="tabular-nums" data-testid="exchange-to-pay">
+                    {formatMoney(owed.due)}
+                  </span>
+                </p>
+                {lines.length === 0 && (
+                  <p className="text-sm text-muted-foreground">{t("exchange.needReplacement")}</p>
+                )}
+                {owed.short && lines.length > 0 && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {t("exchange.tooLow", { credit: formatMoney(credit) })}
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" size="pos" onClick={() => run("exchange")}>
+                    {t("exchange.change")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="pos"
+                    onClick={() => {
+                      cartStore.getState().setExchange(null);
+                      focusScan();
+                    }}
+                  >
+                    {t("exchange.cancel")}
+                  </Button>
+                </div>
+              </div>
+            )}
+            {overLimit && <p className="text-sm text-muted-foreground">{t("totals.needsApproval")}</p>}
+          </div>
+
+          <Button
+            type="button"
+            size="pos-lg"
+            className="w-full text-2xl"
+            disabled={lines.length === 0 || priced === null || owed.short}
+            onClick={() => run("pay")}
+          >
+            {t("actions.pay")}
+            <Kbd className="border-primary-foreground/40 bg-transparent text-primary-foreground">F9</Kbd>
+          </Button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button type="button" variant="outline" size="pos" onClick={() => run("exchange")}>
+              <ArrowLeftRight aria-hidden />
+              {t("actions.exchange")}
+              <Kbd>{SHORTCUT_LABELS.exchange}</Kbd>
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline" size="pos">
+                  <Ellipsis aria-hidden />
+                  {t("actions.more")}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" side="top" className="w-72">
+                {menuItem("phone", t("customer.label"), <Phone aria-hidden />)}
+                {menuItem("quickSale", t("quick.label"), <Zap aria-hidden />)}
+                <DropdownMenuSeparator />
+                {menuItem(
+                  "hold",
+                  t("actions.hold"),
+                  <Hand aria-hidden />,
+                  lines.length === 0 || hold.isPending || exchange !== null,
+                )}
+                {menuItem("recall", t("actions.recall"), <History aria-hidden />)}
+                <DropdownMenuSeparator />
+                {menuItem("lineDiscount", t("actions.lineDiscount"), <SquarePen aria-hidden />, !selected)}
+                {menuItem(
+                  "billDiscount",
+                  t("actions.billDiscount"),
+                  <Percent aria-hidden />,
+                  lines.length === 0,
+                )}
+                <DropdownMenuSeparator />
+                {menuItem("void", t("actions.void"), <Undo2 aria-hidden />)}
+                {menuItem("help", t("actions.help"), <CircleHelp aria-hidden />)}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </section>
       </div>
 
       {dialog === "pay" && priced && (
         <PaymentDialog
           open={approval === null}
-          due={priced.grand_total}
+          due={exchange ? owed.due : priced.grand_total}
           pending={checkout.isPending}
           error={payError}
           onPay={(payments, soldByNo) => pay(payments, soldByNo, null)}
@@ -597,6 +781,17 @@ function Till() {
         <BillDiscountDialog
           current={billDiscount}
           base={priced.gross_sales - priced.lines.reduce((a, l) => a + l.line_discount, 0)}
+          onClose={closeDialog}
+        />
+      )}
+      {dialog === "exchange" && (
+        <ExchangeDialog
+          draft={exchange}
+          onConfirm={(draft) => {
+            cartStore.getState().setExchange(draft);
+            playCue("tick");
+            closeDialog();
+          }}
           onClose={closeDialog}
         />
       )}

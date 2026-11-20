@@ -21,6 +21,7 @@ const SYNCED: &[(&str, &str)] = &[
     ("orders", "id"),
     ("order_items", "id"),
     ("order_payments", "id"),
+    ("order_returns", "id"),
     ("stock_movements", "id"),
     ("expense_categories", "id"),
     ("expenses", "id"),

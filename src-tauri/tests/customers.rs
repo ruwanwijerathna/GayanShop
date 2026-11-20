@@ -139,7 +139,7 @@ async fn the_receipt_masks_the_phone_and_no_other_table_stores_it() {
         (receipt.receipt_no.as_str(), receipt.store_name.as_str(), receipt.grand_total, receipt.lines.len()),
         (r.receipt_no.as_str(), "GayanShop", 25_000, 1)
     );
-    assert_eq!(receipt.footer, "All sales are final. No refunds or exchanges. Thank you, come again!");
+    assert_eq!(receipt.footer, "Exchange within 7 days. Item for item only; no cash refunds. Thank you, come again!");
     let rendered = serde_json::to_string(&receipt).unwrap();
     assert!(!rendered.contains(NATIONAL) && !rendered.contains("Saman"), "receipt shows only the mask");
 

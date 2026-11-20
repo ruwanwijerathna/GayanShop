@@ -32,7 +32,7 @@ const REASONS: VoidReason[] = [
 ];
 
 /**
- * F10 (doc §3.3): the open session's sales on this counter. All sales are final; a void cancels a whole sale,
+ * F10 (doc §3.3): the open session's sales on this counter. A void cancels a whole sale (returns are exchanges, never refunds),
  * with a reason (a note for Other). A cashier gets a supervisor's approval bound to that order and retries.
  */
 export function VoidDialog({ onClose, preselect }: { onClose: () => void; preselect?: string | null }) {

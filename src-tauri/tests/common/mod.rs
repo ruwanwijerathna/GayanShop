@@ -332,5 +332,6 @@ pub fn cart(
         note: None,
         sold_by_no: 1,
         approval_id: None,
+        exchange: None,
     }
 }

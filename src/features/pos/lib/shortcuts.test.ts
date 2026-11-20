@@ -22,6 +22,7 @@ describe("routeShortcut", () => {
     ["F9", "pay"],
     ["F10", "void"],
     ["F11", "recall"],
+    ["F12", "exchange"],
     ["Escape", "cancel"],
     ["NumpadAdd", "pay"],
     ["NumpadDivide", "phone"],

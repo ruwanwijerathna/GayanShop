@@ -11,14 +11,16 @@ use crate::clock::Clock;
 use crate::db::Db;
 use crate::db::repo::WriteCtx;
 use crate::db::repo::checkout::{self, CheckoutInput, CheckoutResult, NoFaults, Seller};
+use crate::db::repo::exchange::{self, ExchangeSource};
 use crate::domain::permissions::Perm;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 
-const SALE_TABLES: [&str; 9] = [
+const SALE_TABLES: [&str; 10] = [
     "orders",
     "order_items",
     "order_payments",
+    "order_returns",
     "stock_movements",
     "customers",
     "cash_sessions",
@@ -73,4 +75,14 @@ pub async fn checkout_order(
         emit_changed(&app, &SALE_TABLES);
     }
     Ok(result)
+}
+
+/// Exchange step 1 (`EXCHANGE_PROCESS`): find the sale by its receipt number and report what can still come
+/// back, and whether the 7-day window has passed (a late exchange needs a supervisor or owner PIN at checkout).
+#[tauri::command]
+#[specta::specta]
+pub async fn exchange_lookup(state: State<'_, AppState>, receipt_no: String) -> AppResult<ExchangeSource> {
+    require(&state.auth, state.clock.as_ref(), Perm::EXCHANGE_PROCESS, "exchange", None)?;
+    let ctx = write_ctx(&state)?;
+    exchange::lookup(&state.db.pool, &ctx.store_id, &receipt_no, &ctx.business_date).await
 }

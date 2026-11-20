@@ -171,6 +171,18 @@ pub async fn void_order(
     if order.session_status != "open" {
         return Err(AppError::validation("VOID_SESSION_CLOSED", order.receipt_no));
     }
+    // An exchange, or a sale whose goods were handed back in an exchange, is final: stock and credit have moved on.
+    let exchanged: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM orders WHERE id = ?1 AND exchange_credit > 0)
+             OR EXISTS (SELECT 1 FROM order_returns r JOIN order_items oi ON oi.id = r.source_item_id
+                        WHERE oi.order_id = ?1)",
+    )
+    .bind(&input.order_id)
+    .fetch_one(&mut *conn)
+    .await?;
+    if exchanged {
+        return Err(AppError::validation("VOID_EXCHANGE", order.receipt_no));
+    }
 
     // Authority: VOID_ORDER, or a different active staff member who holds it.
     let approved_by = if voider.perms.has(Perm::VOID_ORDER) {

@@ -11,6 +11,12 @@
 //! 9. queue the receipt (and a drawer kick for cash);
 //! 10. outbox rows for everything.
 //!
+//! An **exchange** (`input.exchange`, decision #26) is the same sale of the replacement lines plus the returned
+//! lines of earlier orders: the returned goods are credited at what the customer paid for them
+//! (`exchange_credit`), go straight back to stock as `return` slices, and the customer pays only the
+//! difference. Never a refund, never a credit note: a replacement worth less than the returned goods is refused.
+//! Past the exchange window the order needs a supervisor/owner approval (`EXCHANGE_LATE`).
+//!
 //! Rust computes every number first (domain::pricing / payments / fifo) and refuses what the seal would
 //! refuse, with a translatable error, so the SQL checks are a second line of defence, not the UI.
 
@@ -23,6 +29,7 @@ use sqlx::{FromRow, SqliteConnection};
 
 use super::WriteCtx;
 use super::customers;
+use super::exchange::{self, ExchangeInput, ExchangePlan};
 use super::print_jobs::{self, PrintKind};
 use super::stock::{self, Movement, StockReason};
 use crate::audit::{self, AuditAction, AuditCtx, AuditEntry};
@@ -30,6 +37,7 @@ use crate::auth::guard::Actor;
 use crate::clock::new_id;
 use crate::db::{Db, outbox};
 use crate::domain::business_date::parse_date;
+use crate::domain::exchange as exchange_rules;
 use crate::domain::fifo::Slice;
 use crate::domain::payments::{PaymentInput, PaymentMethod, PaymentRuleError, validate_payments};
 use crate::domain::permissions::{Perm, PermMask};
@@ -92,6 +100,8 @@ pub struct CheckoutInput {
     pub sold_by_no: i64,
     /// A supervisor's single-use approval bound to (perm, `checkout_token`, this cashier).
     pub approval_id: Option<String>,
+    /// Set for an exchange: the goods the customer hands back (the `lines` are the replacement goods).
+    pub exchange: Option<ExchangeInput>,
 }
 
 #[derive(Debug, Clone, Serialize, Type, PartialEq, Eq)]
@@ -103,6 +113,9 @@ pub struct CheckoutResult {
     #[specta(type = specta_typescript::Number)]
     pub change_due: i64,
     pub customer_id: Option<String>,
+    /// The value of the goods taken back (0 for an ordinary sale); `grand_total − exchange_credit` was paid.
+    #[specta(type = specta_typescript::Number)]
+    pub exchange_credit: i64,
     /// True when this token had already been checked out: nothing new was written.
     pub replayed: bool,
 }
@@ -306,13 +319,27 @@ async fn build_lines(
 }
 
 /// What needs a supervisor, as (perm to request, all perms the approver must hold).
-fn approvals_needed(lines: &[Line], priced: &PricedOrder, bill_discount: i64, seller: &Seller) -> Vec<Perm> {
+fn approvals_needed(
+    lines: &[Line],
+    priced: &PricedOrder,
+    bill_discount: i64,
+    seller: &Seller,
+    exchange: Option<&ExchangePlan>,
+) -> Vec<Perm> {
     let mut needed = Vec::new();
     let mut need = |p: Perm| {
         if !needed.contains(&p) {
             needed.push(p);
         }
     };
+    if let Some(plan) = exchange {
+        if plan.late && !seller.perms.has(Perm::EXCHANGE_LATE) {
+            need(Perm::EXCHANGE_LATE);
+        }
+        if !seller.perms.has(Perm::EXCHANGE_PROCESS) {
+            need(Perm::EXCHANGE_PROCESS);
+        }
+    }
     if lines.iter().any(|l| l.line_discount > 0) && !seller.perms.has(Perm::LINE_DISCOUNT) {
         need(Perm::LINE_DISCOUNT);
     }
@@ -335,7 +362,9 @@ fn approvals_needed(lines: &[Line], priced: &PricedOrder, bill_discount: i64, se
 
 /// The single perm the UI asks a supervisor for (one approval covers the whole order).
 fn primary(needed: &[Perm]) -> Option<Perm> {
-    [Perm::PRICE_OVERRIDE, Perm::ORDER_DISCOUNT, Perm::LINE_DISCOUNT].into_iter().find(|p| needed.contains(p))
+    [Perm::EXCHANGE_LATE, Perm::EXCHANGE_PROCESS, Perm::PRICE_OVERRIDE, Perm::ORDER_DISCOUNT, Perm::LINE_DISCOUNT]
+        .into_iter()
+        .find(|p| needed.contains(p))
 }
 
 fn approver_covers(a: &Approver, needed: &[Perm], lines: &[Line], priced: &PricedOrder) -> bool {
@@ -362,18 +391,20 @@ async fn load_approver(conn: &mut SqliteConnection, staff_id: &str) -> AppResult
 }
 
 async fn existing(conn: &mut SqliteConnection, token: &str) -> AppResult<Option<CheckoutResult>> {
-    let row: Option<(String, String, i64, i64, Option<String>)> = sqlx::query_as(
-        "SELECT id, receipt_no, grand_total, change_due, customer_id FROM orders WHERE checkout_token = ?1",
+    let row: Option<(String, String, i64, i64, Option<String>, i64)> = sqlx::query_as(
+        "SELECT id, receipt_no, grand_total, change_due, customer_id, exchange_credit FROM orders
+         WHERE checkout_token = ?1",
     )
     .bind(token)
     .fetch_optional(&mut *conn)
     .await?;
-    Ok(row.map(|(order_id, receipt_no, grand_total, change_due, customer_id)| CheckoutResult {
+    Ok(row.map(|(order_id, receipt_no, grand_total, change_due, customer_id, exchange_credit)| CheckoutResult {
         order_id,
         receipt_no,
         grand_total,
         change_due,
         customer_id,
+        exchange_credit,
         replayed: true,
     }))
 }
@@ -450,7 +481,16 @@ pub async fn checkout(
         .iter()
         .map(|p| PaymentInput { method: p.method, amount: p.amount, tendered: p.tendered })
         .collect();
-    let change_due = validate_payments(priced.grand_total, &payments).map_err(payment_err)?;
+    // An exchange credits the returned goods against the replacement; the customer pays only the difference,
+    // and never receives money (the replacement must be worth at least what came back).
+    let exchange_plan = match &input.exchange {
+        Some(e) => Some(exchange::plan(conn, ctx, e).await?),
+        None => None,
+    };
+    let credit = exchange_plan.as_ref().map_or(0, |p| p.credit);
+    let amount_due = exchange_rules::amount_due(priced.grand_total, credit)
+        .map_err(|e| AppError::validation("EXCHANGE_REPLACEMENT_TOO_LOW", e.to_string()))?;
+    let change_due = validate_payments(amount_due, &payments).map_err(payment_err)?;
     let references: Vec<Option<String>> =
         input.payments.iter().map(|p| opt_text(p.reference.as_deref(), 60)).collect::<AppResult<_>>()?;
     let note = opt_text(input.note.as_deref(), 500)?;
@@ -476,7 +516,7 @@ pub async fn checkout(
     };
 
     // Permissions and limits (doc §3.7): one supervisor approval covers the whole order.
-    let needed = approvals_needed(&lines, &priced, input.bill_discount, seller);
+    let needed = approvals_needed(&lines, &priced, input.bill_discount, seller, exchange_plan.as_ref());
     let approver = match (primary(&needed), approver) {
         (None, _) => None,
         (Some(perm), None) => return Err(AppError::ApprovalRequired { perm }),
@@ -493,6 +533,9 @@ pub async fn checkout(
     };
     let approved_by = approver.as_ref().map(|a| a.staff_id.as_str());
     let actor = Actor { staff_id: seller.staff_id.clone(), approved_by: approved_by.map(str::to_owned) };
+    // Who lifted the exchange limits (EXCHANGE_PROCESS / EXCHANGE_LATE the seller lacks), recorded on the order.
+    let exchange_authority =
+        approved_by.filter(|_| needed.contains(&Perm::EXCHANGE_LATE) || needed.contains(&Perm::EXCHANGE_PROCESS));
 
     // FIFO slices for tracked lines (planned before the header, which carries the cost total).
     let mut planned: HashMap<String, i64> = HashMap::new();
@@ -542,9 +585,10 @@ pub async fn checkout(
                              sold_by, approved_by, customer_id, line_count, item_count, gross_sales, discount_total, net_sales,
                              tax_total, rounding, grand_total, paid_total, change_due, cost_total, quick_sale_net,
                              unknown_cost_net, business_date, completed_at, note, created_at, updated_at,
-                             updated_by_device)
+                             updated_by_device, exchange_credit, returned_items, returned_gross, returned_discount,
+                             returned_net, returned_tax, returned_cost, late_approved_by)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending', ?7, ?24, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, 0, ?16, ?16, ?17, ?18,
-                 ?19, ?20, ?21, ?22, ?23, ?22, ?22, ?3)",
+                 ?19, ?20, ?21, ?22, ?23, ?22, ?22, ?3, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32)",
     )
     .bind(&order_id)
     .bind(&ctx.store_id)
@@ -570,6 +614,14 @@ pub async fn checkout(
     .bind(&ctx.now)
     .bind(note.as_deref())
     .bind(&sold_by)
+    .bind(credit)
+    .bind(exchange_plan.as_ref().map_or(0, |p| p.items))
+    .bind(exchange_plan.as_ref().map_or(0, |p| p.gross))
+    .bind(exchange_plan.as_ref().map_or(0, |p| p.discount))
+    .bind(exchange_plan.as_ref().map_or(0, |p| p.net))
+    .bind(exchange_plan.as_ref().map_or(0, |p| p.tax))
+    .bind(exchange_plan.as_ref().map_or(0, |p| p.cost))
+    .bind(exchange_authority)
     .execute(&mut *conn)
     .await?;
     cp.reached("order_pending")?;
@@ -660,6 +712,9 @@ pub async fn checkout(
         .await?;
         outbox::enqueue_upsert(conn, "order_payments", &id, &ctx.now).await?;
     }
+    if let Some(plan) = &exchange_plan {
+        exchange::write(conn, ctx, &order_id, &seller.staff_id, approved_by, plan).await?;
+    }
     cp.reached("payments")?;
 
     // 6. Seal: SQL re-verifies totals, slices, limits, approvers and the open session.
@@ -698,6 +753,24 @@ pub async fn checkout(
             .await?;
         }
     }
+    if let Some(plan) = &exchange_plan {
+        let returned: Vec<Value> = plan
+            .returns
+            .iter()
+            .map(|r| json!({ "receipt_no": r.source_receipt, "name": r.name, "qty": r.qty, "credited": r.total }))
+            .collect();
+        audit_row(
+            conn,
+            ctx,
+            seller,
+            exchange_authority,
+            AuditAction::EXCHANGE,
+            &order_id,
+            json!({ "receipt_no": receipt, "returned": returned, "credit": plan.credit, "replacement_total": priced.grand_total,
+                    "paid": amount_due, "late": plan.late, "window_days": plan.window_days }),
+        )
+        .await?;
+    }
     cp.reached("audit")?;
 
     // 8. The recovered cart can never be sold twice.
@@ -718,9 +791,10 @@ pub async fn checkout(
         "SELECT q.seq FROM sync_outbox q
          WHERE (q.table_name = 'order_items' AND q.row_id IN (SELECT id FROM order_items WHERE order_id = ?1))
             OR (q.table_name = 'order_payments' AND q.row_id IN (SELECT id FROM order_payments WHERE order_id = ?1))
+            OR (q.table_name = 'order_returns' AND q.row_id IN (SELECT id FROM order_returns WHERE order_id = ?1))
             OR (q.table_name = 'stock_movements' AND q.row_id IN
                   (SELECT m.id FROM stock_movements m JOIN order_items oi ON oi.id = m.order_item_id
-                   WHERE oi.order_id = ?1))
+                   WHERE oi.order_id = ?1 OR (m.reason = 'return' AND m.ref_id = ?1)))
          ORDER BY q.seq",
     )
     .bind(&order_id)
@@ -736,6 +810,7 @@ pub async fn checkout(
         grand_total: priced.grand_total,
         change_due,
         customer_id: customer_ref.map(|c| c.id),
+        exchange_credit: credit,
         replayed: false,
     })
 }
