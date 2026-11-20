@@ -46,7 +46,7 @@ fn label_body(l: &PlacedLabel, dpi: u16, label_w_mm: f64) -> String {
             }
             Symbology::Code128 => {
                 out.push_str(&format!("^FO{x},{y}^BY{m}^BCN,{h},N,N,N,A^FD{}^FS\r\n", b.data));
-                let (cw, ch) = (layout::dots(1.2, dpi), layout::dots(1.7, dpi));
+                let (cw, ch) = (layout::dots(1.8, dpi), layout::dots(2.5, dpi));
                 let text_y = y + h + layout::dots(0.5, dpi);
                 let col_x = layout::dots(l.x_mm, dpi);
                 let label_w = layout::dots(label_w_mm, dpi);
