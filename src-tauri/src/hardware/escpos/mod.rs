@@ -132,7 +132,7 @@ impl Default for Layout {
             codepage: CodePage::Pc437,
             cut: CutMode::Partial,
             feed_lines: 4,
-            qr: true,
+            qr: false,
             drawer_pin: DrawerPin::Pin2,
             open_drawer: true,
         }
@@ -364,7 +364,7 @@ mod tests {
 
     #[test]
     fn init_codepage_cut_and_qr() {
-        let mut p = EscPos::new(Layout { codepage: CodePage::Wpc1252, cut: CutMode::Full, ..Layout::default() });
+        let mut p = EscPos::new(Layout { codepage: CodePage::Wpc1252, cut: CutMode::Full, qr: true, ..Layout::default() });
         p.qr("abc").cut();
         let b = p.finish();
         assert_eq!(&b[..5], &[0x1B, b'@', 0x1B, b't', 16]);

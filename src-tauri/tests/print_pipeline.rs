@@ -127,7 +127,7 @@ fn profile() -> ReceiptPrinterProfile {
         codepage: CodePage::Pc437,
         cut: CutMode::Partial,
         feed_lines: 4,
-        qr: true,
+        qr: false,
         drawer_pin: DrawerPin::Pin2,
         open_drawer: true,
     }

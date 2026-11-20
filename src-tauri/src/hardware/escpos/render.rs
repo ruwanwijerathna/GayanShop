@@ -128,7 +128,12 @@ fn receipt_with_banner(r: &ReceiptData, layout: Layout, tz: Tz, logo: Option<&Lo
     p.wrapped("Exchange within 7 days with bill and item.", cols);
     p.bold(true).line("Thank you! Come again.").bold(false);
     p.feed(1);
-    p.align(Align::Center).code128(r.receipt_no.as_bytes());
+    p.align(Align::Center);
+    if layout.qr {
+        p.qr(&r.order_id);
+    } else {
+        p.code128(r.receipt_no.as_bytes());
+    }
     p.align(Align::Center).line("Powered By BraceFrame - (076 9950 199)");
     if !r.footer.trim().is_empty() {
         for l in wrap(&r.footer, cols) {
@@ -250,7 +255,7 @@ pub fn test_page(store: &str, footer: &str, layout: Layout, tz: Tz, now: &str, l
         status: "completed".into(),
         business_date: String::new(),
         completed_at: now.to_owned(),
-        cashier: "Sample".into(),
+        cashier: "Cashier 01".into(),
         item_count: lines.iter().map(|l| l.qty).sum(),
         gross_sales: total,
         discount_total: 0,
