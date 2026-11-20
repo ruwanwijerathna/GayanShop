@@ -1,6 +1,7 @@
 // Settings → Receipt printer: a picture of the sample receipt (header image, shop name, a few made-up lines,
 // totals, QR and the shop's own footer), at the paper width chosen in the form. Receipts print in English, so
 // the sample text is the same in both UI languages.
+import { QrCode } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { Logo, PaperWidth, ReceiptHeaderView } from "@/db/bindings";
@@ -57,9 +58,11 @@ function Pair({ left, right, bold }: { left: string; right: string; bold?: boole
 export function ReceiptPreview({
   header,
   width,
+  qr,
 }: {
   header: ReceiptHeaderView | undefined;
   width: PaperWidth;
+  qr?: boolean;
 }) {
   const { t } = useTranslation("printing");
   return (
@@ -101,7 +104,11 @@ export function ReceiptPreview({
         </p>
         <p className="text-center font-bold">ස්තූතියී, නැවත පැමිණෙන්න!</p>
         <div className="my-1 flex justify-center py-1">
-          <Barcode128 data="T01-20261120-0001" height={32} moduleWidth={1.2} />
+          {qr ? (
+            <QrCode aria-hidden className="mx-auto size-12" strokeWidth={1.5} />
+          ) : (
+            <Barcode128 data="T01-20261120-0001" height={32} moduleWidth={1.2} />
+          )}
         </div>
         <p className="text-center text-[10px] text-neutral-600">Powered By BraceFrame - (076 9950 199)</p>
         <p className="text-center text-[9px] text-neutral-400">{header?.footer}</p>
