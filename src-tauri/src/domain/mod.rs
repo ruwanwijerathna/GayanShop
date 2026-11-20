@@ -3,6 +3,7 @@
 pub mod allocation;
 pub mod business_date;
 pub mod discount;
+pub mod exchange;
 pub mod fifo;
 pub mod money;
 pub mod payments;

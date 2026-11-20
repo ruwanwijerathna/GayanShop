@@ -73,8 +73,10 @@ const RECEIPT = {
   grand_total: 50_000,
   payments: [{ method: "cash", amount: 50_000, tendered: null, reference: null }],
   change_due: 0,
+  returns: [],
+  exchange_credit: 0,
   customer_masked: "07X XXX X567",
-  footer: "All sales are final. No refunds or exchanges. Thank you, come again!",
+  footer: "Exchange within 7 days. Item for item only; no cash refunds. Thank you, come again!",
 } satisfies ReceiptData;
 
 const ANALYTICS: CustomerAnalytics = {

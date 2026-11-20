@@ -16,8 +16,8 @@ async fn pragmas_and_schema_version() {
     assert_eq!(scalar_i64(p, "PRAGMA foreign_keys").await, 1);
     assert_eq!(
         t.db.schema_version().await.unwrap(),
-        4,
-        "0001_init + 0002_report_indexes + 0003_shared_barcodes + 0004_salesperson"
+        5,
+        "0001_init + 0002_report_indexes + 0003_shared_barcodes + 0004_salesperson + 0005_exchanges"
     );
     assert_eq!(scalar_i64(p, "SELECT applying FROM sync_ctx WHERE id = 1").await, 0);
 }
@@ -149,7 +149,7 @@ async fn pending_header_cannot_be_edited_and_seal_verifies_payments() {
         ),
         stmts[4].as_str(),
     ];
-    rejects(p, &short_pay, "payments must equal grand_total").await;
+    rejects(p, &short_pay, "payments plus exchange credit must equal grand_total").await;
     let no_slice = [stmts[0].as_str(), stmts[1].as_str(), stmts[3].as_str(), stmts[4].as_str()];
     rejects(p, &no_slice, "stock slices must cover each tracked line").await;
 }

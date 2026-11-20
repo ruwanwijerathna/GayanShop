@@ -80,10 +80,14 @@ async fn seeds_every_store_setting_exactly() {
         ("tax.inclusive", json!(true)),
         ("tax.default_rate_bp", json!(0)),
         ("discount.cashier_max_bp", json!(500)),
-        ("sales.policy", json!("final")),
+        ("sales.policy", json!("exchange_7d")),
+        ("exchange.window_days", json!(7)),
         ("void.max_minutes", Value::Null),
         ("quick_sale.auto_tag_batch", json!(false)),
-        ("receipt.footer", json!("All sales are final. No refunds or exchanges. Thank you, come again!")),
+        (
+            "receipt.footer",
+            json!("Exchange within 7 days. Item for item only; no cash refunds. Thank you, come again!"),
+        ),
         ("receipt.mask_customer_phone", json!(true)),
         ("customer.capture", json!("optional")),
         ("backup.reminder_days", json!(7)),
@@ -95,7 +99,7 @@ async fn seeds_every_store_setting_exactly() {
         scalar_i64(t.pool(), "SELECT COUNT(*) FROM store_settings").await,
         i64::try_from(expected.len()).unwrap()
     );
-    assert_eq!(RECEIPT_FOOTER, "All sales are final. No refunds or exchanges. Thank you, come again!");
+    assert_eq!(RECEIPT_FOOTER, "Exchange within 7 days. Item for item only; no cash refunds. Thank you, come again!");
 }
 
 #[tokio::test]
@@ -167,7 +171,7 @@ async fn seeds_label_templates_at_203_dpi_with_3mm_gap() {
 async fn everything_is_outboxed_and_audited() {
     let (t, r) = setup().await;
     for (table, n) in [
-        ("store_settings", 16),
+        ("store_settings", 17),
         ("roles", 4),
         ("staff", 1),
         ("expense_categories", 8),

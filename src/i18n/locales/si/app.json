@@ -50,6 +50,7 @@
     },
     "actions": {
       "STORE_INITIALIZED": "වෙළඳසැල සකසන ලදී",
+      "POLICY_UPGRADED": "හුවමාරු ප්‍රතිපත්තිය යොදන ලදී",
       "AUTH_LOGIN": "පිවිසුණි",
       "AUTH_LOGOUT": "ඉවත් විය",
       "AUTH_FAILED": "වැරදි PIN",
@@ -65,7 +66,9 @@
     "ORDER_DISCOUNT": "බිල්පත් වට්ටම",
     "DRAWER_NO_SALE": "ලාච්චුව විවෘත කිරීම",
     "OTHER": "සීමා කළ ක්‍රියාවක්",
-    "CASH_PAY_IN_OUT": "මුදල් දැමීම හෝ ගැනීම"
+    "CASH_PAY_IN_OUT": "මුදල් දැමීම හෝ ගැනීම",
+    "EXCHANGE_PROCESS": "හුවමාරුවක් සිදු කිරීම",
+    "EXCHANGE_LATE": "පරක්කු හුවමාරුවක් අනුමත කිරීම"
   },
   "shortcuts": {
     "lock": "Ctrl+L",

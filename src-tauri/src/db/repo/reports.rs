@@ -403,21 +403,32 @@ pub async fn sales_by(
     const SCOPE: &str =
         "o.status = 'completed' AND o.business_date BETWEEN ?1 AND ?2 AND (?3 IS NULL OR o.device_id = ?3)";
     let sql = match dimension {
+        // Returned goods are netted off in the period of the exchange that took them back (like the daily rollup).
         SalesDimension::Product => format!(
-            "SELECT oi.product_id AS id, CASE WHEN oi.product_id IS NULL THEN NULL ELSE MAX(p.name) END AS label,
-                    SUM(oi.qty) AS qty, SUM(oi.line_net) AS net, SUM(oi.cost_total) AS cost
-             FROM order_items oi JOIN orders o ON o.id = oi.order_id
-             LEFT JOIN products p ON p.id = oi.product_id
-             WHERE {SCOPE}
-             GROUP BY oi.product_id ORDER BY net DESC, qty DESC, id"
+            "WITH lines AS (
+               SELECT oi.product_id AS pid, oi.qty AS qty, oi.line_net AS net, oi.cost_total AS cost
+               FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE {SCOPE}
+               UNION ALL
+               SELECT src.product_id, -r.qty, -r.line_net, -r.cost_total
+               FROM order_returns r JOIN orders o ON o.id = r.order_id
+               JOIN order_items src ON src.id = r.source_item_id WHERE {SCOPE})
+             SELECT l.pid AS id, CASE WHEN l.pid IS NULL THEN NULL ELSE MAX(p.name) END AS label,
+                    SUM(l.qty) AS qty, SUM(l.net) AS net, SUM(l.cost) AS cost
+             FROM lines l LEFT JOIN products p ON p.id = l.pid
+             GROUP BY l.pid ORDER BY net DESC, qty DESC, id"
         ),
         SalesDimension::Category => format!(
-            "SELECT p.category_id AS id, MAX(c.name) AS label, SUM(oi.qty) AS qty, SUM(oi.line_net) AS net,
-                    SUM(oi.cost_total) AS cost
-             FROM order_items oi JOIN orders o ON o.id = oi.order_id
-             LEFT JOIN products p ON p.id = oi.product_id
+            "WITH lines AS (
+               SELECT oi.product_id AS pid, oi.qty AS qty, oi.line_net AS net, oi.cost_total AS cost
+               FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE {SCOPE}
+               UNION ALL
+               SELECT src.product_id, -r.qty, -r.line_net, -r.cost_total
+               FROM order_returns r JOIN orders o ON o.id = r.order_id
+               JOIN order_items src ON src.id = r.source_item_id WHERE {SCOPE})
+             SELECT p.category_id AS id, MAX(c.name) AS label, SUM(l.qty) AS qty, SUM(l.net) AS net,
+                    SUM(l.cost) AS cost
+             FROM lines l LEFT JOIN products p ON p.id = l.pid
              LEFT JOIN categories c ON c.id = p.category_id
-             WHERE {SCOPE}
              GROUP BY p.category_id ORDER BY net DESC, qty DESC, id"
         ),
         SalesDimension::Batch => format!(
@@ -427,16 +438,25 @@ pub async fn sales_by(
                FROM stock_movements m
                JOIN order_items oi ON oi.id = m.order_item_id JOIN orders o ON o.id = oi.order_id
                JOIN batch_items bi ON bi.id = m.batch_item_id
-               WHERE m.reason = 'sale' AND {SCOPE}),
+               WHERE m.reason = 'sale' AND {SCOPE}
+               UNION ALL
+               SELECT bi.batch_id, -m.qty_delta, COALESCE(m.revenue_net, 0), -m.qty_delta * m.unit_cost
+               FROM stock_movements m
+               JOIN orders o ON o.id = m.ref_id
+               JOIN batch_items bi ON bi.id = m.batch_item_id
+               WHERE m.reason = 'return' AND {SCOPE}),
              tagged AS (
                SELECT oi.batch_id AS batch_id, oi.qty AS qty, oi.line_net AS net, oi.cost_total AS cost
                FROM order_items oi JOIN orders o ON o.id = oi.order_id
                WHERE oi.is_custom = 1 AND oi.batch_id IS NOT NULL AND {SCOPE}),
              layered AS (SELECT * FROM slices UNION ALL SELECT * FROM tagged),
              total AS (
-               SELECT COALESCE(SUM(oi.qty), 0) AS qty, COALESCE(SUM(oi.line_net), 0) AS net,
-                      COALESCE(SUM(oi.cost_total), 0) AS cost
-               FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE {SCOPE}),
+               SELECT COALESCE(SUM(x.qty), 0) AS qty, COALESCE(SUM(x.net), 0) AS net, COALESCE(SUM(x.cost), 0) AS cost
+               FROM (SELECT oi.qty AS qty, oi.line_net AS net, oi.cost_total AS cost
+                     FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE {SCOPE}
+                     UNION ALL
+                     SELECT -r.qty, -r.line_net, -r.cost_total
+                     FROM order_returns r JOIN orders o ON o.id = r.order_id WHERE {SCOPE}) x),
              by_batch AS (
                SELECT l.batch_id AS id, MAX(b.code || ' · ' || b.name) AS label, SUM(l.qty) AS qty,
                       SUM(l.net) AS net, SUM(l.cost) AS cost
@@ -572,11 +592,11 @@ pub async fn recompute(conn: &mut SqliteConnection) -> AppResult<RebuildReport> 
          SELECT business_date, device_id,
                 SUM(status = 'completed'), SUM(status = 'voided'),
                 SUM(CASE WHEN status = 'voided' THEN grand_total ELSE 0 END),
-                SUM(CASE WHEN status = 'completed' THEN gross_sales ELSE 0 END),
-                SUM(CASE WHEN status = 'completed' THEN discount_total ELSE 0 END),
-                SUM(CASE WHEN status = 'completed' THEN net_sales ELSE 0 END),
-                SUM(CASE WHEN status = 'completed' THEN tax_total ELSE 0 END),
-                SUM(CASE WHEN status = 'completed' THEN cost_total ELSE 0 END),
+                SUM(CASE WHEN status = 'completed' THEN gross_sales - returned_gross ELSE 0 END),
+                SUM(CASE WHEN status = 'completed' THEN discount_total - returned_discount ELSE 0 END),
+                SUM(CASE WHEN status = 'completed' THEN net_sales - returned_net ELSE 0 END),
+                SUM(CASE WHEN status = 'completed' THEN tax_total - returned_tax ELSE 0 END),
+                SUM(CASE WHEN status = 'completed' THEN cost_total - returned_cost ELSE 0 END),
                 SUM(CASE WHEN status = 'completed' THEN quick_sale_net ELSE 0 END),
                 SUM(CASE WHEN status = 'completed' THEN unknown_cost_net ELSE 0 END),
                 SUM(status = 'completed' AND customer_id IS NOT NULL)
@@ -591,8 +611,8 @@ pub async fn recompute(conn: &mut SqliteConnection) -> AppResult<RebuildReport> 
         "DELETE FROM customer_stats",
         "INSERT INTO customer_stats (customer_id, visit_count, total_spend, total_net, first_visit_date, last_visit_date)
          SELECT customer_id, SUM(status = 'completed'),
-                SUM(CASE WHEN status = 'completed' THEN grand_total ELSE 0 END),
-                SUM(CASE WHEN status = 'completed' THEN net_sales ELSE 0 END),
+                SUM(CASE WHEN status = 'completed' THEN grand_total - exchange_credit ELSE 0 END),
+                SUM(CASE WHEN status = 'completed' THEN net_sales - returned_net ELSE 0 END),
                 MIN(CASE WHEN status = 'completed' THEN business_date END),
                 MAX(CASE WHEN status = 'completed' THEN business_date END)
          FROM orders WHERE customer_id IS NOT NULL AND status IN ('completed', 'voided')
@@ -619,9 +639,9 @@ pub async fn recompute(conn: &mut SqliteConnection) -> AppResult<RebuildReport> 
          SELECT m.batch_item_id, bi.batch_id, m.product_id,
                 SUM(CASE WHEN m.reason IN ('batch_intake','batch_reopen') THEN m.qty_delta ELSE 0 END),
                 SUM(m.qty_delta),
-                SUM(CASE WHEN m.reason IN ('sale','void') THEN -m.qty_delta ELSE 0 END),
-                SUM(CASE WHEN m.reason IN ('sale','void') THEN COALESCE(m.revenue_net, 0) ELSE 0 END),
-                SUM(CASE WHEN m.reason IN ('sale','void') THEN -m.qty_delta * m.unit_cost ELSE 0 END),
+                SUM(CASE WHEN m.reason IN ('sale','void','return') THEN -m.qty_delta ELSE 0 END),
+                SUM(CASE WHEN m.reason IN ('sale','void','return') THEN COALESCE(m.revenue_net, 0) ELSE 0 END),
+                SUM(CASE WHEN m.reason IN ('sale','void','return') THEN -m.qty_delta * m.unit_cost ELSE 0 END),
                 SUM(CASE WHEN m.reason IN ('damage','count_correction','adjustment') THEN -m.qty_delta ELSE 0 END),
                 SUM(CASE WHEN m.reason IN ('damage','count_correction','adjustment') THEN -m.qty_delta * m.unit_cost ELSE 0 END)
          FROM stock_movements m JOIN batch_items bi ON bi.id = m.batch_item_id

@@ -1,11 +1,11 @@
 //! RBAC permission bits (ARCHITECTURE §3.5). Bit numbers are FROZEN once Phase 0 ships: append only,
-//! never renumber, never reuse the reserved bits 6 and 7 (Phase 5 exchanges).
+//! never renumber. Bits 6 and 7 were reserved for exchanges and are now `EXCHANGE_PROCESS` / `EXCHANGE_LATE`.
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-/// Bits that must never be assigned to anything except their reserved Phase 5 meaning.
-pub const RESERVED_BITS: [u32; 2] = [6, 7];
+/// Bits that were reserved before they had a meaning; they now belong to the exchange permissions only.
+pub const EXCHANGE_BITS: [u32; 2] = [6, 7];
 
 macro_rules! permissions {
     ($( $bit:literal => $key:ident, approvable: $approvable:literal; )*) => {
@@ -41,7 +41,8 @@ permissions! {
     3  => LINE_DISCOUNT,            approvable: true;
     4  => ORDER_DISCOUNT,           approvable: true;
     5  => VOID_ORDER,               approvable: true;
-    // 6, 7 reserved: EXCHANGE_PROCESS, EXCHANGE_LATE (Phase 5)
+    6  => EXCHANGE_PROCESS,         approvable: true;
+    7  => EXCHANGE_LATE,            approvable: true;
     8  => DRAWER_NO_SALE,           approvable: true;
     9  => CASH_PAY_IN_OUT,          approvable: true;
     10 => CASH_SESSION_MANAGE,      approvable: false;
@@ -117,11 +118,20 @@ pub const OWNER_ROLE: &str = "Owner";
 /// Owner-confirmed default matrix (§3.5). Cashier discount limit = 5% (owner rule).
 pub fn default_roles() -> Vec<RoleSeed> {
     use Perm::*;
-    let cashier = vec![SALE_CREATE, QUICK_SALE, LINE_DISCOUNT, ORDER_DISCOUNT, CASH_SESSION_MANAGE, REPRINT_RECEIPT];
+    let cashier = vec![
+        SALE_CREATE,
+        QUICK_SALE,
+        LINE_DISCOUNT,
+        ORDER_DISCOUNT,
+        EXCHANGE_PROCESS,
+        CASH_SESSION_MANAGE,
+        REPRINT_RECEIPT,
+    ];
     let mut supervisor = cashier.clone();
     supervisor.extend([
         PRICE_OVERRIDE,
         VOID_ORDER,
+        EXCHANGE_LATE,
         DRAWER_NO_SALE,
         CASH_PAY_IN_OUT,
         CASH_SESSION_FORCE_CLOSE,
@@ -195,9 +205,8 @@ mod tests {
         assert_eq!(Perm::BACKUP_CREATE.bit(), 30);
         let bits: Vec<u32> = Perm::ALL.iter().map(|p| p.bit()).collect();
         assert_eq!(bits.iter().collect::<HashSet<_>>().len(), bits.len(), "bits must be unique");
-        for reserved in RESERVED_BITS {
-            assert!(!bits.contains(&reserved), "bit {reserved} is reserved");
-        }
+        assert_eq!(Perm::EXCHANGE_PROCESS.bit(), EXCHANGE_BITS[0]);
+        assert_eq!(Perm::EXCHANGE_LATE.bit(), EXCHANGE_BITS[1]);
         assert!(PermMask::all().0 < (1i64 << 53));
         // The SQL policy triggers hard-code these masks (§4.3): PRICE_OVERRIDE = 4, VOID_ORDER = 32.
         assert_eq!(PermMask::of(&[Perm::PRICE_OVERRIDE]).0, 4);
@@ -212,7 +221,7 @@ mod tests {
         let e = effective(role, grant, deny, false);
         assert!(e.has(Perm::SALE_CREATE) && e.has(Perm::DRAWER_NO_SALE) && !e.has(Perm::VOID_ORDER));
         assert_eq!(effective(PermMask::EMPTY, PermMask::EMPTY, PermMask::all(), true), PermMask::all());
-        assert_eq!(effective(PermMask(1 << 6 | 1 << 50), PermMask::EMPTY, PermMask::EMPTY, false), PermMask::EMPTY);
+        assert_eq!(effective(PermMask(1 << 50), PermMask::EMPTY, PermMask::EMPTY, false), PermMask::EMPTY);
     }
 
     #[test]
@@ -224,6 +233,10 @@ mod tests {
         assert!(!cashier.perms.has(Perm::VOID_ORDER) && !cashier.perms.has(Perm::PRICE_OVERRIDE));
         assert!(!cashier.perms.has(Perm::DRAWER_NO_SALE));
         assert!(supervisor.perms.has(Perm::VOID_ORDER));
+        // Any cashier may process an exchange inside the window; only a supervisor-or-above PIN lifts it.
+        assert!(cashier.perms.has(Perm::EXCHANGE_PROCESS) && !cashier.perms.has(Perm::EXCHANGE_LATE));
+        assert!(supervisor.perms.has(Perm::EXCHANGE_PROCESS) && supervisor.perms.has(Perm::EXCHANGE_LATE));
+        assert!(manager.perms.has(Perm::EXCHANGE_LATE) && Perm::EXCHANGE_LATE.approvable());
         assert!(manager.perms.has(Perm::CUSTOMER_VIEW) && manager.perms.has(Perm::BACKUP_CREATE));
         assert!(!manager.perms.has(Perm::USER_MANAGE) && !manager.perms.has(Perm::BACKUP_RESTORE));
         assert_eq!(owner.perms, PermMask::all());

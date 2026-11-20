@@ -151,8 +151,16 @@ pub struct ZReport {
     pub discount_total: i64,
     #[specta(type = specta_typescript::Number)]
     pub net_sales: i64,
+    /// What the till actually took: Σ (grand total − exchange credit), i.e. the payments.
     #[specta(type = specta_typescript::Number)]
     pub sales_total: i64,
+    /// Exchanges in this session: item-for-item swaps, with the value of the goods taken back.
+    #[specta(type = specta_typescript::Number)]
+    pub exchanges_count: i64,
+    #[specta(type = specta_typescript::Number)]
+    pub exchange_credit: i64,
+    #[specta(type = specta_typescript::Number)]
+    pub returned_items: i64,
     pub payments: Vec<PaymentTotal>,
     #[specta(type = specta_typescript::Number)]
     pub change_given: i64,
@@ -290,6 +298,9 @@ struct SalesRow {
     net_sales: i64,
     sales_total: i64,
     change_given: i64,
+    exchanges_count: i64,
+    exchange_credit: i64,
+    returned_items: i64,
 }
 
 /// The Z-report for a session (an X-report if it is still open: same numbers, no count yet).
@@ -297,9 +308,14 @@ pub async fn z_report(conn: &mut SqliteConnection, session_id: &str, now: &str) 
     let session = get(conn, session_id).await?;
     let sales: SalesRow = sqlx::query_as(
         "SELECT COUNT(*) AS sales_count, COALESCE(SUM(item_count), 0) AS items_sold,
-                COALESCE(SUM(gross_sales), 0) AS gross_sales, COALESCE(SUM(discount_total), 0) AS discount_total,
-                COALESCE(SUM(net_sales), 0) AS net_sales, COALESCE(SUM(grand_total), 0) AS sales_total,
-                COALESCE(SUM(change_due), 0) AS change_given
+                COALESCE(SUM(gross_sales - returned_gross), 0) AS gross_sales,
+                COALESCE(SUM(discount_total - returned_discount), 0) AS discount_total,
+                COALESCE(SUM(net_sales - returned_net), 0) AS net_sales,
+                COALESCE(SUM(grand_total - exchange_credit), 0) AS sales_total,
+                COALESCE(SUM(change_due), 0) AS change_given,
+                COALESCE(SUM(exchange_credit > 0), 0) AS exchanges_count,
+                COALESCE(SUM(exchange_credit), 0) AS exchange_credit,
+                COALESCE(SUM(returned_items), 0) AS returned_items
          FROM orders WHERE cash_session_id = ?1 AND status = 'completed'",
     )
     .bind(session_id)
@@ -370,6 +386,9 @@ pub async fn z_report(conn: &mut SqliteConnection, session_id: &str, now: &str) 
         discount_total: sales.discount_total,
         net_sales: sales.net_sales,
         sales_total: sales.sales_total,
+        exchanges_count: sales.exchanges_count,
+        exchange_credit: sales.exchange_credit,
+        returned_items: sales.returned_items,
         payments,
         change_given: sales.change_given,
         overrides_count,

@@ -63,6 +63,9 @@ const z: ZReport = {
   quick_sale_lines: 0,
   quick_sale_net: 0,
   voids_count: 1,
+  exchanges_count: 0,
+  exchange_credit: 0,
+  returned_items: 0,
   voids_value: 44_500,
   void_reasons: [{ reason: "WRONG_ITEM", count: 1, value: 44_500 }],
   voids: [

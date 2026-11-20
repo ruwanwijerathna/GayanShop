@@ -44,7 +44,7 @@ fn header(p: &mut EscPos, store: &str) {
 }
 
 /// The sale receipt (doc §6.4): lines, totals, payments, masked customer phone, QR of the order id, the
-/// "All sales are final" footer, then the cut. Never the drawer kick (that's its own job, sent first).
+/// store footer, then the cut. Never the drawer kick (that's its own job, sent first).
 pub fn receipt(r: &ReceiptData, layout: Layout, tz: Tz, logo: Option<&Logo>) -> Vec<u8> {
     receipt_with_banner(r, layout, tz, logo, None)
 }
@@ -59,6 +59,9 @@ fn receipt_with_banner(r: &ReceiptData, layout: Layout, tz: Tz, logo: Option<&Lo
     header(&mut p, &r.store_name);
     if let Some(b) = banner {
         p.bold(true).wrapped(b, cols).bold(false);
+    }
+    if r.exchange_credit > 0 {
+        p.bold(true).line("EXCHANGE").bold(false);
     }
     if r.status == "voided" {
         p.bold(true).line("*** VOIDED - NOT A VALID RECEIPT ***").bold(false);
@@ -84,6 +87,16 @@ fn receipt_with_banner(r: &ReceiptData, layout: Layout, tz: Tz, logo: Option<&Lo
         p.pair("Discount", &format!("-{}", amt(r.discount_total)));
     }
     p.bold(true).pair("TOTAL", &rs(r.grand_total)).bold(false);
+    if r.exchange_credit > 0 {
+        p.rule('-').line("Returned");
+        for ret in &r.returns {
+            p.wrapped(&ret.name, cols);
+            p.pair(&format!("  {} x (sale {})", ret.qty, ret.original_receipt_no), &format!("-{}", amt(ret.value)));
+        }
+        p.pair("Exchange credit", &format!("-{}", amt(r.exchange_credit)));
+        let due = r.grand_total - r.exchange_credit;
+        p.bold(true).pair("TO PAY", &rs(due)).bold(false);
+    }
     for pay in &r.payments {
         match pay.tendered {
             Some(t) if t > pay.amount => p.pair(method_label(&pay.method), &amt(t)),
@@ -167,6 +180,10 @@ pub fn z_report(store: &str, z: &Value, layout: Layout, tz: Tz) -> Vec<u8> {
     p.rule('-');
     p.pair(&format!("Price overrides ({})", n(z, "overrides_count")), &amt(n(z, "overrides_value")));
     p.pair(&format!("Quick-sale lines ({})", n(z, "quick_sale_lines")), &amt(n(z, "quick_sale_net")));
+    if n(z, "exchanges_count") > 0 {
+        p.pair(&format!("Exchanges ({})", n(z, "exchanges_count")), &amt(n(z, "exchange_credit")));
+        p.pair("  Items returned", &n(z, "returned_items").to_string());
+    }
     p.pair(&format!("Voids ({})", n(z, "voids_count")), &amt(n(z, "voids_value")));
     for v in z.get("voids").and_then(Value::as_array).into_iter().flatten() {
         p.pair(&format!("  {} {}", s(v, "receipt_no"), s(v, "reason")), &amt(n(v, "value")));
@@ -219,6 +236,8 @@ pub fn test_page(store: &str, footer: &str, layout: Layout, tz: Tz, now: &str, l
             reference: None,
         }],
         change_due: tendered - total,
+        returns: Vec::new(),
+        exchange_credit: 0,
         customer_masked: None,
         footer: footer.to_owned(),
         lines,

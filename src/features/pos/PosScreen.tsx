@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { CircleHelp, Hand, History, Percent, Search, SquarePen, Undo2 } from "lucide-react";
+import { ArrowLeftRight, CircleHelp, Hand, History, Percent, Search, SquarePen, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -35,6 +35,7 @@ import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { Cart } from "./components/Cart";
 import { CustomerPhoneField } from "./components/CustomerPhoneField";
+import { ExchangeDialog } from "./components/ExchangeDialog";
 import { BillDiscountDialog, LineEditDialog } from "./components/DiscountDialogs";
 import { NumericKeypad } from "./components/NumericKeypad";
 import { PaymentDialog } from "./components/PaymentDialog";
@@ -42,6 +43,7 @@ import { QuickSaleBar } from "./components/QuickSaleBar";
 import { HeldSalesDialog, HelpDialog } from "./components/TillDialogs";
 import { VoidDialog } from "./components/VoidDialog";
 import { BarcodeDisambiguationDialog } from "./dialogs/BarcodeDisambiguationDialog";
+import { amountDue, toExchangeInput, totalCredit } from "./lib/exchange";
 import { withinLimit } from "./lib/pricing";
 import { routeShortcut, SHORTCUT_LABELS, type PosAction } from "./lib/shortcuts";
 import { cartStore, parsePayload, previewTotals, toCheckoutLines, useCart } from "./store/cart.store";
@@ -50,7 +52,7 @@ import { cartStore, parsePayload, previewTotals, toCheckoutLines, useCart } from
 export const SAVE_DEBOUNCE_MS = 500;
 const DONE_BANNER_MS = 2_000;
 
-type Dialog = "pay" | "line" | "bill" | "void" | "recall" | "help";
+type Dialog = "pay" | "line" | "bill" | "void" | "recall" | "help" | "exchange";
 
 /** The till (doc §1.9). Needs an open cash session on this counter. */
 export function PosScreen() {
@@ -84,7 +86,11 @@ function Till() {
   const lines = useCart((s) => s.lines);
   const billDiscount = useCart((s) => s.billDiscount);
   const selectedKey = useCart((s) => s.selectedKey);
+  const exchange = useCart((s) => s.exchange);
   const priced = previewTotals({ lines, billDiscount });
+  // An exchange: the cart is the replacement; the customer pays only what exceeds the returned goods' value.
+  const credit = exchange ? totalCredit(exchange.source, exchange.picks) : 0;
+  const owed = amountDue(priced?.grand_total ?? 0, credit);
 
   const scanRef = useRef<HTMLInputElement>(null);
   const phoneRef = useRef<HTMLInputElement>(null);
@@ -98,7 +104,7 @@ function Till() {
     null,
   );
   const [shared, setShared] = useState<{ code: string; products: ProductSummary[] } | null>(null);
-  const [done, setDone] = useState<{ receipt: string; change: number } | null>(null);
+  const [done, setDone] = useState<{ receipt: string; change: number; exchange: boolean } | null>(null);
 
   const search = useProductSearch(query);
   const results = query.trim() === "" ? [] : (search.data ?? []);
@@ -135,9 +141,16 @@ function Till() {
         s.billDiscount === prev.billDiscount &&
         s.customerPhone === prev.customerPhone &&
         s.customerName === prev.customerName &&
-        s.token === prev.token
+        s.token === prev.token &&
+        s.exchange === prev.exchange
       )
         return;
+      // An exchange is never saved for recovery: a restored cart without it would be a plain sale.
+      if (s.exchange) {
+        if (timer !== null) window.clearTimeout(timer);
+        timer = null;
+        return;
+      }
       if (timer !== null) window.clearTimeout(timer);
       timer = window.setTimeout(() => {
         const snap = cartStore.getState().snapshot();
@@ -234,13 +247,15 @@ function Till() {
         note: null,
         sold_by_no: soldByNo,
         approval_id: approvalId,
+        exchange: s.exchange ? toExchangeInput(s.exchange.source, s.exchange.picks) : null,
       },
       {
         onSuccess: (r) => {
           playCue("complete");
+          const wasExchange = cartStore.getState().exchange !== null;
           cartStore.getState().clear();
           setApproval(null);
-          setDone({ receipt: r.receipt_no, change: r.change_due });
+          setDone({ receipt: r.receipt_no, change: r.change_due, exchange: wasExchange });
           closeDialog();
         },
         onError: (e) => {
@@ -256,6 +271,11 @@ function Till() {
   };
 
   const holdSale = (after?: () => void) => {
+    if (cartStore.getState().exchange) {
+      playCue("error");
+      toast.error(t("exchange.finishFirst"));
+      return;
+    }
     const snap = cartStore.getState().snapshot();
     if (snap.lines.length === 0) {
       after?.();
@@ -314,8 +334,12 @@ function Till() {
       case "hold":
         holdSale();
         break;
+      case "exchange":
+        checkout.reset();
+        setDialog("exchange");
+        break;
       case "pay":
-        if (has && priced) {
+        if (has && priced && !owed.short) {
           checkout.reset();
           setDialog("pay");
         }
@@ -325,7 +349,10 @@ function Till() {
         setDialog("void");
         break;
       case "recall":
-        setDialog("recall");
+        if (cartStore.getState().exchange) {
+          playCue("error");
+          toast.error(t("exchange.finishFirst"));
+        } else setDialog("recall");
         break;
       case "cancel":
         setQuery("");
@@ -413,7 +440,8 @@ function Till() {
           role="status"
           className="border-b bg-success-surface px-4 py-2 text-lg font-semibold text-success-foreground"
         >
-          {t("done.title")} · {t("done.receipt", { receipt: done.receipt })}
+          {done.exchange ? t("exchange.done") : t("done.title")} ·{" "}
+          {t("done.receipt", { receipt: done.receipt })}
           {done.change > 0 && ` · ${t("done.change", { change: formatMoney(done.change) })}`}
         </div>
       )}
@@ -482,6 +510,55 @@ function Till() {
                 {formatMoney(priced?.grand_total ?? 0)}
               </span>
             </div>
+            {exchange && (
+              <div className="mt-1 flex flex-col gap-1 rounded-md border bg-accent/40 p-2" role="status">
+                <p className="flex flex-wrap items-center gap-2 text-base font-semibold">
+                  <ArrowLeftRight aria-hidden className="size-4" />
+                  {t("exchange.banner", { receipt: exchange.source.receipt_no })}
+                  <span className="font-normal text-muted-foreground">
+                    {t("exchange.returned", {
+                      units: Object.values(exchange.picks).reduce((a, q) => a + q, 0),
+                    })}
+                  </span>
+                </p>
+                <p className="flex justify-between text-base">
+                  <span>{t("exchange.creditLine")}</span>
+                  <span className="tabular-nums" data-testid="exchange-credit-line">
+                    − {formatMoney(credit)}
+                  </span>
+                </p>
+                <p className="flex items-baseline justify-between text-xl font-bold">
+                  <span>{t("exchange.toPay")}</span>
+                  <span className="tabular-nums" data-testid="exchange-to-pay">
+                    {formatMoney(owed.due)}
+                  </span>
+                </p>
+                {lines.length === 0 && (
+                  <p className="text-sm text-muted-foreground">{t("exchange.needReplacement")}</p>
+                )}
+                {owed.short && lines.length > 0 && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {t("exchange.tooLow", { credit: formatMoney(credit) })}
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" size="pos" onClick={() => run("exchange")}>
+                    {t("exchange.change")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="pos"
+                    onClick={() => {
+                      cartStore.getState().setExchange(null);
+                      focusScan();
+                    }}
+                  >
+                    {t("exchange.cancel")}
+                  </Button>
+                </div>
+              </div>
+            )}
             {overLimit && <p className="text-sm text-muted-foreground">{t("totals.needsApproval")}</p>}
             <p className="sr-only" aria-live="polite">
               {t("cart.announce", { count: itemCount, total: formatMoney(priced?.grand_total ?? 0) })}
@@ -530,10 +607,16 @@ function Till() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2 border-t p-3">
-        {action("hold", t("actions.hold"), <Hand aria-hidden />, lines.length === 0 || hold.isPending)}
+        {action(
+          "hold",
+          t("actions.hold"),
+          <Hand aria-hidden />,
+          lines.length === 0 || hold.isPending || exchange !== null,
+        )}
         {action("recall", t("actions.recall"), <History aria-hidden />)}
         {action("lineDiscount", t("actions.lineDiscount"), <SquarePen aria-hidden />, !selected)}
         {action("billDiscount", t("actions.billDiscount"), <Percent aria-hidden />, lines.length === 0)}
+        {action("exchange", t("actions.exchange"), <ArrowLeftRight aria-hidden />)}
         {action("void", t("actions.void"), <Undo2 aria-hidden />)}
         {action("help", t("actions.help"), <CircleHelp aria-hidden />)}
         <span className="flex-1" />
@@ -541,7 +624,7 @@ function Till() {
           type="button"
           size="pos-lg"
           className="min-w-56 text-xl"
-          disabled={lines.length === 0 || priced === null}
+          disabled={lines.length === 0 || priced === null || owed.short}
           onClick={() => run("pay")}
         >
           {t("actions.pay")}
@@ -552,7 +635,7 @@ function Till() {
       {dialog === "pay" && priced && (
         <PaymentDialog
           open={approval === null}
-          due={priced.grand_total}
+          due={exchange ? owed.due : priced.grand_total}
           pending={checkout.isPending}
           error={payError}
           onPay={(payments, soldByNo) => pay(payments, soldByNo, null)}
@@ -573,6 +656,17 @@ function Till() {
         <BillDiscountDialog
           current={billDiscount}
           base={priced.gross_sales - priced.lines.reduce((a, l) => a + l.line_discount, 0)}
+          onClose={closeDialog}
+        />
+      )}
+      {dialog === "exchange" && (
+        <ExchangeDialog
+          draft={exchange}
+          onConfirm={(draft) => {
+            cartStore.getState().setExchange(draft);
+            playCue("tick");
+            closeDialog();
+          }}
           onClose={closeDialog}
         />
       )}

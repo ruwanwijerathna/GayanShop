@@ -50,6 +50,7 @@
     },
     "actions": {
       "STORE_INITIALIZED": "Store set up",
+      "POLICY_UPGRADED": "Exchange policy applied",
       "AUTH_LOGIN": "Logged in",
       "AUTH_LOGOUT": "Logged out",
       "AUTH_FAILED": "Wrong PIN",
@@ -65,7 +66,9 @@
     "ORDER_DISCOUNT": "bill discount",
     "DRAWER_NO_SALE": "open the drawer",
     "OTHER": "a restricted action",
-    "CASH_PAY_IN_OUT": "pay cash in or out"
+    "CASH_PAY_IN_OUT": "pay cash in or out",
+    "EXCHANGE_PROCESS": "process an exchange",
+    "EXCHANGE_LATE": "approve a late exchange"
   },
   "shortcuts": {
     "lock": "Ctrl+L",

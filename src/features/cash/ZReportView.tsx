@@ -47,6 +47,15 @@ export function ZReportView({ report }: { report: ZReport }) {
           label={t("z.quickSales")}
           value={`${report.quick_sale_lines} · ${formatMoney(report.quick_sale_net)}`}
         />
+        {report.exchanges_count > 0 && (
+          <>
+            <Row
+              label={t("z.exchanges")}
+              value={`${report.exchanges_count} · ${formatMoney(report.exchange_credit)}`}
+            />
+            <Row label={t("z.returnedItems")} value={String(report.returned_items)} />
+          </>
+        )}
         <Row label={t("z.voids")} value={`${report.voids_count} · ${formatMoney(report.voids_value)}`} />
       </dl>
       {report.voids.length > 0 && (

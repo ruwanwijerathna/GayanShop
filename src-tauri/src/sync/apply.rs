@@ -50,6 +50,7 @@ pub const TABLES: &[(&str, Kind, &str)] = &[
     ("orders", Kind::Order, "id"),
     ("order_items", Kind::InsertOnly, "id"),
     ("order_payments", Kind::InsertOnly, "id"),
+    ("order_returns", Kind::InsertOnly, "id"),
     ("stock_movements", Kind::InsertOnly, "id"),
     ("expense_categories", Kind::Lww, "id"),
     ("expenses", Kind::Lww, "id"),

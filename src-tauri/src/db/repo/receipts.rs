@@ -38,6 +38,19 @@ pub struct ReceiptPayment {
     pub reference: Option<String>,
 }
 
+/// A returned item on an exchange receipt: what the customer handed back and what it was credited at.
+#[derive(Debug, Clone, Serialize, FromRow, PartialEq, Eq, Type)]
+pub struct ReceiptReturn {
+    pub name: String,
+    #[specta(type = specta_typescript::Number)]
+    pub qty: i64,
+    /// What the customer paid for these units (the credit this line gives).
+    #[specta(type = specta_typescript::Number)]
+    pub value: i64,
+    /// Receipt number of the sale the goods came from.
+    pub original_receipt_no: String,
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, Type)]
 pub struct ReceiptData {
     pub order_id: String,
@@ -60,6 +73,11 @@ pub struct ReceiptData {
     pub payments: Vec<ReceiptPayment>,
     #[specta(type = specta_typescript::Number)]
     pub change_due: i64,
+    /// Goods handed back in this exchange (empty on an ordinary sale).
+    pub returns: Vec<ReceiptReturn>,
+    /// Credit from the returned goods, applied against `grand_total` (0 on an ordinary sale).
+    #[specta(type = specta_typescript::Number)]
+    pub exchange_credit: i64,
     /// `07X XXX X123`, or `None` when no customer was attached (or the profile was erased).
     pub customer_masked: Option<String>,
     pub footer: String,
@@ -77,13 +95,14 @@ struct Head {
     discount_total: i64,
     grand_total: i64,
     change_due: i64,
+    exchange_credit: i64,
     customer_phone: Option<String>,
 }
 
 pub async fn load(pool: &SqlitePool, order_id: &str) -> AppResult<ReceiptData> {
     let head: Head = sqlx::query_as(
         "SELECT o.receipt_no, o.status, o.business_date, o.completed_at, s.display_name AS cashier, o.item_count,
-                o.gross_sales, o.discount_total, o.grand_total, o.change_due, c.phone_e164 AS customer_phone
+                o.gross_sales, o.discount_total, o.grand_total, o.change_due, o.exchange_credit, c.phone_e164 AS customer_phone
          FROM orders o
          JOIN staff s ON s.id = o.staff_id
          LEFT JOIN customers c ON c.id = o.customer_id
@@ -106,6 +125,16 @@ pub async fn load(pool: &SqlitePool, order_id: &str) -> AppResult<ReceiptData> {
     .bind(order_id)
     .fetch_all(pool)
     .await?;
+    let returns: Vec<ReceiptReturn> = sqlx::query_as(
+        "SELECT oi.name AS name, r.qty AS qty, r.line_total AS value, so.receipt_no AS original_receipt_no
+         FROM order_returns r
+         JOIN order_items oi ON oi.id = r.source_item_id
+         JOIN orders so ON so.id = oi.order_id
+         WHERE r.order_id = ?1 ORDER BY r.rowid",
+    )
+    .bind(order_id)
+    .fetch_all(pool)
+    .await?;
     let store_name: String = settings::store_get(pool, settings::keys::STORE_NAME).await?.unwrap_or_default();
     let footer: String = settings::store_get(pool, "receipt.footer").await?.unwrap_or_default();
     Ok(ReceiptData {
@@ -123,6 +152,8 @@ pub async fn load(pool: &SqlitePool, order_id: &str) -> AppResult<ReceiptData> {
         grand_total: head.grand_total,
         payments,
         change_due: head.change_due,
+        returns,
+        exchange_credit: head.exchange_credit,
         customer_masked: head.customer_phone.as_deref().and_then(phone::mask_for_receipt),
         footer,
     })

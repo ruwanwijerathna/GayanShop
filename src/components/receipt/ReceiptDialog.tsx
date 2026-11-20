@@ -68,11 +68,32 @@ export function ReceiptDialog({
                 ))}
               </tbody>
             </table>
+            {r.returns.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <p className="font-semibold">{t("receipt.returned")}</p>
+                <ul className="text-sm">
+                  {r.returns.map((x, i) => (
+                    <li key={i} className="flex justify-between gap-3">
+                      <span>
+                        {x.name} × {x.qty} · {x.original_receipt_no}
+                      </span>
+                      <span className="font-mono">− {formatMoney(x.value)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <dl className="grid grid-cols-2 gap-1 text-base">
               <dt>{t("receipt.discount")}</dt>
               <dd className="text-right font-mono">{formatMoney(r.discount_total)}</dd>
               <dt className="font-semibold">{t("receipt.grandTotal")}</dt>
               <dd className="text-right font-mono font-semibold">{formatMoney(r.grand_total)}</dd>
+              {r.exchange_credit > 0 && (
+                <>
+                  <dt>{t("receipt.exchangeCredit")}</dt>
+                  <dd className="text-right font-mono">− {formatMoney(r.exchange_credit)}</dd>
+                </>
+              )}
               {r.payments.map((p, i) => (
                 <div key={i} className="contents">
                   <dt>{t(`receipt.methods.${p.method}`, { defaultValue: p.method })}</dt>

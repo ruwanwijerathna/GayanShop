@@ -13,7 +13,8 @@
 > - LKR, Asia/Colombo, a 04:00 day cutoff, Monday week start, prices tax-inclusive at 0% tax.
 >
 > v4 (owner simplification + operational features):
-> - **All sales are final.** There are no refunds and no exchanges. The only correction is a **same-session void** with supervisor approval (§3.3). Exchanges and credit notes move to Phase 5.
+> - ~~All sales are final.~~ **Superseded by v4.5 (below).** The same-session **void** with supervisor approval (§3.3) stays the correction for a cashier's mistake.
+> - **v4.5 (owner, 2026-11-20): 7-day item-for-item exchanges** replace "all sales are final". No cash refunds and no credit notes, ever. After the window a supervisor or owner PIN is needed (§3.3, decision #26).
 > - **Dual-language UI**, English and Sinhala (සිංහල), with receipts staying English-first (§1.8).
 > - **Label layouts:** 2-up 2″×1″ and 3-up 1″×1″ rolls on TSPL/ZPL printers (§7.4).
 > - **Optional customer phone at the till**, with purchase history and spend analytics (§3.8).
@@ -43,7 +44,7 @@
 | IDs | UUIDv7, generated on the device |
 | Hardware | Scanner: HID keyboard wedge, read in the frontend. Receipts: ESC/POS over raw spooler, network or serial, sent from Rust. The cash drawer sits on the printer's RJ11 port (`ESC p`). Labels: TSPL/ZPL sent raw from Rust, in **2-up 2″×1″** and **3-up 1″×1″** layouts. |
 | Terminals | 1 store with 2–3 counters, each with its own SQLite DB. Every terminal holds the **full store history** for store-wide reports and customer history at any counter. |
-| Sales policy | **All sales are final: no refunds, no exchanges.** The only correction is a **same-session void** (`VOID_ORDER`, supervisor approval) for an immediate cashier mistake, before the cash session closes. |
+| Sales policy | **Item-for-item exchange within 7 days of the sale; never a cash refund or a credit note** (v4.5, decision #26). After 7 days a supervisor or owner PIN is required (`EXCHANGE_LATE`). A **same-session void** (`VOID_ORDER`, supervisor approval) still cancels an immediate cashier mistake before the cash session closes. |
 | Customers | An optional phone number at checkout (numpad shortcut) links the sale to a customer profile, with purchase history and total spend in the back office. |
 | Backups | **Manual "Backup Database Now"** (Owner/Manager) to a USB drive or any folder, via `VACUUM INTO`, without pausing the till. Scheduled automatic backups follow in Phase 4. |
 
@@ -638,13 +639,31 @@ It's sorted by frequency. Two one-click actions:
 
 **Promotion is forward-only.** Past quick-sale lines keep their original attribution, and no historical batch P&L changes. The review screen can still show the key's pre-promotion history through the link. `quick_sale_links.id = UUIDv5(store_id, custom_key)`, so two managers promoting the same key on different terminals produce the *same* row, which merges by LWW.
 
-### 3.3 Sales are final: same-session void is the only correction
+### 3.3 Exchanges, voids and the no-refund policy
 
-**Store policy (owner, final for v1):**
-- **All sales are final.** There are no refunds and no exchanges, in cash or any other form.
-- The only correction is a **same-session void** (`VOID_ORDER`) for an immediate cashier mistake, such as a wrong item, price or quantity, a double scan, or a customer cancelling before leaving the counter. It's only allowed while the till's cash session is still open.
-- The receipt footer (`receipt.footer`, seeded at first run) prints exactly: *"All sales are final. No refunds or exchanges. Thank you, come again!"*
-- Exchanges and credit notes are **deferred to Phase 5** (§8). The schema keeps extension points for them (below), so adding them later needs no rewrite.
+**Store policy (owner, v4.5, 2026-11-20):**
+- **Item-for-item exchange only.** The customer hands back goods and takes other goods. There are **no cash refunds and no credit notes**, under any circumstances. The replacement must be worth at least the returned goods; the customer pays only the difference, and an even swap costs nothing.
+- **The 7-day window counts from the sale's business date.** `exchange.window_days` (default 7) is a store setting.
+- **After the window, an exchange needs a Supervisor or Owner PIN** (`EXCHANGE_LATE`), entered in the usual approval dialog.
+- **Returned goods go straight back into available stock** as `return` stock movements that mirror the original sale slices (same batch layer, same unit cost). There is no inspection step; a damaged item is written off afterwards with the ordinary damage adjustment.
+- A **same-session void** (`VOID_ORDER`) remains the correction for an immediate cashier mistake while the cash session is open (below). Exchange orders, and sales that have had goods returned, cannot be voided.
+- The receipt footer (`receipt.footer`) prints: *"Exchange within 7 days. Item for item only; no cash refunds. Thank you, come again!"* The wording is proposed and the owner can edit it. Stores created before v4.5 are upgraded once at startup, and an owner-edited footer is kept.
+
+**Exchange rules (enforced in Rust and checked again by the seal trigger):**
+
+| Rule | Detail |
+|---|---|
+| Model | An exchange is an ordinary sale of the **replacement** lines (`orders.exchange_credit > 0`) plus insert-only `order_returns` rows naming the returned lines of earlier orders. Payments cover `grand_total − exchange_credit`; `paid_total = grand_total` still holds (the credit counts as paid). `orders.type` stays `'sale'`. |
+| Lookup | The cashier finds the earlier sale by receipt number (F12, `exchange_lookup`). It reports each line's returnable quantity, whether the window has passed, and which lines cannot return. |
+| Eligible lines | Only **tracked catalog lines** of a **completed** order. Quick-sale and untracked lines have no cost layer to put back and are refused. A voided sale has nothing to exchange. |
+| Value | Returned units are credited at **what the customer actually paid** (after the line discount and the bill-discount share), per unit with cumulative flooring: `floor(amount·to/qty) − floor(amount·from/qty)`. Returning every unit of a line, in any number of exchanges, gives back exactly its total. |
+| Quantity | A line can be returned in pieces over several exchanges, never beyond what was sold (`v_integrity_over_returned` must stay empty). |
+| Money | Payments are never negative. A replacement worth less than the credit is refused (`EXCHANGE_REPLACEMENT_TOO_LOW`). |
+| Window | Late when the days between the sale's business date and the exchange's business date exceed `exchange.window_days`. |
+| Who | `EXCHANGE_PROCESS` (bit 6) is held by Cashier and up; `EXCHANGE_LATE` (bit 7) by Supervisor, Manager and Owner. Both are approvable: a cashier's late exchange returns `ApprovalRequired { perm: EXCHANGE_LATE }`, and a supervisor's PIN approves it once. The approver is stored in `orders.late_approved_by`. |
+| Mechanism | One checkout transaction (§8 Phase 1 order): replacement lines, payments and slices, return rows, `return` stock movements, `returned_*` header sums, then the seal, the audit row and the outbox rows. The seal trigger recomputes everything from the rows and refuses a mismatch. |
+| Reports | Sales, discounts, tax, COGS and customer spend are **net of returns**, in the period of the exchange. Batch, product and category P&L subtract the returned units and their cost. The Z-report shows the exchange count, the credit and the items returned. |
+| Print | The receipt shows EXCHANGE, the returned items with their original receipt numbers, the credit, and TO PAY. |
 
 **Void rules (enforced in Rust and checked again in SQL):**
 
@@ -658,11 +677,7 @@ It's sorted by frequency. Two one-click actions:
 | Cash | A voided cash sale means the cashier hands back the cash just taken. `expected_cash` excludes voided orders, so the drawer still reconciles. The void kicks the drawer if the order had a cash payment, and prints a short **VOID slip** (receipt no., amount, reason, approver) for the cash-up. |
 | Time limit | **The end of the open cash session (owner-confirmed).** `void.max_minutes` stays `null`. |
 
-**Phase 5 extension points kept in v1:**
-- `orders.type` exists, constrained to `'sale'` for now.
-- Permission bits 6 and 7 are **reserved** for `EXCHANGE_PROCESS` / `EXCHANGE_LATE`.
-- Every line stores its pro-rata `order_discount_share` (§3.7), so a future exchange can value a returned item at what the customer actually paid.
-- The payment ledger shape (`order_payments` rows per tender) can later carry credit-note issue and redeem rows.
+**Credit notes are out of scope by the owner's decision.** The payment ledger stays non-negative; nothing in the schema issues or redeems credit.
 
 ### 3.4 Cash sessions (shifts) and Z-report
 
@@ -709,8 +724,8 @@ effective(user) = (role.permissions | user.grant_mask) & ~user.deny_mask
 | 3 | `LINE_DISCOUNT` (item-level) | ✅ (≤ 5%) | ✅ | ✅ | ✅ |
 | 4 | `ORDER_DISCOUNT` (full bill) | ✅ (≤ 5%) | ✅ | ✅ | ✅ |
 | 5 | `VOID_ORDER` (same session only; cashiers need supervisor approval) | – | ✅ | ✅ | ✅ |
-| 6 | *reserved* for `EXCHANGE_PROCESS` (Phase 5). Not seeded. | – | – | – | – |
-| 7 | *reserved* for `EXCHANGE_LATE` (Phase 5). Not seeded. | – | – | – | – |
+| 6 | `EXCHANGE_PROCESS`: item-for-item exchange within the window (v4.5) | ✅ | ✅ | ✅ | ✅ |
+| 7 | `EXCHANGE_LATE`: exchange after the window (approvable by a supervisor PIN, v4.5) | – | ✅ | ✅ | ✅ |
 | 8 | `DRAWER_NO_SALE` | – | ✅ | ✅ | ✅ |
 | 9 | `CASH_PAY_IN_OUT` | – | ✅ | ✅ | ✅ |
 | 10 | `CASH_SESSION_MANAGE` (open/close own) | ✅ | ✅ | ✅ | ✅ |
@@ -974,7 +989,7 @@ export interface StoreSetting {       // synced, LWW per key
 // ───────── RBAC ─────────
 export const Perm = {
   SALE_CREATE: 2 ** 0, QUICK_SALE: 2 ** 1, PRICE_OVERRIDE: 2 ** 2, LINE_DISCOUNT: 2 ** 3,
-  ORDER_DISCOUNT: 2 ** 4, VOID_ORDER: 2 ** 5, /* 2 ** 6, 2 ** 7 reserved: Phase 5 exchanges */
+  ORDER_DISCOUNT: 2 ** 4, VOID_ORDER: 2 ** 5, EXCHANGE_PROCESS: 2 ** 6, EXCHANGE_LATE: 2 ** 7,
   DRAWER_NO_SALE: 2 ** 8, CASH_PAY_IN_OUT: 2 ** 9, CASH_SESSION_MANAGE: 2 ** 10,
   CASH_SESSION_FORCE_CLOSE: 2 ** 11, REPRINT_RECEIPT: 2 ** 12, STOCK_ADJUST: 2 ** 13,
   STOCK_DAMAGE: 2 ** 14, BATCH_MANAGE: 2 ** 15, PRODUCT_MANAGE: 2 ** 16, QUICK_SALE_PROMOTE: 2 ** 17,
@@ -1757,6 +1772,28 @@ BEGIN SELECT RAISE(ABORT, 'orders cannot be deleted'); END;
 CREATE TRIGGER trg_orders_insert_pending BEFORE INSERT ON orders
 WHEN (SELECT applying FROM sync_ctx WHERE id = 1) = 0 AND NEW.status <> 'pending'
 BEGIN SELECT RAISE(ABORT, 'orders: local inserts must start as pending and be sealed'); END;
+
+-- ───────── v4.5 (migration 0005): item-for-item exchanges, decision #26 ─────────
+-- orders gains (INTEGER NOT NULL DEFAULT 0 CHECK >= 0): exchange_credit, returned_items, returned_gross,
+-- returned_discount, returned_net, returned_tax, returned_cost; and late_approved_by TEXT REFERENCES staff(id).
+-- trg_orders_state_machine also freezes these columns. paid_total = grand_total still holds.
+CREATE TABLE order_returns (                                   -- insert-only; only into a pending (sealing) order
+  id TEXT PRIMARY KEY, store_id TEXT NOT NULL, device_id TEXT NOT NULL,
+  order_id TEXT NOT NULL REFERENCES orders(id),                -- the exchange (replacement) order
+  source_item_id TEXT NOT NULL REFERENCES order_items(id),     -- the returned line of an earlier order
+  qty INTEGER NOT NULL CHECK (qty > 0),
+  line_gross INTEGER NOT NULL, line_discount INTEGER NOT NULL, -- line + bill discount share = gross − total
+  line_total INTEGER NOT NULL,                                 -- credited: what the customer paid for these units
+  line_net INTEGER NOT NULL, tax_amount INTEGER NOT NULL, cost_total INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (order_id, source_item_id)
+);
+-- stock_movements.reason gains 'return' (qty_delta > 0, revenue_net <= 0, ref_id = the exchange order; tied to an
+-- order_item_id like sale and void). The seal trigger checks: payments + exchange_credit = grand_total; returns
+-- sum to the returned_* totals; credit <= grand_total; only tracked catalog lines of another completed order;
+-- per-unit valuation with cumulative flooring; return slices equal qty, revenue and cost; EXCHANGE_PROCESS held
+-- by the seller or the approver; EXCHANGE_LATE past exchange.window_days. A void is refused for an exchange and
+-- for a sale whose goods were returned. v_integrity_over_returned must stay empty.
 
 CREATE TABLE order_items (
   id TEXT PRIMARY KEY, store_id TEXT NOT NULL, device_id TEXT NOT NULL,
@@ -2739,7 +2776,7 @@ Each phase ends with **exit criteria**. Don't start the next phase until they pa
   - A cashier needs supervisor approval.
   - Exact stock reversal, a VOID slip, and a drawer kick for cash orders.
   - Refused once the session is closed.
-- ESC/POS receipt with QR (spooler, network), the "All sales are final" footer, the masked customer phone, the automatic drawer kick, and an audited **no-sale kick**. Printer test page.
+- ESC/POS receipt with QR (spooler, network), the receipt footer ("All sales are final" in v4.4, the exchange wording from v4.5), the masked customer phone, the automatic drawer kick, and an audited **no-sale kick**. Printer test page.
 - Hold and recall, and debounced crash recovery of the current cart.
   - **Block 1.9 notes:** the cart is a Zustand store (`features/pos/store/cart.store.ts`) whose `held_carts` payload is versioned JSON (`v: 1`, validated with zod on recall). Commands `cart_save_current` (500 ms debounce), `cart_current` ("Recover cart?"; never offers a token that was already sold), `cart_hold` (F8, at most 50), `held_carts` and `cart_recall` (F11, holding the cart in progress first). The till previews totals with `features/pos/lib/pricing.ts`, a BigInt-exact port of `domain::pricing`, tested against `pricing_cases.json`.
 - **Manual "Backup Database Now"** (§3.9) to USB or a chosen folder, with an integrity check, manifest and audit. It ships in Phase 1 because, until Phase 3 sync, it's the only off-machine copy.
@@ -2867,23 +2904,7 @@ Each phase ends with **exit criteria**. Don't start the next phase until they pa
 **Exit:** a two-week pilot at 2–3 counters with zero data-loss incidents, a restore drill passed, an update shipped through the updater, and an audit chain that verifies for every device.
 
 ### Phase 5: Later (future backlog)
-- **Exchanges and credit notes.** Deferred by the owner, and v1 sells everything as final. The design notes to pick up from:
-  - **Policy draft:**
-    - Exchange within N days (7 was proposed) with a receipt, with later exchanges needing supervisor approval.
-    - The customer pays any difference, and a credit note is issued for a negative balance, never cash.
-  - **Model:**
-    - One `type = 'exchange'` order with return lines (`qty < 0`, `return_of_item_id`, `return_disposition` restock/damaged) plus new-item lines.
-    - A return line is valued at what the customer paid: the original `line_total` after the item discount **and** the stored `order_discount_share`, with exact remainder handling on partial returns.
-  - **Credit notes:**
-    - An insert-only `credit_notes` header.
-    - The balance is derived from `order_payments` rows (issue negative, redeem positive) rather than a mutable column.
-    - Offline over-redemption is flagged, not blocked.
-    - It's a liability, not revenue, and kept out of expected cash.
-  - **Already in place:** `orders.type`, reserved permission bits 6 and 7, and the per-line discount shares.
-  - **To add:**
-    - `returns_net` in the rollups.
-    - A `return` stock reason.
-    - Migrations that widen the `CHECK`s on `orders.type`, `order_items.qty` and `order_payments.amount`.
+- **Exchanges: delivered in v4.5** (decision #26, §3.3). **Credit notes are out of scope by the owner's decision**: the store never issues credit, only item-for-item exchange.
 - An owner web dashboard (Supabase + React, read-only reports with an `audit_logs` viewer) and multi-store support.
 - Loyalty points and customer credit sales, foreign phone numbers, and supplier management.
 - Tamil UI. Raster (bitmap) Sinhala receipts and labels.
@@ -2986,11 +3007,12 @@ cargo add --dev proptest
 | `store.week_start` | `monday` |
 | `tax.inclusive` / `tax.default_rate_bp` | `true` / `0` (not VAT/SSCL registered) |
 | `discount.cashier_max_bp` | `500`, which seeds the Cashier role's `max_discount_bp` |
-| `sales.policy` | `final` (no refunds, no exchanges) |
+| `sales.policy` | `exchange_7d` (item-for-item exchange within 7 days; no refunds, no credit notes) |
+| `exchange.window_days` | `7`, counted from the sale's business date; later exchanges need a supervisor or owner PIN |
 | `void.max_minutes` | `null`, **fixed (owner-confirmed)**: a void is allowed only while the order's cash session is open. It requires a supervisor PIN (for cashiers) and a mandatory reason. |
 | `quick_sale.auto_tag_batch` | `false` (owner: never auto-tag) |
 | `store.name` | `GayanShop` (printed on labels and receipts) |
-| `receipt.footer` | **"All sales are final. No refunds or exchanges. Thank you, come again!"** (owner-confirmed, verbatim) |
+| `receipt.footer` | **"Exchange within 7 days. Item for item only; no cash refunds. Thank you, come again!"** (v4.5, wording proposed; the owner can edit it. Before v4.5: "All sales are final. No refunds or exchanges. Thank you, come again!") |
 | `receipt.mask_customer_phone` | `true`: printed as `07X XXX X123` |
 | `customer.capture` | `optional`, with **verbal consent at the counter**. There's no popup, no notice dialog and no blocking step. Enter or Esc on an empty phone field skips it. |
 | `ui.default_language` (device) | `en`. Staff can switch to `si` (Sinhala), and the choice is saved per staff member. |
@@ -3010,7 +3032,7 @@ cargo add --dev proptest
 | 3 | **Late items get cost 0**, and full re-allocation only happens via reopen when nothing has moved yet | Re-allocating after sales | Re-allocating would change the cost of sales already made, which rewrites history. |
 | 4 | **Quick-sale cost is optional**; unknown-cost revenue is reported separately | Requiring a cost; assuming a margin % | Requiring a cost breaks the speed target, and assuming a margin invents numbers. Showing it transparently is honest. |
 | 5 | **Promotion is forward-only**, with no retroactive batch attribution | Re-attributing past quick sales to the batch | Past lines are immutable, and historical P&L shouldn't move when a manager tidies up. |
-| 6 | **All sales final; the only correction is a same-session, whole-order void** (a cashier needs supervisor approval) | Refunds; 7-day exchanges with credit notes (v3); voiding past orders | Owner simplification (v4). Keeps closed Z-reports fixed and cash reconciliation true. Exchanges and credit notes move to Phase 5, and the schema keeps extension points. |
+| 6 | **~~All sales final~~ superseded by #26. The same-session, whole-order void** (a cashier needs supervisor approval) **remains the correction for a cashier mistake** | Refunds; 7-day exchanges with credit notes (v3); voiding past orders | Owner simplification (v4). Keeps closed Z-reports fixed and cash reconciliation true. Exchanges and credit notes move to Phase 5, and the schema keeps extension points. |
 | 6b | **Cashier discount ≤ 5%, combined per line (item + bill share)**, bill discounts apportioned pro-rata by largest remainder | Separate 5% caps for item and bill (which allows ~9.75% stacked) | Owner rule. Pro-rata shares keep batch margins exact, and future exchange values with them. |
 | 10 | **Dual-language UI (en/si), with receipts and labels in English** | Sinhala on receipts | Generic ESC/POS and TSPL printers have no Sinhala code page. Raster printing is Phase 5. |
 | 11 | **Customer phone optional, keyed by `UUIDv5(phone)`, never copied onto orders** | A mandatory customer; a phone snapshot on each order | Never slows a sale, merges cleanly offline, and makes PDPA erasure possible without touching immutable orders. |
@@ -3031,6 +3053,7 @@ cargo add --dev proptest
 | 23 | **SQLCipher deferred; standard SQLite WAL with OS file permissions retained** (Block 4.3) | Bundling SQLCipher / full-database encryption | SQLite WAL with Windows NTFS ACLs meets the single-store offline threat model with zero read overhead; full-disk BitLocker protects against physical theft. |
 | 24 | **Local rotating logs + support bundle export; no SaaS crash reporting** (Block 4.4) | Third-party cloud telemetry (Sentry, etc.) | Preserves customer privacy and strict offline operation; support bundle ZIP is exported on demand by the store owner for diagnostics. |
 | 25 | **Every sale records who made it: a staff number typed at the till, required on every sale** (owner-confirmed 2026-11-18; schema v4.4) | Crediting the logged-in cashier only; an optional or remembered number | Several people can share one till login, so the cashier (`staff_id`, who owns the shift and drawer) and the salesperson (`sold_by`) are different facts. An unknown or disabled number refuses the sale before a receipt number is used. Numbers are auto-assigned (next free, never reused). Staff → ⋮ → Sales performance reads completed orders by `COALESCE(sold_by, staff_id)`: daily totals for 30 days plus week, month and year totals; voided sales do not count. |
+| 26 | **Item-for-item exchange within 7 days of the sale; no cash refunds and no credit notes, ever. After 7 days a supervisor or owner PIN is required. Returned goods go straight back into stock** (owner-confirmed 2026-11-20; schema v4.5) | Cash refunds; credit notes; a restock-or-damage choice per item; blocking late exchanges outright | The owner wants goods to move, not money back. An exchange is a sale of the replacement goods credited with what the customer paid for the returned ones, so the ledger stays append-only and the drawer never pays out. The credit is per-unit with cumulative flooring, exact over any number of partial returns. A replacement worth less than the credit is refused, and a quick-sale or untracked line cannot be returned (no cost layer to restore). The window counts from the sale's business date and is `exchange.window_days`. Exchange orders and sales with returns can't be voided. Open for the owner: the footer wording, and the rule that the replacement must cost at least the returned value. |
 
 
 ---
