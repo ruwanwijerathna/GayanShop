@@ -160,7 +160,11 @@ pub fn z_report(store: &str, z: &Value, layout: Layout, tz: Tz) -> Vec<u8> {
     let session = z.get("session").unwrap_or(&null);
     let mut p = EscPos::new(layout);
     header(&mut p, store);
-    p.bold(true).line("Z-REPORT").bold(false).align(Align::Left);
+    p.bold(true).line("Z-REPORT").bold(false);
+    if z.get("reprint").and_then(Value::as_bool) == Some(true) {
+        p.bold(true).line("*** REPRINT ***").bold(false);
+    }
+    p.align(Align::Left);
     p.pair("Business date", s(session, "business_date"));
     p.pair("Opened", &local(s(session, "opened_at"), tz));
     p.pair("Opened by", s(session, "opened_by_name"));

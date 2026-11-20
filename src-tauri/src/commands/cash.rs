@@ -1,12 +1,14 @@
 //! Cash-session commands (doc §3.4). Open/close: `CASH_SESSION_MANAGE`. Pay-in/out and no-sale are approvable
 //! (`CASH_PAY_IN_OUT`, `DRAWER_NO_SALE`): a cashier retries with a supervisor's approval id bound to
-//! [`DRAWER_TARGET`]. Session history and X-reports need `REPORT_SALES`.
+//! [`DRAWER_TARGET`]. History, X-reports and Z-reports need `REPORT_SALES` for any counter, and are open to staff for this counter's own shifts. Reprinting a Z-report needs `REPRINT_RECEIPT`.
 
 use tauri::{AppHandle, State};
 
 use super::{emit_changed, session, write_ctx};
 use crate::auth::guard::require;
-use crate::db::repo::cash::{self, CashSession, CloseInput, DrawerMovementInput, OpenSessionInput, ZReport};
+use crate::db::repo::cash::{
+    self, CashSession, CloseInput, DrawerMovementInput, HistoryFilter, OpenSessionInput, SessionHistory, ZReport,
+};
 use crate::domain::permissions::Perm;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
@@ -93,12 +95,46 @@ pub async fn list_cash_sessions(state: State<'_, AppState>, limit: u32) -> AppRe
     cash::list(&state.db.pool, &device_id(&state)?, limit).await
 }
 
-/// Z-report of a closed session, or X-report of the open one.
+/// Shift history (Today | History). `REPORT_SALES` sees every counter; anyone else sees this counter's shifts.
+#[tauri::command]
+#[specta::specta]
+pub async fn cash_history(state: State<'_, AppState>, filter: HistoryFilter, limit: u32) -> AppResult<SessionHistory> {
+    let s = session(&state)?;
+    let identity = state.identity()?.ok_or(AppError::NotInitialized)?;
+    let all = s.perms.has(Perm::REPORT_SALES);
+    cash::history(&state.db.pool, &filter, (&identity.device_id, &identity.device_code), all, limit).await
+}
+
+/// Whether the logged-in staff member may read this session: `REPORT_SALES` (any counter) or it is this
+/// counter's own.
+async fn can_view_session(state: &AppState, session_id: &str) -> AppResult<()> {
+    let s = session(state)?;
+    if s.perms.has(Perm::REPORT_SALES) {
+        return Ok(());
+    }
+    let mut conn = state.db.pool.acquire().await?;
+    let found = cash::get(&mut conn, session_id).await?;
+    if found.device_id == device_id(state)? { Ok(()) } else { Err(AppError::Forbidden { perm: Perm::REPORT_SALES }) }
+}
+
+/// Z-report of a closed session, or X-report of the open one. Own counter, or any with `REPORT_SALES`.
 #[tauri::command]
 #[specta::specta]
 pub async fn cash_session_report(state: State<'_, AppState>, session_id: String) -> AppResult<ZReport> {
-    require(&state.auth, state.clock.as_ref(), Perm::REPORT_SALES, "reports", None)?;
+    can_view_session(&state, &session_id).await?;
     let now = write_ctx(&state)?.now;
     let mut conn = state.db.pool.acquire().await?;
     cash::z_report(&mut conn, &session_id, &now).await
+}
+
+/// Print a closed session's Z-report again (`REPRINT_RECEIPT`; own counter, or any with `REPORT_SALES`).
+#[tauri::command]
+#[specta::specta]
+pub async fn reprint_z_report(app: AppHandle, state: State<'_, AppState>, session_id: String) -> AppResult<()> {
+    let actor = require(&state.auth, state.clock.as_ref(), Perm::REPRINT_RECEIPT, "z_report", None)?;
+    can_view_session(&state, &session_id).await?;
+    cash::reprint_z(&state.db, &write_ctx(&state)?, &actor, &session_id).await?;
+    state.printer.notify();
+    emit_changed(&app, &["audit_logs"]);
+    Ok(())
 }

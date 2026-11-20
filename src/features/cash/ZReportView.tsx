@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { ZReport } from "@/db/bindings";
 import { formatMoney } from "@/lib/money";
@@ -12,16 +13,49 @@ function Row({ label, value, strong = false }: { label: string; value: string; s
   );
 }
 
+/** Pay-ins, pay-outs and no-sale openings of a shift, oldest first. */
+export function MovementList({ items }: { items: ZReport["drawer"] }) {
+  const { t, i18n } = useTranslation("cash");
+  const clock = (iso: string) =>
+    new Date(iso).toLocaleTimeString(i18n.resolvedLanguage === "si" ? "si-LK" : "en-LK", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  return (
+    <ul className="flex flex-col gap-1 text-base">
+      {items.map((m) => (
+        <li key={`${m.kind}-${m.created_at}`} className="flex flex-wrap justify-between gap-x-4">
+          <span>
+            {clock(m.created_at)} · {t(`movements.kind.${m.kind}`, { defaultValue: m.kind })}
+            {m.reason !== "" && ` · ${m.reason}`}
+            <span className="text-muted-foreground">
+              {" "}
+              · {m.staff}
+              {m.approved_by && ` (${t("z.approvedBy", { name: m.approved_by })})`}
+            </span>
+          </span>
+          {m.kind !== "no_sale" && <span className="font-mono">{formatMoney(m.amount)}</span>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** The Z-report (or X-report while the session is open), as printed: one session on one counter. */
-export function ZReportView({ report }: { report: ZReport }) {
+export function ZReportView({ report, actions }: { report: ZReport; actions?: ReactNode }) {
   const { t } = useTranslation("cash");
   const variance = report.variance;
   return (
     <section aria-labelledby="z-title" className="flex flex-col gap-3 rounded-lg border border-border p-4">
-      <h2 id="z-title" className="text-xl font-semibold">
-        {t("z.title")}
-        <span className="ml-3 text-sm font-normal text-muted-foreground">{report.session.business_date}</span>
-      </h2>
+      <header className="flex flex-wrap items-center gap-3">
+        <h2 id="z-title" className="flex-1 text-xl font-semibold">
+          {report.session.status === "open" ? t("z.still") : t("z.title")}
+          <span className="ml-3 text-sm font-normal text-muted-foreground">
+            {report.session.business_date}
+          </span>
+        </h2>
+        {actions}
+      </header>
       <dl className="divide-y divide-border">
         <Row label={t("z.sales")} value={String(report.sales_count)} />
         <Row label={t("z.items")} value={String(report.items_sold)} />
@@ -68,6 +102,12 @@ export function ZReportView({ report }: { report: ZReport }) {
             </li>
           ))}
         </ul>
+      )}
+      {report.drawer.length > 0 && (
+        <>
+          <h3 className="font-semibold">{t("z.movements")}</h3>
+          <MovementList items={report.drawer} />
+        </>
       )}
       <dl className="divide-y divide-border">
         <Row label={t("z.float")} value={formatMoney(report.opening_float)} />

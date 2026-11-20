@@ -1,5 +1,12 @@
 // TanStack Query hooks over the generated commands. Only src/db and src/hardware call Rust (AGENT.md §2).
-import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   commands,
   type AdHocPurchase,
@@ -28,6 +35,7 @@ import {
   type Period,
   type SalesDimension,
   type DrawerMovementInput,
+  type HistoryFilter,
   type Perm,
   type NewStaff_Deserialize as NewStaff,
   type ProductInput,
@@ -382,6 +390,28 @@ export function useNoSale() {
 
 export function useCloseCashSession() {
   return useCashMutation((input: CloseInput) => unwrap(commands.closeCashSession(input)));
+}
+
+/** Shift history for the Cash drawer's History tab (own counter, or every counter with REPORT_SALES). */
+export function useCashHistory(filter: HistoryFilter, limit: number) {
+  return useQuery({
+    queryKey: ["cash", "history", filter, limit] as const,
+    queryFn: () => unwrap(commands.cashHistory(filter, limit)),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** The Z-report of a closed shift, or the live X-report of the open one. */
+export function useCashSessionReport(sessionId: string | null) {
+  return useQuery({
+    queryKey: ["cash", "report", sessionId] as const,
+    queryFn: () => unwrap(commands.cashSessionReport(sessionId ?? "")),
+    enabled: sessionId !== null,
+  });
+}
+
+export function useReprintZReport() {
+  return useMutation({ mutationFn: (sessionId: string) => unwrap(commands.reprintZReport(sessionId)) });
 }
 
 // ───────── receipt printer (doc §7.5) ─────────

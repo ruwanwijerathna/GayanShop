@@ -273,6 +273,185 @@ pub async fn list(pool: &SqlitePool, device_id: &str, limit: u32) -> AppResult<V
     .await?)
 }
 
+/// Filters for the shift history. Dates are business dates, inclusive; empty means no bound.
+#[derive(Debug, Clone, Default, Deserialize, Type)]
+pub struct HistoryFilter {
+    pub from: Option<String>,
+    pub to: Option<String>,
+    /// One counter; `None` for all the viewer may see.
+    pub device_id: Option<String>,
+    /// Only shifts whose count did not match (variance ≠ 0).
+    pub variance_only: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Type, PartialEq, Eq)]
+pub struct SessionHistoryRow {
+    pub session: CashSession,
+    /// `T01`…; falls back to a short id for a counter that never sold.
+    pub device_code: String,
+    #[specta(type = specta_typescript::Number)]
+    pub sales_count: i64,
+    /// What the till took in the shift: Σ (grand total − exchange credit) of completed orders.
+    #[specta(type = specta_typescript::Number)]
+    pub sales_total: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Type, PartialEq, Eq)]
+pub struct SessionHistory {
+    pub rows: Vec<SessionHistoryRow>,
+    /// Counters the viewer may filter by.
+    pub counters: Vec<super::reports::ReportDevice>,
+    /// `false` when the viewer only sees this counter (no `REPORT_SALES`).
+    pub all_counters: bool,
+    /// More rows exist beyond `limit`.
+    pub truncated: bool,
+}
+
+#[derive(FromRow)]
+struct HistoryDb {
+    #[sqlx(flatten)]
+    session: CashSession,
+    sales_count: i64,
+    sales_total: i64,
+}
+
+fn valid_date(v: &Option<String>) -> AppResult<Option<String>> {
+    match v.as_deref().map(str::trim).filter(|d| !d.is_empty()) {
+        None => Ok(None),
+        Some(d) => chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d")
+            .map(|_| Some(d.to_string()))
+            .map_err(|_| AppError::validation("DATE_INVALID", d)),
+    }
+}
+
+/// The shift history, newest first. `own` is this counter's `(device_id, device_code)`. When `all_counters` is
+/// false the result is forced to this counter, whatever the filter says.
+pub async fn history(
+    pool: &SqlitePool,
+    filter: &HistoryFilter,
+    own: (&str, &str),
+    all_counters: bool,
+    limit: u32,
+) -> AppResult<SessionHistory> {
+    let from = valid_date(&filter.from)?;
+    let to = valid_date(&filter.to)?;
+    if let (Some(f), Some(t)) = (&from, &to)
+        && f > t
+    {
+        return Err(AppError::validation("DATE_INVALID", format!("{f} > {t}")));
+    }
+    let device =
+        if all_counters { filter.device_id.clone().filter(|d| !d.is_empty()) } else { Some(own.0.to_string()) };
+    let limit = limit.clamp(1, 500);
+    let rows: Vec<HistoryDb> = sqlx::query_as(
+        "SELECT x.* FROM (
+           SELECT s.id, s.device_id, s.business_date, s.status, s.opened_by,
+                  o.display_name AS opened_by_name, s.opened_at, s.opening_float, s.closed_by,
+                  c.display_name AS closed_by_name, s.closed_at, s.expected_cash, s.counted_cash, s.variance,
+                  s.close_note,
+                  (SELECT COUNT(*) FROM orders d WHERE d.cash_session_id = s.id AND d.status = 'completed')
+                      AS sales_count,
+                  (SELECT COALESCE(SUM(d.grand_total - d.exchange_credit), 0) FROM orders d
+                    WHERE d.cash_session_id = s.id AND d.status = 'completed') AS sales_total
+           FROM cash_sessions s
+           JOIN staff o ON o.id = s.opened_by
+           LEFT JOIN staff c ON c.id = s.closed_by
+           WHERE s.deleted_at IS NULL
+             AND (?1 IS NULL OR s.business_date >= ?1)
+             AND (?2 IS NULL OR s.business_date <= ?2)
+             AND (?3 IS NULL OR s.device_id = ?3)
+             AND (?4 = 0 OR COALESCE(s.variance, 0) <> 0)
+           ORDER BY s.opened_at DESC, s.id DESC LIMIT ?5
+         ) x",
+    )
+    .bind(from)
+    .bind(to)
+    .bind(device)
+    .bind(i64::from(filter.variance_only))
+    .bind(i64::from(limit) + 1)
+    .fetch_all(pool)
+    .await?;
+    let truncated = rows.len() > limit as usize;
+
+    let mut counters = counters(pool, own).await?;
+    if !all_counters {
+        counters.retain(|c| c.device_id == own.0);
+    }
+    let code_of = |id: &str| {
+        counters.iter().find(|c| c.device_id == id).map(|c| c.device_code.clone()).unwrap_or_else(|| short_code(id))
+    };
+    let rows = rows
+        .into_iter()
+        .take(limit as usize)
+        .map(|r| SessionHistoryRow {
+            device_code: code_of(&r.session.device_id),
+            session: r.session,
+            sales_count: r.sales_count,
+            sales_total: r.sales_total,
+        })
+        .collect();
+    Ok(SessionHistory { rows, counters, all_counters, truncated })
+}
+
+fn short_code(device_id: &str) -> String {
+    device_id.chars().take(6).collect::<String>().to_uppercase()
+}
+
+/// Every counter that has a shift, with its `T01`-style code (from its receipt numbers; this counter's own
+/// code is known from its identity).
+async fn counters(pool: &SqlitePool, own: (&str, &str)) -> AppResult<Vec<super::reports::ReportDevice>> {
+    let ids: Vec<String> = sqlx::query_scalar("SELECT DISTINCT device_id FROM cash_sessions WHERE deleted_at IS NULL")
+        .fetch_all(pool)
+        .await?;
+    let known = super::reports::devices(pool).await?;
+    let mut out: Vec<super::reports::ReportDevice> = ids
+        .into_iter()
+        .map(|id| {
+            let code = if id == own.0 {
+                own.1.to_string()
+            } else {
+                known
+                    .iter()
+                    .find(|k| k.device_id == id)
+                    .map(|k| k.device_code.clone())
+                    .unwrap_or_else(|| short_code(&id))
+            };
+            super::reports::ReportDevice { device_id: id, device_code: code }
+        })
+        .collect();
+    if !out.iter().any(|c| c.device_id == own.0) {
+        out.push(super::reports::ReportDevice { device_id: own.0.to_string(), device_code: own.1.to_string() });
+    }
+    out.sort_by(|a, b| a.device_code.cmp(&b.device_code));
+    Ok(out)
+}
+
+/// Print an already-closed session's Z-report again. The slip says REPRINT; audited. The session's counter
+/// can be any (the rows are synced), the print goes to this counter's printer.
+pub async fn reprint_z(db: &Db, ctx: &WriteCtx, actor: &Actor, session_id: &str) -> AppResult<()> {
+    let mut tx = db.write().await?;
+    let report = z_report(tx.conn(), session_id, &ctx.now).await?;
+    if report.session.status != "closed" {
+        return Err(AppError::validation("SESSION_NOT_CLOSED", session_id.to_string()));
+    }
+    let mut payload = serde_json::to_value(&report).map_err(|e| AppError::internal(e.to_string()))?;
+    if let Some(o) = payload.as_object_mut() {
+        o.insert("reprint".into(), json!(true));
+    }
+    print_jobs::enqueue(tx.conn(), ctx, PrintKind::ZReport, Some(session_id), &payload).await?;
+    audit_row(
+        tx.conn(),
+        ctx,
+        actor,
+        AuditAction::Z_REPORT_REPRINT,
+        ("cash_session", session_id),
+        json!({ "business_date": report.session.business_date, "device_id": report.session.device_id }),
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
 /// float + Σ cash taken on completed (not voided) orders, net of change + pay-ins − pay-outs.
 pub async fn expected_cash(conn: &mut SqliteConnection, session_id: &str) -> AppResult<i64> {
     sqlx::query_scalar(

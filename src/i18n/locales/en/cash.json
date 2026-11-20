@@ -40,7 +40,18 @@
     "note": "Note (optional)",
     "submit": "Close and print Z-report",
     "confirm": "Closing ends voids for every sale in this session. Continue?",
-    "confirmYes": "Yes, close"
+    "confirmYes": "Yes, close",
+    "countHint": "Count each note and coin in the drawer.",
+    "enterTotal": "Enter a total instead",
+    "enterNotes": "Count notes and coins",
+    "shouldBe": "Should be",
+    "youCounted": "You counted",
+    "diff": {
+      "exact": "Exact. Nothing missing.",
+      "short": "Short by {{amount}}",
+      "over": "Over by {{amount}}"
+    },
+    "back": "Back"
   },
   "z": {
     "title": "Z-report",
@@ -80,7 +91,69 @@
     "variance": "Variance",
     "count": "{{count}} × {{amount}}",
     "exchanges": "Exchanges",
-    "returnedItems": "Items returned"
+    "returnedItems": "Items returned",
+    "print": "Print again",
+    "printed": "Sent to the printer",
+    "done": "Done",
+    "movements": "Cash movements",
+    "still": "Still open"
   },
-  "moneyInvalid": "Enter an amount such as 450 or 450.50."
+  "moneyInvalid": "Enter an amount such as 450 or 450.50.",
+  "tabs": {
+    "label": "Cash drawer views",
+    "today": "Today",
+    "history": "History"
+  },
+  "live": {
+    "expected": "Cash that should be in the drawer",
+    "sales": "Sales so far"
+  },
+  "movements": {
+    "title": "Cash in and out",
+    "empty": "Nothing yet.",
+    "kind": {
+      "pay_in": "Pay in",
+      "pay_out": "Pay out",
+      "no_sale": "No sale"
+    }
+  },
+  "history": {
+    "title": "Shift history",
+    "range": {
+      "label": "Period",
+      "7": "Last 7 days",
+      "30": "Last 30 days",
+      "90": "Last 90 days",
+      "all": "All time",
+      "custom": "Custom dates"
+    },
+    "from": "From",
+    "to": "To",
+    "counter": "Counter",
+    "allCounters": "All counters",
+    "onlyDifferences": "Only shifts with a difference",
+    "empty": "No shifts match these filters.",
+    "more": "Show more",
+    "status": {
+      "open": "Open",
+      "closed": "Closed"
+    },
+    "columns": {
+      "date": "Date",
+      "counter": "Counter",
+      "cashier": "Opened by",
+      "sales": "Sales",
+      "expected": "Should be",
+      "counted": "Counted",
+      "difference": "Difference"
+    },
+    "diff": {
+      "exact": "Exact",
+      "short": "Short {{amount}}",
+      "over": "Over {{amount}}",
+      "none": "–"
+    },
+    "detailTitle": "Shift on {{date}} · {{counter}}",
+    "close": "Close"
+  }
 }
