@@ -63,13 +63,13 @@ describe("scaleLogoDimensions", () => {
   it("scales up to maximum dimensions at 100%", () => {
     const dim = scaleLogoDimensions(800, 400, 100);
     expect(dim).toEqual({ width: LOGO_MAX_WIDTH, height: 288 });
-    expect(dim?.width! % 8).toBe(0);
+    expect((dim?.width ?? 0) % 8).toBe(0);
   });
 
   it("scales down proportionally at 50%", () => {
     const dim = scaleLogoDimensions(800, 400, 50);
     expect(dim).toEqual({ width: 288, height: 144 });
-    expect(dim?.width! % 8).toBe(0);
+    expect((dim?.width ?? 0) % 8).toBe(0);
   });
 
   it("clamps minimum scale to 10%", () => {

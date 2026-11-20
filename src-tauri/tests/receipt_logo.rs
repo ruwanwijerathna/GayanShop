@@ -57,7 +57,8 @@ fn the_image_prints_first_as_a_centred_raster_and_a_plain_receipt_has_none() {
     let header = [0x1D, b'v', b'0', 0, 8, 0, 3, 0];
     let at = find(&with, &header).expect("raster command present");
     assert_eq!(&with[at + 8..at + 8 + 24], l.data.as_slice());
-    assert!(at < find(&with, b"Sale Center").expect("store name"), "image above the store name");
+    assert!(find(&with, b"Sale Center").is_none(), "store name omitted when logo is present");
+    assert!(find(&without, b"Sale Center").is_some(), "store name printed when no logo");
     assert_eq!(&with[at - 3..at], &[0x1B, b'a', 1], "centred");
     assert!(find(&without, &[0x1D, b'v', b'0']).is_none());
 }

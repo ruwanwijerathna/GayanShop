@@ -55,8 +55,9 @@ fn receipt_with_banner(r: &ReceiptData, layout: Layout, tz: Tz, logo: Option<&Lo
     let cols = p.columns();
     if let Some(l) = logo {
         p.logo(l);
+    } else {
+        header(&mut p, &r.store_name);
     }
-    header(&mut p, &r.store_name);
     if let Some(b) = banner {
         p.bold(true).wrapped(b, cols).bold(false);
     }

@@ -1,5 +1,12 @@
 // TanStack Query hooks over the generated commands. Only src/db and src/hardware call Rust (AGENT.md §2).
-import { keepPreviousData, useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   commands,
   type AdHocPurchase,

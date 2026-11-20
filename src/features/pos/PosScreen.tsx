@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { CircleHelp, Hand, History, Percent, Search, SquarePen, Undo2 } from "lucide-react";
+import { CircleHelp, Hand, History, Percent, Printer, Search, SquarePen, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -15,6 +15,7 @@ import type {
   ProductSummary_Serialize as ProductSummary,
 } from "@/db/bindings";
 import { CommandError } from "@/db/client";
+import { commands } from "@/db/bindings";
 import {
   discardCurrentCart,
   lookupProductMatches,
@@ -27,6 +28,7 @@ import {
   useRecallCart,
   useTouchMode,
 } from "@/db/hooks";
+import { usePrintReceiptStore } from "@/components/receipt/PrintableReceiptPortal";
 import { notFoundToast, routeScan } from "@/hardware/scanner/feedback";
 import { useScanHandler, useScanner } from "@/hardware/scanner/ScannerProvider";
 import { translateError } from "@/i18n";
@@ -98,7 +100,7 @@ function Till() {
     null,
   );
   const [shared, setShared] = useState<{ code: string; products: ProductSummary[] } | null>(null);
-  const [done, setDone] = useState<{ receipt: string; change: number } | null>(null);
+  const [done, setDone] = useState<{ receipt: string; change: number; orderId?: string } | null>(null);
 
   const search = useProductSearch(query);
   const results = query.trim() === "" ? [] : (search.data ?? []);
@@ -240,7 +242,7 @@ function Till() {
           playCue("complete");
           cartStore.getState().clear();
           setApproval(null);
-          setDone({ receipt: r.receipt_no, change: r.change_due });
+          setDone({ receipt: r.receipt_no, change: r.change_due, orderId: r.order_id });
           closeDialog();
         },
         onError: (e) => {
@@ -411,10 +413,32 @@ function Till() {
       {done && (
         <div
           role="status"
-          className="border-b bg-success-surface px-4 py-2 text-lg font-semibold text-success-foreground"
+          className="flex flex-wrap items-center justify-between gap-3 border-b bg-success-surface px-4 py-2 text-lg font-semibold text-success-foreground"
         >
-          {t("done.title")} · {t("done.receipt", { receipt: done.receipt })}
-          {done.change > 0 && ` · ${t("done.change", { change: formatMoney(done.change) })}`}
+          <div>
+            {t("done.title")} · {t("done.receipt", { receipt: done.receipt })}
+            {done.change > 0 && ` · ${t("done.change", { change: formatMoney(done.change) })}`}
+          </div>
+          {done.orderId && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="border-success-foreground/40 bg-white/70 text-success-foreground hover:bg-white"
+              onClick={async () => {
+                const orderId = done.orderId;
+                if (orderId) {
+                  const res = await commands.orderReceipt(orderId);
+                  if (res.status === "ok") {
+                    usePrintReceiptStore.getState().print(res.data);
+                  }
+                }
+              }}
+            >
+              <Printer className="mr-1.5 size-4" />
+              {t("done.printReceipt", { defaultValue: "බිල්පත මුද්‍රණය (Print)" })}
+            </Button>
+          )}
         </div>
       )}
 

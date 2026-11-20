@@ -23,11 +23,7 @@ import {
   useSetPrinterProfile,
   useSetReceiptLogo,
 } from "@/db/hooks";
-import {
-  canvasFromLogo,
-  logoFromFileWithSource,
-  renderScaledLogo,
-} from "@/lib/logoBitmap";
+import { canvasFromLogo, logoFromFileWithSource, renderScaledLogo } from "@/lib/logoBitmap";
 import { ReceiptPreview } from "./ReceiptPreview";
 import { translateError } from "@/i18n";
 import { AdvancedSection } from "@/components/common/AdvancedSection";
@@ -146,13 +142,10 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
   const zoomTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [scalePercent, setScalePercent] = useState<number>(() => {
     const stored = localStorage.getItem("receipt_logo_scale");
-    return stored ? Math.min(100, Math.max(10, Number(stored))) : 100;
+    return stored ? Math.min(100, Math.max(10, Number.parseInt(stored, 10))) : 100;
   });
-  const [sliderVal, setSliderVal] = useState<number>(scalePercent);
-
-  useEffect(() => {
-    setSliderVal(scalePercent);
-  }, [scalePercent]);
+  const [sliderVal, setSliderVal] = useState<number | null>(null);
+  const activeZoom = sliderVal ?? scalePercent;
 
   useEffect(() => {
     return () => {
@@ -202,11 +195,13 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
     sourceRef.current = null;
     sourceDimRef.current = { width: res.width, height: res.height };
     setScalePercent(100);
-    setSliderVal(100);
+    setSliderVal(null);
     try {
       if (res.dataUrl) localStorage.setItem("receipt_logo_source", res.dataUrl);
       localStorage.setItem("receipt_logo_scale", "100");
-    } catch {}
+    } catch {
+      /* ignore */
+    }
     setLogo.mutate(res.logo, { onSuccess: () => toast.success(t("settings.logoSaved")) });
   };
 
@@ -216,21 +211,32 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
     try {
       localStorage.removeItem("receipt_logo_source");
       localStorage.removeItem("receipt_logo_scale");
-    } catch {}
+    } catch {
+      /* ignore */
+    }
     setLogo.mutate(null, { onSuccess: () => toast.success(t("settings.logoRemoved")) });
   };
 
   const handleZoom = (percent: number, immediate = false) => {
     const target = Math.min(100, Math.max(10, Math.round(percent)));
-    setSliderVal(target);
+    if (immediate) setSliderVal(null);
     setScalePercent(target);
     try {
       localStorage.setItem("receipt_logo_scale", String(target));
-    } catch {}
+    } catch {
+      /* ignore */
+    }
 
     const source = sourceRef.current ?? (header.data?.logo ? canvasFromLogo(header.data.logo) : null);
     if (!source) return;
-    const dim = sourceDimRef.current ?? ("width" in source ? { width: Number(source.width), height: Number(source.height) } : null);
+    const dim =
+      sourceDimRef.current ??
+      ("width" in source
+        ? {
+            width: Number.parseInt(String(source.width), 10),
+            height: Number.parseInt(String(source.height), 10),
+          }
+        : null);
     if (!dim || dim.width <= 0) return;
 
     const newLogo = renderScaledLogo(source, dim.width, dim.height, target);
@@ -347,12 +353,7 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
                   {header.data?.logo ? t("settings.logoReplace") : t("settings.logoChoose")}
                 </Button>
                 {header.data?.logo && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={setLogo.isPending}
-                    onClick={removeImage}
-                  >
+                  <Button type="button" variant="outline" disabled={setLogo.isPending} onClick={removeImage}>
                     <Trash2 aria-hidden />
                     {t("settings.logoRemove")}
                   </Button>
@@ -364,7 +365,7 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-medium">{t("settings.logoSize")}</span>
                     <span className="text-xs font-mono text-muted-foreground">
-                      {header.data.logo.width} × {header.data.logo.height} dots ({sliderVal}%)
+                      {header.data.logo.width} × {header.data.logo.height} dots ({activeZoom}%)
                     </span>
                   </div>
                   <div className="flex items-center gap-3">
@@ -373,8 +374,8 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
                       variant="outline"
                       size="icon"
                       className="size-8 shrink-0"
-                      disabled={setLogo.isPending || sliderVal <= 10}
-                      onClick={() => handleZoom(sliderVal - 5, true)}
+                      disabled={setLogo.isPending || activeZoom <= 10}
+                      onClick={() => handleZoom(activeZoom - 5, true)}
                       title={t("settings.zoomOut")}
                       aria-label={t("settings.zoomOut")}
                     >
@@ -385,14 +386,20 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
                       min={10}
                       max={100}
                       step={1}
-                      value={sliderVal}
+                      value={activeZoom}
                       onChange={(e) => {
-                        const v = Number(e.target.value);
+                        const v = Number.parseInt(e.target.value, 10);
                         setSliderVal(v);
                         handleZoom(v, false);
                       }}
-                      onPointerUp={() => handleZoom(sliderVal, true)}
-                      onKeyUp={() => handleZoom(sliderVal, true)}
+                      onPointerUp={() => {
+                        setSliderVal(null);
+                        handleZoom(activeZoom, true);
+                      }}
+                      onKeyUp={() => {
+                        setSliderVal(null);
+                        handleZoom(activeZoom, true);
+                      }}
                       className="h-2 flex-1 cursor-pointer accent-primary"
                       aria-label={t("settings.logoSize")}
                     />
@@ -401,8 +408,8 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
                       variant="outline"
                       size="icon"
                       className="size-8 shrink-0"
-                      disabled={setLogo.isPending || sliderVal >= 100}
-                      onClick={() => handleZoom(sliderVal + 5, true)}
+                      disabled={setLogo.isPending || activeZoom >= 100}
+                      onClick={() => handleZoom(activeZoom + 5, true)}
                       title={t("settings.zoomIn")}
                       aria-label={t("settings.zoomIn")}
                     >
