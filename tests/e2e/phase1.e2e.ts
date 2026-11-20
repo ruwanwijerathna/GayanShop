@@ -121,6 +121,7 @@ describe("Phase 1 acceptance: an offline sale day", () => {
       const total = await grandTotal();
       expect(total).toBe(`Rs ${(300 * i + 450).toLocaleString("en-US")}.00`);
       await pressKeys(Key.F9);
+      await type("Salesperson no.", "1");
       const cash = await field("Cash · Cash received (Rs)");
       await cash.waitForDisplayed();
       await cash.setValue("5000");
@@ -144,6 +145,7 @@ describe("Phase 1 acceptance: an offline sale day", () => {
     await click("Apply");
     expect(await grandTotal()).toBe("Rs 427.50");
     await pressKeys(Key.F9);
+    await type("Salesperson no.", "1");
     await click("Complete sale");
     await saleDone();
 
@@ -159,6 +161,7 @@ describe("Phase 1 acceptance: an offline sale day", () => {
     await click("Apply");
     await seeText("Above your discount limit");
     await pressKeys(Key.F9);
+    await type("Salesperson no.", "1");
     await click("Complete sale");
     await approve("Kamal", SUP_PIN);
     await saleDone();

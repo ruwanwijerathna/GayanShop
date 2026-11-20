@@ -16,6 +16,7 @@ pub mod quick_sales;
 pub mod receipts;
 pub mod reports;
 pub mod staff;
+pub mod staff_sales;
 pub mod stock;
 pub mod void;
 

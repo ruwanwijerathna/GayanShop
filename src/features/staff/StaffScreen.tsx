@@ -4,9 +4,11 @@ import {
   ArrowUp,
   ArrowUpDown,
   Check,
+  ChartColumn,
   KeyRound,
   Lock,
   Minus,
+  MoreVertical,
   Pencil,
   RotateCcw,
   Search,
@@ -39,6 +41,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -51,6 +59,7 @@ import { CommandError } from "@/db/client";
 import { useCreateStaff, useResetStaffPin, useRoles, useStaffList, useUpdateStaff } from "@/db/hooks";
 import { translateError } from "@/i18n";
 import { cn } from "@/lib/utils";
+import { StaffSalesDialog } from "./StaffSalesDialog";
 
 const FIELD = "h-12 text-base";
 
@@ -177,6 +186,7 @@ export function StaffScreen() {
 
   const [tab, setTab] = React.useState<Tab>("staff");
   const [editing, setEditing] = React.useState<StaffMember | "new" | null>(null);
+  const [viewingSales, setViewingSales] = React.useState<StaffMember | null>(null);
 
   const list = staff.data ?? [];
   const rolesList = roles.data ?? [];
@@ -253,6 +263,7 @@ export function StaffScreen() {
             roles={rolesList}
             loading={loading}
             onEdit={(m) => setEditing(m)}
+            onViewSales={(m) => setViewingSales(m)}
             onToggleActive={handleToggleActive}
           />
         </TabsContent>
@@ -260,6 +271,10 @@ export function StaffScreen() {
           <RolesTab roles={rolesList} staff={list} />
         </TabsContent>
       </Tabs>
+
+      {viewingSales !== null && (
+        <StaffSalesDialog member={viewingSales} onClose={() => setViewingSales(null)} />
+      )}
 
       {editing !== null && roles.data && (
         <StaffDialog
@@ -312,10 +327,11 @@ interface StaffDataTableProps {
   roles: Role[];
   loading: boolean;
   onEdit: (member: StaffMember) => void;
+  onViewSales: (member: StaffMember) => void;
   onToggleActive: (member: StaffMember, nextActive: boolean) => void;
 }
 
-function StaffDataTable({ data, roles, loading, onEdit, onToggleActive }: StaffDataTableProps) {
+function StaffDataTable({ data, roles, loading, onEdit, onViewSales, onToggleActive }: StaffDataTableProps) {
   const { t } = useTranslation("staff");
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [query, setQuery] = React.useState("");
@@ -346,6 +362,14 @@ function StaffDataTable({ data, roles, loading, onEdit, onToggleActive }: StaffD
 
   const columns = React.useMemo<ColumnDef<StaffMember>[]>(
     () => [
+      {
+        accessorKey: "staff_no",
+        id: "staffNo",
+        header: () => <span className="font-semibold">{t("columns.staffNo")}</span>,
+        cell: ({ row }) => (
+          <span className="font-mono text-base tabular-nums">{row.original.staff_no ?? "—"}</span>
+        ),
+      },
       {
         accessorKey: "display_name",
         id: "name",
@@ -484,22 +508,35 @@ function StaffDataTable({ data, roles, loading, onEdit, onToggleActive }: StaffD
           const m = row.original;
           return (
             <div className="flex justify-end">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 rounded-lg hover:bg-muted"
-                onClick={() => onEdit(m)}
-                aria-label={`${t("edit")} ${m.display_name}`}
-                title={`${t("edit")} ${m.display_name}`}
-              >
-                <Pencil className="size-4" />
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-11 w-11 rounded-lg hover:bg-muted"
+                    aria-label={t("rowMenu", { name: m.display_name })}
+                    title={t("rowMenu", { name: m.display_name })}
+                  >
+                    <MoreVertical className="size-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-52">
+                  <DropdownMenuItem className="h-11 gap-2 text-base" onSelect={() => onViewSales(m)}>
+                    <ChartColumn aria-hidden className="size-4" />
+                    {t("sales.menu")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="h-11 gap-2 text-base" onSelect={() => onEdit(m)}>
+                    <Pencil aria-hidden className="size-4" />
+                    {t("edit")}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           );
         },
       },
     ],
-    [t, onEdit, onToggleActive],
+    [t, onEdit, onViewSales, onToggleActive],
   );
 
   // eslint-disable-next-line react-hooks/incompatible-library

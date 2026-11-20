@@ -57,6 +57,7 @@ export const queryKeys = {
   appInfo: ["app", "info"] as const,
   integrity: ["app", "integrity"] as const,
   loginStaff: ["auth", "login-staff"] as const,
+  staffSales: (id: string) => ["staff", "sales", id] as const,
   audit: ["audit", "pages"] as const,
   categories: ["catalog", "categories"] as const,
   products: ["catalog", "products"] as const,
@@ -560,6 +561,15 @@ export function useBackupNow() {
 
 export function useStaffList() {
   return useQuery({ queryKey: queryKeys.staff, queryFn: () => unwrap(commands.listStaff()) });
+}
+
+/** One person's daily sales for the chart and their week, month and year totals (Staff → Sales performance). */
+export function useStaffSales(id: string | null) {
+  return useQuery({
+    queryKey: queryKeys.staffSales(id ?? ""),
+    queryFn: () => unwrap(commands.staffSales(id ?? "")),
+    enabled: id !== null,
+  });
 }
 
 export function useRoles() {

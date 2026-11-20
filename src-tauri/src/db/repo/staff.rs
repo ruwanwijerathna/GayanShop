@@ -54,6 +54,9 @@ pub struct StaffMember {
     pub effective: Vec<Perm>,
     /// The only active Owner: can't be disabled or moved to another role (owner invariant).
     pub last_owner: bool,
+    /// The small number (1, 2, 3 …) the cashier types at the till to credit a sale; never reused.
+    #[specta(type = Option<specta_typescript::Number>)]
+    pub staff_no: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize, Type)]
@@ -98,10 +101,12 @@ struct StaffRow {
     grant_mask: i64,
     deny_mask: i64,
     max_discount_bp: Option<i64>,
+    staff_no: Option<i64>,
 }
 
 const STAFF_SELECT: &str = "SELECT s.id, s.display_name, s.role_id, r.name AS role_name, r.is_system AS role_is_system,
-        r.permissions AS role_permissions, s.is_active, s.ui_language, s.grant_mask, s.deny_mask, s.max_discount_bp
+        r.permissions AS role_permissions, s.is_active, s.ui_language, s.grant_mask, s.deny_mask, s.max_discount_bp,
+        s.staff_no
      FROM staff s JOIN roles r ON r.id = s.role_id WHERE s.deleted_at IS NULL";
 
 fn is_owner_role(is_system: bool, name: &str) -> bool {
@@ -124,6 +129,7 @@ fn to_member(r: StaffRow, active_owners: i64) -> StaffMember {
         denies: PermMask(r.deny_mask).list(),
         max_discount_bp: r.max_discount_bp,
         effective: eff.list(),
+        staff_no: r.staff_no,
     }
 }
 
@@ -239,7 +245,7 @@ fn audit_ctx(ctx: &WriteCtx) -> AuditCtx<'_> {
 fn audit_view(m: &StaffMember) -> serde_json::Value {
     json!({ "display_name": m.display_name, "role": m.role_name, "is_active": m.is_active,
             "ui_language": m.ui_language, "grants": m.grants, "denies": m.denies,
-            "max_discount_bp": m.max_discount_bp })
+            "max_discount_bp": m.max_discount_bp, "staff_no": m.staff_no })
 }
 
 pub async fn create(
@@ -256,10 +262,15 @@ pub async fn create(
     validate_pin(&input.pin, min_pin_len(&c.role.name))?;
     let hash = hasher.hash(&input.pin)?;
     let id = new_id();
+    // The next free number; deleted rows still count, so a number is never handed out twice.
+    let staff_no: i64 = sqlx::query_scalar("SELECT COALESCE(MAX(staff_no), 0) + 1 FROM staff WHERE store_id = ?1")
+        .bind(&ctx.store_id)
+        .fetch_one(&mut *conn)
+        .await?;
     sqlx::query(
         "INSERT INTO staff (id, store_id, display_name, role_id, pin_hash, grant_mask, deny_mask, max_discount_bp,
-                            ui_language, is_active, created_at, updated_at, updated_by_device)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11, ?12)",
+                            ui_language, is_active, created_at, updated_at, updated_by_device, staff_no)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11, ?12, ?13)",
     )
     .bind(&id)
     .bind(&ctx.store_id)
@@ -273,6 +284,7 @@ pub async fn create(
     .bind(input.staff.is_active)
     .bind(&ctx.now)
     .bind(&ctx.device_id)
+    .bind(staff_no)
     .execute(&mut *conn)
     .await?;
     let m = member(conn, &id).await?;

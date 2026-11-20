@@ -1514,9 +1514,12 @@ CREATE TABLE staff (
   ui_language TEXT NOT NULL DEFAULT 'en' CHECK (ui_language IN ('en','si')),
   is_active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by_device TEXT NOT NULL,
-  deleted_at TEXT, version INTEGER NOT NULL DEFAULT 1
+  deleted_at TEXT, version INTEGER NOT NULL DEFAULT 1,
+  staff_no INTEGER CHECK (staff_no IS NULL OR staff_no > 0)   -- v4.4 (migration 0004): the number typed at the till
 );
 CREATE INDEX ix_staff_role ON staff(role_id);
+-- v4.4: locally unique per store; auto-assigned as MAX + 1 (never reused); only indexed, not unique, in the cloud.
+CREATE UNIQUE INDEX ux_staff_no ON staff(store_id, staff_no) WHERE staff_no IS NOT NULL;
 
 -- Effective permissions = (role | grant) & ~deny; the Owner system role holds every bit (2^53 − 1).
 -- Bits used by policy triggers: PRICE_OVERRIDE = 4 (bit 2), VOID_ORDER = 32 (bit 5).
@@ -1695,6 +1698,7 @@ CREATE TABLE orders (
   type TEXT NOT NULL DEFAULT 'sale' CHECK (type IN ('sale')),   -- Phase 5 may add 'exchange'
   status TEXT NOT NULL CHECK (status IN ('pending','completed','voided')),
   staff_id TEXT NOT NULL REFERENCES staff(id),
+  sold_by TEXT REFERENCES staff(id),                 -- v4.4: the salesperson typed at the till; NULL on older orders
   approved_by TEXT REFERENCES staff(id),             -- bill-discount / override approver
   customer_id TEXT REFERENCES customers(id),         -- optional; the phone lives only on customers
   line_count INTEGER NOT NULL CHECK (line_count > 0),
@@ -3026,6 +3030,7 @@ cargo add --dev proptest
 | 22 | **Successful automatic backups are not audited; a failure is audited once until one succeeds** (owner-confirmed 2026-11-10) | Auditing every hourly backup | About 24 audit rows a day, all synced, would bury the audit log. The status shows the last automatic backup. Manual backups and restores stay fully audited. |
 | 23 | **SQLCipher deferred; standard SQLite WAL with OS file permissions retained** (Block 4.3) | Bundling SQLCipher / full-database encryption | SQLite WAL with Windows NTFS ACLs meets the single-store offline threat model with zero read overhead; full-disk BitLocker protects against physical theft. |
 | 24 | **Local rotating logs + support bundle export; no SaaS crash reporting** (Block 4.4) | Third-party cloud telemetry (Sentry, etc.) | Preserves customer privacy and strict offline operation; support bundle ZIP is exported on demand by the store owner for diagnostics. |
+| 25 | **Every sale records who made it: a staff number typed at the till, required on every sale** (owner-confirmed 2026-11-18; schema v4.4) | Crediting the logged-in cashier only; an optional or remembered number | Several people can share one till login, so the cashier (`staff_id`, who owns the shift and drawer) and the salesperson (`sold_by`) are different facts. An unknown or disabled number refuses the sale before a receipt number is used. Numbers are auto-assigned (next free, never reused). Staff → ⋮ → Sales performance reads completed orders by `COALESCE(sold_by, staff_id)`: daily totals for 30 days plus week, month and year totals; voided sales do not count. |
 
 
 ---

@@ -39,7 +39,8 @@
     "role": "Role",
     "language": "Language",
     "status": "Status",
-    "actions": "Actions"
+    "actions": "Actions",
+    "staffNo": "No."
   },
   "active": "Active",
   "inactive": "Disabled",
@@ -126,5 +127,17 @@
     "inventory": "Inventory & Products",
     "reports": "Reports & Financials",
     "system": "System Administration"
+  },
+  "rowMenu": "Actions for {{name}}",
+  "sales": {
+    "menu": "Sales performance",
+    "title": "{{name}}: sales performance",
+    "subtitle": "Staff no. {{no}} · completed sales only; voided sales are not counted.",
+    "subtitleNoNumber": "Completed sales only; voided sales are not counted.",
+    "week": "This week",
+    "month": "This month",
+    "year": "This year",
+    "orders_one": "{{count}} sale",
+    "orders_other": "{{count}} sales"
   }
 }

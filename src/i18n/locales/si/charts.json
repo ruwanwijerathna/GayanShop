@@ -29,5 +29,11 @@
   "sold": "විකුණූ",
   "writtenOff": "ලියා හැරි",
   "left": "ඉතිරි",
-  "sellThrough": "විකිණුම් අනුපාතය"
+  "sellThrough": "විකිණුම් අනුපාතය",
+  "staffDailySales": "දෛනික විකුණුම් (පසුගිය දින 30)",
+  "sales": "විකුණුම්",
+  "orders": "විකුණුම් ගණන",
+  "date": "දිනය",
+  "ordersCount_one": "විකුණුම් {{count}}",
+  "ordersCount_other": "විකුණුම් {{count}}"
 }

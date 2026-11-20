@@ -13,6 +13,7 @@ vi.mock("@/db/bindings", () => ({
     updateStaff: vi.fn(),
     resetStaffPin: vi.fn(),
     listLoginStaff: vi.fn(),
+    staffSales: vi.fn(),
   },
 }));
 
@@ -50,8 +51,15 @@ const member = (over: Partial<StaffMember>): StaffMember => ({
   max_discount_bp: null,
   effective: [],
   last_owner: true,
+  staff_no: 1,
   ...over,
 });
+
+/** Open a row's ⋮ menu and choose an entry (Radix opens on the keyboard in jsdom). */
+async function rowAction(name: string, entry: string) {
+  fireEvent.keyDown(await screen.findByRole("button", { name: `Actions for ${name}` }), { key: "Enter" });
+  fireEvent.click(await screen.findByRole("menuitem", { name: entry }));
+}
 
 const KASUN = member({
   id: "s2",
@@ -61,6 +69,7 @@ const KASUN = member({
   is_owner: false,
   last_owner: false,
   ui_language: "si",
+  staff_no: 2,
 });
 
 beforeEach(() => {
@@ -70,7 +79,20 @@ beforeEach(() => {
   vi.mocked(commands.updateStaff).mockImplementation(() => ok(KASUN));
   vi.mocked(commands.resetStaffPin).mockImplementation(() => ok(null));
   vi.mocked(commands.listLoginStaff).mockImplementation(() => ok([]));
+  vi.mocked(commands.staffSales).mockImplementation(() => ok(SALES));
 });
+
+const SALES = {
+  staff_id: "s2",
+  today: "2026-11-08",
+  daily: [
+    { date: "2026-11-07", total: 120_000, orders: 3 },
+    { date: "2026-11-08", total: 80_000, orders: 2 },
+  ],
+  week: { total: 200_000, orders: 5 },
+  month: { total: 700_000, orders: 14 },
+  year: { total: 9_000_000, orders: 180 },
+};
 
 describe("StaffScreen", () => {
   it("lists staff with role, language and status", async () => {
@@ -78,6 +100,37 @@ describe("StaffScreen", () => {
     const row = (await screen.findByText("Kasun")).closest("tr");
     expect(row).not.toBeNull();
     if (row) expect(within(row).getByText("Sinhala")).toBeInTheDocument();
+  });
+
+  it("shows each person's staff number", async () => {
+    renderWithProviders(<StaffScreen />);
+    const row = (await screen.findByText("Kasun")).closest("tr");
+    expect(row).not.toBeNull();
+    if (row) expect(within(row).getByText("2")).toBeInTheDocument();
+  });
+
+  it("opens a daily sales chart with week, month and year cards from the row's ⋮ menu", async () => {
+    renderWithProviders(<StaffScreen />);
+    await rowAction("Kasun", "Sales performance");
+    const dialog = await screen.findByRole("dialog", { name: /Kasun: sales performance/ });
+    await waitFor(() => expect(commands.staffSales).toHaveBeenCalledWith("s2"));
+    const card = (name: string) => within(dialog).getByRole("group", { name });
+    expect(within(card("This week")).getByText("Rs 2,000.00")).toBeInTheDocument();
+    expect(within(card("This week")).getByText("5 sales")).toBeInTheDocument();
+    expect(within(card("This month")).getByText("Rs 7,000.00")).toBeInTheDocument();
+    expect(within(card("This year")).getByText("Rs 90,000.00")).toBeInTheDocument();
+    const chart = within(dialog).getByRole("figure", { name: "Daily sales (last 30 days)" });
+    expect(within(chart).getAllByRole("row")).toHaveLength(3);
+  });
+
+  it("shows Rust's refusal instead of the chart", async () => {
+    vi.mocked(commands.staffSales).mockImplementation(() =>
+      err({ kind: "VALIDATION", code: "STAFF_NOT_FOUND", detail: "" }),
+    );
+    renderWithProviders(<StaffScreen />);
+    await rowAction("Kasun", "Sales performance");
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("no longer exists");
   });
 
   it("adds a cashier with a PIN and confirmed PIN", async () => {
@@ -108,7 +161,7 @@ describe("StaffScreen", () => {
 
   it("locks the role and active switch of the last Owner", async () => {
     renderWithProviders(<StaffScreen />);
-    fireEvent.click(await screen.findByRole("button", { name: "Edit Gayan" }));
+    await rowAction("Gayan", "Edit");
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByLabelText("Role")).toBeDisabled();
     expect(within(dialog).getByLabelText("Can log in")).toBeDisabled();
@@ -120,7 +173,7 @@ describe("StaffScreen", () => {
       err({ kind: "VALIDATION", code: "OWNER_ROLE_OWNER_ONLY", detail: "" }),
     );
     renderWithProviders(<StaffScreen />);
-    fireEvent.click(await screen.findByRole("button", { name: "Edit Kasun" }));
+    await rowAction("Kasun", "Edit");
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("Only an Owner");
@@ -128,7 +181,7 @@ describe("StaffScreen", () => {
 
   it("resets a PIN", async () => {
     renderWithProviders(<StaffScreen />);
-    fireEvent.click(await screen.findByRole("button", { name: "Edit Kasun" }));
+    await rowAction("Kasun", "Edit");
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "Reset PIN" }));
     fireEvent.change(within(dialog).getByLabelText("New PIN (4–8 digits)"), { target: { value: "9753" } });
@@ -181,7 +234,7 @@ describe("StaffScreen", () => {
 
   it("closes the editor with Cancel without saving", async () => {
     renderWithProviders(<StaffScreen />);
-    fireEvent.click(await screen.findByRole("button", { name: "Edit Kasun" }));
+    await rowAction("Kasun", "Edit");
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
