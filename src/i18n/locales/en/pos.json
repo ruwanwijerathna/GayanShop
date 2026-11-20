@@ -66,7 +66,8 @@
     "void": "Void",
     "help": "Shortcuts",
     "newSale": "Clear cart",
-    "exchange": "Exchange"
+    "exchange": "Exchange",
+    "more": "More"
   },
   "keypad": {
     "label": "Keypad",
