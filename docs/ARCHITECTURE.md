@@ -322,19 +322,25 @@ Style: flat with clear borders, no decorative effects. Borders, not shadows, sep
 - **Touch targets ≥ 48 × 48 px**, with **≥ 8 px between adjacent targets** on all till screens and dialogs.
 - Button sizes: `pos` = 48 px (`h-12`), `pos-lg` = 64 px (`h-16`) for **Pay**, the keypad and payment methods, `default` = 40 px (mouse-only back-office forms).
 - Rows are 48 px, or 36 px in an opt-in compact density for mouse-driven back-office PCs.
-- **Till layout at 1024×768** (no scrolling of the primary regions):
+- **Till layout at 1024×768** (v4.6 redesign, owner 2026-11-20: simple, two panes, nothing to hunt for):
 
   ```
-  ┌──────────────────────────────── top bar 56px: store · counter T01 · staff · sync pill · EN|සිං · lock ──┐
-  │ scan/search field (F3) 56px · customer phone (F4) · quick-sale bar (F2)                                     │
-  ├──────────────────────────────────────────────┬────────────────────────────────────────────────────────────┤
-  │ CART (≈58%) — virtualised, 48px lines,       │ quick keys / search results (48px tiles)                      │
-  │ newest line at bottom, auto-scroll           │                                                              │
-  │                                              │ numeric keypad (64px keys)                                    │
-  ├──────────────────────────────────────────────┼────────────────────────────────────────────────────────────┤
-  │ items · discounts · TOTAL Rs 12,450.00 (40px)│ [Hold F8] [Discount F6/F7] [Void F10]   [  PAY  F9  ] 64px   │
-  └──────────────────────────────────────────────┴────────────────────────────────────────────────────────────┘
+  ┌──────────────── CART (60%) ─────────────────┬────────── SELL (40%) ───────────────┐
+  │ Cart                              Items: 3  │ Scan or search [F3]  (56 px field)  │
+  ├─────────────────────────────────────────────┤ [optional panel: phone F4 / quick   │
+  │ 64 px lines, newest at the bottom,          │  sale F2, closed until asked for]   │
+  │ − qty +  line total (virtualised)           │ search results (only while typing)  │
+  │                                             │ ┌─────────────────────────────────┐ │
+  │                                             │ │ TOTAL                Rs 12,450  │ │
+  │                                             │ └─────────────────────────────────┘ │
+  │                                             │ [        PAY  F9        ] 64 px     │
+  │                                             │ [Exchange F12]  [ ⋯ More ]          │
+  └─────────────────────────────────────────────┴─────────────────────────────────────┘
   ```
+
+  - Only **Pay** and **Exchange** are always visible. **More** holds customer phone (F4), quick sale (F2), hold (F8), recall (F11), edit line (F6), bill discount (F7), void (F10) and shortcuts (F1). Every shortcut still works without opening the menu.
+  - There are **no product tiles and no on-screen keypad on the till**; the numeric keypad appears only inside the payment dialog in touch mode.
+  - The phone and quick-sale fields open inline (never a modal), close after use, and an entered phone number stays visible as a chip.
 
 **Dual-mode input:**
 - **Keyboard-first:**
@@ -343,7 +349,7 @@ Style: flat with clear borders, no decorative effects. Borders, not shadows, sep
   - Every till button shows its key as a visible **`<Kbd>` badge** (e.g. `PAY [F9]`).
   - In dialogs, Tab order is logical, Enter triggers the default action and Esc cancels. A focus trap is mandatory, and focus returns to where it was on close.
 - **Touch:**
-  - **Touch screen mode** is a per-device toggle (Settings → Touch screen; `device_settings` key `ui.touch_mode`, default off, never synced). Only when it is on do the till's numeric keypad, the payment dialog's keypad and the PIN pads' digit keys show. Off, the masked PIN field and every input stay fully keyboard-driven.
+  - **Touch screen mode** is a per-device toggle (Settings → Touch screen; `device_settings` key `ui.touch_mode`, default off, never synced). Only when it is on do the payment dialog's keypad and the PIN pads' digit keys show. Off, the masked PIN field and every input stay fully keyboard-driven.
   - No hover-only affordances, no long-press-only actions, and no drag-required interactions.
   - Pressed state appears within one frame (`active:` scale 0.98 plus a darker fill).
 - Shortcuts are suspended while a text field is focused, except for F-keys and Esc, and while a scanner burst is being captured (§7.1).

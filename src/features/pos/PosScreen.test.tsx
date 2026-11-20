@@ -1,6 +1,7 @@
 // The till end to end against mocked commands: scan → cart, F2 quick sale, F4 phone, F9 pay with change,
 // the supervisor step-up on an above-limit discount, an unknown barcode, hold, and the debounced save.
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { useEffect, type ReactNode } from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useSession } from "@/app/session";
@@ -242,18 +243,30 @@ describe("PosScreen: shared barcodes", () => {
 });
 
 describe("PosScreen", () => {
-  it("hides the on-screen keypad unless touch screen mode is on", async () => {
-    await renderTill();
-    await waitFor(() => expect(commands.devicePreferences).toHaveBeenCalled());
-    expect(screen.queryByRole("group", { name: "Keypad" })).not.toBeInTheDocument();
-  });
-
-  it("shows the on-screen keypad in touch screen mode", async () => {
+  it("keeps the till simple: no on-screen keypad, even in touch screen mode", async () => {
     vi.mocked(commands.devicePreferences).mockImplementation(() =>
       ok({ default_language: "en", theme: "light", touch_mode: true }),
     );
     await renderTill();
-    expect(await screen.findByRole("group", { name: "Keypad" })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Keypad" })).not.toBeInTheDocument();
+  });
+
+  it("shows only Pay, Exchange and More until the menu is opened", async () => {
+    await renderTill();
+    expect(screen.getByRole("button", { name: /PAY/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Exchange/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "More" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Hold/ })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Quick sale/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Customer phone/)).not.toBeInTheDocument();
+  });
+
+  it("opens Hold and Quick sale from the More menu", async () => {
+    await renderTill();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "More" }));
+    await user.click(await screen.findByRole("menuitem", { name: /Quick sale/ }));
+    expect(await screen.findByLabelText(/Quick sale/)).toHaveFocus();
   });
 
   it("adds a scanned product, bumps it on a second scan and totals it", async () => {
@@ -291,7 +304,10 @@ describe("PosScreen", () => {
     fireEvent.keyDown(bar, { key: "Enter", code: "Enter" });
     expect(cartStore.getState().lines[0]).toMatchObject({ productId: null, name: "Bucket 10L", qty: 3 });
     expect(screen.getByTestId("grand-total")).toHaveTextContent("Rs 1,350.00");
-    fireEvent.change(bar, { target: { value: "Bucket 10L" } });
+    // The panel closes after an add and focus is back on the scan field; F2 reopens it.
+    expect(screen.queryByLabelText(/Quick sale/)).not.toBeInTheDocument();
+    key("F2");
+    fireEvent.change(screen.getByLabelText(/Quick sale/), { target: { value: "Bucket 10L" } });
     expect(screen.getByText(/Price missing/)).toBeInTheDocument();
   });
 
