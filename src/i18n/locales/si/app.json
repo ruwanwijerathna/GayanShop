@@ -56,7 +56,8 @@
       "AUTH_FAILED": "වැරදි PIN",
       "AUTH_LOCKOUT": "වැරදි PIN නිසා අගුළු දැමිණි",
       "APPROVAL_GRANTED": "අනුමැතිය ලබා දුනි",
-      "APPROVAL_DENIED": "අනුමැතිය ප්‍රතික්ෂේප විය"
+      "APPROVAL_DENIED": "අනුමැතිය ප්‍රතික්ෂේප විය",
+      "Z_REPORT_REPRINT": "Z-වාර්තාව නැවත මුද්‍රණය කළා"
     }
   },
   "permissions": {

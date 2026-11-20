@@ -122,8 +122,12 @@ export const commands = {
 	closeCashSession: (input: CloseInput_Deserialize) => typedError<ZReport_Serialize, AppError>(__TAURI_INVOKE("close_cash_session", { input })),
 	/**  This counter's recent sessions. */
 	listCashSessions: (limit: number) => typedError<CashSession_Serialize[], AppError>(__TAURI_INVOKE("list_cash_sessions", { limit })),
-	/**  Z-report of a closed session, or X-report of the open one. */
+	/**  Z-report of a closed session, or X-report of the open one. Own counter, or any with `REPORT_SALES`. */
 	cashSessionReport: (sessionId: string) => typedError<ZReport_Serialize, AppError>(__TAURI_INVOKE("cash_session_report", { sessionId })),
+	/**  Shift history (Today | History). `REPORT_SALES` sees every counter; anyone else sees this counter's shifts. */
+	cashHistory: (filter: HistoryFilter_Deserialize, limit: number) => typedError<SessionHistory_Serialize, AppError>(__TAURI_INVOKE("cash_history", { filter, limit })),
+	/**  Print a closed session's Z-report again (`REPRINT_RECEIPT`; own counter, or any with `REPORT_SALES`). */
+	reprintZReport: (sessionId: string) => typedError<null, AppError>(__TAURI_INVOKE("reprint_z_report", { sessionId })),
 	checkoutOrder: (input: CheckoutInput_Deserialize) => typedError<CheckoutResult_Serialize, AppError>(__TAURI_INVOKE("checkout_order", { input })),
 	/**
 	 *  Exchange step 1 (`EXCHANGE_PROCESS`): find the sale by its receipt number and report what can still come
@@ -1451,6 +1455,29 @@ export type HistoryCursor = {
 	id: string,
 };
 
+/**  Filters for the shift history. Dates are business dates, inclusive; empty means no bound. */
+export type HistoryFilter = HistoryFilter_Serialize | HistoryFilter_Deserialize;
+
+/**  Filters for the shift history. Dates are business dates, inclusive; empty means no bound. */
+export type HistoryFilter_Deserialize = {
+	from?: string | null,
+	to?: string | null,
+	/**  One counter; `None` for all the viewer may see. */
+	device_id?: string | null,
+	/**  Only shifts whose count did not match (variance ≠ 0). */
+	variance_only: boolean,
+};
+
+/**  Filters for the shift history. Dates are business dates, inclusive; empty means no bound. */
+export type HistoryFilter_Serialize = {
+	from: string | null,
+	to: string | null,
+	/**  One counter; `None` for all the viewer may see. */
+	device_id: string | null,
+	/**  Only shifts whose count did not match (variance ≠ 0). */
+	variance_only: boolean,
+};
+
 /**  One order in a customer's purchase history (completed or voided; voids carry no spend). */
 export type HistoryOrder = HistoryOrder_Serialize | HistoryOrder_Deserialize;
 
@@ -2589,6 +2616,48 @@ export type SalesByRow_Serialize = {
 };
 
 export type SalesDimension = "product" | "category" | "batch";
+
+export type SessionHistory = SessionHistory_Serialize | SessionHistory_Deserialize;
+
+export type SessionHistoryRow = SessionHistoryRow_Serialize | SessionHistoryRow_Deserialize;
+
+export type SessionHistoryRow_Deserialize = {
+	session: CashSession_Deserialize,
+	/**  `T01`…; falls back to a short id for a counter that never sold. */
+	device_code: string,
+	sales_count: number,
+	/**  What the till took in the shift: Σ (grand total − exchange credit) of completed orders. */
+	sales_total: number,
+};
+
+export type SessionHistoryRow_Serialize = {
+	session: CashSession_Serialize,
+	/**  `T01`…; falls back to a short id for a counter that never sold. */
+	device_code: string,
+	sales_count: number,
+	/**  What the till took in the shift: Σ (grand total − exchange credit) of completed orders. */
+	sales_total: number,
+};
+
+export type SessionHistory_Deserialize = {
+	rows: SessionHistoryRow_Deserialize[],
+	/**  Counters the viewer may filter by. */
+	counters: ReportDevice[],
+	/**  `false` when the viewer only sees this counter (no `REPORT_SALES`). */
+	all_counters: boolean,
+	/**  More rows exist beyond `limit`. */
+	truncated: boolean,
+};
+
+export type SessionHistory_Serialize = {
+	rows: SessionHistoryRow_Serialize[],
+	/**  Counters the viewer may filter by. */
+	counters: ReportDevice[],
+	/**  `false` when the viewer only sees this counter (no `REPORT_SALES`). */
+	all_counters: boolean,
+	/**  More rows exist beyond `limit`. */
+	truncated: boolean,
+};
 
 /**  What the UI receives — never the PIN hash; permissions as keys, not a mask. */
 export type SessionInfo = {

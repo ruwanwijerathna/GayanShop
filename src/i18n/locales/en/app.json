@@ -56,7 +56,8 @@
       "AUTH_FAILED": "Wrong PIN",
       "AUTH_LOCKOUT": "Locked after wrong PINs",
       "APPROVAL_GRANTED": "Approval granted",
-      "APPROVAL_DENIED": "Approval denied"
+      "APPROVAL_DENIED": "Approval denied",
+      "Z_REPORT_REPRINT": "Z-report reprinted"
     }
   },
   "permissions": {

@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import type { CashSession, DrawerMovementKind, Perm, ZReport } from "@/db/bindings";
 import { CommandError } from "@/db/client";
 import {
+  useCashSessionReport,
   useCloseCashSession,
   useCurrentCashSession,
   useDrawerMovement,
@@ -18,8 +19,10 @@ import {
 import { translateError } from "@/i18n";
 import { playCue } from "@/lib/audio";
 import { formatMoney, parseMajor } from "@/lib/money";
-import { ZReportView } from "./ZReportView";
-import { Checkbox } from "@/components/ui/checkbox";
+import { MovementList, ZReportView } from "./ZReportView";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CashHistory } from "./CashHistory";
+import { PrintZButton } from "./PrintZButton";
 
 /** Must match `commands::cash::DRAWER_TARGET`: the approval is bound to it. */
 export const DRAWER_TARGET = "cash_drawer";
@@ -262,18 +265,37 @@ function NoSaleForm({ onDone, onApproval }: { onDone: () => void; onApproval: (p
   );
 }
 
-function CloseForm({ onDone, onClosed }: { onDone: () => void; onClosed: (z: ZReport) => void }) {
+function CloseForm({
+  expected,
+  onDone,
+  onClosed,
+}: {
+  expected: number | null;
+  onDone: () => void;
+  onClosed: (z: ZReport) => void;
+}) {
   const { t, i18n } = useTranslation(["cash", "common"]);
   const close = useCloseCashSession();
   const [counted, setCounted] = useState("");
-  const [byDenomination, setByDenomination] = useState(false);
+  const [byTotal, setByTotal] = useState(false);
   const [counts, setCounts] = useState<Record<number, string>>({});
   const [note, setNote] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const serverError = close.error instanceof CommandError ? translateError(i18n.t, close.error.error) : null;
 
-  const total = byDenomination ? denominationTotal(counts) : parseMajor(counted);
+  const total = byTotal ? parseMajor(counted) : denominationTotal(counts);
+  // Over / short, said in words (never colour alone) before anything is confirmed.
+  let verdict: string | null = null;
+  if (expected !== null && total !== null) {
+    const diff = total - expected;
+    verdict =
+      diff === 0
+        ? t("close.diff.exact")
+        : diff < 0
+          ? t("close.diff.short", { amount: formatMoney(-diff) })
+          : t("close.diff.over", { amount: formatMoney(diff) });
+  }
 
   const submit = () => {
     if (total === null) {
@@ -282,12 +304,12 @@ function CloseForm({ onDone, onClosed }: { onDone: () => void; onClosed: (z: ZRe
       return;
     }
     setLocalError(null);
-    const denominations = byDenomination
-      ? DENOMINATIONS.filter((v) => (counts[v] ?? "").trim() !== "").map((value) => ({
+    const denominations = byTotal
+      ? null
+      : DENOMINATIONS.filter((v) => (counts[v] ?? "").trim() !== "").map((value) => ({
           value,
           count: Number.parseInt(counts[value] ?? "0", 10),
-        }))
-      : null;
+        }));
     close.mutate(
       { counted_cash: total, denominations, note: note.trim() === "" ? null : note },
       {
@@ -306,41 +328,21 @@ function CloseForm({ onDone, onClosed }: { onDone: () => void; onClosed: (z: ZRe
   return (
     <form
       aria-label={t("close.title")}
-      className="flex flex-col gap-3 rounded-md bg-muted p-3"
+      className="flex flex-col gap-4 rounded-lg border border-border bg-muted/40 p-4"
       onSubmit={(e) => {
         e.preventDefault();
         if (confirming) submit();
-        else setConfirming(true);
+        else if (total === null) {
+          setLocalError(t("moneyInvalid"));
+          playCue("error");
+        } else {
+          setLocalError(null);
+          setConfirming(true);
+        }
       }}
     >
-      <h3 className="font-semibold">{t("close.title")}</h3>
-      <label className="flex min-h-12 items-center gap-3">
-        <Checkbox
-          className="size-6"
-          checked={byDenomination}
-          onCheckedChange={(v) => setByDenomination(v === true)}
-        />
-        {t("close.byDenomination")}
-      </label>
-      {byDenomination ? (
-        <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
-          {DENOMINATIONS.map((v) => (
-            <Field
-              key={v}
-              id={`denom-${v}`}
-              label={t("close.denomination", { value: formatMoney(v).replace("Rs ", "") })}
-            >
-              <Input
-                id={`denom-${v}`}
-                inputMode="numeric"
-                className={`${FIELD} font-mono`}
-                value={counts[v] ?? ""}
-                onChange={(e) => setCounts((c) => ({ ...c, [v]: e.target.value }))}
-              />
-            </Field>
-          ))}
-        </div>
-      ) : (
+      <h3 className="text-lg font-semibold">{t("close.title")}</h3>
+      {byTotal ? (
         <Field id="counted-cash" label={t("close.counted")}>
           <Input
             id="counted-cash"
@@ -350,12 +352,46 @@ function CloseForm({ onDone, onClosed }: { onDone: () => void; onClosed: (z: ZRe
             onChange={(e) => setCounted(e.target.value)}
           />
         </Field>
+      ) : (
+        <>
+          <p className="text-muted-foreground">{t("close.countHint")}</p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+            {DENOMINATIONS.map((v) => (
+              <Field
+                key={v}
+                id={`denom-${v}`}
+                label={t("close.denomination", { value: formatMoney(v).replace("Rs ", "") })}
+              >
+                <Input
+                  id={`denom-${v}`}
+                  inputMode="numeric"
+                  className={`${FIELD} font-mono`}
+                  value={counts[v] ?? ""}
+                  onChange={(e) => setCounts((c) => ({ ...c, [v]: e.target.value }))}
+                />
+              </Field>
+            ))}
+          </div>
+        </>
       )}
-      {byDenomination && total !== null && (
-        <p className="font-mono text-lg" aria-live="polite">
-          {formatMoney(total)}
-        </p>
-      )}
+      <button
+        type="button"
+        className="self-start text-base underline underline-offset-4"
+        onClick={() => setByTotal((v) => !v)}
+      >
+        {byTotal ? t("close.enterNotes") : t("close.enterTotal")}
+      </button>
+      <dl className="grid grid-cols-2 gap-y-1 rounded-md border bg-background p-3 text-lg" aria-live="polite">
+        {expected !== null && (
+          <>
+            <dt className="text-muted-foreground">{t("close.shouldBe")}</dt>
+            <dd className="text-right font-mono">{formatMoney(expected)}</dd>
+          </>
+        )}
+        <dt className="text-muted-foreground">{t("close.youCounted")}</dt>
+        <dd className="text-right font-mono">{total === null ? "–" : formatMoney(total)}</dd>
+        {verdict && <dd className="col-span-2 pt-1 text-xl font-semibold">{verdict}</dd>}
+      </dl>
       <Field id="close-note" label={t("close.note")}>
         <Input
           id="close-note"
@@ -371,41 +407,68 @@ function CloseForm({ onDone, onClosed }: { onDone: () => void; onClosed: (z: ZRe
         <Button type="submit" size="pos" disabled={close.isPending}>
           {confirming ? t("close.confirmYes") : t("close.submit")}
         </Button>
-        <Button type="button" size="pos" variant="outline" onClick={onDone}>
-          {t("common:actions.cancel")}
+        <Button
+          type="button"
+          size="pos"
+          variant="outline"
+          onClick={confirming ? () => setConfirming(false) : onDone}
+        >
+          {confirming ? t("close.back") : t("common:actions.cancel")}
         </Button>
       </div>
     </form>
   );
 }
 
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col">
+      <dt className="text-sm text-muted-foreground">{label}</dt>
+      <dd className="font-mono text-lg font-semibold">{value}</dd>
+    </div>
+  );
+}
+
+/** The open shift: what should be in the drawer right now, the four things a cashier does, and the day's cash movements. */
 function SessionPanel({ session, onClosed }: { session: CashSession; onClosed: (z: ZReport) => void }) {
   const { t, i18n } = useTranslation(["cash", "common"]);
+  const live = useCashSessionReport(session.id).data ?? null;
   const [mode, setMode] = useState<Mode>(null);
   const [pending, setPending] = useState<Pending>(null);
   const done = () => setMode(null);
   const opened = new Date(session.opened_at).toLocaleTimeString(
     i18n.resolvedLanguage === "si" ? "si-LK" : "en-LK",
+    { hour: "2-digit", minute: "2-digit" },
   );
 
   return (
-    <section
-      aria-labelledby="session-title"
-      className="flex flex-col gap-4 rounded-lg border border-border p-4"
-    >
-      <header>
-        <h2 id="session-title" className="text-xl font-semibold">
-          {t("session.title")}
-        </h2>
-        <p className="text-muted-foreground">
-          {t("session.openedBy", { name: session.opened_by_name, time: opened })}
-        </p>
-        <p>
-          {t("session.float")}: <span className="font-mono">{formatMoney(session.opening_float)}</span> ·{" "}
-          {t("session.businessDate")}: <span className="font-mono">{session.business_date}</span>
-        </p>
-      </header>
-      <div className="flex flex-wrap gap-2">
+    <section aria-labelledby="session-title" className="flex flex-col gap-5">
+      <div className="flex flex-col gap-4 rounded-lg border border-border p-5">
+        <header>
+          <h2 id="session-title" className="text-xl font-semibold">
+            {t("session.title")}
+          </h2>
+          <p className="text-muted-foreground">
+            {t("session.openedBy", { name: session.opened_by_name, time: opened })} · {session.business_date}
+          </p>
+        </header>
+        <div>
+          <p className="text-muted-foreground">{t("live.expected")}</p>
+          <p className="text-5xl leading-tight font-bold tabular-nums" data-testid="expected-cash">
+            {formatMoney(live?.expected_cash ?? session.opening_float)}
+          </p>
+        </div>
+        <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+          <Stat label={t("z.float")} value={formatMoney(live?.opening_float ?? session.opening_float)} />
+          <Stat label={t("z.cashSales")} value={formatMoney(live?.cash_sales ?? 0)} />
+          <Stat label={t("z.payIns")} value={formatMoney(live?.pay_ins ?? 0)} />
+          <Stat label={t("z.payOuts")} value={formatMoney(live?.pay_outs ?? 0)} />
+          <Stat label={t("z.sales")} value={String(live?.sales_count ?? 0)} />
+          <Stat label={t("live.sales")} value={formatMoney(live?.sales_total ?? 0)} />
+        </dl>
+      </div>
+
+      <div className="flex flex-wrap gap-3">
         <Button
           type="button"
           size="pos"
@@ -428,6 +491,7 @@ function SessionPanel({ session, onClosed }: { session: CashSession; onClosed: (
           <DoorOpen aria-hidden />
           {t("actions.noSale")}
         </Button>
+        <span className="flex-1" />
         <Can perm="CASH_SESSION_MANAGE">
           <Button type="button" size="pos" onClick={() => setMode({ kind: "close" })}>
             <LockKeyhole aria-hidden />
@@ -439,7 +503,21 @@ function SessionPanel({ session, onClosed }: { session: CashSession; onClosed: (
         <MovementForm key={mode.movement} movement={mode.movement} onDone={done} onApproval={setPending} />
       )}
       {mode?.kind === "noSale" && <NoSaleForm onDone={done} onApproval={setPending} />}
-      {mode?.kind === "close" && <CloseForm onDone={done} onClosed={onClosed} />}
+      {mode?.kind === "close" && (
+        <CloseForm expected={live?.expected_cash ?? null} onDone={done} onClosed={onClosed} />
+      )}
+
+      <section aria-labelledby="movements-title" className="flex flex-col gap-2">
+        <h3 id="movements-title" className="text-lg font-semibold">
+          {t("movements.title")}
+        </h3>
+        {live && live.drawer.length > 0 ? (
+          <MovementList items={live.drawer} />
+        ) : (
+          <p className="text-muted-foreground">{t("movements.empty")}</p>
+        )}
+      </section>
+
       {pending && (
         <ApprovalDialog
           open
@@ -457,17 +535,30 @@ function SessionPanel({ session, onClosed }: { session: CashSession; onClosed: (
   );
 }
 
-/** The counter's cash drawer: open a session, pay in/out, no-sale, close with the Z-report (doc §3.4). */
-export function CashScreen() {
+function Today() {
   const { t, i18n } = useTranslation(["cash", "common"]);
   const current = useCurrentCashSession();
   const [closed, setClosed] = useState<ZReport | null>(null);
   const loadError =
     current.error instanceof CommandError ? translateError(i18n.t, current.error.error) : null;
 
+  if (closed) {
+    return (
+      <ZReportView
+        report={closed}
+        actions={
+          <>
+            <PrintZButton sessionId={closed.session.id} />
+            <Button type="button" size="pos" onClick={() => setClosed(null)}>
+              {t("z.done")}
+            </Button>
+          </>
+        }
+      />
+    );
+  }
   return (
-    <section className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">{t("title")}</h1>
+    <>
       <Alert message={loadError} />
       {current.isLoading ? (
         <p className="text-muted-foreground">{t("common:table.loading")}</p>
@@ -478,7 +569,32 @@ export function CashScreen() {
           <OpenSessionForm />
         </Can>
       )}
-      {closed && <ZReportView report={closed} />}
+    </>
+  );
+}
+
+/** The counter's cash drawer (doc §3.4): Today (open, pay in/out, no-sale, guided close) and History. */
+export function CashScreen() {
+  const { t } = useTranslation("cash");
+  return (
+    <section className="flex flex-col gap-4">
+      <h1 className="text-2xl font-semibold">{t("title")}</h1>
+      <Tabs defaultValue="today" className="gap-4">
+        <TabsList aria-label={t("tabs.label")}>
+          <TabsTrigger value="today" className="h-12 px-6 text-base">
+            {t("tabs.today")}
+          </TabsTrigger>
+          <TabsTrigger value="history" className="h-12 px-6 text-base">
+            {t("tabs.history")}
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="today" className="flex flex-col gap-4">
+          <Today />
+        </TabsContent>
+        <TabsContent value="history">
+          <CashHistory />
+        </TabsContent>
+      </Tabs>
     </section>
   );
 }
