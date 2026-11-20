@@ -39,7 +39,7 @@ const NET: ReceiptPrinterProfile_Serialize = {
 const HEADER: ReceiptHeaderView_Serialize = {
   logo: null,
   store_name: "Sale Center",
-  footer: "All sales are final. No refunds or exchanges. Thank you, come again!",
+  footer: "Exchange within 7 days. Item for item only; no cash refunds. Thank you, come again!",
 };
 
 function As({ perms, children }: { perms: Perm[]; children: ReactNode }) {

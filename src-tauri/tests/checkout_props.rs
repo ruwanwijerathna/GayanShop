@@ -94,6 +94,7 @@ async fn build(t: &Till, n: usize, g: &GenCart) -> (CheckoutInput, gayanshop_lib
         note: None,
         sold_by_no: 1,
         approval_id: None,
+        exchange: None,
     };
     (input, priced)
 }

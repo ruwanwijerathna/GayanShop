@@ -50,7 +50,10 @@ fn the_image_prints_first_as_a_centred_raster_and_a_plain_receipt_has_none() {
     let without = render::test_page("Sale Center", "Thanks!", Layout::default(), tz, now, None);
     for page in [&with, &without] {
         assert!(find(page, b"SAMPLE RECEIPT").is_some() && find(page, b"Sample item B").is_some());
-        assert!(find(page, b"2026-11-16").is_some() && find(page, b"22:50").is_some(), "printed in the store's time zone");
+        assert!(
+            find(page, b"2026-11-16").is_some() && find(page, b"22:50").is_some(),
+            "printed in the store's time zone"
+        );
         assert!(find(page, b"Thanks!").is_some(), "the store's own footer");
     }
     // GS v 0 m xL xH yL yH: 8 bytes per row, 3 rows.

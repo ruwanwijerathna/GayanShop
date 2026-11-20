@@ -115,7 +115,9 @@
     "BACKUP_RESTORE": "උපස්ථ ප්‍රතිසාධනය",
     "DATA_EXPORT": "දත්ත අපනයනය",
     "CUSTOMER_VIEW": "පාරිභෝගික ඉතිහාසය බැලීම",
-    "BACKUP_CREATE": "උපස්ථ ගැනීම"
+    "BACKUP_CREATE": "උපස්ථ ගැනීම",
+    "EXCHANGE_PROCESS": "හුවමාරු සිදු කිරීම",
+    "EXCHANGE_LATE": "දින 7කට පසු හුවමාරු අනුමත කිරීම"
   },
   "toggle": {
     "activate": "{{name}} සක්‍රීය කරන්න",

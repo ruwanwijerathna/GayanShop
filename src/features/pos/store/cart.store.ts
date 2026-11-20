@@ -5,9 +5,11 @@ import { z } from "zod";
 import { createStore, useStore } from "zustand";
 import type {
   CheckoutLine_Deserialize as CheckoutLine,
+  ExchangeSource,
   ProductSummary_Serialize as ProductSummary,
 } from "@/db/bindings";
 import type { Money } from "@/lib/money";
+import type { ReturnPicks } from "../lib/exchange";
 import { priceLines, type PricedOrder } from "../lib/pricing";
 
 export const MAX_LINE_QTY = 9_999;
@@ -44,6 +46,16 @@ export interface QuickSaleLine {
   unitCost?: Money | null;
 }
 
+/**
+ * An exchange in progress: the earlier sale and the units the customer hands back. The cart's lines are the
+ * replacement goods. It is never written to crash recovery or held carts: a recovered cart without it would be
+ * a plain sale.
+ */
+export interface ExchangeDraft {
+  source: ExchangeSource;
+  picks: ReturnPicks;
+}
+
 export interface CartState {
   token: string;
   lines: CartLine[];
@@ -52,6 +64,7 @@ export interface CartState {
   customerName: string;
   /** The line the cashier is working on (F6 edits it); the newest line by default. */
   selectedKey: string | null;
+  exchange: ExchangeDraft | null;
   /** Bumped on every add so the touched line can flash even when its key is unchanged. */
   touch: { key: string; seq: number } | null;
 
@@ -65,6 +78,8 @@ export interface CartState {
   overridePrice: (key: string, unitPrice: Money, reason: string | null) => void;
   setBillDiscount: (discount: Money) => void;
   setCustomer: (phone: string, name: string) => void;
+  /** Start, change or (with `null`) leave an exchange; the replacement lines stay in the cart. */
+  setExchange: (draft: ExchangeDraft | null) => void;
   /** A fresh cart with a new checkout token (after a sale, or Esc on an empty-confirm). */
   clear: () => void;
   restore: (payload: CartPayload) => void;
@@ -93,6 +108,7 @@ export function createCartStore(token: () => string = newToken) {
       customerPhone: "",
       customerName: "",
       selectedKey: null,
+      exchange: null,
       touch: null,
 
       addProduct: (p) =>
@@ -183,6 +199,7 @@ export function createCartStore(token: () => string = newToken) {
         }),
       setBillDiscount: (discount) => set({ billDiscount: Math.max(0, discount) }),
       setCustomer: (phone, name) => set({ customerPhone: phone, customerName: name }),
+      setExchange: (draft) => set({ exchange: draft }),
       clear: () =>
         set({
           token: token(),
@@ -191,6 +208,7 @@ export function createCartStore(token: () => string = newToken) {
           customerPhone: "",
           customerName: "",
           selectedKey: null,
+          exchange: null,
           touch: null,
         }),
       restore: (p) =>
@@ -201,6 +219,7 @@ export function createCartStore(token: () => string = newToken) {
           customerPhone: p.customerPhone,
           customerName: p.customerName,
           selectedKey: p.lines.at(-1)?.key ?? null,
+          exchange: null,
           touch: null,
         }),
       snapshot: () => {

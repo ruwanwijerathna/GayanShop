@@ -216,7 +216,7 @@ async fn a_cash_sale_kicks_the_drawer_then_prints_the_receipt() {
         b"Rs. 250.00",
         b"Change",
         b"Customer: 07X XXX X567",
-        b"All sales are final.",
+        b"Exchange within 7 days.",
     ] {
         assert!(contains(receipt, needle), "receipt lacks {:?}", String::from_utf8_lossy(needle));
     }

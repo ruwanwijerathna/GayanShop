@@ -7,7 +7,7 @@
 >
 > Never change an architectural decision silently. Propose the doc change to the owner first.
 
-**Current state (2026-11-10): Phases 0–4 are complete and merged to `main`.** Blocks 4.1–4.5 are committed and green. Production NSIS Windows installer (6.40 MiB) generated at `src-tauri/target/release/bundle/nsis/GayanShop POS_0.1.0_x64-setup.exe`. Deploying Phase 3 to the live project (link, `db push` — which now also carries Block 4.1's `sync_health` migration —, `functions deploy`, sign-up off, the owner account) and registering the counters are the owner's steps in `docs/qa/phase3-acceptance.md`. Owner hardware, touch and Sinhala checks are pending in `docs/qa/phase1-acceptance.md` and `docs/qa/phase2-acceptance.md`. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and verifying the first GitHub Actions CI run on remote `origin` (`github.com/ruwanwijerathna/GayanShop`).
+**Current state (2026-11-20): Phases 0–4 are complete and merged to `main`. The 7-day item-for-item exchange (decision #26, schema v4.5) is built on branch `feat/exchanges`; manual checks are in `docs/qa/exchanges-acceptance.md`.** Blocks 4.1–4.5 are committed and green. Production NSIS Windows installer (6.40 MiB) generated at `src-tauri/target/release/bundle/nsis/GayanShop POS_0.1.0_x64-setup.exe`. Deploying Phase 3 to the live project (link, `db push` — which now also carries Block 4.1's `sync_health` migration —, `functions deploy`, sign-up off, the owner account) and registering the counters are the owner's steps in `docs/qa/phase3-acceptance.md`. Owner hardware, touch and Sinhala checks are pending in `docs/qa/phase1-acceptance.md` and `docs/qa/phase2-acceptance.md`. Still pending the owner from Phase 0: dragging the window border below 1024×768 (`docs/qa/phase0-smoke.md` item 1.3c) and verifying the first GitHub Actions CI run on remote `origin` (`github.com/ruwanwijerathna/GayanShop`).
 
 ---
 
@@ -20,12 +20,12 @@
   - Supabase cloud sync later (Phase 3).
   - English and Sinhala UI; receipts and labels in English.
 - **Policies (owner-final):**
-  - All sales are final: no refunds, no exchanges.
-  - The only correction is a same-session void with a supervisor PIN and a mandatory reason.
+  - Item-for-item exchange within 7 days of the sale's business date (decision #26): no cash refunds and no credit notes, ever. After 7 days a supervisor or owner PIN is required. Returned goods go straight back into stock.
+  - A cashier's mistake is corrected by a same-session void with a supervisor PIN and a mandatory reason. Exchange orders can't be voided.
   - The cashier discount limit is 5%, combined item and bill discount, per line.
   - Prices are tax-inclusive at 0% tax.
   - Asia/Colombo, 04:00 business-day cutoff, Monday week start.
-  - Receipt footer, verbatim: *"All sales are final. No refunds or exchanges. Thank you, come again!"*
+  - Receipt footer: *"Exchange within 7 days. Item for item only; no cash refunds. Thank you, come again!"* (v4.5; the owner can edit it)
 
 ### Architectural principles (detail in the doc)
 1. **The local SQLite file is the source of truth for the till.** A sale never waits on the network, a printer or sync.

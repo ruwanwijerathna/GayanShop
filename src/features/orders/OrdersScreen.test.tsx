@@ -81,8 +81,10 @@ beforeEach(() => {
       grand_total: 45_002,
       payments: [{ method: "cash", amount: 45_002, tendered: 50_000, reference: null }],
       change_due: 4_998,
+      returns: [],
+      exchange_credit: 0,
       customer_masked: "07X XXX X567",
-      footer: "All sales are final. No refunds or exchanges. Thank you, come again!",
+      footer: "Exchange within 7 days. Item for item only; no cash refunds. Thank you, come again!",
     }),
   );
 });

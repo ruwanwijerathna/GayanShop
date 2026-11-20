@@ -4,7 +4,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(42);
+SELECT plan(47);
 
 -- ─── fixtures (as the migration owner, which bypasses RLS) ───
 -- Store A: one device, an Owner, a received batch with a layer, an open cash session, a completed sale.
@@ -72,18 +72,24 @@ SELECT 'a0000000-0000-0000-0000-000000000032', store_a, dev_a, 'a0000000-0000-00
        'a0000000-0000-0000-0000-0000000000c1', -2, 'sale', 'a0000000-0000-0000-0000-000000000011', 20000, 90000,
        '2026-11-08', t0 FROM fx;
 
+-- An exchange fixture: a replacement order's return of the sale above, and a 'return' stock movement.
+INSERT INTO pos.order_returns (id, store_id, device_id, order_id, source_item_id, qty, line_gross, line_discount,
+                               line_total, line_net, tax_amount, cost_total, created_at)
+SELECT 'a0000000-0000-0000-0000-000000000041', store_a, dev_a, 'a0000000-0000-0000-0000-0000000000f1',
+       'a0000000-0000-0000-0000-000000000011', 1, 45000, 0, 45000, 45000, 0, 20000, t0 FROM fx;
+
 -- ─── structure ───
 SELECT has_schema('pos', 'the business schema exists');
-SELECT is((SELECT count(*)::int FROM pos.synced_tables), 18, 'eighteen synced tables, as on the terminal');
+SELECT is((SELECT count(*)::int FROM pos.synced_tables), 19, 'nineteen synced tables, as on the terminal');
 SELECT is(
   (SELECT count(*)::int FROM pos.synced_tables st
    JOIN information_schema.tables it ON it.table_schema = 'pos' AND it.table_name = st.name),
-  18, 'every synced table exists in pos');
+  19, 'every synced table exists in pos');
 SELECT is(
   (SELECT count(*)::int FROM pos.synced_tables st
    JOIN information_schema.columns c ON c.table_schema = 'pos' AND c.table_name = st.name
      AND c.column_name = 'server_seq' AND c.is_nullable = 'NO'),
-  18, 'every synced table carries server_seq NOT NULL');
+  19, 'every synced table carries server_seq NOT NULL');
 SELECT is(
   (SELECT count(*)::int FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
    WHERE n.nspname = 'pos' AND c.relkind = 'r' AND NOT c.relrowsecurity),
@@ -93,11 +99,34 @@ SELECT has_table('pos', 'devices', 'the devices table exists');
 SELECT col_is_pk('pos', 'processed_ops', 'op_id', 'processed_ops is keyed by op_id');
 SELECT col_type_is('pos', 'audit_logs', 'metadata', 'text', 'audit metadata stays text: it feeds the hash chain');
 
+SELECT has_table('pos', 'order_returns', 'the exchange returns table exists');
+SELECT throws_ok($$DELETE FROM pos.order_returns$$, '23514', 'order_returns are append-only',
+  'order_returns cannot be deleted');
+SELECT is((SELECT exchange_credit FROM pos.orders WHERE id = 'a0000000-0000-0000-0000-0000000000f1'), 0::bigint,
+  'an ordinary sale carries no exchange credit');
+SELECT lives_ok(
+  $$INSERT INTO pos.stock_movements (id, store_id, device_id, product_id, batch_item_id, qty_delta, reason, ref_type,
+                                     ref_id, order_item_id, unit_cost, revenue_net, business_date, created_at)
+    VALUES ('a0000000-0000-0000-0000-000000000033', 'a0000000-0000-0000-0000-000000000001',
+            'a0000000-0000-0000-0000-0000000000d1', 'a0000000-0000-0000-0000-0000000000a1',
+            'a0000000-0000-0000-0000-0000000000c1', 1, 'return', 'order',
+            'a0000000-0000-0000-0000-0000000000f1', 'a0000000-0000-0000-0000-000000000011', 20000, -45000,
+            '2026-11-08', '2026-11-08T03:30:00.000Z')$$,
+  'a returned unit goes back into stock as a return movement');
+SELECT throws_ok(
+  $$INSERT INTO pos.stock_movements (id, store_id, device_id, product_id, batch_item_id, qty_delta, reason,
+                                     unit_cost, business_date, created_at)
+    VALUES ('a0000000-0000-0000-0000-000000000034', 'a0000000-0000-0000-0000-000000000001',
+            'a0000000-0000-0000-0000-0000000000d1', 'a0000000-0000-0000-0000-0000000000a1',
+            'a0000000-0000-0000-0000-0000000000c1', 1, 'refund', 20000, '2026-11-08',
+            '2026-11-08T03:30:00.000Z')$$,
+  '23514', NULL, 'there is no refund stock reason');
+
 -- ─── policies ───
 SELECT is(
   (SELECT count(*)::int FROM pg_policies
    WHERE schemaname = 'pos'
-     AND tablename IN ('audit_logs','stock_movements','order_items','order_payments','cash_movements')
+     AND tablename IN ('audit_logs','stock_movements','order_items','order_payments','cash_movements','order_returns')
      AND cmd IN ('UPDATE','DELETE','ALL')),
   0, 'append-only tables have no UPDATE or DELETE policy');
 SELECT is(
@@ -172,8 +201,8 @@ SELECT is((SELECT void_count FROM pos.daily_sales_summary WHERE store_id = (SELE
   'the voided sale counts as a void');
 SELECT is((SELECT sales_count FROM pos.daily_sales_summary WHERE store_id = (SELECT store_a FROM fx)), 0::bigint,
   'and not as a sale');
-SELECT is((SELECT on_hand FROM pos.stock_levels WHERE product_id = 'a0000000-0000-0000-0000-0000000000a1'), 8::bigint,
-  'stock_levels = Σ movements');
+SELECT is((SELECT on_hand FROM pos.stock_levels WHERE product_id = 'a0000000-0000-0000-0000-0000000000a1'), 9::bigint,
+  'stock_levels = Σ movements, returns included');
 
 -- ─── RLS: a device of store A sees and writes store A only ───
 GRANT USAGE ON SCHEMA extensions TO pos_sync;   -- test-only (rolled back): pgTAP's own functions

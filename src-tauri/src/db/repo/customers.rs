@@ -581,7 +581,7 @@ pub async fn analytics(
         .await?
     } else {
         sqlx::query_as(
-            "SELECT o.customer_id, c.display_name, c.phone_e164, COUNT(*) AS visits, SUM(o.grand_total) AS spend
+            "SELECT o.customer_id, c.display_name, c.phone_e164, COUNT(*) AS visits, SUM(o.grand_total - o.exchange_credit) AS spend
              FROM orders o JOIN customers c ON c.id = o.customer_id
              WHERE o.store_id = ?1 AND o.status = 'completed' AND o.customer_id IS NOT NULL
                AND o.business_date BETWEEN ?2 AND ?3

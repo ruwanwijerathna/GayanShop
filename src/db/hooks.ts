@@ -35,6 +35,7 @@ import {
   type Period,
   type SalesDimension,
   type DrawerMovementInput,
+  type HistoryFilter,
   type Perm,
   type NewStaff_Deserialize as NewStaff,
   type ProductInput,
@@ -391,6 +392,28 @@ export function useCloseCashSession() {
   return useCashMutation((input: CloseInput) => unwrap(commands.closeCashSession(input)));
 }
 
+/** Shift history for the Cash drawer's History tab (own counter, or every counter with REPORT_SALES). */
+export function useCashHistory(filter: HistoryFilter, limit: number) {
+  return useQuery({
+    queryKey: ["cash", "history", filter, limit] as const,
+    queryFn: () => unwrap(commands.cashHistory(filter, limit)),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** The Z-report of a closed shift, or the live X-report of the open one. */
+export function useCashSessionReport(sessionId: string | null) {
+  return useQuery({
+    queryKey: ["cash", "report", sessionId] as const,
+    queryFn: () => unwrap(commands.cashSessionReport(sessionId ?? "")),
+    enabled: sessionId !== null,
+  });
+}
+
+export function useReprintZReport() {
+  return useMutation({ mutationFn: (sessionId: string) => unwrap(commands.reprintZReport(sessionId)) });
+}
+
 // ───────── receipt printer (doc §7.5) ─────────
 
 /** Banner state. Polled as well, because the worker's health changes without a database write. */
@@ -471,6 +494,11 @@ export function useCheckoutOrder() {
       await qc.invalidateQueries({ queryKey: ["customers"] });
     },
   });
+}
+
+/** Exchange step 1: look the earlier sale up by receipt number (no cache: the answer is per attempt). */
+export function useExchangeLookup() {
+  return useMutation({ mutationFn: (receiptNo: string) => unwrap(commands.exchangeLookup(receiptNo)) });
 }
 
 export function useSessionOrders(enabled: boolean) {

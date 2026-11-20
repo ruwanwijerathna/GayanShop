@@ -65,7 +65,9 @@
     "billDiscount": "Bill discount",
     "void": "Void",
     "help": "Shortcuts",
-    "newSale": "Clear cart"
+    "newSale": "Clear cart",
+    "exchange": "Exchange",
+    "more": "More"
   },
   "keypad": {
     "label": "Keypad",
@@ -141,7 +143,7 @@
   },
   "void": {
     "title": "Void a sale",
-    "help": "All sales are final. A void cancels a whole sale from this counter's open session.",
+    "help": "A void cancels a whole sale from this counter's open session. Returned goods go through an exchange, never a refund.",
     "empty": "No sales in this session yet.",
     "voided": "Voided",
     "reason": "Reason",
@@ -171,7 +173,8 @@
       "pay": "Pay (also Numpad +)",
       "void": "Void a sale from this session",
       "recall": "Recall a held sale",
-      "cancel": "Cancel / back to the scan field"
+      "cancel": "Cancel / back to the scan field",
+      "exchange": "Exchange goods (item for item)"
     },
     "lock": "Lock the till",
     "language": "Switch language"
@@ -185,5 +188,33 @@
     "move": "move",
     "add": "add to sale",
     "cancel": "cancel"
+  },
+  "exchange": {
+    "title": "Exchange",
+    "help": "Item for item, within 7 days of the sale. The customer pays only the difference. There are no cash refunds and no credit notes.",
+    "receipt": "Receipt number of the sale",
+    "find": "Find sale",
+    "sale": "{{receipt}} · sold {{date}} ({{days}} days ago)",
+    "late": "More than {{days}} days ago. A supervisor or owner PIN is needed to finish this exchange.",
+    "lines": "Items on that sale",
+    "returnable": "Can return {{left}} of {{sold}}",
+    "alreadyReturned": "Already returned",
+    "notReturnable": "Can't be returned (not a stocked item)",
+    "nothing": "Nothing on this sale can be exchanged.",
+    "fewer": "Return fewer {{name}}",
+    "more": "Return more {{name}}",
+    "credit": "Value of the {{units}} returned item(s)",
+    "rule": "The replacement goods must be worth at least this much. Scan them next.",
+    "confirm": "Use for exchange",
+    "banner": "Exchange for {{receipt}}",
+    "returned": "{{units}} item(s) returned",
+    "creditLine": "Exchange credit",
+    "toPay": "TO PAY",
+    "change": "Change items",
+    "cancel": "Cancel exchange",
+    "tooLow": "The replacement must be worth at least {{credit}}. Add more items.",
+    "needReplacement": "Scan the replacement items.",
+    "finishFirst": "Finish or cancel the exchange first.",
+    "done": "Exchange complete ✓"
   }
 }

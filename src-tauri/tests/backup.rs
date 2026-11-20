@@ -108,7 +108,7 @@ async fn a_concurrent_checkout_during_backup_is_not_blocked_and_the_copy_is_cons
     let torn: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM orders o WHERE o.status <> 'completed'
             OR o.grand_total <> (SELECT COALESCE(SUM(line_total), 0) FROM order_items i WHERE i.order_id = o.id)
-            OR o.paid_total <> (SELECT COALESCE(SUM(amount), 0) FROM order_payments p WHERE p.order_id = o.id)",
+            OR o.paid_total <> (SELECT COALESCE(SUM(amount), 0) FROM order_payments p WHERE p.order_id = o.id) + o.exchange_credit",
     )
     .fetch_one(&copy)
     .await

@@ -57,7 +57,9 @@ export function planPayments(due: Money, rows: PaymentRow[]): PaymentPlan {
   const tendered = cash.value.trim() === "" ? remaining : parseMajor(cash.value);
   if (tendered === null) return { ok: false, reason: "invalid", paid: nonCash };
   if (tendered < remaining) return { ok: false, reason: "notEnough", paid: nonCash + tendered };
-  payments.push({ method: "cash", amount: remaining, tendered, reference: null });
+  // An even exchange owes nothing: send no zero-value cash row.
+  if (remaining > 0 || tendered > 0)
+    payments.push({ method: "cash", amount: remaining, tendered, reference: null });
   return { ok: true, payments, change: tendered - remaining, paid: nonCash + tendered };
 }
 

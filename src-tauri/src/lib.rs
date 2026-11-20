@@ -121,7 +121,10 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::cash::close_cash_session,
         commands::cash::list_cash_sessions,
         commands::cash::cash_session_report,
+        commands::cash::cash_history,
+        commands::cash::reprint_z_report,
         commands::checkout::checkout_order,
+        commands::checkout::exchange_lookup,
         commands::customers::customer_lookup,
         commands::customers::customer_list,
         commands::customers::customer_profile,
@@ -286,6 +289,13 @@ pub fn run() -> Result<(), tauri::Error> {
             let db = tauri::async_runtime::block_on(Db::open(&db_path, &data_dir.join("backups")))?;
             tauri::async_runtime::block_on(restore::finish_swap(&db, &data_dir))?;
             let identity = tauri::async_runtime::block_on(setup::load_identity(&db.pool))?;
+            if let Some(id) = &identity {
+                // Stores created before exchanges move to the exchange policy once. A frozen (pending-restore)
+                // counter refuses the audit row; it upgrades on a later start.
+                if let Err(e) = tauri::async_runtime::block_on(setup::upgrade_exchange_policy(&db, &SystemClock, id)) {
+                    log::warn!("exchange policy upgrade deferred: {e}");
+                }
+            }
             let auth = Auth::new(PinHasher::production());
             let clock: Arc<dyn clock::Clock> = Arc::new(SystemClock);
             let tz = identity.as_ref().map_or(chrono_tz::Asia::Colombo, |i| i.calendar.timezone);

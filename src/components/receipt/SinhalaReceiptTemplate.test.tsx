@@ -29,6 +29,8 @@ const SAMPLE_RECEIPT: ReceiptData = {
       line_total: 230000,
     },
   ],
+  returns: [],
+  exchange_credit: 0,
   payments: [
     {
       method: "cash",

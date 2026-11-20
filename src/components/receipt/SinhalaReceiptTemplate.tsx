@@ -130,6 +130,27 @@ export function SinhalaReceiptTemplate({
         </div>
       </div>
 
+      {receipt.returns.length > 0 && (
+        <div className="border-t border-dashed border-black/80 pt-2">
+          <div className="mb-1 text-xs font-bold">ආපසු ලැබුණු භාණ්ඩ (Returned)</div>
+          <div className="flex flex-col gap-1.5">
+            {receipt.returns.map((x, i) => (
+              <div key={i} className="flex flex-col text-xs">
+                <span className="font-medium text-black">{x.name}</span>
+                <div className="flex justify-between text-neutral-700">
+                  <span className="font-mono">
+                    &nbsp;&nbsp;{x.qty} · {x.original_receipt_no}
+                  </span>
+                  <span className="font-mono font-medium text-black">
+                    -{formatMoney(x.value).replace("Rs ", "")}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 4. Totals: මුළු මුදල, ගෙවූ මුදල, ඉතිරි මුදල, භාණ්ඩ ගණන */}
       <div className="flex flex-col gap-0.5 border-t border-dashed border-black/80 pt-1.5 text-xs">
         <div className="flex justify-between gap-1">
@@ -148,6 +169,13 @@ export function SinhalaReceiptTemplate({
           <span>මුළු මුදල :</span>
           <span className="font-mono text-base">{formatMoney(receipt.grand_total)}</span>
         </div>
+
+        {receipt.exchange_credit > 0 && (
+          <div className="flex justify-between gap-1">
+            <span>හුවමාරු අගය (Exchange) :</span>
+            <span className="font-mono font-medium">-{formatMoney(receipt.exchange_credit)}</span>
+          </div>
+        )}
 
         <div className="flex justify-between gap-1">
           <span>ගෙවූ මුදල :</span>

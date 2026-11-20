@@ -66,6 +66,7 @@ const HELP_ORDER: PosAction[] = [
   "pay",
   "void",
   "recall",
+  "exchange",
   "cancel",
 ];
 

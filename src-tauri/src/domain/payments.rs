@@ -1,4 +1,4 @@
-//! Tender rules (ARCHITECTURE §3.3, §3.7). All sales are final: no payment is ever negative, the
+//! Tender rules (ARCHITECTURE §3.3, §3.7). There are no cash refunds: no payment is ever negative, the
 //! applied amounts equal the bill exactly, and change can only come from cash tendered.
 //! The SQL seal trigger enforces the same identities.
 
