@@ -306,6 +306,8 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
                 grand_total: 243500,
                 payments: [{ method: "cash", amount: 243500, tendered: 300000, reference: null }],
                 change_due: 56500,
+                returns: [],
+                exchange_credit: 0,
                 footer:
                   header.data?.footer ??
                   "All sales are final. No refunds or exchanges. Thank you, come again!",

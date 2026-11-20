@@ -6,7 +6,7 @@ use chrono_tz::Tz;
 use serde_json::Value;
 use sqlx::SqlitePool;
 
-use super::{Align, EscPos, Layout, Logo, drawer_kick, wrap};
+use super::{Align, EscPos, Layout, Logo, ReceiptImage, drawer_kick, wrap};
 use crate::db::repo::receipts::{self, ReceiptData, ReceiptLine, ReceiptPayment};
 use crate::db::settings;
 use crate::domain::money::format_lkr;
@@ -280,6 +280,13 @@ pub fn test_page(store: &str, footer: &str, layout: Layout, tz: Tz, now: &str, l
     bytes
 }
 
+/// A receipt the webview drew (Sinhala text cannot go through the printer's fonts): the picture, then the cut.
+pub fn receipt_image(image: &ReceiptImage, layout: Layout) -> Vec<u8> {
+    let mut p = EscPos::new(layout);
+    p.image(image).cut();
+    p.finish()
+}
+
 /// Device setting that holds the receipt header image.
 pub const LOGO_KEY: &str = "receipt.logo";
 
@@ -298,6 +305,12 @@ pub async fn job(
     now: &str,
 ) -> AppResult<Vec<u8>> {
     match kind {
+        "receipt" if payload.get("image").is_some() => {
+            let image: ReceiptImage = serde_json::from_value(payload["image"].clone())
+                .map_err(|e| AppError::internal(format!("receipt job with a bad image: {e}")))?;
+            image.validate()?;
+            Ok(receipt_image(&image, layout))
+        }
         "receipt" => {
             let order_id = payload
                 .get("order_id")

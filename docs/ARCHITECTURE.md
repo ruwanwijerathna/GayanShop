@@ -2569,6 +2569,8 @@ A **"Print Test Receipt"** in Settings prints a **sample receipt** (header image
 
 Sinhala/Tamil text: most printers lack those code pages. Render such lines as a raster bitmap (`GS v 0`) in Phase 5. Receipts are English-first until then.
 
+**Sinhala receipt as a picture (v4.6, owner 2026-11-21).** The Sinhala receipt template is drawn off screen by the webview at the paper's full width (576 dots), thresholded to a 1-bit bitmap and sent with `print_receipt_image` (`REPRINT_RECEIPT`). That command queues a normal `receipt` print job whose payload carries the image, so it prints on the configured receipt printer through the same worker as every other receipt: no system print dialog, and a stuck printer shows in the banner. The bitmap is validated in Rust (width a multiple of 8 and at most 576, height at most 6000) and goes to the printer as `GS v 0` bands of 256 rows, then the cut. No schema change.
+
 ### 7.3 Cash drawer (confirmed: RJ11 to the receipt printer)
 - Kick: `ESC p m t1 t2` → `1B 70 00 19 FA` (pin 2, 50 ms on, 500 ms off). Pin 5 (`m = 01`) is configurable for drawers wired that way.
 - **Automatic kick** happens after a completed order with a cash payment. It's covered by the order record, with no separate audit row. A **void** of a cash order also kicks (covered by its `VOID_ORDER` audit row), because the cashier hands back the cash just taken.
