@@ -24,6 +24,7 @@ import {
   useSetReceiptLogo,
 } from "@/db/hooks";
 import { canvasFromLogo, logoFromFileWithSource, renderScaledLogo } from "@/lib/logoBitmap";
+import { usePrintReceiptStore } from "@/components/receipt/PrintableReceiptPortal";
 import { ReceiptPreview } from "./ReceiptPreview";
 import { translateError } from "@/i18n";
 import { AdvancedSection } from "@/components/common/AdvancedSection";
@@ -275,6 +276,61 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
             onClick={() => test.mutate()}
           >
             {t("settings.testPage")}
+          </Button>
+          <Button
+            type="button"
+            size="pos"
+            variant="outline"
+            onClick={() => {
+              usePrintReceiptStore.getState().print({
+                order_id: "SAMPLE-RECEIPT",
+                store_name: header.data?.store_name ?? "GayanShop",
+                receipt_no: "T01-20261120-0001",
+                status: "completed",
+                business_date: new Date().toISOString().slice(0, 10),
+                completed_at: new Date().toISOString(),
+                cashier: "Cashier 01",
+                customer_masked: null,
+                lines: [
+                  {
+                    name: "Sample item A",
+                    qty: 2,
+                    list_price: 45000,
+                    unit_price: 45000,
+                    line_gross: 90000,
+                    line_discount: 0,
+                    line_total: 90000,
+                  },
+                  {
+                    name: "Sample item B",
+                    qty: 1,
+                    list_price: 125000,
+                    unit_price: 125000,
+                    line_gross: 125000,
+                    line_discount: 0,
+                    line_total: 125000,
+                  },
+                  {
+                    name: "Sample item C",
+                    qty: 3,
+                    list_price: 9500,
+                    unit_price: 9500,
+                    line_gross: 28500,
+                    line_discount: 0,
+                    line_total: 28500,
+                  },
+                ],
+                item_count: 6,
+                gross_sales: 243500,
+                discount_total: 0,
+                grand_total: 243500,
+                payments: [{ method: "cash", amount: 243500, tendered: 300000, reference: null }],
+                change_due: 56500,
+                footer: header.data?.footer ?? "",
+              });
+            }}
+          >
+            {t("settings.testPageSinhala", { defaultValue: "සිංහල ටෙස්ට් මුද්‍රණය (HTML)" })}
           </Button>
         </Can>
       }

@@ -28,6 +28,15 @@ fn local(iso: &str, tz: Tz) -> String {
         .unwrap_or_else(|_| iso.to_owned())
 }
 
+fn date_time(iso: &str, tz: Tz) -> (String, String) {
+    DateTime::parse_from_rfc3339(iso)
+        .map(|t| {
+            let l = t.with_timezone(&Utc).with_timezone(&tz);
+            (l.format("%Y-%m-%d").to_string(), l.format("%H:%M").to_string())
+        })
+        .unwrap_or_else(|_| (iso.to_owned(), String::new()))
+}
+
 fn method_label(m: &str) -> &'static str {
     match m {
         "cash" => "Cash",
@@ -64,9 +73,16 @@ fn receipt_with_banner(r: &ReceiptData, layout: Layout, tz: Tz, logo: Option<&Lo
     if r.status == "voided" {
         p.bold(true).line("*** VOIDED - NOT A VALID RECEIPT ***").bold(false);
     }
+    let (date_str, time_str) = date_time(&r.completed_at, tz);
     p.align(Align::Left);
-    p.pair("Receipt", &r.receipt_no);
-    p.pair(&local(&r.completed_at, tz), &format!("Cashier: {}", r.cashier));
+    p.pair("Bill No / Receipt:", &r.receipt_no);
+    p.pair(&format!("Date: {date_str}"), &format!("Time: {time_str}"));
+    let cashier_str = format!("Cashier: {}", r.cashier);
+    if let Some(c) = &r.customer_masked {
+        p.pair(&cashier_str, &format!("Customer: {c}"));
+    } else {
+        p.line(&cashier_str);
+    }
     p.rule('-');
     for l in &r.lines {
         p.wrapped(&l.name, cols);
@@ -94,12 +110,17 @@ fn receipt_with_banner(r: &ReceiptData, layout: Layout, tz: Tz, logo: Option<&Lo
     if r.change_due > 0 {
         p.pair("Change", &amt(r.change_due));
     }
-    if let Some(c) = &r.customer_masked {
-        p.line(&format!("Customer: {c}"));
-    }
-    p.rule('-').align(Align::Center).qr(&r.order_id);
-    for l in wrap(&r.footer, cols) {
-        p.line(&l);
+    p.rule('-');
+    p.align(Align::Center);
+    p.wrapped("Exchange within 7 days with bill and item.", cols);
+    p.bold(true).line("Thank you! Come again.").bold(false);
+    p.feed(1);
+    p.align(Align::Center).code128(r.receipt_no.as_bytes());
+    p.align(Align::Center).line("Powered By BraceFrame - (076 9950 199)");
+    if !r.footer.trim().is_empty() {
+        for l in wrap(&r.footer, cols) {
+            p.line(&l);
+        }
     }
     p.align(Align::Left).cut();
     p.finish()
@@ -204,7 +225,7 @@ pub fn test_page(store: &str, footer: &str, layout: Layout, tz: Tz, now: &str, l
     let sample = ReceiptData {
         order_id: "SAMPLE-RECEIPT".into(),
         store_name: store.to_owned(),
-        receipt_no: "SAMPLE".into(),
+        receipt_no: "T01-20261120-0001".into(),
         status: "completed".into(),
         business_date: String::new(),
         completed_at: now.to_owned(),

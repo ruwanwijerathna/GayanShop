@@ -290,7 +290,7 @@ impl EscPos {
     }
 
     /// Code128 (code set B) with HRI below: `GS h`, `GS w`, `GS H`, `GS k 73`.
-    fn code128(&mut self, data: &[u8]) -> &mut Self {
+    pub fn code128(&mut self, data: &[u8]) -> &mut Self {
         let body: Vec<u8> = [b"{B".as_slice(), data].concat();
         let n = u8::try_from(body.len()).unwrap_or(u8::MAX);
         self.buf.extend_from_slice(&[GS, b'h', 80, GS, b'w', 2, GS, b'H', 2, GS, b'k', 73, n]);

@@ -70,15 +70,19 @@ export function ReceiptPreview({
         className="flex flex-col gap-1 rounded-sm border border-border bg-white p-3 font-mono text-[11px] leading-snug text-black shadow-sm"
         style={{ width: PAPER_DOTS[width] * SCALE + 24 }}
       >
-        {header?.logo && (
+        {header?.logo ? (
           <div className="flex justify-center pb-1">
             <LogoCanvas logo={header.logo} />
           </div>
+        ) : (
+          <p className="text-center text-base font-bold">{header?.store_name}</p>
         )}
-        <p className="text-center text-base font-bold">{header?.store_name}</p>
         <p className="text-center font-bold">{t("preview.banner")}</p>
-        <Pair left={t("preview.receipt")} right="SAMPLE" />
-        <hr className="border-dashed border-black/60" />
+        <div className="space-y-0.5 border-b border-dashed border-black/60 pb-1">
+          <Pair left="බිල් අංකය:" right="T01-20261120-0001" />
+          <Pair left="දිනය: 2026-11-20" right="වේලාව: 20:30" />
+          <Pair left="අයකැමි:" right="Cashier 01" />
+        </div>
         {ROWS.map((r) => (
           <div key={r.key}>
             <p>{t(`preview.${r.key}`)}</p>
@@ -86,6 +90,7 @@ export function ReceiptPreview({
           </div>
         ))}
         <hr className="border-dashed border-black/60" />
+        <Pair left="භාණ්ඩ ගණන:" right="6" />
         <Pair left={t("preview.subtotal")} right="2,435.00" />
         <Pair left={t("preview.total")} right="Rs. 2,435.00" bold />
         <Pair left={t("preview.cash")} right="3,000.00" />
