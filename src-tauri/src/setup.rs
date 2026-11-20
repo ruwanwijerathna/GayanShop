@@ -81,9 +81,9 @@ pub fn builtin_label_templates() -> Value {
             "label_w_mm": 50.0, "label_h_mm": 25.0, "col_gap_mm": 2.0, "row_gap_mm": 3.0, "left_margin_mm": 1.5,
             "dpi": 203, "language": "tspl", "symbology": "auto",
             "elements": [
-                { "kind": "store_name", "x_mm": 0.0, "y_mm": 3.0,  "w_mm": 50.0, "h_mm": 4.0,  "font_size": 4, "bold": true, "align": "center" },
-                { "kind": "barcode",    "x_mm": 0.0, "y_mm": 7.5,  "w_mm": 50.0, "h_mm": 6.5,  "font_size": 1 },
-                { "kind": "price",      "x_mm": 0.0, "y_mm": 17.0, "w_mm": 50.0, "h_mm": 6.0,  "font_size": 6, "bold": true, "align": "center" }
+                { "kind": "store_name", "x_mm": 0.0, "y_mm": 4.0,  "w_mm": 50.0, "h_mm": 4.0,  "font_size": 4, "bold": true, "align": "center" },
+                { "kind": "barcode",    "x_mm": 0.0, "y_mm": 8.5,  "w_mm": 50.0, "h_mm": 6.5,  "font_size": 1 },
+                { "kind": "price",      "x_mm": 0.0, "y_mm": 18.0, "w_mm": 50.0, "h_mm": 6.0,  "font_size": 6, "bold": true, "align": "center" }
             ]
         },
         {
@@ -91,8 +91,8 @@ pub fn builtin_label_templates() -> Value {
             "label_w_mm": 30.0, "label_h_mm": 16.0, "col_gap_mm": 2.0, "row_gap_mm": 3.0, "left_margin_mm": 1.5,
             "dpi": 203, "language": "tspl", "symbology": "code128",
             "elements": [
-                { "kind": "store_name", "x_mm": 0.0, "y_mm": 1.5,  "w_mm": 30.0, "h_mm": 1.5, "font_size": 1, "bold": true, "align": "center" },
-                { "kind": "barcode",    "x_mm": 0.0, "y_mm": 4.0,  "w_mm": 30.0, "h_mm": 4.5, "font_size": 1 },
+                { "kind": "store_name", "x_mm": 0.0, "y_mm": 1.5,  "w_mm": 30.0, "h_mm": 2.0, "font_size": 2, "bold": true, "align": "center" },
+                { "kind": "barcode",    "x_mm": 0.0, "y_mm": 4.5,  "w_mm": 30.0, "h_mm": 4.5, "font_size": 1 },
                 { "kind": "price",      "x_mm": 0.0, "y_mm": 10.5, "w_mm": 30.0, "h_mm": 4.0, "font_size": 4, "bold": true, "align": "center" }
             ]
         }
