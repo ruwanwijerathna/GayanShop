@@ -127,4 +127,25 @@ describe("cart store", () => {
     expect(parsePayload("{}")).toBeNull();
     expect(parsePayload("not json")).toBeNull();
   });
+
+  it("keeps an exchange out of the held-cart payload and drops it on clear", () => {
+    const s = store();
+    s.getState().addProduct(product("a", 1_000));
+    s.getState().setExchange({
+      source: {
+        order_id: "o1",
+        receipt_no: "T01-20261112-0001",
+        business_date: "2026-11-12",
+        days_since: 2,
+        window_days: 7,
+        late: false,
+        lines: [],
+      },
+      picks: { i1: 1 },
+    });
+    expect(s.getState().exchange?.picks).toEqual({ i1: 1 });
+    expect(s.getState().snapshot()).not.toHaveProperty("exchange");
+    s.getState().clear();
+    expect(s.getState().exchange).toBeNull();
+  });
 });

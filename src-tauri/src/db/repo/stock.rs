@@ -20,6 +20,7 @@ pub enum StockReason {
     BatchReopen,
     Sale,
     Void,
+    Return,
     Damage,
     CountCorrection,
     Adjustment,
@@ -32,6 +33,7 @@ impl StockReason {
             StockReason::BatchReopen => "batch_reopen",
             StockReason::Sale => "sale",
             StockReason::Void => "void",
+            StockReason::Return => "return",
             StockReason::Damage => "damage",
             StockReason::CountCorrection => "count_correction",
             StockReason::Adjustment => "adjustment",
@@ -241,9 +243,9 @@ pub async fn rebuild_derived(conn: &mut SqliteConnection) -> AppResult<()> {
          SELECT m.batch_item_id, bi.batch_id, m.product_id,
            SUM(CASE WHEN m.reason IN ('batch_intake','batch_reopen') THEN m.qty_delta ELSE 0 END),
            SUM(m.qty_delta),
-           SUM(CASE WHEN m.reason IN ('sale','void') THEN -m.qty_delta ELSE 0 END),
-           SUM(CASE WHEN m.reason IN ('sale','void') THEN COALESCE(m.revenue_net, 0) ELSE 0 END),
-           SUM(CASE WHEN m.reason IN ('sale','void') THEN -m.qty_delta * m.unit_cost ELSE 0 END),
+           SUM(CASE WHEN m.reason IN ('sale','void','return') THEN -m.qty_delta ELSE 0 END),
+           SUM(CASE WHEN m.reason IN ('sale','void','return') THEN COALESCE(m.revenue_net, 0) ELSE 0 END),
+           SUM(CASE WHEN m.reason IN ('sale','void','return') THEN -m.qty_delta * m.unit_cost ELSE 0 END),
            SUM(CASE WHEN m.reason IN ('damage','count_correction','adjustment') THEN -m.qty_delta ELSE 0 END),
            SUM(CASE WHEN m.reason IN ('damage','count_correction','adjustment') THEN -m.qty_delta * m.unit_cost ELSE 0 END)
          FROM stock_movements m JOIN batch_items bi ON bi.id = m.batch_item_id

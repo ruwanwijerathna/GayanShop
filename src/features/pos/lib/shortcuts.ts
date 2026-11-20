@@ -16,6 +16,7 @@ export type PosAction =
   | "pay"
   | "void"
   | "recall"
+  | "exchange"
   | "cancel";
 
 export interface KeyInput {
@@ -43,6 +44,7 @@ const F_KEYS: Record<string, PosAction> = {
   F9: "pay",
   F10: "void",
   F11: "recall",
+  F12: "exchange",
 };
 
 const NUMPAD: Record<string, PosAction> = {
@@ -72,5 +74,6 @@ export const SHORTCUT_LABELS: Record<PosAction, string> = {
   pay: "F9",
   void: "F10",
   recall: "F11",
+  exchange: "F12",
   cancel: "Esc",
 };

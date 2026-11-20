@@ -74,7 +74,9 @@
       "bank_transfer": "බැංකු මාරුව",
       "qr": "QR",
       "other": "වෙනත්"
-    }
+    },
+    "returned": "මෙම හුවමාරුවේදී ආපසු දුන් අයිතම",
+    "exchangeCredit": "හුවමාරු ණය"
   },
   "export": {
     "kinds": {

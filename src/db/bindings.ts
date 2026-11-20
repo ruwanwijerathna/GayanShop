@@ -125,6 +125,11 @@ export const commands = {
 	/**  Z-report of a closed session, or X-report of the open one. */
 	cashSessionReport: (sessionId: string) => typedError<ZReport_Serialize, AppError>(__TAURI_INVOKE("cash_session_report", { sessionId })),
 	checkoutOrder: (input: CheckoutInput_Deserialize) => typedError<CheckoutResult_Serialize, AppError>(__TAURI_INVOKE("checkout_order", { input })),
+	/**
+	 *  Exchange step 1 (`EXCHANGE_PROCESS`): find the sale by its receipt number and report what can still come
+	 *  back, and whether the 7-day window has passed (a late exchange needs a supervisor or owner PIN at checkout).
+	 */
+	exchangeLookup: (receiptNo: string) => typedError<ExchangeSource, AppError>(__TAURI_INVOKE("exchange_lookup", { receiptNo })),
 	customerLookup: (input: CustomerLookupInput) => typedError<CustomerLookup_Serialize, AppError>(__TAURI_INVOKE("customer_lookup", { input })),
 	customerList: (search: string | null, sort: CustomerSort | null) => typedError<CustomerList_Serialize, AppError>(__TAURI_INVOKE("customer_list", { search, sort })),
 	customerProfile: (id: string) => typedError<CustomerProfile_Serialize, AppError>(__TAURI_INVOKE("customer_profile", { id })),
@@ -815,6 +820,8 @@ export type CheckoutInput_Deserialize = {
 	sold_by_no: number,
 	/**  A supervisor's single-use approval bound to (perm, `checkout_token`, this cashier). */
 	approval_id?: string | null,
+	/**  Set for an exchange: the goods the customer hands back (the `lines` are the replacement goods). */
+	exchange?: ExchangeInput | null,
 };
 
 export type CheckoutInput_Serialize = {
@@ -830,6 +837,8 @@ export type CheckoutInput_Serialize = {
 	sold_by_no: number,
 	/**  A supervisor's single-use approval bound to (perm, `checkout_token`, this cashier). */
 	approval_id: string | null,
+	/**  Set for an exchange: the goods the customer hands back (the `lines` are the replacement goods). */
+	exchange: ExchangeInput | null,
 };
 
 export type CheckoutLine = CheckoutLine_Serialize | CheckoutLine_Deserialize;
@@ -870,6 +879,8 @@ export type CheckoutResult_Deserialize = {
 	grand_total: number,
 	change_due: number,
 	customer_id?: string | null,
+	/**  The value of the goods taken back (0 for an ordinary sale); `grand_total − exchange_credit` was paid. */
+	exchange_credit: number,
 	/**  True when this token had already been checked out: nothing new was written. */
 	replayed: boolean,
 };
@@ -880,6 +891,8 @@ export type CheckoutResult_Serialize = {
 	grand_total: number,
 	change_due: number,
 	customer_id: string | null,
+	/**  The value of the goods taken back (0 for an ordinary sale); `grand_total − exchange_credit` was paid. */
+	exchange_credit: number,
 	/**  True when this token had already been checked out: nothing new was written. */
 	replayed: boolean,
 };
@@ -1196,6 +1209,40 @@ export type DrawerMovement_Serialize = {
 export type DrawerPin = "pin2" | "pin5";
 
 export type ElementKind = "store_name" | "product_name" | "attributes" | "price" | "barcode";
+
+/**  The returned side of an exchange; the replacement goods are the checkout's ordinary lines. */
+export type ExchangeInput = {
+	returns: ExchangeReturn[],
+};
+
+export type ExchangeLine = {
+	item_id: string,
+	name: string,
+	qty: number,
+	/**  What the customer paid for the whole line (after discounts). */
+	line_total: number,
+	returned_qty: number,
+	returnable_qty: number,
+	/**  False for quick-sale and untracked lines (nothing to put back on the shelf) and fully returned lines. */
+	eligible: boolean,
+};
+
+/**  One returned line: units of an earlier order's line. */
+export type ExchangeReturn = {
+	item_id: string,
+	qty: number,
+};
+
+export type ExchangeSource = {
+	order_id: string,
+	receipt_no: string,
+	business_date: string,
+	days_since: number,
+	window_days: number,
+	/**  Past the window: completing the exchange needs a supervisor / owner PIN (`EXCHANGE_LATE`). */
+	late: boolean,
+	lines: ExchangeLine[],
+};
 
 export type ExpenseCategory = {
 	id: string,
@@ -1933,7 +1980,7 @@ export type PeriodSales = {
 };
 
 /**  Permission key as seen by the UI and stored in audit metadata. */
-export type Perm = "SALE_CREATE" | "QUICK_SALE" | "PRICE_OVERRIDE" | "LINE_DISCOUNT" | "ORDER_DISCOUNT" | "VOID_ORDER" | "DRAWER_NO_SALE" | "CASH_PAY_IN_OUT" | "CASH_SESSION_MANAGE" | "CASH_SESSION_FORCE_CLOSE" | "REPRINT_RECEIPT" | "STOCK_ADJUST" | "STOCK_DAMAGE" | "BATCH_MANAGE" | "PRODUCT_MANAGE" | "QUICK_SALE_PROMOTE" | "LABEL_PRINT" | "VIEW_COST" | "REPORT_SALES" | "REPORT_FINANCIAL" | "EXPENSE_MANAGE" | "SETTINGS_MANAGE" | "USER_MANAGE" | "AUDIT_VIEW" | "SYNC_MANAGE" | "BACKUP_RESTORE" | "DATA_EXPORT" | "CUSTOMER_VIEW" | "BACKUP_CREATE";
+export type Perm = "SALE_CREATE" | "QUICK_SALE" | "PRICE_OVERRIDE" | "LINE_DISCOUNT" | "ORDER_DISCOUNT" | "VOID_ORDER" | "EXCHANGE_PROCESS" | "EXCHANGE_LATE" | "DRAWER_NO_SALE" | "CASH_PAY_IN_OUT" | "CASH_SESSION_MANAGE" | "CASH_SESSION_FORCE_CLOSE" | "REPRINT_RECEIPT" | "STOCK_ADJUST" | "STOCK_DAMAGE" | "BATCH_MANAGE" | "PRODUCT_MANAGE" | "QUICK_SALE_PROMOTE" | "LABEL_PRINT" | "VIEW_COST" | "REPORT_SALES" | "REPORT_FINANCIAL" | "EXPENSE_MANAGE" | "SETTINGS_MANAGE" | "USER_MANAGE" | "AUDIT_VIEW" | "SYNC_MANAGE" | "BACKUP_RESTORE" | "DATA_EXPORT" | "CUSTOMER_VIEW" | "BACKUP_CREATE";
 
 export type PlacedBarcode = {
 	symbology: Symbology,
@@ -2277,6 +2324,10 @@ export type ReceiptData_Deserialize = {
 	grand_total: number,
 	payments: ReceiptPayment_Deserialize[],
 	change_due: number,
+	/**  Goods handed back in this exchange (empty on an ordinary sale). */
+	returns: ReceiptReturn[],
+	/**  Credit from the returned goods, applied against `grand_total` (0 on an ordinary sale). */
+	exchange_credit: number,
 	/**  `07X XXX X123`, or `None` when no customer was attached (or the profile was erased). */
 	customer_masked?: string | null,
 	footer: string,
@@ -2298,6 +2349,10 @@ export type ReceiptData_Serialize = {
 	grand_total: number,
 	payments: ReceiptPayment_Serialize[],
 	change_due: number,
+	/**  Goods handed back in this exchange (empty on an ordinary sale). */
+	returns: ReceiptReturn[],
+	/**  Credit from the returned goods, applied against `grand_total` (0 on an ordinary sale). */
+	exchange_credit: number,
 	/**  `07X XXX X123`, or `None` when no customer was attached (or the profile was erased). */
 	customer_masked: string | null,
 	footer: string,
@@ -2379,6 +2434,16 @@ export type ReceiptPrinterProfile_Serialize = {
 	 *  before this field existed keep the drawer on.
 	 */
 	open_drawer: boolean,
+};
+
+/**  A returned item on an exchange receipt: what the customer handed back and what it was credited at. */
+export type ReceiptReturn = {
+	name: string,
+	qty: number,
+	/**  What the customer paid for these units (the credit this line gives). */
+	value: number,
+	/**  Receipt number of the sale the goods came from. */
+	original_receipt_no: string,
 };
 
 export type RecoverInput = {
@@ -3064,7 +3129,12 @@ export type ZReport_Deserialize = {
 	gross_sales: number,
 	discount_total: number,
 	net_sales: number,
+	/**  What the till actually took: Σ (grand total − exchange credit), i.e. the payments. */
 	sales_total: number,
+	/**  Exchanges in this session: item-for-item swaps, with the value of the goods taken back. */
+	exchanges_count: number,
+	exchange_credit: number,
+	returned_items: number,
 	payments: PaymentTotal[],
 	change_given: number,
 	overrides_count: number,
@@ -3096,7 +3166,12 @@ export type ZReport_Serialize = {
 	gross_sales: number,
 	discount_total: number,
 	net_sales: number,
+	/**  What the till actually took: Σ (grand total − exchange credit), i.e. the payments. */
 	sales_total: number,
+	/**  Exchanges in this session: item-for-item swaps, with the value of the goods taken back. */
+	exchanges_count: number,
+	exchange_credit: number,
+	returned_items: number,
 	payments: PaymentTotal[],
 	change_given: number,
 	overrides_count: number,

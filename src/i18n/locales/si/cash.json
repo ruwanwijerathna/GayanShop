@@ -78,7 +78,9 @@
     "expected": "අපේක්ෂිත මුදල",
     "counted": "ගණන් කළ මුදල",
     "variance": "වෙනස",
-    "count": "{{count}} × {{amount}}"
+    "count": "{{count}} × {{amount}}",
+    "exchanges": "හුවමාරු",
+    "returnedItems": "ආපසු දුන් අයිතම"
   },
   "moneyInvalid": "450 හෝ 450.50 වැනි මුදලක් ඇතුළත් කරන්න."
 }

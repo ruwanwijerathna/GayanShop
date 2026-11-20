@@ -78,7 +78,9 @@
     "expected": "Expected cash",
     "counted": "Counted cash",
     "variance": "Variance",
-    "count": "{{count}} × {{amount}}"
+    "count": "{{count}} × {{amount}}",
+    "exchanges": "Exchanges",
+    "returnedItems": "Items returned"
   },
   "moneyInvalid": "Enter an amount such as 450 or 450.50."
 }

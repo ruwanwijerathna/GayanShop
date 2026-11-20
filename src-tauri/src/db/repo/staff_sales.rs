@@ -78,7 +78,7 @@ pub async fn sales(pool: &SqlitePool, cal: &StoreCalendar, today: NaiveDate, sta
 
     // `ix_orders_sold_by` serves this exact expression and predicate.
     let rows: Vec<DayRow> = sqlx::query_as(
-        "SELECT business_date, SUM(grand_total) AS total, COUNT(*) AS orders FROM orders
+        "SELECT business_date, SUM(grand_total - exchange_credit) AS total, COUNT(*) AS orders FROM orders
          WHERE status = 'completed' AND COALESCE(sold_by, staff_id) = ?1 AND business_date BETWEEN ?2 AND ?3
          GROUP BY business_date",
     )

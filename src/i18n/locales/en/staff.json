@@ -115,7 +115,9 @@
     "BACKUP_RESTORE": "Restore backups",
     "DATA_EXPORT": "Export data",
     "CUSTOMER_VIEW": "See customer history",
-    "BACKUP_CREATE": "Take backups"
+    "BACKUP_CREATE": "Take backups",
+    "EXCHANGE_PROCESS": "Process exchanges",
+    "EXCHANGE_LATE": "Approve exchanges after 7 days"
   },
   "toggle": {
     "activate": "Activate {{name}}",

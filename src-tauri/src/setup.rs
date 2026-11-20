@@ -16,8 +16,15 @@ use crate::domain::permissions::{OWNER_ROLE, default_roles, min_pin_len};
 use crate::domain::receipt_no::device_digit;
 use crate::error::{AppError, AppResult};
 
-/// Owner-confirmed receipt footer — verbatim (§11).
-pub const RECEIPT_FOOTER: &str = "All sales are final. No refunds or exchanges. Thank you, come again!";
+/// Receipt footer under the 7-day exchange policy (§11, decision #26). The wording is proposed; the owner confirms it.
+pub const RECEIPT_FOOTER: &str = "Exchange within 7 days. Item for item only; no cash refunds. Thank you, come again!";
+
+/// The footer stores were seeded with before exchanges existed; the upgrade replaces it only while it is untouched.
+pub const LEGACY_RECEIPT_FOOTER: &str = "All sales are final. No refunds or exchanges. Thank you, come again!";
+
+/// `sales.policy` value under the exchange policy, and the setting for the exchange window.
+pub const SALES_POLICY_EXCHANGE: &str = "exchange_7d";
+pub const EXCHANGE_WINDOW_KEY: &str = "exchange.window_days";
 
 pub const EXPENSE_CATEGORIES: [&str; 8] =
     ["Rent", "Electricity", "Water", "Wages", "Transport (non-batch)", "Tea & sundries", "Repairs", "Other"];
@@ -63,7 +70,8 @@ pub fn store_setting_seeds(store_name: &str) -> Vec<(&'static str, Value)> {
         ("tax.inclusive", json!(true)),
         ("tax.default_rate_bp", json!(0)),
         ("discount.cashier_max_bp", json!(500)),
-        ("sales.policy", json!("final")),
+        ("sales.policy", json!(SALES_POLICY_EXCHANGE)),
+        (EXCHANGE_WINDOW_KEY, json!(crate::domain::exchange::DEFAULT_WINDOW_DAYS)),
         ("void.max_minutes", Value::Null),
         ("quick_sale.auto_tag_batch", json!(false)),
         ("receipt.footer", json!(RECEIPT_FOOTER)),
@@ -128,6 +136,85 @@ pub async fn load_identity(pool: &SqlitePool) -> AppResult<Option<Identity>> {
     let store_name: String = settings::store_get(pool, keys::STORE_NAME).await?.unwrap_or_default();
     Ok(Some(Identity { store_id, device_id, device_code, store_name, calendar }))
 }
+
+/// Bring a store created before exchanges (schema v5) onto the exchange policy, once. Idempotent: it changes
+/// nothing when the policy is already set. The footer is replaced only while it still holds the old verbatim
+/// text, so an owner's own wording is kept. Roles gain EXCHANGE_PROCESS / EXCHANGE_LATE where the defaults grant
+/// them (bits are only ever added). Settings and roles go to the outbox; one audit row records the upgrade.
+pub async fn upgrade_exchange_policy(db: &Db, clock: &dyn Clock, identity: &Identity) -> AppResult<bool> {
+    let policy: Option<String> = settings::store_get(&db.pool, "sales.policy").await?;
+    if policy.as_deref() == Some(SALES_POLICY_EXCHANGE) {
+        return Ok(false);
+    }
+    let footer: Option<String> = settings::store_get(&db.pool, "receipt.footer").await?;
+    let window: Option<i64> = settings::store_get(&db.pool, EXCHANGE_WINDOW_KEY).await?;
+
+    let now_dt = clock.now();
+    let now = iso(now_dt);
+    let bd = format_date(identity.calendar.business_date(now_dt));
+    let mut tx = db.write().await?;
+    let c = tx.conn();
+    let (store, device) = (identity.store_id.as_str(), identity.device_id.as_str());
+
+    settings::store_set(c, store, device, &now, "sales.policy", &json!(SALES_POLICY_EXCHANGE)).await?;
+    if window.is_none() {
+        let days = crate::domain::exchange::DEFAULT_WINDOW_DAYS;
+        settings::store_set(c, store, device, &now, EXCHANGE_WINDOW_KEY, &json!(days)).await?;
+    }
+    let footer_replaced = footer.as_deref().is_none_or(|f| f == LEGACY_RECEIPT_FOOTER);
+    if footer_replaced {
+        settings::store_set(c, store, device, &now, "receipt.footer", &json!(RECEIPT_FOOTER)).await?;
+    }
+
+    let mut roles_changed: Vec<&str> = Vec::new();
+    for seed in default_roles() {
+        let bits = seed.perms.0 & EXCHANGE_MASK;
+        if bits == 0 {
+            continue;
+        }
+        let id: Option<String> = sqlx::query_scalar(
+            "SELECT id FROM roles WHERE store_id = ?1 AND name = ?2 AND is_system = 1 AND deleted_at IS NULL
+               AND (permissions & ?3) != ?3",
+        )
+        .bind(store)
+        .bind(seed.name)
+        .bind(bits)
+        .fetch_optional(&mut *c)
+        .await?;
+        let Some(id) = id else { continue };
+        sqlx::query(
+            "UPDATE roles SET permissions = permissions | ?2, updated_at = ?3, updated_by_device = ?4,
+               version = version + 1 WHERE id = ?1",
+        )
+        .bind(&id)
+        .bind(bits)
+        .bind(&now)
+        .bind(device)
+        .execute(&mut *c)
+        .await?;
+        outbox::enqueue_upsert(c, "roles", &id, &now).await?;
+        roles_changed.push(seed.name);
+    }
+
+    audit::record(
+        c,
+        &AuditCtx { store_id: store, device_id: device, business_date: &bd, now: &now },
+        AuditEntry {
+            action: AuditAction::POLICY_UPGRADED,
+            staff_id: None,
+            approved_by: None,
+            entity_type: Some("store"),
+            entity_id: Some(store),
+            metadata: json!({ "policy": SALES_POLICY_EXCHANGE, "footer_replaced": footer_replaced, "roles": roles_changed }),
+        },
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(true)
+}
+
+/// EXCHANGE_PROCESS (bit 6) | EXCHANGE_LATE (bit 7).
+const EXCHANGE_MASK: i64 = (1 << 6) | (1 << 7);
 
 const META_COLS: &str = "created_at, updated_at, updated_by_device";
 

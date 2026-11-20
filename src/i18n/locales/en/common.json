@@ -74,7 +74,9 @@
       "bank_transfer": "Bank transfer",
       "qr": "QR",
       "other": "Other"
-    }
+    },
+    "returned": "Returned in this exchange",
+    "exchangeCredit": "Exchange credit"
   },
   "export": {
     "kinds": {

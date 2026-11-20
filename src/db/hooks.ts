@@ -466,6 +466,11 @@ export function useCheckoutOrder() {
   });
 }
 
+/** Exchange step 1: look the earlier sale up by receipt number (no cache: the answer is per attempt). */
+export function useExchangeLookup() {
+  return useMutation({ mutationFn: (receiptNo: string) => unwrap(commands.exchangeLookup(receiptNo)) });
+}
+
 export function useSessionOrders(enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.sessionOrders,

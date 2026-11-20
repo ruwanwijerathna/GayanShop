@@ -7,6 +7,7 @@ import { useSession } from "@/app/session";
 import {
   commands,
   type CashSession_Serialize as CashSession,
+  type ExchangeSource,
   type Perm,
   type ProductSummary_Serialize as ProductSummary,
 } from "@/db/bindings";
@@ -24,6 +25,7 @@ vi.mock("@/db/bindings", () => ({
     listCategories: vi.fn(),
     customerLookup: vi.fn(),
     checkoutOrder: vi.fn(),
+    exchangeLookup: vi.fn(),
     cartSaveCurrent: vi.fn(),
     cartDiscardCurrent: vi.fn(),
     cartCurrent: vi.fn(),
@@ -333,6 +335,7 @@ describe("PosScreen", () => {
         receipt_no: "T01-20261108-0001",
         grand_total: 45_000,
         change_due: 5_000,
+        exchange_credit: 0,
         customer_id: null,
         replayed: false,
       }),
@@ -376,6 +379,7 @@ describe("PosScreen", () => {
           receipt_no: "T01-20261108-0001",
           grand_total: 42_300,
           change_due: 0,
+          exchange_credit: 0,
           customer_id: null,
           replayed: false,
         }),
@@ -446,5 +450,156 @@ describe("PosScreen", () => {
     await renderTill();
     key("F1");
     expect(await screen.findByRole("dialog", { name: "Till shortcuts" })).toBeInTheDocument();
+  });
+
+  describe("exchange (F12)", () => {
+    const SOURCE: ExchangeSource = {
+      order_id: "o-old",
+      receipt_no: "T01-20261105-0007",
+      business_date: "2026-11-05",
+      days_since: 3,
+      window_days: 7,
+      late: false,
+      lines: [
+        {
+          item_id: "i1",
+          name: "Blue Bucket",
+          qty: 2,
+          line_total: 90_000,
+          returned_qty: 0,
+          returnable_qty: 2,
+          eligible: true,
+        },
+        {
+          item_id: "i2",
+          name: "Loose item",
+          qty: 1,
+          line_total: 5_000,
+          returned_qty: 0,
+          returnable_qty: 0,
+          eligible: false,
+        },
+      ],
+    };
+    const DONE = {
+      order_id: "o-new",
+      receipt_no: "T01-20261108-0002",
+      grand_total: 90_000,
+      change_due: 0,
+      exchange_credit: 45_000,
+      customer_id: null,
+      replayed: false,
+    };
+
+    /** F12 → find the sale → hand back one bucket → use it for the exchange. */
+    async function startExchange(source: ExchangeSource = SOURCE) {
+      vi.mocked(commands.exchangeLookup).mockImplementation(() => ok(source));
+      await renderTill();
+      key("F12");
+      const dialog = await screen.findByRole("dialog", { name: "Exchange" });
+      fireEvent.change(within(dialog).getByLabelText("Receipt number of the sale"), {
+        target: { value: source.receipt_no },
+      });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Find sale" }));
+      await within(dialog).findByText(/sold 2026-11-05/);
+      expect(within(dialog).getByText("Can't be returned (not a stocked item)")).toBeInTheDocument();
+      fireEvent.click(within(dialog).getByRole("button", { name: "Return more Blue Bucket" }));
+      expect(within(dialog).getByTestId("exchange-credit")).toHaveTextContent("Rs 450.00");
+      fireEvent.click(within(dialog).getByRole("button", { name: "Use for exchange" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    }
+
+    it("charges only the difference and sends the returned units with the replacement", async () => {
+      vi.mocked(commands.checkoutOrder).mockImplementation(() => ok(DONE));
+      await startExchange();
+      act(() => {
+        cartStore.getState().addProduct(BUCKET);
+        cartStore.getState().addProduct(BUCKET);
+      });
+      expect(await screen.findByTestId("exchange-credit-line")).toHaveTextContent("Rs 450.00");
+      expect(screen.getByTestId("exchange-to-pay")).toHaveTextContent("Rs 450.00");
+      key("F9");
+      const dialog = await screen.findByRole("dialog");
+      fireEvent.change(within(dialog).getByLabelText("Salesperson no."), { target: { value: "1" } });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Complete sale" }));
+      await waitFor(() => expect(commands.checkoutOrder).toHaveBeenCalledTimes(1));
+      expect(vi.mocked(commands.checkoutOrder).mock.calls[0]?.[0]).toMatchObject({
+        lines: [{ product_id: "p1", qty: 2 }],
+        payments: [{ method: "cash", amount: 45_000 }],
+        exchange: { returns: [{ item_id: "i1", qty: 1 }] },
+      });
+      expect(await screen.findByText(/Exchange complete ✓/)).toBeInTheDocument();
+      expect(cartStore.getState().exchange).toBeNull();
+    });
+
+    it("blocks payment while the replacement is worth less than the returned goods", async () => {
+      await startExchange();
+      act(() => cartStore.getState().addProduct(LIME));
+      expect(await screen.findByText(/must be worth at least Rs 450\.00/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /PAY/ })).toBeDisabled();
+      key("F9");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("an even swap sends no payment rows", async () => {
+      vi.mocked(commands.checkoutOrder).mockImplementation(() => ok({ ...DONE, grand_total: 45_000 }));
+      await startExchange();
+      act(() => cartStore.getState().addProduct(BUCKET));
+      expect(await screen.findByTestId("exchange-to-pay")).toHaveTextContent("Rs 0.00");
+      key("F9");
+      const dialog = await screen.findByRole("dialog");
+      fireEvent.change(within(dialog).getByLabelText("Salesperson no."), { target: { value: "1" } });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Complete sale" }));
+      await waitFor(() => expect(commands.checkoutOrder).toHaveBeenCalledTimes(1));
+      expect(vi.mocked(commands.checkoutOrder).mock.calls[0]?.[0].payments).toEqual([]);
+    });
+
+    it("a late exchange asks a supervisor, then retries with the approval and the same returns", async () => {
+      vi.mocked(commands.checkoutOrder)
+        .mockImplementationOnce(() => err({ kind: "APPROVAL_REQUIRED", perm: "EXCHANGE_LATE" }))
+        .mockImplementationOnce(() => ok(DONE));
+      await startExchange({ ...SOURCE, days_since: 9, late: true });
+      act(() => {
+        cartStore.getState().addProduct(BUCKET);
+        cartStore.getState().addProduct(BUCKET);
+      });
+      key("F9");
+      const pay = await screen.findByRole("dialog");
+      fireEvent.change(within(pay).getByLabelText("Salesperson no."), { target: { value: "2" } });
+      fireEvent.click(within(pay).getByRole("button", { name: "Complete sale" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Kamal" }));
+      fireEvent.change(screen.getByLabelText("PIN"), { target: { value: "2222" } });
+      fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+      await waitFor(() => expect(commands.checkoutOrder).toHaveBeenCalledTimes(2));
+      const token = vi.mocked(commands.checkoutOrder).mock.calls[0]?.[0].checkout_token;
+      expect(vi.mocked(commands.requestApproval)).toHaveBeenCalledWith("EXCHANGE_LATE", token, "sup", "2222");
+      expect(vi.mocked(commands.checkoutOrder).mock.calls[1]?.[0]).toMatchObject({
+        approval_id: "appr-1",
+        exchange: { returns: [{ item_id: "i1", qty: 1 }] },
+      });
+    });
+
+    it("warns that a sale past the window needs a supervisor", async () => {
+      vi.mocked(commands.exchangeLookup).mockImplementation(() =>
+        ok({ ...SOURCE, days_since: 9, late: true }),
+      );
+      await renderTill();
+      key("F12");
+      const dialog = await screen.findByRole("dialog", { name: "Exchange" });
+      fireEvent.change(within(dialog).getByLabelText("Receipt number of the sale"), {
+        target: { value: "T01-20261105-0007" },
+      });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Find sale" }));
+      expect(await within(dialog).findByText(/More than 7 days ago/)).toBeInTheDocument();
+    });
+
+    it("never holds or recalls a cart that is mid-exchange", async () => {
+      await startExchange();
+      act(() => cartStore.getState().addProduct(BUCKET));
+      key("F8");
+      expect(await screen.findByText("Finish or cancel the exchange first.")).toBeInTheDocument();
+      expect(commands.cartHold).not.toHaveBeenCalled();
+      expect(cartStore.getState().lines).toHaveLength(1);
+    });
   });
 });
