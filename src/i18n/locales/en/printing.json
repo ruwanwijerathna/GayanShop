@@ -82,6 +82,9 @@
     "logoRemove": "Remove image",
     "logoSaved": "Header image saved.",
     "logoRemoved": "Header image removed.",
+    "logoSize": "Header image size",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
     "logoUnreadable": "That file could not be read as a picture. Try a PNG or JPG."
   },
   "preview": {

@@ -1,5 +1,5 @@
-import { ImagePlus, Printer, Trash2 } from "lucide-react";
-import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { ImagePlus, Printer, Trash2, ZoomIn, ZoomOut } from "lucide-react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Can } from "@/components/auth/Can";
@@ -23,7 +23,11 @@ import {
   useSetPrinterProfile,
   useSetReceiptLogo,
 } from "@/db/hooks";
-import { logoFromFile } from "@/lib/logoBitmap";
+import {
+  canvasFromLogo,
+  logoFromFileWithSource,
+  renderScaledLogo,
+} from "@/lib/logoBitmap";
 import { ReceiptPreview } from "./ReceiptPreview";
 import { translateError } from "@/i18n";
 import { AdvancedSection } from "@/components/common/AdvancedSection";
@@ -137,6 +141,37 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
   const [form, setForm] = useState<PrinterForm>(() => toForm(profile));
   const [saved, setSaved] = useState(false);
 
+  const sourceRef = useRef<CanvasImageSource | null>(null);
+  const sourceDimRef = useRef<{ width: number; height: number } | null>(null);
+  const zoomTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [scalePercent, setScalePercent] = useState<number>(() => {
+    const stored = localStorage.getItem("receipt_logo_scale");
+    return stored ? Math.min(100, Math.max(20, Number(stored))) : 100;
+  });
+
+  useEffect(() => {
+    return () => {
+      if (zoomTimerRef.current) clearTimeout(zoomTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!header.data?.logo || sourceRef.current) return;
+    const dataUrl = localStorage.getItem("receipt_logo_source");
+    if (dataUrl) {
+      const img = new Image();
+      img.onload = () => {
+        sourceRef.current = img;
+        sourceDimRef.current = { width: img.naturalWidth, height: img.naturalHeight };
+      };
+      img.src = dataUrl;
+    } else {
+      const canvas = canvasFromLogo(header.data.logo);
+      sourceRef.current = canvas;
+      sourceDimRef.current = { width: canvas.width, height: canvas.height };
+    }
+  }, [header.data?.logo]);
+
   const set = <K extends keyof PrinterForm>(key: K, value: PrinterForm[K]) => {
     setSaved(false);
     setForm((f) => ({ ...f, [key]: value }));
@@ -154,12 +189,55 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    const logo = await logoFromFile(file);
-    if (!logo) {
+    const res = await logoFromFileWithSource(file, 100);
+    if (!res) {
       toast.error(t("settings.logoUnreadable"));
       return;
     }
-    setLogo.mutate(logo, { onSuccess: () => toast.success(t("settings.logoSaved")) });
+    sourceRef.current = null;
+    sourceDimRef.current = { width: res.width, height: res.height };
+    setScalePercent(100);
+    try {
+      if (res.dataUrl) localStorage.setItem("receipt_logo_source", res.dataUrl);
+      localStorage.setItem("receipt_logo_scale", "100");
+    } catch {}
+    setLogo.mutate(res.logo, { onSuccess: () => toast.success(t("settings.logoSaved")) });
+  };
+
+  const removeImage = () => {
+    sourceRef.current = null;
+    sourceDimRef.current = null;
+    try {
+      localStorage.removeItem("receipt_logo_source");
+      localStorage.removeItem("receipt_logo_scale");
+    } catch {}
+    setLogo.mutate(null, { onSuccess: () => toast.success(t("settings.logoRemoved")) });
+  };
+
+  const handleZoom = (percent: number, immediate = false) => {
+    const target = Math.min(100, Math.max(20, Math.round(percent / 5) * 5));
+    setScalePercent(target);
+    try {
+      localStorage.setItem("receipt_logo_scale", String(target));
+    } catch {}
+
+    const source = sourceRef.current ?? (header.data?.logo ? canvasFromLogo(header.data.logo) : null);
+    if (!source) return;
+    const dim = sourceDimRef.current ?? ("width" in source ? { width: Number(source.width), height: Number(source.height) } : null);
+    if (!dim || dim.width <= 0) return;
+
+    const newLogo = renderScaledLogo(source, dim.width, dim.height, target);
+    if (!newLogo) return;
+
+    if (immediate) {
+      if (zoomTimerRef.current) clearTimeout(zoomTimerRef.current);
+      setLogo.mutate(newLogo);
+    } else {
+      if (zoomTimerRef.current) clearTimeout(zoomTimerRef.current);
+      zoomTimerRef.current = setTimeout(() => {
+        setLogo.mutate(newLogo);
+      }, 120);
+    }
   };
 
   const tone = health === "ready" ? "ok" : health === "not_configured" ? "idle" : "bad";
@@ -243,7 +321,7 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
               <span className="text-sm text-muted-foreground">{t("settings.logoHint")}</span>
             </div>
             <Can perm="SETTINGS_MANAGE">
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <input
                   ref={fileInput}
                   type="file"
@@ -267,15 +345,61 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
                     type="button"
                     variant="outline"
                     disabled={setLogo.isPending}
-                    onClick={() =>
-                      setLogo.mutate(null, { onSuccess: () => toast.success(t("settings.logoRemoved")) })
-                    }
+                    onClick={removeImage}
                   >
                     <Trash2 aria-hidden />
                     {t("settings.logoRemove")}
                   </Button>
                 )}
               </div>
+
+              {header.data?.logo && (
+                <div className="mt-1 flex flex-col gap-2 rounded-lg border bg-muted/30 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium">{t("settings.logoSize")}</span>
+                    <span className="text-xs font-mono text-muted-foreground">
+                      {header.data.logo.width} × {header.data.logo.height} dots ({scalePercent}%)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="size-8 shrink-0"
+                      disabled={setLogo.isPending || scalePercent <= 20}
+                      onClick={() => handleZoom(scalePercent - 10, true)}
+                      title={t("settings.zoomOut")}
+                      aria-label={t("settings.zoomOut")}
+                    >
+                      <ZoomOut className="size-4" />
+                    </Button>
+                    <input
+                      type="range"
+                      min={20}
+                      max={100}
+                      step={5}
+                      value={scalePercent}
+                      disabled={setLogo.isPending}
+                      onChange={(e) => handleZoom(Number(e.target.value))}
+                      className="h-2 flex-1 cursor-pointer accent-primary"
+                      aria-label={t("settings.logoSize")}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="size-8 shrink-0"
+                      disabled={setLogo.isPending || scalePercent >= 100}
+                      onClick={() => handleZoom(scalePercent + 10, true)}
+                      title={t("settings.zoomIn")}
+                      aria-label={t("settings.zoomIn")}
+                    >
+                      <ZoomIn className="size-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </Can>
           </div>
 
