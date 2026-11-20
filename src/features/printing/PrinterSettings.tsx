@@ -17,12 +17,12 @@ import { CommandError } from "@/db/client";
 import {
   usePrinterProfile,
   usePrinterStatus,
-  usePrintTestPage,
   useReceiptHeader,
   useSetPrinterProfile,
   useSetReceiptLogo,
 } from "@/db/hooks";
 import { canvasFromLogo, logoFromFileWithSource, renderScaledLogo } from "@/lib/logoBitmap";
+import { usePrintReceiptStore } from "@/components/receipt/PrintableReceiptPortal";
 import { ReceiptPreview } from "./ReceiptPreview";
 import { translateError } from "@/i18n";
 import { SettingsCard, StatusPill } from "@/components/common/SettingsCard";
@@ -120,7 +120,6 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
   const { t, i18n } = useTranslation("printing");
   const status = usePrinterStatus();
   const save = useSetPrinterProfile();
-  const test = usePrintTestPage();
   const header = useReceiptHeader();
   const setLogo = useSetReceiptLogo();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -170,7 +169,7 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
     save.mutate(toProfile(form), { onSuccess: () => setSaved(true) });
   };
 
-  const error = [save.error, test.error, setLogo.error].find((x) => x instanceof CommandError);
+  const error = [save.error, setLogo.error].find((x) => x instanceof CommandError);
   const health = status.data?.health ?? "not_configured";
 
   const chooseImage = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -261,8 +260,57 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
             type="button"
             size="pos"
             variant="outline"
-            disabled={test.isPending || profile === null}
-            onClick={() => test.mutate()}
+            disabled={profile === null}
+            onClick={() => {
+              usePrintReceiptStore.getState().print({
+                order_id: "SAMPLE-RECEIPT",
+                store_name: header.data?.store_name ?? "Gayan Sales Center",
+                receipt_no: "T01-20261120-0001",
+                status: "completed",
+                business_date: "2026-11-20",
+                completed_at: "2026-11-20T20:30:00",
+                cashier: "Cashier 01",
+                customer_masked: null,
+                lines: [
+                  {
+                    name: "Sample item A",
+                    qty: 2,
+                    list_price: 45000,
+                    unit_price: 45000,
+                    line_gross: 90000,
+                    line_discount: 0,
+                    line_total: 90000,
+                  },
+                  {
+                    name: "Sample item B",
+                    qty: 1,
+                    list_price: 125000,
+                    unit_price: 125000,
+                    line_gross: 125000,
+                    line_discount: 0,
+                    line_total: 125000,
+                  },
+                  {
+                    name: "Sample item C",
+                    qty: 3,
+                    list_price: 9500,
+                    unit_price: 9500,
+                    line_gross: 28500,
+                    line_discount: 0,
+                    line_total: 28500,
+                  },
+                ],
+                item_count: 6,
+                gross_sales: 243500,
+                discount_total: 0,
+                grand_total: 243500,
+                payments: [{ method: "cash", amount: 243500, tendered: 300000, reference: null }],
+                change_due: 56500,
+                footer:
+                  header.data?.footer ??
+                  "All sales are final. No refunds or exchanges. Thank you, come again!",
+              });
+            }}
           >
             {t("settings.testPage")}
           </Button>
@@ -419,7 +467,6 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
             </p>
           )}
           {saved && <p role="status">{t("settings.saved")}</p>}
-          {test.isSuccess && <p role="status">{t("settings.testQueued")}</p>}
         </div>
         <aside aria-label={t("preview.title")} className="flex justify-center lg:justify-end">
           <ReceiptPreview header={header.data} width={form.width} qr={form.qr} />

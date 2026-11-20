@@ -10,6 +10,7 @@ import {
   type ReceiptPrinterProfile_Serialize,
 } from "@/db/bindings";
 import { chooseOption, err, ok, renderWithProviders, session } from "@/test/render";
+import { usePrintReceiptStore } from "@/components/receipt/PrintableReceiptPortal";
 import { DEFAULT_FORM, PrinterSettings, toForm, toProfile } from "./PrinterSettings";
 
 vi.mock("@/db/bindings", () => ({
@@ -112,12 +113,17 @@ describe("PrinterSettings", () => {
     expect(await screen.findByText("Printer settings saved.")).toBeInTheDocument();
   });
 
-  it("loads the saved profile and queues a test page", async () => {
+  it("loads the saved profile and prints the sample test receipt", async () => {
     vi.mocked(commands.printerProfile).mockImplementation(() => ok(NET));
+    const spy = vi.spyOn(usePrintReceiptStore.getState(), "print");
     renderAs();
     fireEvent.click(await screen.findByRole("button", { name: "Print Test Receipt" }));
-    await waitFor(() => expect(commands.printTestPage).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText("A sample receipt was sent to the printer.")).toBeInTheDocument();
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        order_id: "SAMPLE-RECEIPT",
+        receipt_no: "T01-20261120-0001",
+      }),
+    );
   });
 
   it("previews the sample receipt beside the form with the shop name and footer", async () => {

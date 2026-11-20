@@ -238,12 +238,20 @@ function Till() {
         approval_id: approvalId,
       },
       {
-        onSuccess: (r) => {
+        onSuccess: async (r) => {
           playCue("complete");
           cartStore.getState().clear();
           setApproval(null);
           setDone({ receipt: r.receipt_no, change: r.change_due, orderId: r.order_id });
           closeDialog();
+          try {
+            const res = await commands.orderReceipt(r.order_id);
+            if (res.status === "ok") {
+              usePrintReceiptStore.getState().print(res.data);
+            }
+          } catch {
+            // Ignore auto-print error
+          }
         },
         onError: (e) => {
           if (e instanceof CommandError && e.error.kind === "APPROVAL_REQUIRED") {

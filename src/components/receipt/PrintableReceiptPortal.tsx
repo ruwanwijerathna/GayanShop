@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 import type { ReceiptData_Serialize as ReceiptData } from "@/db/bindings";
+import { useReceiptHeader } from "@/db/hooks";
 import { SinhalaReceiptTemplate } from "./SinhalaReceiptTemplate";
 
 interface PrintStore {
@@ -24,6 +25,7 @@ export const usePrintReceiptStore = create<PrintStore>((set) => ({
 export function PrintableReceiptPortal() {
   const activeReceipt = usePrintReceiptStore((s) => s.activeReceipt);
   const clear = usePrintReceiptStore((s) => s.clear);
+  const header = useReceiptHeader();
 
   useEffect(() => {
     const handleAfterPrint = () => {
@@ -39,7 +41,11 @@ export function PrintableReceiptPortal() {
 
   return (
     <div id="printable-receipt-portal">
-      <SinhalaReceiptTemplate receipt={activeReceipt} />
+      <SinhalaReceiptTemplate
+        receipt={activeReceipt}
+        logo={header.data?.logo}
+        storeName={header.data?.store_name}
+      />
     </div>
   );
 }
