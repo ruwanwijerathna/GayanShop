@@ -152,6 +152,16 @@ describe("PrinterSettings", () => {
     expect(screen.getByRole("button", { name: "Replace image" })).toBeInTheDocument();
   });
 
+  it("shows zoom controls when a header image is saved", async () => {
+    vi.mocked(commands.receiptHeader).mockImplementation(() =>
+      ok({ ...HEADER, logo: { width: 384, height: 100, data: new Array(48 * 100).fill(0) } }),
+    );
+    renderAs();
+    expect(await screen.findByRole("button", { name: "Zoom out" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Zoom in" })).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: "Header image size" })).toBeInTheDocument();
+  });
+
   it("shows Rust's validation message", async () => {
     vi.mocked(commands.setPrinterProfile).mockImplementation(() =>
       err({ kind: "VALIDATION", code: "PRINTER_PROFILE_INVALID", detail: "host or port" }),

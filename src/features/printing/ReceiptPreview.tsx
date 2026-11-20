@@ -1,10 +1,10 @@
 // Settings → Receipt printer: a picture of the sample receipt (header image, shop name, a few made-up lines,
 // totals, QR and the shop's own footer), at the paper width chosen in the form. Receipts print in English, so
 // the sample text is the same in both UI languages.
-import { QrCode } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { Logo, PaperWidth, ReceiptHeaderView } from "@/db/bindings";
+import { Barcode128 } from "@/components/receipt/Barcode128";
 
 /** Printable dots across the paper: the printer's 203 dpi head. */
 const PAPER_DOTS: Record<PaperWidth, number> = { mm80: 576, mm58: 384 };
@@ -70,15 +70,19 @@ export function ReceiptPreview({
         className="flex flex-col gap-1 rounded-sm border border-border bg-white p-3 font-mono text-[11px] leading-snug text-black shadow-sm"
         style={{ width: PAPER_DOTS[width] * SCALE + 24 }}
       >
-        {header?.logo && (
+        {header?.logo ? (
           <div className="flex justify-center pb-1">
             <LogoCanvas logo={header.logo} />
           </div>
+        ) : (
+          <p className="text-center text-base font-bold">{header?.store_name}</p>
         )}
-        <p className="text-center text-base font-bold">{header?.store_name}</p>
         <p className="text-center font-bold">{t("preview.banner")}</p>
-        <Pair left={t("preview.receipt")} right="SAMPLE" />
-        <hr className="border-dashed border-black/60" />
+        <div className="space-y-0.5 border-b border-dashed border-black/60 pb-1">
+          <Pair left="බිල් අංකය:" right="T01-20261120-0001" />
+          <Pair left="දිනය: 2026-11-20" right="වේලාව: 20:30" />
+          <Pair left="අයකැමි:" right="Cashier 01" />
+        </div>
         {ROWS.map((r) => (
           <div key={r.key}>
             <p>{t(`preview.${r.key}`)}</p>
@@ -86,12 +90,21 @@ export function ReceiptPreview({
           </div>
         ))}
         <hr className="border-dashed border-black/60" />
+        <Pair left="භාණ්ඩ ගණන:" right="6" />
         <Pair left={t("preview.subtotal")} right="2,435.00" />
         <Pair left={t("preview.total")} right="Rs. 2,435.00" bold />
         <Pair left={t("preview.cash")} right="3,000.00" />
         <Pair left={t("preview.change")} right="565.00" />
-        <QrCode aria-hidden className="mx-auto my-1 size-12" strokeWidth={1.5} />
-        <p className="text-center">{header?.footer}</p>
+        <hr className="border-dashed border-black/60" />
+        <p className="text-center font-medium">
+          මිලදී ගත් භාණ්ඩ මාරු කිරීම සදහා දින 7ක් ඇතුලත බිල්පත සමග භාණ්ඩය රැගෙන එන්න.
+        </p>
+        <p className="text-center font-bold">ස්තූතියී, නැවත පැමිණෙන්න!</p>
+        <div className="my-1 flex justify-center py-1">
+          <Barcode128 data="T01-20261120-0001" height={32} moduleWidth={1.2} />
+        </div>
+        <p className="text-center text-[10px] text-neutral-600">Powered By BraceFrame - (076 9950 199)</p>
+        <p className="text-center text-[9px] text-neutral-400">{header?.footer}</p>
       </div>
       <figcaption className="text-sm text-muted-foreground">{t("preview.title")}</figcaption>
     </figure>

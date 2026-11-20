@@ -7,6 +7,7 @@ import {
   History,
   Percent,
   Phone,
+  Printer,
   Search,
   SquarePen,
   Undo2,
@@ -35,6 +36,7 @@ import type {
   ProductSummary_Serialize as ProductSummary,
 } from "@/db/bindings";
 import { CommandError } from "@/db/client";
+import { commands } from "@/db/bindings";
 import {
   discardCurrentCart,
   lookupProductMatches,
@@ -46,6 +48,7 @@ import {
   useProductSearch,
   useRecallCart,
 } from "@/db/hooks";
+import { usePrintReceiptStore } from "@/components/receipt/PrintableReceiptPortal";
 import { notFoundToast, routeScan } from "@/hardware/scanner/feedback";
 import { useScanHandler, useScanner } from "@/hardware/scanner/ScannerProvider";
 import { translateError } from "@/i18n";
@@ -124,7 +127,12 @@ function Till() {
     null,
   );
   const [shared, setShared] = useState<{ code: string; products: ProductSummary[] } | null>(null);
-  const [done, setDone] = useState<{ receipt: string; change: number; exchange: boolean } | null>(null);
+  const [done, setDone] = useState<{
+    receipt: string;
+    change: number;
+    exchange: boolean;
+    orderId?: string;
+  } | null>(null);
 
   const search = useProductSearch(query);
   const results = query.trim() === "" ? [] : (search.data ?? []);
@@ -286,7 +294,12 @@ function Till() {
           const wasExchange = cartStore.getState().exchange !== null;
           cartStore.getState().clear();
           setApproval(null);
-          setDone({ receipt: r.receipt_no, change: r.change_due, exchange: wasExchange });
+          setDone({
+            receipt: r.receipt_no,
+            change: r.change_due,
+            exchange: wasExchange,
+            orderId: r.order_id,
+          });
           closeDialog();
         },
         onError: (e) => {
@@ -478,11 +491,33 @@ function Till() {
       {done && (
         <div
           role="status"
-          className="border-b bg-success-surface px-4 py-2 text-lg font-semibold text-success-foreground"
+          className="flex flex-wrap items-center justify-between gap-3 border-b bg-success-surface px-4 py-2 text-lg font-semibold text-success-foreground"
         >
-          {done.exchange ? t("exchange.done") : t("done.title")} ·{" "}
-          {t("done.receipt", { receipt: done.receipt })}
-          {done.change > 0 && ` · ${t("done.change", { change: formatMoney(done.change) })}`}
+          <div>
+            {done.exchange ? t("exchange.done") : t("done.title")} ·{" "}
+            {t("done.receipt", { receipt: done.receipt })}
+            {done.change > 0 && ` · ${t("done.change", { change: formatMoney(done.change) })}`}
+          </div>
+          {done.orderId && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="border-success-foreground/40 bg-white/70 text-success-foreground hover:bg-white"
+              onClick={async () => {
+                const orderId = done.orderId;
+                if (orderId) {
+                  const res = await commands.orderReceipt(orderId);
+                  if (res.status === "ok") {
+                    usePrintReceiptStore.getState().print(res.data);
+                  }
+                }
+              }}
+            >
+              <Printer className="mr-1.5 size-4" />
+              {t("done.printReceipt", { defaultValue: "බිල්පත මුද්‍රණය (Print)" })}
+            </Button>
+          )}
         </div>
       )}
 

@@ -23,7 +23,7 @@ fn label_body(l: &PlacedLabel, dpi: u16) -> String {
         for (i, line) in t.lines.iter().enumerate() {
             let x = layout::text_x_dots(t, line, dpi);
             let y = layout::text_y_dots(t, i, dpi);
-            let font = t.font_size.clamp(1, 4);
+            let font = t.font_size.clamp(1, 5);
             // Bold has no TSPL attribute: a bold line is drawn twice, one dot apart.
             out.push_str(&format!("TEXT {x},{y},\"{font}\",0,1,1,\"{line}\"\r\n"));
             if t.bold {

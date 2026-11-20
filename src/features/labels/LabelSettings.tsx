@@ -133,7 +133,7 @@ function Field({ id, label, children }: { id: string; label: string; children: R
 /** A to-scale row of the roll's labels, so the two sizes are told apart at a glance. */
 function RollVisual({ template }: { template: LabelTemplate }) {
   return (
-    <span aria-hidden className="mb-1 flex gap-1.5">
+    <span aria-hidden className="mb-1 flex h-9 items-center gap-1.5">
       {Array.from({ length: template.columns }, (_, i) => (
         <span
           key={i}
@@ -213,7 +213,26 @@ function LabelCard({
         <div className="flex min-w-0 flex-col gap-5">
           {form.kind === "spooler" ? (
             <Field id="lp-target" label={t("settings.printerName")}>
-              <PrinterSelect id="lp-target" value={form.target} onChange={(v) => set("target", v)} />
+              <PrinterSelect
+                id="lp-target"
+                value={form.target}
+                onChange={(v) => {
+                  const lower = v.toLowerCase();
+                  const detectedDpi = lower.includes("300") ? 300 : lower.includes("203") ? 203 : undefined;
+                  const detectedLang =
+                    lower.includes("zpl") || lower.includes("zebra")
+                      ? "zpl"
+                      : lower.includes("tspl") || lower.includes("tsc") || lower.includes("xprinter")
+                        ? "tspl"
+                        : undefined;
+                  setForm((f) => ({
+                    ...f,
+                    target: v,
+                    ...(detectedDpi !== undefined ? { dpi: detectedDpi } : {}),
+                    ...(detectedLang !== undefined ? { language: detectedLang } : {}),
+                  }));
+                }}
+              />
             </Field>
           ) : (
             <p className="rounded-lg border bg-muted/40 p-3 text-base">
@@ -401,7 +420,7 @@ function LabelCard({
             )}
           </AdvancedSection>
         </div>
-        <aside aria-label={t("settings.previewTitle")} className="flex flex-col gap-2">
+        <aside aria-label={t("settings.previewTitle")} className="flex flex-col gap-2 self-start">
           {samplePreview.data ? (
             <LabelPreviewSvg preview={samplePreview.data} title={t("settings.previewTitle")} maxRows={1} />
           ) : (

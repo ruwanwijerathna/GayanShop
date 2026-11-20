@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react";
 import { I18nextProvider } from "react-i18next";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { PrintableReceiptPortal } from "@/components/receipt/PrintableReceiptPortal";
 import { ScannerProvider } from "@/hardware/scanner/ScannerProvider";
 import { createI18n, type UiLanguage } from "@/i18n";
 import { createQueryClient } from "./query-client";
@@ -18,6 +19,7 @@ export function Providers({ children, language = "en" }: { children: ReactNode; 
           <SessionProvider>
             <ScannerProvider>{children}</ScannerProvider>
             <Toaster position="top-center" />
+            <PrintableReceiptPortal />
           </SessionProvider>
         </TooltipProvider>
       </I18nextProvider>

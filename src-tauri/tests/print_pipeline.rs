@@ -221,7 +221,8 @@ async fn a_cash_sale_kicks_the_drawer_then_prints_the_receipt() {
         assert!(contains(receipt, needle), "receipt lacks {:?}", String::from_utf8_lossy(needle));
     }
     assert!(!contains(receipt, b"771234567"), "the phone is masked");
-    assert!(contains(receipt, &[0x1D, b'(', b'k', 3, 0, 49, 81, 48]), "QR of the order id");
+    assert!(contains(receipt, &[0x1D, b'k', 73]), "Code128 barcode of receipt_no");
+    assert!(contains(receipt, b"Powered By BraceFrame - (076 9950 199)"), "BraceFrame branding");
     assert!(receipt.ends_with(&[0x1B, b'd', 4, 0x1D, b'V', 1]), "feed then partial cut");
     assert_eq!(hub.health().unwrap().health, PrinterHealth::Ready);
     assert_eq!(fake.max_in_flight.load(Ordering::SeqCst), 1, "one call at a time");

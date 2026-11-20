@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { bitmapFromRgba, fitLogo, LOGO_MAX_HEIGHT, LOGO_MAX_WIDTH } from "./logoBitmap";
+import {
+  bitmapFromRgba,
+  canvasFromLogo,
+  fitLogo,
+  LOGO_MAX_HEIGHT,
+  LOGO_MAX_WIDTH,
+  scaleLogoDimensions,
+} from "./logoBitmap";
 
 function pixels(values: ([number, number, number, number] | undefined)[]): Uint8ClampedArray {
   return Uint8ClampedArray.from(values.flatMap((v) => v ?? [255, 255, 255, 255]));
@@ -38,7 +45,7 @@ describe("fitLogo", () => {
   });
 
   it("scales a wide picture to the paper width, keeping the proportions", () => {
-    expect(fitLogo(768, 192)).toEqual({ width: LOGO_MAX_WIDTH, height: 96 });
+    expect(fitLogo(768, 192)).toEqual({ width: LOGO_MAX_WIDTH, height: 144 });
   });
 
   it("scales a tall picture to the height limit", () => {
@@ -49,5 +56,32 @@ describe("fitLogo", () => {
 
   it("rejects an empty picture", () => {
     expect(fitLogo(0, 10)).toBeNull();
+  });
+});
+
+describe("scaleLogoDimensions", () => {
+  it("scales up to maximum dimensions at 100%", () => {
+    const dim = scaleLogoDimensions(800, 400, 100);
+    expect(dim).toEqual({ width: LOGO_MAX_WIDTH, height: 288 });
+    expect((dim?.width ?? 0) % 8).toBe(0);
+  });
+
+  it("scales down proportionally at 50%", () => {
+    const dim = scaleLogoDimensions(800, 400, 50);
+    expect(dim).toEqual({ width: 288, height: 144 });
+    expect((dim?.width ?? 0) % 8).toBe(0);
+  });
+
+  it("clamps minimum scale to 10%", () => {
+    const dim = scaleLogoDimensions(800, 400, 5);
+    expect(dim).toEqual(scaleLogoDimensions(800, 400, 10));
+  });
+});
+
+describe("canvasFromLogo", () => {
+  it("reconstructs an HTMLCanvasElement with logo dimensions", () => {
+    const canvas = canvasFromLogo({ width: 16, height: 2, data: [0xff, 0x00, 0x00, 0xff] });
+    expect(canvas.width).toBe(16);
+    expect(canvas.height).toBe(2);
   });
 });

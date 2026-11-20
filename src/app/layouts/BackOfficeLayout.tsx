@@ -14,7 +14,7 @@ export function BackOfficeLayout({ sidebar, children }: { sidebar: ReactNode; ch
     <SidebarProvider
       defaultOpen={defaultOpen}
       style={SIDEBAR_SIZE}
-      className="h-screen min-h-[768px] min-w-[1024px] bg-background"
+      className="h-screen w-full overflow-hidden bg-background"
     >
       {sidebar}
       <SidebarInset className="flex min-h-0 min-w-0 flex-col overflow-hidden">

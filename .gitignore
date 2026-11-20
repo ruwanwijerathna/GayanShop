@@ -36,4 +36,6 @@ src-tauri/gen
 .tauri/
 *.key
 *.key.pub
+*.exe
+images/
 .serena/

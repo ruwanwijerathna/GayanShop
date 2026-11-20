@@ -36,7 +36,7 @@ export function RadioCards<T extends string>({
         <label
           key={o.value}
           className={cn(
-            "flex min-h-12 cursor-pointer flex-col gap-1 rounded-lg border-2 bg-background p-4 transition-colors",
+            "relative flex min-h-12 cursor-pointer flex-col gap-1 rounded-lg border-2 bg-background p-4 transition-colors",
             "has-[input:checked]:border-primary has-[input:checked]:bg-primary/10",
             "has-[input:focus-visible]:ring-[3px] has-[input:focus-visible]:ring-ring/50",
             disabled && "cursor-not-allowed opacity-50",
@@ -49,7 +49,7 @@ export function RadioCards<T extends string>({
             checked={value === o.value}
             disabled={disabled}
             onChange={() => onValueChange(o.value)}
-            className="sr-only"
+            className="sr-only top-0 left-0"
           />
           {o.visual}
           <span className="text-base font-semibold">{o.label}</span>

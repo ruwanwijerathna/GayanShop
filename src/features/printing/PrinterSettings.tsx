@@ -1,5 +1,5 @@
-import { ImagePlus, Printer, Trash2 } from "lucide-react";
-import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { ImagePlus, Printer, Trash2, ZoomIn, ZoomOut } from "lucide-react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Can } from "@/components/auth/Can";
@@ -23,7 +23,8 @@ import {
   useSetPrinterProfile,
   useSetReceiptLogo,
 } from "@/db/hooks";
-import { logoFromFile } from "@/lib/logoBitmap";
+import { canvasFromLogo, logoFromFileWithSource, renderScaledLogo } from "@/lib/logoBitmap";
+import { usePrintReceiptStore } from "@/components/receipt/PrintableReceiptPortal";
 import { ReceiptPreview } from "./ReceiptPreview";
 import { translateError } from "@/i18n";
 import { AdvancedSection } from "@/components/common/AdvancedSection";
@@ -137,6 +138,39 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
   const [form, setForm] = useState<PrinterForm>(() => toForm(profile));
   const [saved, setSaved] = useState(false);
 
+  const sourceRef = useRef<CanvasImageSource | null>(null);
+  const sourceDimRef = useRef<{ width: number; height: number } | null>(null);
+  const zoomTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [scalePercent, setScalePercent] = useState<number>(() => {
+    const stored = localStorage.getItem("receipt_logo_scale");
+    return stored ? Math.min(100, Math.max(10, Number.parseInt(stored, 10))) : 100;
+  });
+  const [sliderVal, setSliderVal] = useState<number | null>(null);
+  const activeZoom = sliderVal ?? scalePercent;
+
+  useEffect(() => {
+    return () => {
+      if (zoomTimerRef.current) clearTimeout(zoomTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!header.data?.logo || sourceRef.current) return;
+    const dataUrl = localStorage.getItem("receipt_logo_source");
+    if (dataUrl) {
+      const img = new Image();
+      img.onload = () => {
+        sourceRef.current = img;
+        sourceDimRef.current = { width: img.naturalWidth, height: img.naturalHeight };
+      };
+      img.src = dataUrl;
+    } else {
+      const canvas = canvasFromLogo(header.data.logo);
+      sourceRef.current = canvas;
+      sourceDimRef.current = { width: canvas.width, height: canvas.height };
+    }
+  }, [header.data?.logo]);
+
   const set = <K extends keyof PrinterForm>(key: K, value: PrinterForm[K]) => {
     setSaved(false);
     setForm((f) => ({ ...f, [key]: value }));
@@ -154,12 +188,69 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    const logo = await logoFromFile(file);
-    if (!logo) {
+    const res = await logoFromFileWithSource(file, 100);
+    if (!res) {
       toast.error(t("settings.logoUnreadable"));
       return;
     }
-    setLogo.mutate(logo, { onSuccess: () => toast.success(t("settings.logoSaved")) });
+    sourceRef.current = null;
+    sourceDimRef.current = { width: res.width, height: res.height };
+    setScalePercent(100);
+    setSliderVal(null);
+    try {
+      if (res.dataUrl) localStorage.setItem("receipt_logo_source", res.dataUrl);
+      localStorage.setItem("receipt_logo_scale", "100");
+    } catch {
+      /* ignore */
+    }
+    setLogo.mutate(res.logo, { onSuccess: () => toast.success(t("settings.logoSaved")) });
+  };
+
+  const removeImage = () => {
+    sourceRef.current = null;
+    sourceDimRef.current = null;
+    try {
+      localStorage.removeItem("receipt_logo_source");
+      localStorage.removeItem("receipt_logo_scale");
+    } catch {
+      /* ignore */
+    }
+    setLogo.mutate(null, { onSuccess: () => toast.success(t("settings.logoRemoved")) });
+  };
+
+  const handleZoom = (percent: number, immediate = false) => {
+    const target = Math.min(100, Math.max(10, Math.round(percent)));
+    if (immediate) setSliderVal(null);
+    setScalePercent(target);
+    try {
+      localStorage.setItem("receipt_logo_scale", String(target));
+    } catch {
+      /* ignore */
+    }
+
+    const source = sourceRef.current ?? (header.data?.logo ? canvasFromLogo(header.data.logo) : null);
+    if (!source) return;
+    const dim =
+      sourceDimRef.current ??
+      ("width" in source
+        ? {
+            width: Number.parseInt(String(source.width), 10),
+            height: Number.parseInt(String(source.height), 10),
+          }
+        : null);
+    if (!dim || dim.width <= 0) return;
+
+    const newLogo = renderScaledLogo(source, dim.width, dim.height, target);
+    if (!newLogo) return;
+
+    if (zoomTimerRef.current) clearTimeout(zoomTimerRef.current);
+    if (immediate) {
+      setLogo.mutate(newLogo);
+    } else {
+      zoomTimerRef.current = setTimeout(() => {
+        setLogo.mutate(newLogo);
+      }, 150);
+    }
   };
 
   const tone = health === "ready" ? "ok" : health === "not_configured" ? "idle" : "bad";
@@ -185,6 +276,63 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
             onClick={() => test.mutate()}
           >
             {t("settings.testPage")}
+          </Button>
+          <Button
+            type="button"
+            size="pos"
+            variant="outline"
+            onClick={() => {
+              usePrintReceiptStore.getState().print({
+                order_id: "SAMPLE-RECEIPT",
+                store_name: header.data?.store_name ?? "GayanShop",
+                receipt_no: "T01-20261120-0001",
+                status: "completed",
+                business_date: new Date().toISOString().slice(0, 10),
+                completed_at: new Date().toISOString(),
+                cashier: "Cashier 01",
+                customer_masked: null,
+                lines: [
+                  {
+                    name: "Sample item A",
+                    qty: 2,
+                    list_price: 45000,
+                    unit_price: 45000,
+                    line_gross: 90000,
+                    line_discount: 0,
+                    line_total: 90000,
+                  },
+                  {
+                    name: "Sample item B",
+                    qty: 1,
+                    list_price: 125000,
+                    unit_price: 125000,
+                    line_gross: 125000,
+                    line_discount: 0,
+                    line_total: 125000,
+                  },
+                  {
+                    name: "Sample item C",
+                    qty: 3,
+                    list_price: 9500,
+                    unit_price: 9500,
+                    line_gross: 28500,
+                    line_discount: 0,
+                    line_total: 28500,
+                  },
+                ],
+                item_count: 6,
+                gross_sales: 243500,
+                discount_total: 0,
+                grand_total: 243500,
+                payments: [{ method: "cash", amount: 243500, tendered: 300000, reference: null }],
+                change_due: 56500,
+                returns: [],
+                exchange_credit: 0,
+                footer: header.data?.footer ?? "",
+              });
+            }}
+          >
+            {t("settings.testPageSinhala", { defaultValue: "සිංහල ටෙස්ට් මුද්‍රණය (HTML)" })}
           </Button>
         </Can>
       }
@@ -243,7 +391,7 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
               <span className="text-sm text-muted-foreground">{t("settings.logoHint")}</span>
             </div>
             <Can perm="SETTINGS_MANAGE">
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <input
                   ref={fileInput}
                   type="file"
@@ -263,19 +411,71 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
                   {header.data?.logo ? t("settings.logoReplace") : t("settings.logoChoose")}
                 </Button>
                 {header.data?.logo && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={setLogo.isPending}
-                    onClick={() =>
-                      setLogo.mutate(null, { onSuccess: () => toast.success(t("settings.logoRemoved")) })
-                    }
-                  >
+                  <Button type="button" variant="outline" disabled={setLogo.isPending} onClick={removeImage}>
                     <Trash2 aria-hidden />
                     {t("settings.logoRemove")}
                   </Button>
                 )}
               </div>
+
+              {header.data?.logo && (
+                <div className="mt-1 flex flex-col gap-2 rounded-lg border bg-muted/30 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium">{t("settings.logoSize")}</span>
+                    <span className="text-xs font-mono text-muted-foreground">
+                      {header.data.logo.width} × {header.data.logo.height} dots ({activeZoom}%)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="size-8 shrink-0"
+                      disabled={setLogo.isPending || activeZoom <= 10}
+                      onClick={() => handleZoom(activeZoom - 5, true)}
+                      title={t("settings.zoomOut")}
+                      aria-label={t("settings.zoomOut")}
+                    >
+                      <ZoomOut className="size-4" />
+                    </Button>
+                    <input
+                      type="range"
+                      min={10}
+                      max={100}
+                      step={1}
+                      value={activeZoom}
+                      onChange={(e) => {
+                        const v = Number.parseInt(e.target.value, 10);
+                        setSliderVal(v);
+                        handleZoom(v, false);
+                      }}
+                      onPointerUp={() => {
+                        setSliderVal(null);
+                        handleZoom(activeZoom, true);
+                      }}
+                      onKeyUp={() => {
+                        setSliderVal(null);
+                        handleZoom(activeZoom, true);
+                      }}
+                      className="h-2 flex-1 cursor-pointer accent-primary"
+                      aria-label={t("settings.logoSize")}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="size-8 shrink-0"
+                      disabled={setLogo.isPending || activeZoom >= 100}
+                      onClick={() => handleZoom(activeZoom + 5, true)}
+                      title={t("settings.zoomIn")}
+                      aria-label={t("settings.zoomIn")}
+                    >
+                      <ZoomIn className="size-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </Can>
           </div>
 

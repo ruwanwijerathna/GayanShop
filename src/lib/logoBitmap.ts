@@ -3,8 +3,8 @@
 import type { Logo } from "@/db/bindings";
 
 /** Mirrors `LOGO_MAX_WIDTH` / `LOGO_MAX_HEIGHT` in `hardware::escpos`. */
-export const LOGO_MAX_WIDTH = 384;
-export const LOGO_MAX_HEIGHT = 240;
+export const LOGO_MAX_WIDTH = 576;
+export const LOGO_MAX_HEIGHT = 480;
 
 /** A pixel prints black when it is opaque enough and darker than mid-grey. */
 const DARK = 128;
@@ -38,26 +38,105 @@ export function fitLogo(srcW: number, srcH: number): { width: number; height: nu
   return { width, height: Math.min(height, LOGO_MAX_HEIGHT) };
 }
 
+/** Maximum dimensions that fit in the printable area while maintaining aspect ratio. */
+export function maxLogoDimensions(srcW: number, srcH: number): { width: number; height: number } | null {
+  if (srcW <= 0 || srcH <= 0) return null;
+  const scale = Math.min(LOGO_MAX_WIDTH / srcW, LOGO_MAX_HEIGHT / srcH);
+  const width = Math.max(8, Math.floor((srcW * scale) / 8) * 8);
+  const height = Math.max(1, Math.min(LOGO_MAX_HEIGHT, Math.round(srcH * (width / srcW))));
+  return { width, height };
+}
+
+/** The scaled size for a given zoom percentage (10% to 100%). */
+export function scaleLogoDimensions(
+  srcW: number,
+  srcH: number,
+  percent: number,
+): { width: number; height: number } | null {
+  const maxDim = maxLogoDimensions(srcW, srcH);
+  if (!maxDim) return null;
+  const p = Math.max(10, Math.min(100, percent)) / 100;
+  const rawW = maxDim.width * p;
+  const width = Math.max(8, Math.floor(rawW / 8) * 8);
+  const height = Math.max(1, Math.min(LOGO_MAX_HEIGHT, Math.round(srcH * (width / srcW))));
+  return { width, height };
+}
+
+/** Render a source image or canvas into a 1-bit monochrome `Logo` at a specific scale percentage. */
+export function renderScaledLogo(
+  source: CanvasImageSource,
+  srcW: number,
+  srcH: number,
+  percent: number,
+): Logo | null {
+  const size = scaleLogoDimensions(srcW, srcH, percent);
+  if (!size) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = size.width;
+  canvas.height = size.height;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, size.width, size.height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(source, 0, 0, size.width, size.height);
+  return bitmapFromRgba(ctx.getImageData(0, 0, size.width, size.height).data, size.width, size.height);
+}
+
+/** Reconstruct an HTMLCanvasElement from an existing `Logo` bitmap. */
+export function canvasFromLogo(logo: Logo): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = logo.width;
+  canvas.height = logo.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return canvas;
+  const image = ctx.createImageData(logo.width, logo.height);
+  const rowBytes = logo.width / 8;
+  for (let y = 0; y < logo.height; y++) {
+    for (let x = 0; x < logo.width; x++) {
+      const black = ((logo.data[y * rowBytes + (x >> 3)] ?? 0) & (0x80 >> (x & 7))) !== 0;
+      const at = (y * logo.width + x) * 4;
+      const v = black ? 0 : 255;
+      image.data[at] = v;
+      image.data[at + 1] = v;
+      image.data[at + 2] = v;
+      image.data[at + 3] = 255;
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+  return canvas;
+}
+
 /** Decode a picture file and convert it; `null` when the browser can't read it as an image. */
 export async function logoFromFile(file: File): Promise<Logo | null> {
+  const res = await logoFromFileWithSource(file, 100);
+  return res ? res.logo : null;
+}
+
+/** Decode a picture file, returning the 1-bit `Logo`, dimensions, and a data URL for persistent zooming. */
+export async function logoFromFileWithSource(
+  file: File,
+  percent = 100,
+): Promise<{ logo: Logo; dataUrl: string; width: number; height: number } | null> {
   let image: ImageBitmap;
   try {
     image = await createImageBitmap(file);
   } catch {
     return null;
   }
-  const size = fitLogo(image.width, image.height);
-  const canvas = document.createElement("canvas");
-  const ctx = size ? canvas.getContext("2d", { willReadFrequently: true }) : null;
-  if (!size || !ctx) {
-    image.close();
-    return null;
-  }
-  canvas.width = size.width;
-  canvas.height = size.height;
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, size.width, size.height);
-  ctx.drawImage(image, 0, 0, size.width, size.height);
+  const logo = renderScaledLogo(image, image.width, image.height, percent);
+  const width = image.width;
+  const height = image.height;
   image.close();
-  return bitmapFromRgba(ctx.getImageData(0, 0, size.width, size.height).data, size.width, size.height);
+  if (!logo) return null;
+
+  const dataUrl = await new Promise<string>((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+    reader.onerror = () => resolve("");
+    reader.readAsDataURL(file);
+  });
+
+  return { logo, dataUrl, width, height };
 }

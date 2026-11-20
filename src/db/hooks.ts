@@ -673,6 +673,7 @@ export function useLabelSamplePreview(templateId: string | null) {
     queryFn: () => unwrap(commands.labelSamplePreview(templateId ?? "")),
     enabled: templateId !== null,
     retry: false,
+    placeholderData: keepPreviousData,
   });
 }
 
