@@ -203,8 +203,8 @@ pub async fn first_run(db: &Db, hasher: &PinHasher, clock: &dyn Clock, input: &S
     // The Owner.
     let owner_id = new_id();
     sqlx::query(&format!(
-        "INSERT INTO staff (id, store_id, display_name, role_id, pin_hash, ui_language, {META_COLS})
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, ?8)"
+        "INSERT INTO staff (id, store_id, display_name, role_id, pin_hash, ui_language, staff_no, {META_COLS})
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?7, ?8)"
     ))
     .bind(&owner_id)
     .bind(&store_id)

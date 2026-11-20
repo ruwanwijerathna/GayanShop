@@ -8,6 +8,7 @@ import { axisMoney, bucketLabel, chartColor, percentBp, tokenConfig, tooltipMone
 import { PaymentDonut } from "./PaymentDonut";
 import { RevenueExpenseBar } from "./RevenueExpenseBar";
 import { SalesTrendArea, overlay } from "./SalesTrendArea";
+import { StaffDailySalesBar } from "./StaffDailySalesBar";
 import { TopCustomersBar } from "./TopCustomersBar";
 
 beforeAll(() => {
@@ -168,6 +169,22 @@ describe("charts", () => {
       ["කාණ්ඩය", "ලැබුණු", "විකුණූ", "ලියා හැරි", "ඉතිරි", "විකිණුම් අනුපාතය"],
       ["B-2026-1001", "100", "62", "3", "35", "62.0%"],
     ]);
+  });
+
+  it("staff daily sales, English and Sinhala, quiet days as zero", () => {
+    const days = [
+      { date: "2026-11-06", total: 0, orders: 0 },
+      { date: "2026-11-07", total: 120_050, orders: 3 },
+    ];
+    const en = renderIn("en", <StaffDailySalesBar days={days} />);
+    expect(tableOf("Daily sales (last 30 days)")).toEqual([
+      ["Date", "Sales", "Sales count"],
+      ["06 Nov", "Rs 0.00", "0"],
+      ["07 Nov", "Rs 1,200.50", "3"],
+    ]);
+    en.unmount();
+    renderIn("si", <StaffDailySalesBar days={days} />);
+    expect(tableOf("දෛනික විකුණුම් (පසුගිය දින 30)")[0]).toEqual(["දිනය", "විකුණුම්", "විකුණුම් ගණන"]);
   });
 
   it("says so when there is nothing to draw", () => {

@@ -19,7 +19,7 @@ const TABLE_KEYS: Record<string, readonly string[] | readonly (readonly string[]
   cash_sessions: ["cash"],
   cash_movements: ["cash"],
   print_jobs: ["printer"],
-  orders: [["orders"], ["quickSales"], ["customers"], ["reports"]],
+  orders: [["orders"], ["quickSales"], ["customers"], ["reports"], ["staff"]],
   customers: ["customers"],
   staff: ["staff"],
   quick_sale_links: ["quickSales"],

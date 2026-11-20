@@ -179,13 +179,13 @@ pub async fn till() -> Till {
     let t = open().await;
     let s = store(&t).await;
     let hasher = PinHasher::fast_for_tests();
-    for (id, role, pin) in [(CASHIER, "Cashier", CASHIER_PIN), (SUP, "Supervisor", SUP_PIN)] {
+    for (id, role, pin, no) in [(CASHIER, "Cashier", CASHIER_PIN, 2), (SUP, "Supervisor", SUP_PIN, 3)] {
         let hash = hasher.hash(pin).unwrap();
         exec(
             t.pool(),
             &format!(
-                "INSERT INTO staff (id, store_id, display_name, role_id, pin_hash, created_at, updated_at, updated_by_device)
-                 SELECT '{id}', '{store}', '{id}', id, '{hash}', '{NOW}', '{NOW}', '{dev}' FROM roles WHERE name = '{role}'",
+                "INSERT INTO staff (id, store_id, display_name, role_id, pin_hash, created_at, updated_at, updated_by_device, staff_no)
+                 SELECT '{id}', '{store}', '{id}', id, '{hash}', '{NOW}', '{NOW}', '{dev}', {no} FROM roles WHERE name = '{role}'",
                 store = s.store_id,
                 dev = s.device_id
             ),
@@ -330,6 +330,7 @@ pub fn cart(
         customer_phone: None,
         customer_name: None,
         note: None,
+        sold_by_no: 1,
         approval_id: None,
     }
 }

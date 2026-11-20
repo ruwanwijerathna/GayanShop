@@ -170,6 +170,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::staff::list_roles,
         commands::staff::create_staff,
         commands::staff::update_staff,
+        commands::staff::staff_sales,
         commands::staff::reset_staff_pin,
         commands::void::void_order,
         commands::void::session_orders,

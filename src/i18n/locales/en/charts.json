@@ -29,5 +29,11 @@
   "sold": "Sold",
   "writtenOff": "Written off",
   "left": "Left",
-  "sellThrough": "Sell-through"
+  "sellThrough": "Sell-through",
+  "staffDailySales": "Daily sales (last 30 days)",
+  "sales": "Sales",
+  "orders": "Sales count",
+  "date": "Date",
+  "ordersCount_one": "{{count}} sale",
+  "ordersCount_other": "{{count}} sales"
 }

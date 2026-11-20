@@ -345,12 +345,21 @@ describe("PosScreen", () => {
     const dialog = await screen.findByRole("dialog");
     fireEvent.change(within(dialog).getByLabelText(/Cash received/), { target: { value: "500" } });
     expect(within(dialog).getByText("Rs 50.00")).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Complete sale" }));
+    // Who made the sale is required: no number, no sale.
+    const complete = within(dialog).getByRole("button", { name: "Complete sale" });
+    expect(within(dialog).getByLabelText("Salesperson no.")).toHaveFocus();
+    expect(complete).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText("Salesperson no."), { target: { value: "0" } });
+    expect(complete).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText("Salesperson no."), { target: { value: "3a" } });
+    expect(within(dialog).getByLabelText("Salesperson no.")).toHaveValue("3");
+    fireEvent.click(complete);
     await waitFor(() => expect(commands.checkoutOrder).toHaveBeenCalledTimes(1));
     expect(vi.mocked(commands.checkoutOrder).mock.calls[0]?.[0]).toMatchObject({
       checkout_token: token,
       lines: [{ product_id: "p1", unit_price: 45_000, qty: 1, line_discount: 0 }],
       payments: [{ method: "cash", amount: 45_000, tendered: 50_000 }],
+      sold_by_no: 3,
       approval_id: null,
     });
     expect(await screen.findByText(/Sale complete ✓/)).toHaveTextContent("Change Rs 50.00");
@@ -377,6 +386,7 @@ describe("PosScreen", () => {
     expect(await screen.findByText(/Above your discount limit/)).toBeInTheDocument();
     key("F9");
     const pay = await screen.findByRole("dialog");
+    fireEvent.change(within(pay).getByLabelText("Salesperson no."), { target: { value: "2" } });
     fireEvent.click(within(pay).getByRole("button", { name: "Complete sale" }));
     fireEvent.click(await screen.findByRole("button", { name: "Kamal" }));
     fireEvent.change(screen.getByLabelText("PIN"), { target: { value: "2222" } });
@@ -386,6 +396,7 @@ describe("PosScreen", () => {
     expect(vi.mocked(commands.requestApproval)).toHaveBeenCalledWith("ORDER_DISCOUNT", token, "sup", "2222");
     expect(vi.mocked(commands.checkoutOrder).mock.calls[1]?.[0]).toMatchObject({
       checkout_token: token,
+      sold_by_no: 2,
       approval_id: "appr-1",
     });
   });

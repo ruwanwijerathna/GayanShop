@@ -87,6 +87,9 @@ pub struct CheckoutInput {
     pub customer_phone: Option<String>,
     pub customer_name: Option<String>,
     pub note: Option<String>,
+    /// The staff number (1, 2, 3 …) of the person who made the sale; required on every sale.
+    #[specta(type = specta_typescript::Number)]
+    pub sold_by_no: i64,
     /// A supervisor's single-use approval bound to (perm, `checkout_token`, this cashier).
     pub approval_id: Option<String>,
 }
@@ -456,6 +459,22 @@ pub async fn checkout(
         None => None,
     };
 
+    // Who made the sale: the number typed at the till must belong to an active staff member of this store.
+    let sold_by: String = {
+        let row: Option<(String, bool)> = sqlx::query_as(
+            "SELECT id, is_active FROM staff WHERE store_id = ?1 AND staff_no = ?2 AND deleted_at IS NULL",
+        )
+        .bind(&ctx.store_id)
+        .bind(input.sold_by_no)
+        .fetch_optional(&mut *conn)
+        .await?;
+        match row {
+            None => return Err(AppError::validation("SALESPERSON_UNKNOWN", input.sold_by_no.to_string())),
+            Some((_, false)) => return Err(AppError::validation("SALESPERSON_INACTIVE", input.sold_by_no.to_string())),
+            Some((id, true)) => id,
+        }
+    };
+
     // Permissions and limits (doc §3.7): one supervisor approval covers the whole order.
     let needed = approvals_needed(&lines, &priced, input.bill_discount, seller);
     let approver = match (primary(&needed), approver) {
@@ -520,11 +539,11 @@ pub async fn checkout(
     let order_id = new_id();
     sqlx::query(
         "INSERT INTO orders (id, store_id, device_id, cash_session_id, receipt_no, checkout_token, status, staff_id,
-                             approved_by, customer_id, line_count, item_count, gross_sales, discount_total, net_sales,
+                             sold_by, approved_by, customer_id, line_count, item_count, gross_sales, discount_total, net_sales,
                              tax_total, rounding, grand_total, paid_total, change_due, cost_total, quick_sale_net,
                              unknown_cost_net, business_date, completed_at, note, created_at, updated_at,
                              updated_by_device)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending', ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, 0, ?16, ?16, ?17, ?18,
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending', ?7, ?24, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, 0, ?16, ?16, ?17, ?18,
                  ?19, ?20, ?21, ?22, ?23, ?22, ?22, ?3)",
     )
     .bind(&order_id)
@@ -550,6 +569,7 @@ pub async fn checkout(
     .bind(&ctx.business_date)
     .bind(&ctx.now)
     .bind(note.as_deref())
+    .bind(&sold_by)
     .execute(&mut *conn)
     .await?;
     cp.reached("order_pending")?;

@@ -114,7 +114,9 @@
     "complete": "Complete sale",
     "notEnough": "Payments don't cover the amount due yet.",
     "tooMuch": "Card, transfer and QR payments can't exceed what is due.",
-    "processing": "Saving the sale…"
+    "processing": "Saving the sale…",
+    "salesperson": "Salesperson no.",
+    "salespersonHint": "Type the staff number of the person who made this sale (1, 2, 3 …)."
   },
   "done": {
     "title": "Sale complete ✓",

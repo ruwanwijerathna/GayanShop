@@ -94,7 +94,9 @@ function Till() {
   const [quickText, setQuickText] = useState("");
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [voidPreselect, setVoidPreselect] = useState<string | null>(null);
-  const [approval, setApproval] = useState<{ perm: Perm; payments: PaymentLine[] } | null>(null);
+  const [approval, setApproval] = useState<{ perm: Perm; payments: PaymentLine[]; soldByNo: number } | null>(
+    null,
+  );
   const [shared, setShared] = useState<{ code: string; products: ProductSummary[] } | null>(null);
   const [done, setDone] = useState<{ receipt: string; change: number } | null>(null);
 
@@ -219,7 +221,7 @@ function Till() {
     }
   };
 
-  const pay = (payments: PaymentLine[], approvalId: string | null) => {
+  const pay = (payments: PaymentLine[], soldByNo: number, approvalId: string | null) => {
     const s = cartStore.getState();
     checkout.mutate(
       {
@@ -230,6 +232,7 @@ function Till() {
         customer_phone: s.customerPhone.trim() || null,
         customer_name: s.customerName.trim() || null,
         note: null,
+        sold_by_no: soldByNo,
         approval_id: approvalId,
       },
       {
@@ -243,7 +246,7 @@ function Till() {
         onError: (e) => {
           if (e instanceof CommandError && e.error.kind === "APPROVAL_REQUIRED") {
             playCue("approval");
-            setApproval({ perm: e.error.perm, payments });
+            setApproval({ perm: e.error.perm, payments, soldByNo });
           } else {
             playCue("error");
           }
@@ -552,7 +555,7 @@ function Till() {
           due={priced.grand_total}
           pending={checkout.isPending}
           error={payError}
-          onPay={(payments) => pay(payments, null)}
+          onPay={(payments, soldByNo) => pay(payments, soldByNo, null)}
           onCancel={closeDialog}
         />
       )}
@@ -561,7 +564,7 @@ function Till() {
           open
           perm={approval.perm}
           targetRef={cartStore.getState().token}
-          onApproved={(id) => pay(approval.payments, id)}
+          onApproved={(id) => pay(approval.payments, approval.soldByNo, id)}
           onCancel={() => setApproval(null)}
         />
       )}

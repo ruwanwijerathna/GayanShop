@@ -1,5 +1,5 @@
 import { Banknote, Plus, Trash2 } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -61,12 +61,18 @@ export function planPayments(due: Money, rows: PaymentRow[]): PaymentPlan {
   return { ok: true, payments, change: tendered - remaining, paid: nonCash + tendered };
 }
 
+/** The staff number typed at the till: whole numbers from 1 to 9999; anything else is not a number yet. */
+export function parseStaffNo(text: string): number | null {
+  const s = text.trim();
+  return /^[1-9]\d{0,3}$/.test(s) ? Number.parseInt(s, 10) : null;
+}
+
 export interface PaymentDialogProps {
   open: boolean;
   due: Money;
   pending: boolean;
   error: string | null;
-  onPay: (payments: PaymentLine[]) => void;
+  onPay: (payments: PaymentLine[], soldByNo: number) => void;
   onCancel: () => void;
 }
 
@@ -74,6 +80,9 @@ export function PaymentDialog({ open, due, pending, error, onPay, onCancel }: Pa
   const { t } = useTranslation("pos");
   const touchMode = useTouchMode();
   const [rows, setRows] = useState<PaymentRow[]>([{ method: "cash", value: "", reference: "" }]);
+  const [soldBy, setSoldBy] = useState("");
+  const soldByRef = useRef<HTMLInputElement>(null);
+  const soldByNo = parseStaffNo(soldBy);
   const plan = planPayments(due, rows);
   const remaining = Math.max(0, due - plan.paid);
 
@@ -89,14 +98,21 @@ export function PaymentDialog({ open, due, pending, error, onPay, onCancel }: Pa
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (plan.ok && !pending) onPay(plan.payments);
+    if (plan.ok && soldByNo !== null && !pending) onPay(plan.payments, soldByNo);
   };
 
   const hasCash = rows.some((r) => r.method === "cash");
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !pending && onCancel()}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent
+        className="max-w-3xl"
+        onOpenAutoFocus={(e) => {
+          // Who made the sale is the one required answer, so it takes the first keystrokes.
+          e.preventDefault();
+          soldByRef.current?.focus();
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="text-xl">{t("pay.title")}</DialogTitle>
           <DialogDescription className="sr-only">{t("pay.due")}</DialogDescription>
@@ -122,6 +138,25 @@ export function PaymentDialog({ open, due, pending, error, onPay, onCancel }: Pa
                 </>
               )}
             </dl>
+
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="pay-salesperson">{t("pay.salesperson")}</Label>
+              <Input
+                id="pay-salesperson"
+                ref={soldByRef}
+                className="h-12 w-40 text-lg tabular-nums"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={4}
+                required
+                aria-describedby="pay-salesperson-hint"
+                value={soldBy}
+                onChange={(e) => setSoldBy(e.target.value.replace(/\D/g, ""))}
+              />
+              <p id="pay-salesperson-hint" className="text-sm text-muted-foreground">
+                {t("pay.salespersonHint")}
+              </p>
+            </div>
 
             {rows.map((row, i) => (
               <div key={i} className="flex items-end gap-2">
@@ -189,7 +224,12 @@ export function PaymentDialog({ open, due, pending, error, onPay, onCancel }: Pa
               </p>
             )}
             <DialogFooter className="mt-2">
-              <Button type="submit" size="pos-lg" className="w-full" disabled={!plan.ok || pending}>
+              <Button
+                type="submit"
+                size="pos-lg"
+                className="w-full"
+                disabled={!plan.ok || soldByNo === null || pending}
+              >
                 {pending ? t("pay.processing") : t("pay.complete")}
               </Button>
             </DialogFooter>
