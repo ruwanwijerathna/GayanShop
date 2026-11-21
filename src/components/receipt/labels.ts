@@ -6,7 +6,7 @@ export const RECEIPT_LABELS = {
   TIME: "වේලාව",
   CASHIER: "අයකැමි",
   CUSTOMER: "පාරිභෝගික",
-  ITEMS_COUNT: "භාණ්ඩ ගණන",
+  ITEMS_COUNT: "Items",
   SUBTOTAL: "Subtotal",
   TOTAL: "TOTAL",
   PAID: "Cash",

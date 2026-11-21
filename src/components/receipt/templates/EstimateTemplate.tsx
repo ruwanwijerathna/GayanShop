@@ -59,8 +59,11 @@ export function EstimateTemplate({ data, logo, logoDataUrl, storeName }: Estimat
       <div className="flex flex-col gap-1 border-t border-dashed border-black/80 pt-1.5 text-xs">
         {data.lines.map((line, idx) => (
           <div key={idx} className="flex flex-col">
-            <span className="font-medium truncate">{line.name}</span>
-            <div className="flex justify-between text-neutral-800">
+            <span className="font-medium truncate">
+              <span className="font-mono font-bold mr-1">{idx + 1}.</span>
+              {line.name}
+            </span>
+            <div className="flex justify-between pl-3 text-neutral-800">
               <span className="font-mono">
                 {line.qty} x {formatMoney(line.unit_price).replace("Rs ", "")}
               </span>
@@ -74,7 +77,7 @@ export function EstimateTemplate({ data, logo, logoDataUrl, storeName }: Estimat
       <div className="flex flex-col gap-0.5 border-t border-dashed border-black/80 pt-1.5 text-xs">
         <div className="flex justify-between">
           <span className="font-semibold">{RECEIPT_LABELS.ITEMS_COUNT} :</span>
-          <span className="font-mono font-bold">{data.item_count}</span>
+          <span className="font-mono font-bold">{data.lines.length}</span>
         </div>
         <div className="my-0.5 flex justify-between border-y border-black py-1 text-sm font-bold">
           <span>{RECEIPT_LABELS.TOTAL} :</span>

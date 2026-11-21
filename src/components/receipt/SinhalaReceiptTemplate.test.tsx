@@ -126,7 +126,7 @@ describe("SinhalaReceiptTemplate (Sale Receipt)", () => {
 
     // Totals
     expect(screen.getByText(`${RECEIPT_LABELS.ITEMS_COUNT} :`)).toBeInTheDocument();
-    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText("1")).toBeInTheDocument();
     expect(screen.getByText(RECEIPT_LABELS.TOTAL)).toBeInTheDocument();
     expect(screen.getByText("Rs 2,300.00")).toBeInTheDocument();
     expect(screen.getByText(RECEIPT_LABELS.PAID)).toBeInTheDocument();
@@ -163,6 +163,20 @@ describe("SinhalaReceiptTemplate (Sale Receipt)", () => {
     expect(screen.getByText(RECEIPT_LABELS.NEW_ITEMS)).toBeInTheDocument();
     expect(screen.getByText(RECEIPT_LABELS.RETURNED_ITEMS)).toBeInTheDocument();
     expect(screen.getByText("Old T-Shirt")).toBeInTheDocument();
+  });
+
+  it("can disable the exchange policy note when exchange_policy is false", () => {
+    render(
+      <SinhalaReceiptTemplate
+        receipt={{
+          ...SAMPLE_RECEIPT,
+          exchange_policy: false,
+        }}
+      />,
+    );
+
+    expect(screen.queryByText(RECEIPT_LABELS.EXCHANGE_POLICY)).not.toBeInTheDocument();
+    expect(screen.getByText(RECEIPT_LABELS.THANK_YOU)).toBeInTheDocument();
   });
 });
 

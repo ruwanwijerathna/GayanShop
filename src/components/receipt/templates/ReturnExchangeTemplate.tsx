@@ -5,10 +5,13 @@ import { RECEIPT_LABELS } from "../labels";
 import { formatDateTime, ReceiptContainer } from "./ReceiptContainer";
 
 export interface ReturnExchangeTemplateProps {
-  receipt: ReceiptData;
+  receipt: ReceiptData & {
+    exchange_policy?: boolean | string | null;
+  };
   logo?: Logo | null;
   logoDataUrl?: string | null;
   storeName?: string;
+  showExchangePolicy?: boolean;
 }
 
 export function ReturnExchangeTemplate({
@@ -16,6 +19,7 @@ export function ReturnExchangeTemplate({
   logo,
   logoDataUrl,
   storeName,
+  showExchangePolicy = true,
 }: ReturnExchangeTemplateProps) {
   const { date, time } = formatDateTime(receipt.completed_at || receipt.business_date);
 
@@ -24,6 +28,13 @@ export function ReturnExchangeTemplate({
   }, 0);
 
   const netDue = Math.max(0, receipt.grand_total - receipt.exchange_credit);
+  const distinctItemCount = receipt.lines.length;
+
+  const isPolicyVisible = showExchangePolicy && receipt.exchange_policy !== false;
+  const policyText =
+    typeof receipt.exchange_policy === "string" && receipt.exchange_policy.trim().length > 0
+      ? receipt.exchange_policy
+      : RECEIPT_LABELS.EXCHANGE_POLICY;
 
   return (
     <ReceiptContainer logo={logo} logoDataUrl={logoDataUrl} storeName={storeName || receipt.store_name}>
@@ -69,8 +80,11 @@ export function ReturnExchangeTemplate({
           <p className="font-bold text-[11px] underline">{RECEIPT_LABELS.NEW_ITEMS}</p>
           {receipt.lines.map((line, idx) => (
             <div key={idx} className="flex flex-col">
-              <span className="font-medium truncate">{line.name}</span>
-              <div className="flex justify-between text-neutral-800">
+              <span className="font-medium truncate">
+                <span className="font-mono font-bold mr-1">{idx + 1}.</span>
+                {line.name}
+              </span>
+              <div className="flex justify-between pl-3 text-neutral-800">
                 <span className="font-mono">
                   {line.qty} x {formatMoney(line.unit_price).replace("Rs ", "")}
                 </span>
@@ -89,8 +103,11 @@ export function ReturnExchangeTemplate({
           <p className="font-bold text-[11px] underline">{RECEIPT_LABELS.RETURNED_ITEMS}</p>
           {receipt.returns.map((ret, idx) => (
             <div key={idx} className="flex flex-col">
-              <span className="font-medium truncate">{ret.name}</span>
-              <div className="flex justify-between text-neutral-800">
+              <span className="font-medium truncate">
+                <span className="font-mono font-bold mr-1">{idx + 1}.</span>
+                {ret.name}
+              </span>
+              <div className="flex justify-between pl-3 text-neutral-800">
                 <span className="font-mono text-[11px]">
                   {ret.qty} x (බිල්: {ret.original_receipt_no})
                 </span>
@@ -107,7 +124,7 @@ export function ReturnExchangeTemplate({
       <div className="flex flex-col gap-0.5 border-t border-dashed border-black/80 pt-1.5 text-xs">
         <div className="flex justify-between">
           <span className="font-medium">{RECEIPT_LABELS.ITEMS_COUNT} :</span>
-          <span className="font-mono font-bold">{receipt.item_count}</span>
+          <span className="font-mono font-bold">{distinctItemCount}</span>
         </div>
         <div className="flex justify-between">
           <span className="font-medium font-sans">{RECEIPT_LABELS.GROSS_TOTAL}</span>
@@ -137,7 +154,7 @@ export function ReturnExchangeTemplate({
 
       {/* 7-day policy & Thank you note */}
       <div className="flex flex-col items-center gap-1 border-t border-dashed border-black/80 pt-2 text-center text-xs">
-        <p className="px-1 text-[11px] leading-snug">{RECEIPT_LABELS.EXCHANGE_POLICY}</p>
+        {isPolicyVisible && <p className="px-1 text-[11px] leading-snug">{policyText}</p>}
         <p className="font-bold text-sm">{RECEIPT_LABELS.THANK_YOU}</p>
       </div>
 
