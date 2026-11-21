@@ -460,8 +460,11 @@ export function usePrintTestPage() {
   return usePrinterMutation(() => unwrap(commands.printTestPage()));
 }
 
+/** `orderId` marks a reprint of that bill (audited); `null` is a sample such as the Settings test receipt. */
 export function usePrintReceiptImage() {
-  return usePrinterMutation((image: ReceiptImage) => unwrap(commands.printReceiptImage(image)));
+  return usePrinterMutation(({ image, orderId }: { image: ReceiptImage; orderId: string | null }) =>
+    unwrap(commands.printReceiptImage(image, orderId)),
+  );
 }
 
 export function usePrintRetry() {

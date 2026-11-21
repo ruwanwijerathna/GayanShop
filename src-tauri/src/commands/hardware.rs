@@ -102,16 +102,53 @@ pub async fn print_test_page(app: AppHandle, state: State<'_, AppState>) -> AppR
 
 /// A receipt the webview drew (the Sinhala template) goes through the same queue as every other receipt, so
 /// the till never waits on the printer and a stuck printer shows in the banner. Needs `REPRINT_RECEIPT`.
+/// With an `order_id` it is a reprint of that bill (this counter's own, or any with `REPORT_SALES`), audited
+/// as `REPRINT_RECEIPT`; without one it is a sample (the Settings test receipt).
 #[tauri::command]
 #[specta::specta]
-pub async fn print_receipt_image(app: AppHandle, state: State<'_, AppState>, image: ReceiptImage) -> AppResult<()> {
-    require(&state.auth, state.clock.as_ref(), Perm::REPRINT_RECEIPT, "receipt", None)?;
+pub async fn print_receipt_image(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    image: ReceiptImage,
+    order_id: Option<String>,
+) -> AppResult<()> {
+    let actor = require(&state.auth, state.clock.as_ref(), Perm::REPRINT_RECEIPT, "receipt", None)?;
     image.validate()?;
+    if let Some(id) = &order_id {
+        super::orders::can_view_order(&state, id).await?;
+    }
     let ctx = write_ctx(&state)?;
     let mut tx = state.db.write().await?;
-    print_jobs::enqueue(tx.conn(), &ctx, PrintKind::Receipt, None, &json!({ "image": image })).await?;
+    print_jobs::enqueue(tx.conn(), &ctx, PrintKind::Receipt, order_id.as_deref(), &json!({ "image": image })).await?;
+    if let Some(id) = &order_id {
+        let receipt_no: Option<String> = sqlx::query_scalar("SELECT receipt_no FROM orders WHERE id = ?1")
+            .bind(id)
+            .fetch_optional(&mut *tx.conn())
+            .await?;
+        audit::record(
+            tx.conn(),
+            &AuditCtx {
+                store_id: &ctx.store_id,
+                device_id: &ctx.device_id,
+                business_date: &ctx.business_date,
+                now: &ctx.now,
+            },
+            AuditEntry {
+                action: AuditAction::REPRINT_RECEIPT,
+                staff_id: Some(&actor.staff_id),
+                approved_by: actor.approved_by.as_deref(),
+                entity_type: Some("order"),
+                entity_id: Some(id),
+                metadata: json!({ "receipt_no": receipt_no }),
+            },
+        )
+        .await?;
+    }
     tx.commit().await?;
     changed(&app, &state);
+    if order_id.is_some() {
+        emit_changed(&app, &["audit_logs"]);
+    }
     Ok(())
 }
 

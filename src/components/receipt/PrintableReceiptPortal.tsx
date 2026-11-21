@@ -14,19 +14,23 @@ import { SinhalaReceiptTemplate } from "./SinhalaReceiptTemplate";
 
 interface PrintStore {
   activeReceipt: ReceiptData | null;
-  print: (receipt: ReceiptData) => void;
+  /** A reprint of a real bill is audited against it; a sample (Settings test receipt) is not. */
+  reprint: boolean;
+  print: (receipt: ReceiptData, options?: { reprint?: boolean }) => void;
   clear: () => void;
 }
 
 export const usePrintReceiptStore = create<PrintStore>((set) => ({
   activeReceipt: null,
-  print: (receipt: ReceiptData) => set({ activeReceipt: receipt }),
-  clear: () => set({ activeReceipt: null }),
+  reprint: false,
+  print: (receipt, options) => set({ activeReceipt: receipt, reprint: options?.reprint ?? false }),
+  clear: () => set({ activeReceipt: null, reprint: false }),
 }));
 
 export function PrintableReceiptPortal() {
   const { t, i18n } = useTranslation("printing");
   const activeReceipt = usePrintReceiptStore((s) => s.activeReceipt);
+  const reprint = usePrintReceiptStore((s) => s.reprint);
   const clear = usePrintReceiptStore((s) => s.clear);
   const sheet = useRef<HTMLDivElement>(null);
   const send = usePrintReceiptImage();
@@ -45,7 +49,7 @@ export function PrintableReceiptPortal() {
         if (!node || stale) return;
         const image = await receiptImageFromElement(node);
         if (stale) return;
-        await sendRef.current(image);
+        await sendRef.current({ image, orderId: reprint ? activeReceipt.order_id : null });
         toast.success(t("receiptImage.sent"));
       } catch (e) {
         toast.error(e instanceof CommandError ? translateError(i18n.t, e.error) : t("receiptImage.failed"));
@@ -56,7 +60,7 @@ export function PrintableReceiptPortal() {
     return () => {
       stale = true;
     };
-  }, [activeReceipt, clear, i18n.t, t]);
+  }, [activeReceipt, reprint, clear, i18n.t, t]);
 
   if (!activeReceipt) return null;
 

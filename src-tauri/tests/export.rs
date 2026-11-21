@@ -277,6 +277,9 @@ async fn order_history_pages_newest_first_with_filters() {
         device_id: None,
         status,
         receipt: receipt.map(str::to_owned),
+        phone: None,
+        payment: None,
+        kind: None,
     };
     let all = filter(Period::AllTime, None, None);
     let first = orders::history(pool, &t.s.store_id, &cal(), &all, None, 2).await.unwrap();

@@ -376,7 +376,15 @@ async fn measure(t: &common::Till, scale: &seed::Scale, rounds: usize) -> Vec<Bu
     }
 
     // Order history: the newest page and a page deep in the year (500 rows, keyset).
-    let all = OrderFilter { period: Period::AllTime, device_id: None, status: None, receipt: None };
+    let all = OrderFilter {
+        period: Period::AllTime,
+        device_id: None,
+        status: None,
+        receipt: None,
+        phone: None,
+        payment: None,
+        kind: None,
+    };
     let first = orders::history(&p, &store, &cal, &all, None, 500).await.unwrap();
     let mut deep = first.next_cursor.clone();
     for _ in 0..20 {

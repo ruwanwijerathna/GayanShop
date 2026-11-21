@@ -182,8 +182,10 @@ export const commands = {
 	/**
 	 *  A receipt the webview drew (the Sinhala template) goes through the same queue as every other receipt, so
 	 *  the till never waits on the printer and a stuck printer shows in the banner. Needs `REPRINT_RECEIPT`.
+	 *  With an `order_id` it is a reprint of that bill (this counter's own, or any with `REPORT_SALES`), audited
+	 *  as `REPRINT_RECEIPT`; without one it is a sample (the Settings test receipt).
 	 */
-	printReceiptImage: (image: ReceiptImage) => typedError<null, AppError>(__TAURI_INVOKE("print_receipt_image", { image })),
+	printReceiptImage: (image: ReceiptImage, orderId: string | null) => typedError<null, AppError>(__TAURI_INVOKE("print_receipt_image", { image, orderId })),
 	/**  The banner's Retry: failed jobs go back to the queue. */
 	printRetry: () => typedError<null, AppError>(__TAURI_INVOKE("print_retry")),
 	/**  The banner's "Reprint later": failed jobs are dropped (abandoned, audited). The sales stand. */
@@ -672,6 +674,9 @@ export type Batch_Serialize = {
 	items_cost: number,
 	version: number,
 };
+
+/**  Exchange bills (replacement sales that took returned goods in) or the original sales those goods came from. */
+export type BillKind = "exchange" | "with_returns";
 
 /**  Progress of a bootstrap, for the first-run screen's progress bar. */
 export type BootstrapProgress = {
@@ -1888,6 +1893,11 @@ export type OrderFilter_Deserialize = {
 	status?: OrderStatusFilter | null,
 	/**  A receipt number, or the start of one (`T01-2611`). */
 	receipt?: string | null,
+	/**  A customer's phone, or its last digits (at least four): `0771234567`, `771234567`, `34567`. */
+	phone?: string | null,
+	/**  Bills paid at least partly with this method. */
+	payment?: PaymentMethod | null,
+	kind?: BillKind | null,
 };
 
 export type OrderFilter_Serialize = {
@@ -1896,6 +1906,11 @@ export type OrderFilter_Serialize = {
 	status: OrderStatusFilter | null,
 	/**  A receipt number, or the start of one (`T01-2611`). */
 	receipt: string | null,
+	/**  A customer's phone, or its last digits (at least four): `0771234567`, `771234567`, `34567`. */
+	phone: string | null,
+	/**  Bills paid at least partly with this method. */
+	payment: PaymentMethod | null,
+	kind: BillKind | null,
 };
 
 export type OrderPage = OrderPage_Serialize | OrderPage_Deserialize;
@@ -1923,6 +1938,12 @@ export type OrderRow_Deserialize = {
 	grand_total: number,
 	has_customer: boolean,
 	void_reason?: string | null,
+	/**  Value of returned goods this (exchange) bill took in; 0 for an ordinary sale. */
+	exchange_credit: number,
+	/**  Some of this sale's goods were later returned in an exchange. */
+	has_returns: boolean,
+	/**  The payment methods used, comma separated and sorted (`card,cash`). */
+	methods: string,
 };
 
 export type OrderRow_Serialize = {
@@ -1936,6 +1957,12 @@ export type OrderRow_Serialize = {
 	grand_total: number,
 	has_customer: boolean,
 	void_reason: string | null,
+	/**  Value of returned goods this (exchange) bill took in; 0 for an ordinary sale. */
+	exchange_credit: number,
+	/**  Some of this sale's goods were later returned in an exchange. */
+	has_returns: boolean,
+	/**  The payment methods used, comma separated and sorted (`card,cash`). */
+	methods: string,
 };
 
 export type OrderStatusFilter = "completed" | "voided";

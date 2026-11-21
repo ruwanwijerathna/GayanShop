@@ -14,6 +14,7 @@ import type { HistoryFilter, SessionHistoryRow_Serialize as Row } from "@/db/bin
 import { CommandError } from "@/db/client";
 import { useBusinessToday, useCashHistory, useCashSessionReport } from "@/db/hooks";
 import { translateError } from "@/i18n";
+import { daysBefore } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { PrintZButton } from "./PrintZButton";
 import { ZReportView } from "./ZReportView";
@@ -23,13 +24,6 @@ const PAGE = 100;
 
 type Range = "7" | "30" | "90" | "all" | "custom";
 const RANGE_DAYS = { "7": 7, "30": 30, "90": 90 } as const;
-
-/** `2026-11-20` minus `days`, in calendar days (no time zone involved). */
-export function daysBefore(date: string, days: number): string {
-  const d = new Date(`${date}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() - days);
-  return d.toISOString().slice(0, 10);
-}
 
 function Detail({ row, onClose }: { row: Row; onClose: () => void }) {
   const { t, i18n } = useTranslation("cash");
