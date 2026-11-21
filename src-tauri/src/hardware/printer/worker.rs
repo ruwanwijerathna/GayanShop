@@ -405,6 +405,11 @@ impl Worker {
                     continue;
                 }
             };
+            if bytes.is_empty() {
+                self.retry_at.remove(&job.id);
+                self.set_job(&job.id, "done", None, None).await?;
+                continue;
+            }
             self.set_job(&job.id, "printing", Some(job.attempts + 1), None).await?;
             match self.call(transport.clone(), move |t| t.send(&bytes)).await {
                 Call::TimedOut(stuck) => {

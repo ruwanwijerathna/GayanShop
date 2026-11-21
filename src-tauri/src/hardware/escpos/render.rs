@@ -7,7 +7,7 @@ use serde_json::Value;
 use sqlx::SqlitePool;
 
 use super::{Align, EscPos, Layout, Logo, ReceiptImage, drawer_kick, wrap};
-use crate::db::repo::receipts::{self, ReceiptData, ReceiptLine, ReceiptPayment};
+use crate::db::repo::receipts::{ReceiptData, ReceiptLine, ReceiptPayment};
 use crate::db::settings;
 use crate::domain::money::format_lkr;
 use crate::error::{AppError, AppResult};
@@ -47,6 +47,7 @@ fn method_label(m: &str) -> &'static str {
     }
 }
 
+#[allow(dead_code)]
 fn header(p: &mut EscPos, store: &str) {
     let half = p.columns() / 2;
     p.align(Align::Center).bold(true).double(true).wrapped(store, half).double(false).bold(false);
@@ -54,6 +55,7 @@ fn header(p: &mut EscPos, store: &str) {
 
 /// The sale receipt (doc §6.4): lines, totals, payments, masked customer phone, QR of the order id, the
 /// store footer, then the cut. Never the drawer kick (that's its own job, sent first).
+#[allow(dead_code)]
 pub fn receipt(r: &ReceiptData, layout: Layout, tz: Tz, logo: Option<&Logo>) -> Vec<u8> {
     receipt_with_banner(r, layout, tz, logo, None)
 }
@@ -312,12 +314,11 @@ pub async fn job(
             Ok(receipt_image(&image, layout))
         }
         "receipt" => {
-            let order_id = payload
-                .get("order_id")
-                .and_then(Value::as_str)
-                .ok_or_else(|| AppError::internal("receipt job without order_id"))?;
-            let logo = load_logo(pool).await?;
-            Ok(receipt(&receipts::load(pool, order_id).await?, layout, tz, logo.as_ref()))
+            // Deprecated: Old ESC/POS raw text template is disabled.
+            // All sales receipts are drawn via the webview HTML/CSS template (with Sinhala Unicode)
+            // and sent as an image via `commands.printReceiptImage`.
+            // Returning empty bytes ensures the worker completes the job without double-printing.
+            Ok(Vec::new())
         }
         "drawer_kick" => Ok(drawer_kick(layout.drawer_pin)),
         "void_slip" => void_slip(pool, payload, layout, tz, now).await,
@@ -326,10 +327,9 @@ pub async fn job(
             Ok(z_report(&store, payload, layout, tz))
         }
         "test" => {
-            let store: String = settings::store_get(pool, settings::keys::STORE_NAME).await?.unwrap_or_default();
-            let footer: String = settings::store_get(pool, "receipt.footer").await?.unwrap_or_default();
-            let logo = load_logo(pool).await?;
-            Ok(test_page(&store, &footer, layout, tz, now, logo.as_ref()))
+            // Deprecated: Old text test page is disabled.
+            // Test receipt is printed via the webview HTML/CSS template (Sinhala Unicode).
+            Ok(Vec::new())
         }
         other => Err(AppError::internal(format!("not a receipt-printer job: {other}"))),
     }
