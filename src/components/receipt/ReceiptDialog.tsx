@@ -45,7 +45,7 @@ export function ReceiptDialog({
               type="button"
               size="pos"
               className="flex-1"
-              onClick={() => usePrintReceiptStore.getState().print(r)}
+              onClick={() => usePrintReceiptStore.getState().print(r, { reprint: true })}
             >
               <Printer className="mr-2 size-4" />
               {t("receipt.print", { defaultValue: "මුද්‍රණය කරන්න (Print)" })}

@@ -171,7 +171,8 @@
     "RETURN_QTY_EXCEEDS": "More units were chosen than can still be returned.",
     "EXCHANGE_REPLACEMENT_TOO_LOW": "The replacement must be worth at least the returned goods. There are no cash refunds or credit notes.",
     "VOID_EXCHANGE": "An exchange, or a sale with returned goods, can't be voided.",
-    "SESSION_NOT_CLOSED": "That shift is still open; close it before printing its Z-report."
+    "SESSION_NOT_CLOSED": "That shift is still open; close it before printing its Z-report.",
+    "PHONE_SEARCH_TOO_SHORT": "Type at least 4 digits of the phone number."
   },
   "INVARIANT": {
     "_": "This change isn't allowed.",

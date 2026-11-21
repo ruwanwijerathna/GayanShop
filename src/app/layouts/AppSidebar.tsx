@@ -80,7 +80,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { to: "/", label: "nav.home", Icon: Store },
       { to: "/pos", label: "nav.pos", Icon: ShoppingCart, perm: ["SALE_CREATE"] },
-      { to: "/orders", label: "nav.orders", Icon: ScrollText, perm: ["REPORT_SALES"] },
+      { to: "/orders", label: "nav.orders", Icon: ScrollText, perm: ["REPORT_SALES", "REPRINT_RECEIPT"] },
       { to: "/cash", label: "nav.cash", Icon: Banknote },
       { to: "/customers", label: "nav.customers", Icon: Contact, perm: ["CUSTOMER_VIEW"] },
     ],

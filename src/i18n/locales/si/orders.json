@@ -1,32 +1,56 @@
 {
   "title": "බිල්පත්",
-  "empty": "මෙම කාල සීමාවේ ඇණවුම් නැත.",
-  "columns": {
-    "receipt": "රිසිට්පත",
-    "when": "සම්පූර්ණ කළේ",
-    "cashier": "අයකැමි",
-    "items": "අයිතම",
-    "total": "එකතුව",
-    "status": "තත්ත්වය"
+  "export": "අපනයනය",
+  "empty": "මෙම දිනයට බිල්පත් නැත.",
+  "emptyFiltered": "බිල්පත් හමු නොවීය. වෙනත් සෙවීමක් උත්සාහ කරන්න, නැතහොත් පෙරහන් ඉවත් කරන්න.",
+  "search": {
+    "label": "බිල්පත් සොයන්න",
+    "placeholder": "රිසිට්පත් අංකය හෝ පාරිභෝගික දුරකථනය",
+    "allDates": "සියලු දිනවල සොයමින්",
+    "tooShort": "දුරකථන අංකයේ ඉලක්කම් 4ක්වත් ටයිප් කරන්න."
   },
-  "status": {
-    "completed": "සම්පූර්ණයි",
+  "period": {
+    "label": "දිනය",
+    "today": "අද",
+    "yesterday": "ඊයේ",
+    "week": "මෙම සතිය",
+    "month": "මෙම මාසය",
+    "date": "දිනයක් තෝරන්න"
+  },
+  "columns": {
+    "bill": "බිල්පත",
+    "paid": "ගෙවූ ආකාරය",
+    "total": "එකතුව"
+  },
+  "method": {
+    "cash": "මුදල්",
+    "card": "කාඩ්පත",
+    "bank_transfer": "බැංකු හුවමාරුව",
+    "qr": "QR",
+    "other": "වෙනත්"
+  },
+  "badge": {
     "voided": "අවලංගු කළ",
-    "withCustomer": "සම්පූර්ණයි · පාරිභෝගිකයා"
+    "exchange": "හුවමාරුව",
+    "returns": "ආපසු ලැබී ඇත"
   },
   "filters": {
-    "receipt": "රිසිට්පත් අංකය",
+    "button": "පෙරහන්",
+    "buttonCount_one": "පෙරහන් · {{count}}",
+    "buttonCount_other": "පෙරහන් · {{count}}",
+    "title": "බිල්පත් පෙරන්න",
     "counter": "කවුන්ටරය",
     "allCounters": "සියලු කවුන්ටර",
+    "payment": "ගෙවූ ආකාරය",
+    "anyPayment": "ඕනෑම ගෙවීමක්",
+    "kind": "වර්ගය",
+    "anyKind": "සියලු බිල්පත්",
+    "exchange": "හුවමාරු බිල්පත්",
+    "withReturns": "ආපසු ලැබුණු විකුණුම්",
     "status": "තත්ත්වය",
-    "allStatuses": "සියල්ල"
-  },
-  "reasons": {
-    "WRONG_ITEM": "වැරදි අයිතමය",
-    "WRONG_PRICE": "වැරදි මිල",
-    "WRONG_QTY": "වැරදි ප්‍රමාණය",
-    "DUPLICATE_SCAN": "දෙවරක් ස්කෑන් කළා",
-    "CUSTOMER_CANCELLED": "පාරිභෝගිකයා අවලංගු කළා",
-    "OTHER": "වෙනත්"
+    "anyStatus": "සියල්ල",
+    "voidedOnly": "අවලංගු කළ පමණි",
+    "clear": "පෙරහන් ඉවත් කරන්න",
+    "done": "අවසන්"
   }
 }
