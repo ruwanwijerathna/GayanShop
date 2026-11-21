@@ -55,10 +55,17 @@ describe("PrintableReceiptPortal", () => {
     renderWithProviders(<div />);
     act(() => usePrintReceiptStore.getState().print(RECEIPT));
 
-    await waitFor(() => expect(commands.printReceiptImage).toHaveBeenCalledWith(IMAGE));
+    await waitFor(() => expect(commands.printReceiptImage).toHaveBeenCalledWith(IMAGE, null));
     expect(await screen.findByText("Receipt sent to the printer.")).toBeInTheDocument();
     await waitFor(() => expect(usePrintReceiptStore.getState().activeReceipt).toBeNull());
     expect(window.print).not.toHaveBeenCalled();
+  });
+
+  it("marks a reprint of a real bill with its order, so it is audited", async () => {
+    renderWithProviders(<div />);
+    act(() => usePrintReceiptStore.getState().print(RECEIPT, { reprint: true }));
+
+    await waitFor(() => expect(commands.printReceiptImage).toHaveBeenCalledWith(IMAGE, "order-1"));
   });
 
   it("shows the printer's refusal and still lets go of the receipt", async () => {
