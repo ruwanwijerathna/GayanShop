@@ -12,6 +12,23 @@
 @import "@fontsource/noto-sans-sinhala/600.css";
 @import "@fontsource/jetbrains-mono/400.css";
 
+/* Bundled Sinhala FM fonts for receipt printing */
+@font-face {
+  font-family: "FMGemunu";
+  src: url("/fonts/FMGemunu.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "FMSamantha";
+  src: url("/fonts/FMSamantha.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
