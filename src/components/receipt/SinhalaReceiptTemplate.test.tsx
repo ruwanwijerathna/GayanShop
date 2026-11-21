@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { ReceiptData_Serialize as ReceiptData, ZReport_Serialize as ZReportData } from "@/db/bindings";
-import { FM_LABELS } from "@/lib/unicodeToFm";
+import { RECEIPT_LABELS } from "./labels";
 import { SinhalaReceiptTemplate } from "./SinhalaReceiptTemplate";
 import { CashMovementTemplate, EstimateTemplate, ZReportTemplate } from "./templates";
 
@@ -107,15 +107,15 @@ const SAMPLE_ZREPORT: ZReportData = {
 };
 
 describe("SinhalaReceiptTemplate (Sale Receipt)", () => {
-  it("renders sale receipt with FM Font Sinhala labels", () => {
+  it("renders sale receipt with Sinhala Unicode labels", () => {
     render(<SinhalaReceiptTemplate receipt={SAMPLE_RECEIPT} />);
 
-    // Header Details in FM Gemunu
-    expect(screen.getByText(`${FM_LABELS.BILL_NO} :`)).toBeInTheDocument();
+    // Header Details in Sinhala Unicode
+    expect(screen.getByText(`${RECEIPT_LABELS.BILL_NO} :`)).toBeInTheDocument();
     expect(screen.getAllByText("T01-20261120-0005").length).toBe(2);
-    expect(screen.getByText(`${FM_LABELS.DATE} :`)).toBeInTheDocument();
-    expect(screen.getByText(`${FM_LABELS.TIME} :`)).toBeInTheDocument();
-    expect(screen.getByText(`${FM_LABELS.CASHIER} :`)).toBeInTheDocument();
+    expect(screen.getByText(`${RECEIPT_LABELS.DATE} :`)).toBeInTheDocument();
+    expect(screen.getByText(`${RECEIPT_LABELS.TIME} :`)).toBeInTheDocument();
+    expect(screen.getByText(`${RECEIPT_LABELS.CASHIER} :`)).toBeInTheDocument();
     expect(screen.getByText("Ruwan")).toBeInTheDocument();
     expect(screen.getByText("07X XXX X123")).toBeInTheDocument();
 
@@ -125,18 +125,18 @@ describe("SinhalaReceiptTemplate (Sale Receipt)", () => {
     expect(screen.getAllByText("2,400.00").length).toBe(2);
 
     // Totals
-    expect(screen.getByText(`${FM_LABELS.ITEMS_COUNT} :`)).toBeInTheDocument();
+    expect(screen.getByText(`${RECEIPT_LABELS.ITEMS_COUNT} :`)).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument();
-    expect(screen.getByText(`${FM_LABELS.TOTAL} :`)).toBeInTheDocument();
+    expect(screen.getByText(RECEIPT_LABELS.TOTAL)).toBeInTheDocument();
     expect(screen.getByText("Rs 2,300.00")).toBeInTheDocument();
-    expect(screen.getByText(`${FM_LABELS.PAID} :`)).toBeInTheDocument();
-    expect(screen.getByText("Rs 2,500.00")).toBeInTheDocument();
-    expect(screen.getByText(`${FM_LABELS.CHANGE} :`)).toBeInTheDocument();
-    expect(screen.getByText("Rs 200.00")).toBeInTheDocument();
+    expect(screen.getByText(RECEIPT_LABELS.PAID)).toBeInTheDocument();
+    expect(screen.getByText("2,500.00")).toBeInTheDocument();
+    expect(screen.getByText(RECEIPT_LABELS.CHANGE)).toBeInTheDocument();
+    expect(screen.getByText("200.00")).toBeInTheDocument();
 
     // 7-day exchange policy & Thank you
-    expect(screen.getByText(FM_LABELS.EXCHANGE_POLICY)).toBeInTheDocument();
-    expect(screen.getByText(FM_LABELS.THANK_YOU)).toBeInTheDocument();
+    expect(screen.getByText(RECEIPT_LABELS.EXCHANGE_POLICY)).toBeInTheDocument();
+    expect(screen.getByText(RECEIPT_LABELS.THANK_YOU)).toBeInTheDocument();
 
     // Barcode & Branding
     expect(screen.getByLabelText("Barcode: T01-20261120-0005")).toBeInTheDocument();
@@ -159,18 +159,18 @@ describe("SinhalaReceiptTemplate (Sale Receipt)", () => {
   it("renders Return & Exchange template when return lines exist", () => {
     render(<SinhalaReceiptTemplate receipt={SAMPLE_EXCHANGE_RECEIPT} />);
 
-    expect(screen.getByText(FM_LABELS.EXCHANGE_TITLE)).toBeInTheDocument();
-    expect(screen.getByText(FM_LABELS.NEW_ITEMS)).toBeInTheDocument();
-    expect(screen.getByText(FM_LABELS.RETURNED_ITEMS)).toBeInTheDocument();
+    expect(screen.getByText(RECEIPT_LABELS.EXCHANGE_TITLE)).toBeInTheDocument();
+    expect(screen.getByText(RECEIPT_LABELS.NEW_ITEMS)).toBeInTheDocument();
+    expect(screen.getByText(RECEIPT_LABELS.RETURNED_ITEMS)).toBeInTheDocument();
     expect(screen.getByText("Old T-Shirt")).toBeInTheDocument();
   });
 });
 
 describe("Specialized Receipt Templates", () => {
-  it("renders Z-Report template with accurate metrics and FM font labels", () => {
+  it("renders Z-Report template with accurate metrics and Sinhala Unicode labels", () => {
     render(<ZReportTemplate report={SAMPLE_ZREPORT} storeName="Gayan Fashion" />);
 
-    expect(screen.getByText(FM_LABELS.Z_REPORT_TITLE)).toBeInTheDocument();
+    expect(screen.getByText(RECEIPT_LABELS.Z_REPORT_TITLE)).toBeInTheDocument();
     expect(screen.getByText("2026-11-20")).toBeInTheDocument();
     expect(screen.getByText("25")).toBeInTheDocument();
     expect(screen.getByText("Rs 50,000.00")).toBeInTheDocument();
@@ -190,8 +190,8 @@ describe("Specialized Receipt Templates", () => {
       />,
     );
 
-    expect(screen.getByText(FM_LABELS.DRAWER_SLIP_TITLE)).toBeInTheDocument();
-    expect(screen.getByText(FM_LABELS.PAY_IN_TITLE)).toBeInTheDocument();
+    expect(screen.getByText(RECEIPT_LABELS.DRAWER_SLIP_TITLE)).toBeInTheDocument();
+    expect(screen.getByText(RECEIPT_LABELS.PAY_IN_TITLE)).toBeInTheDocument();
     expect(screen.getByText("Rs 5,000.00")).toBeInTheDocument();
     expect(screen.getByText("Morning float topup")).toBeInTheDocument();
   });
@@ -218,8 +218,8 @@ describe("Specialized Receipt Templates", () => {
       />,
     );
 
-    expect(screen.getByText(FM_LABELS.ESTIMATE_TITLE)).toBeInTheDocument();
-    expect(screen.getByText(FM_LABELS.NOT_A_SALE_NOTE)).toBeInTheDocument();
+    expect(screen.getByText(RECEIPT_LABELS.ESTIMATE_TITLE)).toBeInTheDocument();
+    expect(screen.getByText(RECEIPT_LABELS.NOT_A_SALE_NOTE)).toBeInTheDocument();
     expect(screen.getByText("EST-20261120-001")).toBeInTheDocument();
     expect(screen.getByText("Kamal Perera")).toBeInTheDocument();
     expect(screen.getByText("Rs 14,000.00")).toBeInTheDocument();

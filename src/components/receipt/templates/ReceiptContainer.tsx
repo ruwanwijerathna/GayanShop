@@ -28,7 +28,7 @@ export function ReceiptContainer({
       style={{
         width: "72mm",
         maxWidth: "100%",
-        fontFamily: "'FMGemunu', 'Inter', sans-serif",
+        fontFamily: "'Noto Sans Sinhala', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
         fontSize: "12px",
         lineHeight: "1.35",
       }}
