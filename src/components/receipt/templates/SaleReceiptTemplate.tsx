@@ -29,13 +29,13 @@ export function SaleReceiptTemplate({ receipt, logo, logoDataUrl, storeName }: S
       )}
 
       {receipt.status === "voided" && (
-        <div className="border border-black py-0.5 text-center text-xs font-bold uppercase tracking-wider">
+        <div className="border border-black py-0.5 text-center text-[10px] font-bold uppercase tracking-wider">
           {RECEIPT_LABELS.VOIDED_RECEIPT}
         </div>
       )}
 
       {/* Bill details: බිල් අංකය, දිනය, වේලාව, අයකැමි */}
-      <div className="flex flex-col gap-0.5 border-t border-dashed border-black/80 pt-1.5 text-xs">
+      <div className="flex flex-col gap-0.5 border-t border-dashed border-black/80 pt-1.5 text-[10px]">
         <div className="flex justify-between gap-1">
           <span className="font-semibold">{RECEIPT_LABELS.BILL_NO} :</span>
           <span className="font-mono font-bold">{receipt.receipt_no}</span>
@@ -63,7 +63,7 @@ export function SaleReceiptTemplate({ receipt, logo, logoDataUrl, storeName }: S
       </div>
 
       {/* Items List */}
-      <div className="flex flex-col gap-1 border-t border-dashed border-black/80 pt-1.5 text-xs">
+      <div className="flex flex-col gap-1 border-t border-dashed border-black/80 pt-1.5 text-[10px]">
         {receipt.lines.map((line, idx) => (
           <div key={idx} className="flex flex-col">
             <div className="flex justify-between font-medium">
@@ -86,7 +86,7 @@ export function SaleReceiptTemplate({ receipt, logo, logoDataUrl, storeName }: S
       </div>
 
       {/* Totals: භාණ්ඩ ගණන, Subtotal, TOTAL, Cash, Change */}
-      <div className="flex flex-col gap-0.5 border-t border-dashed border-black/80 pt-1.5 text-xs">
+      <div className="flex flex-col gap-0.5 border-t border-dashed border-black/80 pt-1.5 text-[10px]">
         <div className="flex justify-between">
           <span className="font-semibold">{RECEIPT_LABELS.ITEMS_COUNT} :</span>
           <span className="font-mono font-bold">{receipt.item_count}</span>
@@ -116,22 +116,22 @@ export function SaleReceiptTemplate({ receipt, logo, logoDataUrl, storeName }: S
       </div>
 
       {/* 7-day policy & Thank you note */}
-      <div className="flex flex-col items-center gap-1 border-t border-dashed border-black/80 pt-2 text-center text-xs">
+      <div className="flex flex-col items-center gap-1 border-t border-dashed border-black/80 pt-2 text-center text-[8px]">
         <p className="px-1 text-[11px] leading-snug">{RECEIPT_LABELS.EXCHANGE_POLICY}</p>
         <p className="font-bold text-sm">{RECEIPT_LABELS.THANK_YOU}</p>
       </div>
 
       {/* Barcode128 */}
       <div className="flex justify-center pt-1">
-        <Barcode128 data={receipt.receipt_no} height={42} />
+        <Barcode128 data={receipt.receipt_no} height={30} />
       </div>
 
       {/* Footer Branding */}
       <div className="flex flex-col items-center gap-0.5 pt-1 text-center text-[11px] text-neutral-700 font-sans">
-        <p className="font-medium">{RECEIPT_LABELS.POWERED_BY}</p>
         {receipt.footer && (
           <p className="whitespace-pre-wrap text-[10px] text-neutral-500">{receipt.footer}</p>
         )}
+        <p className="font-medium">{RECEIPT_LABELS.POWERED_BY}</p>
       </div>
     </ReceiptContainer>
   );
