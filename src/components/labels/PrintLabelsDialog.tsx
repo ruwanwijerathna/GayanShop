@@ -150,7 +150,7 @@ export function PrintLabelsDialog({ items, onClose }: { items: LabelItem[]; onCl
   return (
     <>
       <Dialog open={!approving} onOpenChange={(o) => !o && onClose()}>
-        <DialogContent className="max-h-[92vh] max-w-3xl gap-5 overflow-y-auto">
+        <DialogContent className="max-h-[92vh] max-w-4xl gap-5 overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl">{t("print.title")}</DialogTitle>
           </DialogHeader>
