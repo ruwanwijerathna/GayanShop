@@ -138,6 +138,10 @@ pub struct TemplateCalibration {
     pub row_gap_mm: f64,
     #[specta(type = specta_typescript::Number)]
     pub left_margin_mm: f64,
+    /// Calibrations saved before the top margin existed leave it at 0.
+    #[serde(default)]
+    #[specta(type = specta_typescript::Number)]
+    pub top_margin_mm: f64,
 }
 
 fn in_range(v: f64, lo: f64, hi: f64) -> bool {
@@ -162,12 +166,14 @@ pub async fn calibrate(
             if !in_range(c.col_gap_mm, 0.0, 10.0)
                 || !in_range(c.row_gap_mm, 0.0, 10.0)
                 || !in_range(c.left_margin_mm, 0.0, 10.0)
+                || !in_range(c.top_margin_mm, 0.0, 10.0)
             {
                 return Err(AppError::validation("LABEL_CALIBRATION_INVALID", "0–10 mm"));
             }
             slot.col_gap_mm = c.col_gap_mm;
             slot.row_gap_mm = c.row_gap_mm;
             slot.left_margin_mm = c.left_margin_mm;
+            slot.top_margin_mm = c.top_margin_mm;
         }
     }
     let saved = slot.clone();

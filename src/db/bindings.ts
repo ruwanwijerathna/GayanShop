@@ -87,7 +87,7 @@ export const commands = {
 	labelPrinterProfile: () => typedError<LabelPrinterProfile_Serialize | null, AppError>(__TAURI_INVOKE("label_printer_profile")),
 	setLabelPrinterProfile: (profile: LabelPrinterProfile_Deserialize) => typedError<null, AppError>(__TAURI_INVOKE("set_label_printer_profile", { profile })),
 	/**  Correct a template's column gap, row gap and left margin for this counter's roll; `None` = reset to default. */
-	calibrateLabelTemplate: (id: string, calibration: TemplateCalibration | null) => typedError<LabelTemplate_Serialize, AppError>(__TAURI_INVOKE("calibrate_label_template", { id, calibration })),
+	calibrateLabelTemplate: (id: string, calibration: TemplateCalibration_Deserialize | null) => typedError<LabelTemplate_Serialize, AppError>(__TAURI_INVOKE("calibrate_label_template", { id, calibration })),
 	/**  Each product's sticker in printer dots, which the webview draws: the preview, and the picture it prints. */
 	labelPreview: (job: LabelJob_Deserialize) => typedError<LabelLayout_Serialize, AppError>(__TAURI_INVOKE("label_preview", { job })),
 	/**  One sample sticker on a roll, for the Settings preview and "Print test label". */
@@ -1773,6 +1773,8 @@ export type LabelTemplate_Deserialize = {
 	/**  The die-cut gap between rows. */
 	row_gap_mm: number,
 	left_margin_mm: number,
+	/**  Calibration: how far down the roll each sticker starts (templates stored before it existed: 0). */
+	top_margin_mm?: number,
 	dpi: number,
 	language: LabelLanguage,
 	symbology: SymbologyRule,
@@ -1790,6 +1792,8 @@ export type LabelTemplate_Serialize = {
 	/**  The die-cut gap between rows. */
 	row_gap_mm: number,
 	left_margin_mm: number,
+	/**  Calibration: how far down the roll each sticker starts (templates stored before it existed: 0). */
+	top_margin_mm: number,
 	dpi: number,
 	language: LabelLanguage,
 	symbology: SymbologyRule,
@@ -3087,10 +3091,24 @@ export type TableCount = {
 };
 
 /**  Calibration of a template (Settings → Labels): roll geometry only; the element boxes are the built-ins'. */
-export type TemplateCalibration = {
+export type TemplateCalibration = TemplateCalibration_Serialize | TemplateCalibration_Deserialize;
+
+/**  Calibration of a template (Settings → Labels): roll geometry only; the element boxes are the built-ins'. */
+export type TemplateCalibration_Deserialize = {
 	col_gap_mm: number,
 	row_gap_mm: number,
 	left_margin_mm: number,
+	/**  Calibrations saved before the top margin existed leave it at 0. */
+	top_margin_mm?: number,
+};
+
+/**  Calibration of a template (Settings → Labels): roll geometry only; the element boxes are the built-ins'. */
+export type TemplateCalibration_Serialize = {
+	col_gap_mm: number,
+	row_gap_mm: number,
+	left_margin_mm: number,
+	/**  Calibrations saved before the top margin existed leave it at 0. */
+	top_margin_mm: number,
 };
 
 export type TopCustomer = TopCustomer_Serialize | TopCustomer_Deserialize;

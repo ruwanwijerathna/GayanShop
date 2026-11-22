@@ -20,7 +20,7 @@ function Text({ t }: { t: StickerText }) {
     left: t.x,
     top: t.y,
     width: t.w,
-    height: t.h,
+    height: clamp ? t.h : Math.max(t.h, t.font_px),
     fontFamily: SANS,
     fontSize: t.font_px,
     lineHeight: `${t.font_px}px`,
@@ -35,7 +35,7 @@ function Text({ t }: { t: StickerText }) {
 }
 
 /** The bars as rectangles on whole dots: every bar and space is `module` dots per module. */
-function Bars({ b }: { b: StickerBarcode }) {
+function Bars({ b, labelH }: { b: StickerBarcode; labelH?: number }) {
   const rects: { x: number; w: number }[] = [];
   let x = 0;
   b.widths.forEach((modules, i) => {
@@ -43,6 +43,10 @@ function Bars({ b }: { b: StickerBarcode }) {
     if (i % 2 === 0) rects.push({ x, w });
     x += w;
   });
+  const is16 = (labelH ?? 25) <= 16;
+  const is20 = (labelH ?? 25) > 16 && (labelH ?? 25) <= 20;
+  const fontSize = is16 ? 13 : is20 ? 16 : Math.round(b.hri_px * 1.15);
+  const gap = is16 ? 3 : is20 ? 4 : Math.max(6, Math.round(b.hri_px * 0.5));
   return (
     <>
       <svg
@@ -61,12 +65,12 @@ function Bars({ b }: { b: StickerBarcode }) {
         style={{
           position: "absolute",
           left: b.x,
-          top: b.y + b.bar_h + Math.max(6, Math.round(b.hri_px * 0.5)),
+          top: b.y + b.bar_h + gap,
           width: x,
           textAlign: "center",
           fontFamily: MONO,
-          fontSize: b.hri_px,
-          lineHeight: `${b.hri_px}px`,
+          fontSize,
+          lineHeight: `${fontSize}px`,
         }}
       >
         {b.data}
@@ -92,7 +96,7 @@ export function LabelSticker({ layout, sticker }: { layout: LabelLayout; sticker
       {sticker.texts.map((t) => (
         <Text key={`${t.kind}:${t.y}:${t.x}`} t={t} />
       ))}
-      {sticker.barcode && <Bars b={sticker.barcode} />}
+      {sticker.barcode && <Bars b={sticker.barcode} labelH={layout.label_h_mm} />}
     </div>
   );
 }

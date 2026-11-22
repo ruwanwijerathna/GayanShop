@@ -1,7 +1,8 @@
 {
   "templates": {
     "two_up_50x25": "50 x 25 mm, 2 across",
-    "three_up_30x16": "30 x 16 mm, 3 across"
+    "three_up_30x16": "30 x 16 mm, 3 across",
+    "three_up_30x20": "30 x 20 mm, 3 across"
   },
   "print": {
     "title": "Print labels",
@@ -29,52 +30,34 @@
   },
   "settings": {
     "printerTitle": "Label printer",
-    "connection": "Connection",
     "kinds": {
       "spooler": "Windows printer (USB)",
       "network": "Network (TCP 9100)",
       "serial": "Serial (COM port)"
     },
     "printerName": "Printer",
-    "host": "IP address or host name",
-    "comPort": "COM port",
-    "port": "Port",
-    "baud": "Baud rate",
-    "language": "Printer language",
-    "languages": {
-      "tspl": "TSPL (Xprinter, TSC, most)",
-      "zpl": "ZPL (Zebra)"
-    },
     "dpi": "Resolution",
-    "darkness": "Darkness (0–15)",
-    "speed": "Speed (1–6)",
-    "offsetX": "Shift right (mm)",
-    "offsetY": "Shift down (mm)",
     "save": "Save label printer",
     "saved": "Label printer saved.",
     "invalid": "Check the numbers: whole numbers for darkness and speed, mm like 1.5.",
     "templateHint": "{{cols}} labels per row at {{dpi}} dpi. Correct the gaps for your roll, then print the alignment test.",
     "colGap": "Gap between labels (mm)",
-    "rowGap": "Gap between rows (mm)",
+    "topMargin": "Top margin (mm)",
     "margin": "Left margin (mm)",
-    "saveCalibration": "Save",
     "reset": "Reset to default",
     "alignQueued": "Alignment test sent to the label printer.",
-    "advanced": "Advanced Calibration",
     "stickerSize": "Sticker size",
     "stickerHint": "Also the roll chosen by default when printing labels.",
     "testLabel": "Print Test Label",
     "rollCalibration": "Roll calibration: {{name}}",
     "printerHint": "Prints price stickers for your products.",
-    "otherConnection": "This printer is connected by {{kind}}. Change it under Advanced Calibration.",
+    "otherConnection": "This printer is connected by {{kind}}, and saving keeps that connection. To use a Windows printer instead, choose it below.",
     "previewTitle": "Sticker preview",
     "testQueued": "A sample sticker row was sent to the label printer.",
     "alignTest": "Print alignment test",
-    "alignTestHint": "Prints only the outline of each label, to check the gaps and margins.",
     "autoPrint": "Print labels when stock arrives",
     "autoPrintHint": "Prints one sticker for every unit that arrives: a new product's opening stock, a restock, a quick purchase or a late item. Uses the sticker size chosen above, saved with the printer.",
     "dpiHint": "Resolution of the printer head. Use 300 dpi if the printed sticker looks larger than the preview.",
-    "calibrationSaved": "Roll settings saved.",
     "calibrationReset": "Roll settings reset to the sticker size defaults."
   },
   "auto": {

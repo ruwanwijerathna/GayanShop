@@ -78,19 +78,24 @@ fn tspl_profile() -> LabelPrinterProfile {
 fn the_built_in_templates_are_the_owner_confirmed_rolls() {
     let two = builtin("two_up_50x25");
     let three = builtin("three_up_30x16");
+    let three_20 = builtin("three_up_30x20");
     assert_eq!((two.columns, two.label_w_mm, two.label_h_mm, two.dpi), (2, 50.0, 25.0, 203));
     assert_eq!((three.columns, three.label_w_mm, three.label_h_mm, three.dpi), (3, 30.0, 16.0, 203));
+    assert_eq!((three_20.columns, three_20.label_w_mm, three_20.label_h_mm, three_20.dpi), (3, 30.0, 20.0, 203));
     assert_eq!((two.row_gap_mm, two.col_gap_mm, two.left_margin_mm), (3.0, 2.0, 1.5));
     assert_eq!((three.row_gap_mm, three.col_gap_mm, three.left_margin_mm), (3.0, 2.0, 1.5));
+    assert_eq!((three_20.row_gap_mm, three_20.col_gap_mm, three_20.left_margin_mm), (3.0, 2.0, 1.5));
     // Roll widths (a margin each side): 105.0 mm and 97.0 mm.
     assert_eq!(layout::mm_text(layout::roll_width_mm(&two)), "105.0");
     assert_eq!(layout::mm_text(layout::roll_width_mm(&three)), "97.0");
+    assert_eq!(layout::mm_text(layout::roll_width_mm(&three_20)), "97.0");
 }
 
 #[test]
 fn a_sticker_picture_is_the_label_in_dots_rounded_up_to_whole_bytes() {
     assert_eq!(layout::sticker_size(&builtin("two_up_50x25")), (400, 200));
     assert_eq!(layout::sticker_size(&builtin("three_up_30x16")), (240, 128));
+    assert_eq!(layout::sticker_size(&builtin("three_up_30x20")), (240, 160));
     // 50 mm at 300 dpi is 591 dots: 592, the 8-dot byte boundary; the extra column stays white.
     let t300 = LabelTemplate { dpi: 300, ..builtin("two_up_50x25") };
     assert_eq!(layout::sticker_size(&t300), (592, 295));
@@ -121,7 +126,7 @@ fn a_13_digit_code128_fits_a_2x1_label_at_two_dots() {
 #[test]
 fn the_8_digit_in_store_barcode_prints_as_code128_c_on_both_rolls() {
     // START C, 21, 00, 04, 23, check, STOP = 6 × 11 + 13 = 79 modules, 99 with the quiet zones.
-    for (id, module) in [("three_up_30x16", 2), ("two_up_50x25", 4)] {
+    for (id, module) in [("three_up_30x16", 2), ("three_up_30x20", 2), ("two_up_50x25", 4)] {
         let p = layout::layout(&builtin(id), &[cell("p1", "Ear Stud", &["21000423"])]);
         let b = p.stickers[0].barcode.as_ref().unwrap();
         assert_eq!((b.symbology, b.data.as_str(), b.module, b.fits), (Symbology::Code128, "21000423", module, true));
@@ -166,7 +171,7 @@ fn codes_that_cannot_fit_print_flagged_and_300_dpi_allows_8_digits() {
 #[test]
 fn the_stickers_read_shop_name_then_barcode_then_a_large_price() {
     use layout::ElementKind::{Barcode, Price, StoreName};
-    for id in ["two_up_50x25", "three_up_30x16"] {
+    for id in ["two_up_50x25", "three_up_30x16", "three_up_30x20"] {
         let t = builtin(id);
         let kinds: Vec<_> = t.elements.iter().map(|e| e.kind).collect();
         assert_eq!(kinds, vec![StoreName, Barcode, Price], "{id}");
@@ -293,6 +298,27 @@ fn calibration_offsets_shift_every_picture_and_never_past_the_edge() {
 }
 
 #[test]
+fn a_rolls_top_margin_moves_every_picture_and_outline_down_on_top_of_the_printer_shift() {
+    let t = LabelTemplate { top_margin_mm: 1.5, ..builtin("two_up_50x25") };
+    let a = picture(400, 200, 1);
+    let shifted = LabelPrinterProfile { offset_y_mm: 0.5, ..tspl_profile() };
+    let bytes = label::emit(&t, &shifted, std::slice::from_ref(&a), &bitmap::rows(&[(0, 2)], 2, false));
+    let mut expected = TSPL_HEADER_TWO_UP.as_bytes().to_vec();
+    expected.extend(b"CLS\r\n");
+    // 1.5 mm margin + 0.5 mm shift = 2 mm = 16 dots down, for both columns.
+    expected.extend(tspl_bitmap(12, 16, &a));
+    expected.extend(tspl_bitmap(428, 16, &a));
+    expected.extend(b"PRINT 1\r\n");
+    assert_eq!(bytes, expected);
+    let outline = String::from_utf8(label::tspl::alignment_test(&t, (0.0, 0.0), 8, 4)).unwrap();
+    assert!(outline.contains("BOX 12,12,412,212,2"), "{outline}");
+    // A template stored before the top margin existed reads as 0.
+    let mut old = serde_json::to_value(builtin("two_up_50x25")).unwrap();
+    old.as_object_mut().unwrap().remove("top_margin_mm");
+    assert_eq!(serde_json::from_value::<LabelTemplate>(old).unwrap().top_margin_mm, 0.0);
+}
+
+#[test]
 fn the_alignment_test_outlines_every_cell() {
     let t = builtin("three_up_30x16");
     let tspl = String::from_utf8(label::tspl::alignment_test(&t, (0.0, 0.0), 8, 4)).unwrap();
@@ -318,7 +344,7 @@ fn a_saved_default_sticker_size_round_trips_and_old_profiles_have_none() {
 
 #[test]
 fn the_barcode_boxes_are_short_so_the_price_stays_the_big_thing() {
-    for (id, bars_mm) in [("two_up_50x25", 4.5), ("three_up_30x16", 2.5)] {
+    for (id, bars_mm) in [("two_up_50x25", 4.5), ("three_up_30x16", 2.5), ("three_up_30x20", 4.5)] {
         let t = builtin(id);
         let bar = t.elements.iter().find(|e| e.kind == layout::ElementKind::Barcode).unwrap();
         assert!((bar.h_mm - 2.0 - bars_mm).abs() < 1e-9, "{id}: bars are {bars_mm} mm tall plus the 2 mm digits");
@@ -328,16 +354,21 @@ fn the_barcode_boxes_are_short_so_the_price_stays_the_big_thing() {
 #[tokio::test]
 async fn templates_calibrate_per_device_and_reset_to_default() {
     let t = till().await;
-    let cal = TemplateCalibration { col_gap_mm: 3.0, row_gap_mm: 2.5, left_margin_mm: 1.0 };
+    let cal = TemplateCalibration { col_gap_mm: 3.0, row_gap_mm: 2.5, left_margin_mm: 1.0, top_margin_mm: 0.5 };
     let mut tx = t.t.db.write().await.unwrap();
     let saved = label::calibrate(tx.conn(), t.pool(), "two_up_50x25", Some(&cal)).await.unwrap();
     tx.commit().await.unwrap();
-    assert_eq!((saved.col_gap_mm, saved.row_gap_mm, saved.left_margin_mm), (3.0, 2.5, 1.0));
-    assert_eq!(label::template(t.pool(), "two_up_50x25").await.unwrap().col_gap_mm, 3.0);
+    assert_eq!((saved.col_gap_mm, saved.row_gap_mm, saved.left_margin_mm, saved.top_margin_mm), (3.0, 2.5, 1.0, 0.5));
+    let stored = label::template(t.pool(), "two_up_50x25").await.unwrap();
+    assert_eq!((stored.col_gap_mm, stored.top_margin_mm), (3.0, 0.5));
+    assert_eq!(label::template(t.pool(), "three_up_30x16").await.unwrap().top_margin_mm, 0.0, "per roll");
 
-    let bad = TemplateCalibration { col_gap_mm: 12.0, ..cal };
     let mut tx = t.t.db.write().await.unwrap();
-    assert!(label::calibrate(tx.conn(), t.pool(), "two_up_50x25", Some(&bad)).await.is_err());
+    for bad in
+        [TemplateCalibration { col_gap_mm: 12.0, ..cal.clone() }, TemplateCalibration { top_margin_mm: -0.5, ..cal }]
+    {
+        assert!(label::calibrate(tx.conn(), t.pool(), "two_up_50x25", Some(&bad)).await.is_err());
+    }
     let reset = label::calibrate(tx.conn(), t.pool(), "two_up_50x25", None).await.unwrap();
     tx.commit().await.unwrap();
     assert_eq!(reset, builtin("two_up_50x25"));
@@ -583,11 +614,14 @@ fn a_store_seeded_with_the_old_rolls_moves_to_the_new_ones_and_keeps_calibration
 
     let migrated = label::reconcile(vec![old_two, old_three, custom.clone()], builtins.clone());
     let ids: Vec<&str> = migrated.iter().map(|t| t.id.as_str()).collect();
-    assert_eq!(ids, vec!["two_up_50x25", "three_up_30x16", "mine"]);
-    assert_eq!(migrated[2], custom);
+    assert_eq!(ids, vec!["two_up_50x25", "three_up_30x16", "three_up_30x20", "mine"]);
+    assert_eq!(migrated[3], custom);
 
     let kept = label::reconcile(vec![calibrated.clone(), builtin("two_up_50x25")], builtins.clone());
-    assert_eq!(kept.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), vec!["two_up_50x25", "three_up_30x16"]);
+    assert_eq!(
+        kept.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(),
+        vec!["two_up_50x25", "three_up_30x16", "three_up_30x20"]
+    );
     assert_eq!(kept[1].col_gap_mm, 3.5, "a calibrated current roll is not overwritten");
     let stale = LabelTemplate { elements: vec![], col_gap_mm: 3.5, ..builtin("three_up_30x16") };
     let refreshed = label::reconcile(vec![stale], builtins.clone());

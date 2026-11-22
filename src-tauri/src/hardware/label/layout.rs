@@ -87,6 +87,10 @@ pub struct LabelTemplate {
     pub row_gap_mm: f64,
     #[specta(type = specta_typescript::Number)]
     pub left_margin_mm: f64,
+    /// Calibration: how far down the roll each sticker starts (templates stored before it existed: 0).
+    #[serde(default)]
+    #[specta(type = specta_typescript::Number)]
+    pub top_margin_mm: f64,
     pub dpi: u16,
     pub language: LabelLanguage,
     pub symbology: SymbologyRule,
@@ -209,6 +213,7 @@ pub fn font_mm(step: u8) -> f64 {
         2 => 2.5,
         3 => 3.0,
         4 => 4.0,
+        5 => 5.0,
         _ => 6.0,
     }
 }
@@ -229,11 +234,13 @@ pub fn roll_width_mm(t: &LabelTemplate) -> f64 {
     t.left_margin_mm * 2.0 + n * t.label_w_mm + (n - 1.0) * t.col_gap_mm
 }
 
-/// Where column `col`'s sticker picture goes on the roll, in dots: the margin, the columns and gaps before it,
-/// and the calibration offset. A negative position (an offset pulling past the edge) is clamped to 0.
+/// Where column `col`'s sticker picture goes on the roll, in dots: the left margin, the columns and gaps before
+/// it, the roll's top margin, and the printer's calibration shift. A negative position (a shift pulling past
+/// the edge) is clamped to 0.
 pub fn column_origin(t: &LabelTemplate, col: u8, offset_mm: (f64, f64)) -> (i64, i64) {
     let x = t.left_margin_mm + f64::from(col) * (t.label_w_mm + t.col_gap_mm) + offset_mm.0;
-    (dots(x, t.dpi).max(0), dots(offset_mm.1, t.dpi).max(0))
+    let y = t.top_margin_mm + offset_mm.1;
+    (dots(x, t.dpi).max(0), dots(y, t.dpi).max(0))
 }
 
 /// Choose the code and module size for a barcode box: the first candidate that fits at ≥ 2 dots, the largest
@@ -369,6 +376,6 @@ mod tests {
         assert_eq!(dots(font_mm(4), 203), 32);
         assert_eq!(dots(font_mm(6), 203), 48);
         assert_eq!(dots(font_mm(6), 300), 71);
-        assert_eq!(font_mm(9), font_mm(5));
+        assert_eq!(font_mm(9), font_mm(6));
     }
 }

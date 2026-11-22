@@ -150,10 +150,11 @@ async fn seeds_label_templates_at_203_dpi_with_3mm_gap() {
     let (t, _) = setup().await;
     let templates = device_setting(&t, "label.templates").await;
     let list = templates.as_array().unwrap();
-    assert_eq!(list.len(), 2);
+    assert_eq!(list.len(), 3);
     for (tpl, id, cols, w, h, kinds) in [
         (&list[0], "two_up_50x25", 2, 50.0, 25.0, vec!["store_name", "barcode", "price"]),
         (&list[1], "three_up_30x16", 3, 30.0, 16.0, vec!["store_name", "barcode", "price"]),
+        (&list[2], "three_up_30x20", 3, 30.0, 20.0, vec!["store_name", "barcode", "price"]),
     ] {
         assert_eq!(tpl["id"], json!(id));
         assert_eq!(tpl["columns"], json!(cols));
@@ -165,6 +166,7 @@ async fn seeds_label_templates_at_203_dpi_with_3mm_gap() {
         assert_eq!(got, kinds);
     }
     assert_eq!(list[1]["symbology"], json!("code128"), "3-up 1x1 prints the 6-digit SKU as Code128");
+    assert_eq!(list[2]["symbology"], json!("code128"), "3-up 30x20 prints as Code128");
 }
 
 #[tokio::test]

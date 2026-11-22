@@ -91,7 +91,7 @@ pub fn builtin_label_templates() -> Value {
             "elements": [
                 { "kind": "store_name", "x_mm": 0.0, "y_mm": 4.0,  "w_mm": 50.0, "h_mm": 4.0,  "font_size": 4, "bold": true, "align": "center" },
                 { "kind": "barcode",    "x_mm": 0.0, "y_mm": 8.5,  "w_mm": 50.0, "h_mm": 6.5,  "font_size": 1 },
-                { "kind": "price",      "x_mm": 0.0, "y_mm": 18.0, "w_mm": 50.0, "h_mm": 6.0,  "font_size": 6, "bold": true, "align": "center" }
+                { "kind": "price",      "x_mm": 0.0, "y_mm": 17.0, "w_mm": 50.0, "h_mm": 8.0,  "font_size": 6, "bold": true, "align": "center" }
             ]
         },
         {
@@ -99,9 +99,19 @@ pub fn builtin_label_templates() -> Value {
             "label_w_mm": 30.0, "label_h_mm": 16.0, "col_gap_mm": 2.0, "row_gap_mm": 3.0, "left_margin_mm": 1.5,
             "dpi": 203, "language": "tspl", "symbology": "code128",
             "elements": [
-                { "kind": "store_name", "x_mm": 0.0, "y_mm": 1.5,  "w_mm": 30.0, "h_mm": 2.0, "font_size": 2, "bold": true, "align": "center" },
-                { "kind": "barcode",    "x_mm": 0.0, "y_mm": 4.5,  "w_mm": 30.0, "h_mm": 4.5, "font_size": 1 },
-                { "kind": "price",      "x_mm": 0.0, "y_mm": 10.5, "w_mm": 30.0, "h_mm": 4.0, "font_size": 4, "bold": true, "align": "center" }
+                { "kind": "store_name", "x_mm": 0.0, "y_mm": 2.0,  "w_mm": 30.0, "h_mm": 2.8, "font_size": 2, "bold": true, "align": "center" },
+                { "kind": "barcode",    "x_mm": 0.0, "y_mm": 5.0,  "w_mm": 30.0, "h_mm": 4.5, "font_size": 1 },
+                { "kind": "price",      "x_mm": 0.0, "y_mm": 10.0, "w_mm": 30.0, "h_mm": 5.0, "font_size": 4, "bold": true, "align": "center" }
+            ]
+        },
+        {
+            "id": "three_up_30x20", "name": "3-up 30 x 20 mm", "columns": 3,
+            "label_w_mm": 30.0, "label_h_mm": 20.0, "col_gap_mm": 2.0, "row_gap_mm": 3.0, "left_margin_mm": 1.5,
+            "dpi": 203, "language": "tspl", "symbology": "code128",
+            "elements": [
+                { "kind": "store_name", "x_mm": 0.0, "y_mm": 1.5,  "w_mm": 30.0, "h_mm": 2.8, "font_size": 2, "bold": true, "align": "center" },
+                { "kind": "barcode",    "x_mm": 0.0, "y_mm": 4.8,  "w_mm": 30.0, "h_mm": 6.5, "font_size": 1 },
+                { "kind": "price",      "x_mm": 0.0, "y_mm": 12.0, "w_mm": 30.0, "h_mm": 5.5, "font_size": 5, "bold": true, "align": "center" }
             ]
         }
     ])
