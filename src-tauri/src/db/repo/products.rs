@@ -768,9 +768,14 @@ pub async fn update(
 }
 
 /// Soft delete: the row stays for order history and sync; it leaves search, scanning and lists.
+/// A tracked product with units on hand (or oversold) can't be deleted: bring its stock to zero first, so
+/// the units are written off in the stock history instead of vanishing with the product.
 pub async fn delete(db: &Db, ctx: &WriteCtx, actor: &Actor, id: &str) -> AppResult<()> {
     let mut tx = db.write().await?;
     let old = get_conn(tx.conn(), &ctx.store_id, id).await?;
+    if old.track_stock && old.on_hand != 0 {
+        return Err(AppError::validation("PRODUCT_HAS_STOCK", format!("{} on hand", old.on_hand)));
+    }
     sqlx::query(
         "UPDATE products SET deleted_at = ?1, is_active = 0, updated_at = ?1, updated_by_device = ?2,
                 version = version + 1

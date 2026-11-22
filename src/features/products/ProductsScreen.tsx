@@ -17,13 +17,11 @@ import {
 import {
   Barcode,
   ClipboardCheck,
-  FolderTree,
   History,
   MoreHorizontal,
   Package,
   PackagePlus,
   Pencil,
-  Plus,
   Search,
   Tag,
   X,
@@ -59,10 +57,9 @@ import { translateError } from "@/i18n";
 import { formatMoney } from "@/lib/money";
 import { hasPerm } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import { CategoriesDialog } from "./CategoriesDialog";
 import { MovementHistorySheet } from "./MovementHistorySheet";
 import { categoryPath } from "./categories";
-import { ProductFormDialog } from "./ProductFormDialog";
+import { ProductFormPanel } from "./ProductFormPanel";
 import { ShortBarcodesDialog, withoutBarcode } from "./ShortBarcodesDialog";
 import { AdjustStockDialog, RestockDialog } from "./ProductStockDialogs";
 import { matchesText } from "./productForm";
@@ -70,8 +67,6 @@ import { LOW_STOCK_MAX, stockLevel, type StockLevel } from "./stock";
 
 const STOCK_LEVELS: StockLevel[] = ["in_stock", "low", "out", "oversold", "untracked"];
 const NO_CATEGORY = "none";
-/** Inactive products stay out of the list until the Status filter is changed or reset. */
-const DEFAULT_FILTERS: ColumnFiltersState = [{ id: "status", value: ["active"] }];
 const SKELETON_ROWS = 6;
 
 /** The Stock cell: plain count, or a badge for low / out / oversold; a dash when stock isn't tracked. */
@@ -123,8 +118,9 @@ export function ProductsScreen() {
   const products = useProducts();
   const categories = useCategories();
 
-  const [editing, setEditing] = useState<{ product: Product | null } | null>(null);
-  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  /** The product open in the side panel; `null` = the panel is adding a new one. `formKey` resets the form. */
+  const [editing, setEditing] = useState<Product | null>(null);
+  const [formKey, setFormKey] = useState(0);
   const [printIds, setPrintIds] = useState<string[] | null>(null);
   const [shortBarcodesOpen, setShortBarcodesOpen] = useState(false);
   const [historyFor, setHistoryFor] = useState<Product | null>(null);
@@ -132,7 +128,7 @@ export function ProductsScreen() {
   const [adjustFor, setAdjustFor] = useState<Product | null>(null);
 
   const [sorting, setSorting] = useState<SortingState>([{ id: "name", desc: false }]);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(DEFAULT_FILTERS);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -186,7 +182,7 @@ export function ProductsScreen() {
                 <button
                   type="button"
                   className="w-full truncate rounded-sm text-left font-medium outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  onClick={() => setEditing({ product: p })}
+                  onClick={() => setEditing(p)}
                 >
                   {p.name}
                 </button>
@@ -195,6 +191,11 @@ export function ProductsScreen() {
               )}
               {codes.length > 0 && (
                 <span className="truncate font-mono text-xs text-muted-foreground">{codes.join(" · ")}</span>
+              )}
+              {p.barcode_conflict && (
+                <Badge variant="destructive" className="self-start">
+                  {t("status.conflict")}
+                </Badge>
               )}
             </div>
           );
@@ -259,27 +260,6 @@ export function ProductsScreen() {
         cell: ({ row }) => <StockCell product={row.original} />,
       },
       {
-        id: "status",
-        accessorFn: (p) => (p.is_active ? "active" : "inactive"),
-        filterFn: facetFilterFn,
-        enableSorting: false,
-        header: () => t("columns.status"),
-        cell: ({ row }) =>
-          row.original.barcode_conflict ? (
-            <Badge variant="destructive">{t("status.conflict")}</Badge>
-          ) : row.original.is_active ? (
-            <Badge variant="secondary" className="gap-1.5">
-              <span aria-hidden className="size-1.5 rounded-full bg-emerald-500" />
-              {t("status.active")}
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="gap-1.5 text-muted-foreground">
-              <span aria-hidden className="size-1.5 rounded-full bg-muted-foreground/50" />
-              {t("status.inactive")}
-            </Badge>
-          ),
-      },
-      {
         id: "actions",
         enableSorting: false,
         enableHiding: false,
@@ -313,7 +293,7 @@ export function ProductsScreen() {
                 </>
               )}
               {canManage && (
-                <DropdownMenuItem className="min-h-11" onSelect={() => setEditing({ product: row.original })}>
+                <DropdownMenuItem className="min-h-11" onSelect={() => setEditing(row.original)}>
                   <Pencil aria-hidden />
                   {t("edit")}
                 </DropdownMenuItem>
@@ -373,7 +353,6 @@ export function ProductsScreen() {
     price: t("columns.price"),
     cost: t("columns.cost"),
     stock: t("columns.stock"),
-    status: t("columns.status"),
   };
 
   return (
@@ -390,19 +369,6 @@ export function ProductsScreen() {
             </p>
           </div>
         </div>
-        <Button
-          type="button"
-          size="pos"
-          variant="outline"
-          className="rounded-xl"
-          onClick={() => setCategoriesOpen(true)}
-        >
-          <FolderTree aria-hidden />
-          {t("categories.title")}
-          <Badge variant="secondary" className="ml-1 rounded-md px-1.5 tabular-nums">
-            {cats.length}
-          </Badge>
-        </Button>
         <Can perm="PRODUCT_MANAGE">
           {uncoded.length > 0 && (
             <Button
@@ -416,15 +382,6 @@ export function ProductsScreen() {
               {t("shortBarcodes.open", { count: uncoded.length })}
             </Button>
           )}
-          <Button
-            type="button"
-            size="pos"
-            className="rounded-xl shadow-sm"
-            onClick={() => setEditing({ product: null })}
-          >
-            <Plus aria-hidden />
-            {t("add")}
-          </Button>
         </Can>
       </header>
 
@@ -434,184 +391,188 @@ export function ProductsScreen() {
         </p>
       )}
 
-      <Card className="gap-0 overflow-hidden py-0 shadow-sm">
-        <div className="flex flex-wrap items-center gap-2 border-b bg-muted/20 p-3">
-          <div className="relative min-w-56 flex-1">
-            <Search
-              aria-hidden
-              className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
+      <div className={cn("grid items-start gap-4", canManage && "lg:grid-cols-[minmax(0,1fr)_20rem]")}>
+        <Card className="min-w-0 gap-0 overflow-hidden py-0 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2 border-b bg-muted/20 p-3">
+            <div className="relative min-w-56 flex-1">
+              <Search
+                aria-hidden
+                className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                type="search"
+                aria-label={t("searchLabel")}
+                placeholder={t("search")}
+                className="h-12 rounded-xl bg-background pl-10 text-base"
+                value={globalFilter}
+                autoComplete="off"
+                onChange={(e) => setGlobalFilter(e.target.value)}
+              />
+            </div>
+            <DataTableFacetedFilter
+              column={table.getColumn("category")}
+              title={t("filters.category")}
+              options={[
+                ...cats.map((c) => ({ value: c.id, label: catName.get(c.id) ?? c.name })),
+                { value: NO_CATEGORY, label: t("uncategorized") },
+              ]}
             />
-            <Input
-              type="search"
-              aria-label={t("searchLabel")}
-              placeholder={t("search")}
-              className="h-12 rounded-xl bg-background pl-10 text-base"
-              value={globalFilter}
-              autoComplete="off"
-              onChange={(e) => setGlobalFilter(e.target.value)}
+            <DataTableFacetedFilter
+              column={table.getColumn("stock")}
+              title={t("filters.stock")}
+              options={STOCK_LEVELS.map((l) => ({
+                value: l,
+                label: t(`stockLevel.${l}`, { max: LOW_STOCK_MAX }),
+              }))}
             />
+            {isFiltered && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="pos"
+                className="rounded-xl"
+                onClick={() => {
+                  setColumnFilters([]);
+                  setGlobalFilter("");
+                }}
+              >
+                {t("filters.reset")}
+                <X aria-hidden />
+              </Button>
+            )}
+            <div className="ml-auto">
+              <DataTableViewOptions table={table} labels={columnLabels} />
+            </div>
           </div>
-          <DataTableFacetedFilter
-            column={table.getColumn("category")}
-            title={t("filters.category")}
-            options={[
-              ...cats.map((c) => ({ value: c.id, label: catName.get(c.id) ?? c.name })),
-              { value: NO_CATEGORY, label: t("uncategorized") },
-            ]}
-          />
-          <DataTableFacetedFilter
-            column={table.getColumn("stock")}
-            title={t("filters.stock")}
-            options={STOCK_LEVELS.map((l) => ({
-              value: l,
-              label: t(`stockLevel.${l}`, { max: LOW_STOCK_MAX }),
-            }))}
-          />
-          <DataTableFacetedFilter
-            column={table.getColumn("status")}
-            title={t("filters.status")}
-            options={[
-              { value: "active", label: t("status.active") },
-              { value: "inactive", label: t("status.inactive") },
-            ]}
-          />
-          {isFiltered && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="pos"
-              className="rounded-xl"
-              onClick={() => {
-                setColumnFilters([]);
-                setGlobalFilter("");
-              }}
-            >
-              {t("filters.reset")}
-              <X aria-hidden />
-            </Button>
+
+          {selectedIds.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3 border-b bg-primary/5 px-4 py-2 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1">
+              <span className="flex-1 text-sm font-medium tabular-nums">
+                {t("selectedCount", { count: selectedIds.length })}
+              </span>
+              <Button
+                type="button"
+                size="pos"
+                variant="outline"
+                className="rounded-xl bg-background"
+                onClick={() => setPrintIds(selectedIds)}
+              >
+                <Tag aria-hidden />
+                {t("printLabels", { count: selectedIds.length })}
+              </Button>
+              <Button
+                type="button"
+                size="pos"
+                variant="ghost"
+                className="rounded-xl"
+                onClick={() => setRowSelection({})}
+              >
+                {t("clearSelection")}
+              </Button>
+            </div>
           )}
-          <div className="ml-auto">
-            <DataTableViewOptions table={table} labels={columnLabels} />
-          </div>
-        </div>
 
-        {selectedIds.length > 0 && (
-          <div className="flex flex-wrap items-center gap-3 border-b bg-primary/5 px-4 py-2 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1">
-            <span className="flex-1 text-sm font-medium tabular-nums">
-              {t("selectedCount", { count: selectedIds.length })}
-            </span>
-            <Button
-              type="button"
-              size="pos"
-              variant="outline"
-              className="rounded-xl bg-background"
-              onClick={() => setPrintIds(selectedIds)}
-            >
-              <Tag aria-hidden />
-              {t("printLabels", { count: selectedIds.length })}
-            </Button>
-            <Button
-              type="button"
-              size="pos"
-              variant="ghost"
-              className="rounded-xl"
-              onClick={() => setRowSelection({})}
-            >
-              {t("clearSelection")}
-            </Button>
-          </div>
-        )}
-
-        <Table role="grid" aria-label={t("title")} className="min-w-[760px]">
-          <TableHeader className="bg-muted/40">
-            {table.getHeaderGroups().map((group) => (
-              <TableRow key={group.id} className="hover:bg-transparent">
-                {group.headers.map((header) => (
-                  <TableHead
-                    key={header.id}
-                    scope="col"
-                    aria-sort={
-                      header.column.getIsSorted() === "asc"
-                        ? "ascending"
-                        : header.column.getIsSorted() === "desc"
-                          ? "descending"
-                          : undefined
-                    }
-                    className={cn(
-                      "h-12",
-                      header.column.id === "select" && "w-12 pl-4",
-                      (header.column.id === "price" || header.column.id === "cost") && "text-right",
-                      header.column.id === "actions" && "w-14 text-right pr-4",
-                    )}
-                  >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {products.isLoading &&
-              Array.from({ length: SKELETON_ROWS }, (_, i) => (
-                <TableRow key={i} className="h-16 hover:bg-transparent" aria-hidden>
-                  {Array.from({ length: visibleColumns }, (_, j) => (
-                    <TableCell key={j}>
-                      <Skeleton className="h-5 w-full max-w-32" />
-                    </TableCell>
+          <Table role="grid" aria-label={t("title")} className="min-w-[620px]">
+            <TableHeader className="bg-muted/40">
+              {table.getHeaderGroups().map((group) => (
+                <TableRow key={group.id} className="hover:bg-transparent">
+                  {group.headers.map((header) => (
+                    <TableHead
+                      key={header.id}
+                      scope="col"
+                      aria-sort={
+                        header.column.getIsSorted() === "asc"
+                          ? "ascending"
+                          : header.column.getIsSorted() === "desc"
+                            ? "descending"
+                            : undefined
+                      }
+                      className={cn(
+                        "h-12",
+                        header.column.id === "select" && "w-12 pl-4",
+                        (header.column.id === "price" || header.column.id === "cost") && "text-right",
+                        header.column.id === "actions" && "w-14 text-right pr-4",
+                      )}
+                    >
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(header.column.columnDef.header, header.getContext())}
+                    </TableHead>
                   ))}
                 </TableRow>
               ))}
-            {!products.isLoading &&
-              table.getRowModel().rows.map((row, i) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() ? "selected" : undefined}
-                  className={cn(
-                    "h-16 motion-safe:animate-in motion-safe:fade-in-0",
-                    !row.original.is_active && "text-muted-foreground",
-                  )}
-                  style={{ animationDelay: `${Math.min(i, 10) * 20}ms`, animationFillMode: "backwards" }}
-                >
-                  {row.getVisibleCells().map((cell) => {
-                    const id = cell.column.id;
-                    return (
-                      <TableCell
-                        key={cell.id}
-                        className={cn(
-                          id === "select" && "w-12 pl-4",
-                          id === "name" && "max-w-64",
-                          (id === "price" || id === "cost") && "text-right",
-                          id === "actions" && "w-14 text-right pr-4",
-                        )}
-                        onClick={id === "select" || id === "actions" ? stop : undefined}
-                      >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+            </TableHeader>
+            <TableBody>
+              {products.isLoading &&
+                Array.from({ length: SKELETON_ROWS }, (_, i) => (
+                  <TableRow key={i} className="h-16 hover:bg-transparent" aria-hidden>
+                    {Array.from({ length: visibleColumns }, (_, j) => (
+                      <TableCell key={j}>
+                        <Skeleton className="h-5 w-full max-w-32" />
                       </TableCell>
-                    );
-                  })}
+                    ))}
+                  </TableRow>
+                ))}
+              {!products.isLoading &&
+                table.getRowModel().rows.map((row, i) => (
+                  <TableRow
+                    key={row.id}
+                    data-state={row.getIsSelected() ? "selected" : undefined}
+                    className={cn(
+                      "h-16 motion-safe:animate-in motion-safe:fade-in-0",
+                      editing?.id === row.original.id && "bg-primary/5",
+                    )}
+                    style={{ animationDelay: `${Math.min(i, 10) * 20}ms`, animationFillMode: "backwards" }}
+                  >
+                    {row.getVisibleCells().map((cell) => {
+                      const id = cell.column.id;
+                      return (
+                        <TableCell
+                          key={cell.id}
+                          className={cn(
+                            id === "select" && "w-12 pl-4",
+                            id === "name" && "max-w-64",
+                            (id === "price" || id === "cost") && "text-right",
+                            id === "actions" && "w-14 text-right pr-4",
+                          )}
+                          onClick={id === "select" || id === "actions" ? stop : undefined}
+                        >
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
+                ))}
+              {!products.isLoading && table.getRowModel().rows.length === 0 && (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={visibleColumns} className="py-16">
+                    <div className="flex flex-col items-center gap-2 text-center text-muted-foreground">
+                      <span className="flex size-12 items-center justify-center rounded-full bg-muted">
+                        <Package aria-hidden className="size-6" />
+                      </span>
+                      <span>{data.length === 0 ? t("empty") : t("noMatch")}</span>
+                    </div>
+                  </TableCell>
                 </TableRow>
-              ))}
-            {!products.isLoading && table.getRowModel().rows.length === 0 && (
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={visibleColumns} className="py-16">
-                  <div className="flex flex-col items-center gap-2 text-center text-muted-foreground">
-                    <span className="flex size-12 items-center justify-center rounded-full bg-muted">
-                      <Package aria-hidden className="size-6" />
-                    </span>
-                    <span>{data.length === 0 ? t("empty") : t("noMatch")}</span>
-                  </div>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-        {products.isLoading && <p className="sr-only">{t("common:table.loading")}</p>}
-        <DataTablePagination table={table} />
-      </Card>
+              )}
+            </TableBody>
+          </Table>
+          {products.isLoading && <p className="sr-only">{t("common:table.loading")}</p>}
+          <DataTablePagination table={table} />
+        </Card>
+        {canManage && (
+          <ProductFormPanel
+            key={editing?.id ?? `new-${formKey}`}
+            product={editing}
+            categories={cats}
+            onDone={() => {
+              setEditing(null);
+              setFormKey((k) => k + 1);
+            }}
+          />
+        )}
+      </div>
 
-      <CategoriesDialog open={categoriesOpen} onOpenChange={setCategoriesOpen} categories={cats} />
       {shortBarcodesOpen && (
         <ShortBarcodesDialog
           products={uncoded}
@@ -619,12 +580,6 @@ export function ProductsScreen() {
           onDone={(ids) => setRowSelection(Object.fromEntries(ids.map((id) => [id, true])))}
         />
       )}
-      <ProductFormDialog
-        open={editing !== null}
-        product={editing?.product ?? null}
-        categories={cats}
-        onClose={() => setEditing(null)}
-      />
       {restockFor && <RestockDialog product={restockFor} onClose={() => setRestockFor(null)} />}
       {adjustFor && <AdjustStockDialog product={adjustFor} onClose={() => setAdjustFor(null)} />}
       {historyFor && <MovementHistorySheet product={historyFor} onClose={() => setHistoryFor(null)} />}
