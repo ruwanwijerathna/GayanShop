@@ -22,6 +22,7 @@ import {
   Package,
   PackagePlus,
   Pencil,
+  Plus,
   Search,
   Tag,
   X,
@@ -49,6 +50,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { Product } from "@/db/bindings";
 import { CommandError } from "@/db/client";
@@ -118,9 +120,15 @@ export function ProductsScreen() {
   const products = useProducts();
   const categories = useCategories();
 
-  /** The product open in the side panel; `null` = the panel is adding a new one. `formKey` resets the form. */
+  /** The product open in the slider; `null` = it is adding a new one. `formKey` resets the form. */
   const [editing, setEditing] = useState<Product | null>(null);
+  const [sliderOpen, setSliderOpen] = useState(false);
   const [formKey, setFormKey] = useState(0);
+  const openEditor = (p: Product | null) => {
+    setEditing(p);
+    if (p === null) setFormKey((k) => k + 1);
+    setSliderOpen(true);
+  };
   const [printIds, setPrintIds] = useState<string[] | null>(null);
   const [shortBarcodesOpen, setShortBarcodesOpen] = useState(false);
   const [historyFor, setHistoryFor] = useState<Product | null>(null);
@@ -182,7 +190,7 @@ export function ProductsScreen() {
                 <button
                   type="button"
                   className="w-full truncate rounded-sm text-left font-medium outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  onClick={() => setEditing(p)}
+                  onClick={() => openEditor(p)}
                 >
                   {p.name}
                 </button>
@@ -293,7 +301,7 @@ export function ProductsScreen() {
                 </>
               )}
               {canManage && (
-                <DropdownMenuItem className="min-h-11" onSelect={() => setEditing(row.original)}>
+                <DropdownMenuItem className="min-h-11" onSelect={() => openEditor(row.original)}>
                   <Pencil aria-hidden />
                   {t("edit")}
                 </DropdownMenuItem>
@@ -391,187 +399,214 @@ export function ProductsScreen() {
         </p>
       )}
 
-      <div className={cn("grid items-start gap-4", canManage && "lg:grid-cols-[minmax(0,1fr)_20rem]")}>
-        <Card className="min-w-0 gap-0 overflow-hidden py-0 shadow-sm">
-          <div className="flex flex-wrap items-center gap-2 border-b bg-muted/20 p-3">
-            <div className="relative min-w-56 flex-1">
-              <Search
-                aria-hidden
-                className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
-              />
-              <Input
-                type="search"
-                aria-label={t("searchLabel")}
-                placeholder={t("search")}
-                className="h-12 rounded-xl bg-background pl-10 text-base"
-                value={globalFilter}
-                autoComplete="off"
-                onChange={(e) => setGlobalFilter(e.target.value)}
-              />
-            </div>
-            <DataTableFacetedFilter
-              column={table.getColumn("category")}
-              title={t("filters.category")}
-              options={[
-                ...cats.map((c) => ({ value: c.id, label: catName.get(c.id) ?? c.name })),
-                { value: NO_CATEGORY, label: t("uncategorized") },
-              ]}
+      <Card className="min-w-0 gap-0 overflow-hidden py-0 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2 border-b bg-muted/20 p-3">
+          <div className="relative min-w-56 flex-1">
+            <Search
+              aria-hidden
+              className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
             />
-            <DataTableFacetedFilter
-              column={table.getColumn("stock")}
-              title={t("filters.stock")}
-              options={STOCK_LEVELS.map((l) => ({
-                value: l,
-                label: t(`stockLevel.${l}`, { max: LOW_STOCK_MAX }),
-              }))}
+            <Input
+              type="search"
+              aria-label={t("searchLabel")}
+              placeholder={t("search")}
+              className="h-12 rounded-xl bg-background pl-10 text-base"
+              value={globalFilter}
+              autoComplete="off"
+              onChange={(e) => setGlobalFilter(e.target.value)}
             />
-            {isFiltered && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="pos"
-                className="rounded-xl"
-                onClick={() => {
-                  setColumnFilters([]);
-                  setGlobalFilter("");
-                }}
-              >
-                {t("filters.reset")}
-                <X aria-hidden />
-              </Button>
-            )}
-            <div className="ml-auto">
-              <DataTableViewOptions table={table} labels={columnLabels} />
-            </div>
           </div>
-
-          {selectedIds.length > 0 && (
-            <div className="flex flex-wrap items-center gap-3 border-b bg-primary/5 px-4 py-2 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1">
-              <span className="flex-1 text-sm font-medium tabular-nums">
-                {t("selectedCount", { count: selectedIds.length })}
-              </span>
-              <Button
-                type="button"
-                size="pos"
-                variant="outline"
-                className="rounded-xl bg-background"
-                onClick={() => setPrintIds(selectedIds)}
-              >
-                <Tag aria-hidden />
-                {t("printLabels", { count: selectedIds.length })}
-              </Button>
-              <Button
-                type="button"
-                size="pos"
-                variant="ghost"
-                className="rounded-xl"
-                onClick={() => setRowSelection({})}
-              >
-                {t("clearSelection")}
-              </Button>
-            </div>
+          <DataTableFacetedFilter
+            column={table.getColumn("category")}
+            title={t("filters.category")}
+            options={[
+              ...cats.map((c) => ({ value: c.id, label: catName.get(c.id) ?? c.name })),
+              { value: NO_CATEGORY, label: t("uncategorized") },
+            ]}
+          />
+          <DataTableFacetedFilter
+            column={table.getColumn("stock")}
+            title={t("filters.stock")}
+            options={STOCK_LEVELS.map((l) => ({
+              value: l,
+              label: t(`stockLevel.${l}`, { max: LOW_STOCK_MAX }),
+            }))}
+          />
+          {isFiltered && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="pos"
+              className="rounded-xl"
+              onClick={() => {
+                setColumnFilters([]);
+                setGlobalFilter("");
+              }}
+            >
+              {t("filters.reset")}
+              <X aria-hidden />
+            </Button>
           )}
+          <div className="ml-auto">
+            <DataTableViewOptions table={table} labels={columnLabels} />
+          </div>
+        </div>
 
-          <Table role="grid" aria-label={t("title")} className="min-w-[620px]">
-            <TableHeader className="bg-muted/40">
-              {table.getHeaderGroups().map((group) => (
-                <TableRow key={group.id} className="hover:bg-transparent">
-                  {group.headers.map((header) => (
-                    <TableHead
-                      key={header.id}
-                      scope="col"
-                      aria-sort={
-                        header.column.getIsSorted() === "asc"
-                          ? "ascending"
-                          : header.column.getIsSorted() === "desc"
-                            ? "descending"
-                            : undefined
-                      }
-                      className={cn(
-                        "h-12",
-                        header.column.id === "select" && "w-12 pl-4",
-                        (header.column.id === "price" || header.column.id === "cost") && "text-right",
-                        header.column.id === "actions" && "w-14 text-right pr-4",
-                      )}
-                    >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(header.column.columnDef.header, header.getContext())}
-                    </TableHead>
+        {selectedIds.length > 0 && (
+          <div className="flex flex-wrap items-center gap-3 border-b bg-primary/5 px-4 py-2 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1">
+            <span className="flex-1 text-sm font-medium tabular-nums">
+              {t("selectedCount", { count: selectedIds.length })}
+            </span>
+            <Button
+              type="button"
+              size="pos"
+              variant="outline"
+              className="rounded-xl bg-background"
+              onClick={() => setPrintIds(selectedIds)}
+            >
+              <Tag aria-hidden />
+              {t("printLabels", { count: selectedIds.length })}
+            </Button>
+            <Button
+              type="button"
+              size="pos"
+              variant="ghost"
+              className="rounded-xl"
+              onClick={() => setRowSelection({})}
+            >
+              {t("clearSelection")}
+            </Button>
+          </div>
+        )}
+
+        <Table role="grid" aria-label={t("title")} className="min-w-[620px]">
+          <TableHeader className="bg-muted/40">
+            {table.getHeaderGroups().map((group) => (
+              <TableRow key={group.id} className="hover:bg-transparent">
+                {group.headers.map((header) => (
+                  <TableHead
+                    key={header.id}
+                    scope="col"
+                    aria-sort={
+                      header.column.getIsSorted() === "asc"
+                        ? "ascending"
+                        : header.column.getIsSorted() === "desc"
+                          ? "descending"
+                          : undefined
+                    }
+                    className={cn(
+                      "h-12",
+                      header.column.id === "select" && "w-12 pl-4",
+                      (header.column.id === "price" || header.column.id === "cost") && "text-right",
+                      header.column.id === "actions" && "w-14 text-right pr-4",
+                    )}
+                  >
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(header.column.columnDef.header, header.getContext())}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {products.isLoading &&
+              Array.from({ length: SKELETON_ROWS }, (_, i) => (
+                <TableRow key={i} className="h-16 hover:bg-transparent" aria-hidden>
+                  {Array.from({ length: visibleColumns }, (_, j) => (
+                    <TableCell key={j}>
+                      <Skeleton className="h-5 w-full max-w-32" />
+                    </TableCell>
                   ))}
                 </TableRow>
               ))}
-            </TableHeader>
-            <TableBody>
-              {products.isLoading &&
-                Array.from({ length: SKELETON_ROWS }, (_, i) => (
-                  <TableRow key={i} className="h-16 hover:bg-transparent" aria-hidden>
-                    {Array.from({ length: visibleColumns }, (_, j) => (
-                      <TableCell key={j}>
-                        <Skeleton className="h-5 w-full max-w-32" />
+            {!products.isLoading &&
+              table.getRowModel().rows.map((row, i) => (
+                <TableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() ? "selected" : undefined}
+                  className={cn(
+                    "h-16 motion-safe:animate-in motion-safe:fade-in-0",
+                    editing?.id === row.original.id && "bg-primary/5",
+                  )}
+                  style={{ animationDelay: `${Math.min(i, 10) * 20}ms`, animationFillMode: "backwards" }}
+                >
+                  {row.getVisibleCells().map((cell) => {
+                    const id = cell.column.id;
+                    return (
+                      <TableCell
+                        key={cell.id}
+                        className={cn(
+                          id === "select" && "w-12 pl-4",
+                          id === "name" && "max-w-64",
+                          (id === "price" || id === "cost") && "text-right",
+                          id === "actions" && "w-14 text-right pr-4",
+                        )}
+                        onClick={id === "select" || id === "actions" ? stop : undefined}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              {!products.isLoading &&
-                table.getRowModel().rows.map((row, i) => (
-                  <TableRow
-                    key={row.id}
-                    data-state={row.getIsSelected() ? "selected" : undefined}
-                    className={cn(
-                      "h-16 motion-safe:animate-in motion-safe:fade-in-0",
-                      editing?.id === row.original.id && "bg-primary/5",
-                    )}
-                    style={{ animationDelay: `${Math.min(i, 10) * 20}ms`, animationFillMode: "backwards" }}
-                  >
-                    {row.getVisibleCells().map((cell) => {
-                      const id = cell.column.id;
-                      return (
-                        <TableCell
-                          key={cell.id}
-                          className={cn(
-                            id === "select" && "w-12 pl-4",
-                            id === "name" && "max-w-64",
-                            (id === "price" || id === "cost") && "text-right",
-                            id === "actions" && "w-14 text-right pr-4",
-                          )}
-                          onClick={id === "select" || id === "actions" ? stop : undefined}
-                        >
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                ))}
-              {!products.isLoading && table.getRowModel().rows.length === 0 && (
-                <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={visibleColumns} className="py-16">
-                    <div className="flex flex-col items-center gap-2 text-center text-muted-foreground">
-                      <span className="flex size-12 items-center justify-center rounded-full bg-muted">
-                        <Package aria-hidden className="size-6" />
-                      </span>
-                      <span>{data.length === 0 ? t("empty") : t("noMatch")}</span>
-                    </div>
-                  </TableCell>
+                    );
+                  })}
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
-          {products.isLoading && <p className="sr-only">{t("common:table.loading")}</p>}
-          <DataTablePagination table={table} />
-        </Card>
-        {canManage && (
-          <ProductFormPanel
-            key={editing?.id ?? `new-${formKey}`}
-            product={editing}
-            categories={cats}
-            onDone={() => {
-              setEditing(null);
-              setFormKey((k) => k + 1);
-            }}
-          />
-        )}
-      </div>
+              ))}
+            {!products.isLoading && table.getRowModel().rows.length === 0 && (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={visibleColumns} className="py-16">
+                  <div className="flex flex-col items-center gap-2 text-center text-muted-foreground">
+                    <span className="flex size-12 items-center justify-center rounded-full bg-muted">
+                      <Package aria-hidden className="size-6" />
+                    </span>
+                    <span>{data.length === 0 ? t("empty") : t("noMatch")}</span>
+                  </div>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+        {products.isLoading && <p className="sr-only">{t("common:table.loading")}</p>}
+        <DataTablePagination table={table} />
+      </Card>
+      {canManage && (
+        <>
+          {!sliderOpen && (
+            <Button
+              type="button"
+              variant="default"
+              aria-label={t("add")}
+              className="fixed top-1/2 right-0 z-30 h-auto min-h-28 w-12 -translate-y-1/2 flex-col gap-2 rounded-r-none rounded-l-xl px-0 py-4 shadow-lg"
+              onClick={() => openEditor(null)}
+            >
+              <Plus aria-hidden />
+              <span aria-hidden className="[writing-mode:vertical-rl] text-sm font-medium">
+                {t("add")}
+              </span>
+            </Button>
+          )}
+          <Sheet open={sliderOpen} onOpenChange={setSliderOpen}>
+            <SheetContent className="w-full gap-0 overflow-y-auto p-0 sm:max-w-md">
+              <SheetTitle className="sr-only">{editing ? t("edit") : t("add")}</SheetTitle>
+              <SheetDescription className="sr-only">{editing?.name ?? t("form.addHint")}</SheetDescription>
+              <ProductFormPanel
+                key={editing?.id ?? `new-${formKey}`}
+                product={editing}
+                categories={cats}
+                onDone={(why) => {
+                  if (why === "new" || (why === "saved" && editing === null)) {
+                    // Keep the slider open on a clean form so several products can be added in a row.
+                    setEditing(null);
+                    setFormKey((k) => k + 1);
+                    return;
+                  }
+                  setSliderOpen(false);
+                  setEditing(null);
+                  setFormKey((k) => k + 1);
+                }}
+              />
+            </SheetContent>
+          </Sheet>
+        </>
+      )}
 
       {shortBarcodesOpen && (
         <ShortBarcodesDialog

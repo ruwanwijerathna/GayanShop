@@ -36,14 +36,13 @@ beforeEach(() => {
 });
 
 describe("ProductsStockPage", () => {
-  it("has no Add product or Categories button in the page; Categories sits in Export & Import", async () => {
+  it("has no Categories button in the page header; Categories sits in Export & Import", async () => {
     renderWithProviders(
       <As perms={["PRODUCT_MANAGE", "DATA_EXPORT"]}>
         <ProductsStockPage />
       </As>,
     );
-    expect(await screen.findByRole("form", { name: "Add product" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Add product" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Add product" })).toBeInTheDocument(); // the slider's handle
     expect(screen.queryByRole("button", { name: /^Categories/ })).not.toBeInTheDocument();
 
     fireEvent.keyDown(screen.getByRole("button", { name: "Products & Stock tools" }), { key: "Enter" });
