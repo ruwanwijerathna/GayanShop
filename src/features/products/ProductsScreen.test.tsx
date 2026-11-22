@@ -170,7 +170,7 @@ describe("ProductsScreen", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Generate SKU" }));
     expect(within(dialog).getByLabelText(/^SKU/)).toHaveValue("200001");
     fireEvent.click(within(dialog).getByRole("button", { name: "Generate barcode" }));
-    expect(within(dialog).getByLabelText(/^Barcode/)).toHaveValue("2200000000019");
+    expect(within(dialog).getByLabelText(/^Barcode/)).toHaveValue("22000019");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(commands.createProduct).toHaveBeenCalledWith(
@@ -180,7 +180,7 @@ describe("ProductsScreen", () => {
         price: 12_050,
         default_cost: 8_000,
         sku: { mode: "manual", value: "200001" },
-        barcode: { mode: "manual", value: "2200000000019" },
+        barcode: { mode: "manual", value: "22000019" },
       }),
     );
   });

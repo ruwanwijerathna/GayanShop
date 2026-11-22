@@ -501,13 +501,14 @@ fn code_err(e: CodeError) -> AppError {
     match e {
         CodeError::BadDeviceCode => AppError::validation("DEVICE_CODE_INVALID", e.to_string()),
         CodeError::SequenceExhausted => AppError::validation("CODE_SEQUENCE_EXHAUSTED", e.to_string()),
-        CodeError::BadEan13 => AppError::validation("BARCODE_CHECK_DIGIT", e.to_string()),
+        CodeError::BadCheckDigit => AppError::validation("BARCODE_CHECK_DIGIT", e.to_string()),
     }
 }
 
 /// Next value of this counter's in-store code sequence (shared by SKU and barcode, so a product given both
 /// gets matching numbers). Never reuses a number already on a product, even if `sku_counters` was lost
-/// (reinstall, restore): the start point is the larger of the counter and the highest code in use.
+/// (reinstall, restore): the start point is the larger of the counter and the highest code in use, counting
+/// 8-digit in-store barcodes and the 13-digit ones generated before them.
 async fn next_code_seq(conn: &mut SqliteConnection, store_id: &str, digit: u8) -> AppResult<u32> {
     let counter: Option<i64> = sqlx::query_scalar("SELECT last_seq FROM sku_counters WHERE device_digit = ?1")
         .bind(i64::from(digit))
@@ -518,12 +519,16 @@ async fn next_code_seq(conn: &mut SqliteConnection, store_id: &str, digit: u8) -
            SELECT CAST(substr(sku, 2) AS INTEGER) AS seq FROM products
             WHERE store_id = ?1 AND length(sku) = 6 AND sku GLOB ?2
            UNION ALL
+           SELECT CAST(substr(barcode, 3, 5) AS INTEGER) FROM products
+            WHERE store_id = ?1 AND length(barcode) = 8 AND barcode GLOB ?3
+           UNION ALL
            SELECT CAST(substr(barcode, 3, 10) AS INTEGER) FROM products
-            WHERE store_id = ?1 AND length(barcode) = 13 AND barcode GLOB ?3
+            WHERE store_id = ?1 AND length(barcode) = 13 AND barcode GLOB ?4
          )",
     )
     .bind(store_id)
     .bind(format!("{digit}[0-9][0-9][0-9][0-9][0-9]"))
+    .bind(format!("2{digit}[0-9][0-9][0-9][0-9][0-9][0-9]"))
     .bind(format!("2{digit}[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]"))
     .fetch_one(&mut *conn)
     .await?;
@@ -567,7 +572,7 @@ async fn resolve_codes(
         loop {
             let seq = next_code_seq(conn, &ctx.store_id, digit).await?;
             let gen_sku = receipt_no::sku_code(digit, seq).map_err(code_err)?;
-            let gen_barcode = receipt_no::in_store_ean13(digit, u64::from(seq)).map_err(code_err)?;
+            let gen_barcode = receipt_no::in_store_barcode(digit, seq).map_err(code_err)?;
             let sku_clash = want_sku && sku_taken(conn, &ctx.store_id, &gen_sku, self_id).await?;
             let barcode_clash = want_barcode && barcode_taken(conn, &ctx.store_id, &gen_barcode, self_id).await?;
             if sku_clash || barcode_clash {

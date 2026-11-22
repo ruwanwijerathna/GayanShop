@@ -177,6 +177,7 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
             maxLength={which === "sku" ? 16 : 32}
             autoComplete="off"
             placeholder={which === "sku" ? t("form.skuPlaceholder") : t("form.barcodePlaceholder")}
+            aria-describedby={`product-${which}-hint`}
             onChange={(e) => {
               const val = e.target.value;
               set(which, val);
@@ -195,6 +196,9 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
             </Button>
           </WithTooltip>
         </div>
+        <p id={`product-${which}-hint`} className="text-sm text-muted-foreground">
+          {which === "sku" ? t("form.skuHint") : t("form.barcodeHint")}
+        </p>
       </Field>
     );
   };

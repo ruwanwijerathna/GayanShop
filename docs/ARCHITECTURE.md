@@ -1050,7 +1050,7 @@ export interface Product extends SyncMeta {
   name: string;                       // printable (receipt/label code page) — English/Latin
   name_si: string | null;             // optional Sinhala display name; screens only, never printed
   sku: string | null;
-  barcode: string | null;             // EAN-13/UPC or in-store prefix "2"
+  barcode: string | null;             // EAN-13/UPC, or in-store 8-digit "2{device}{seq:05}{check}" (older: 13-digit)
   category_id: UUID | null;
   default_cost: Money;                // fallback cost for ADJUSTMENTS layers; real cost lives on batch_items
   price: Money;
@@ -2611,7 +2611,7 @@ Sinhala/Tamil text: most printers lack those code pages. Render such lines as a 
 | Product name | `products.name` (Latin; `name_si` is never printed) | Up to 2 lines on both label sizes, with word wrap then ellipsis. Characters outside the printer's built-in font are replaced with `?`, and the preview warns. |
 | Attributes / size | `products.attributes`: `size` first, then the others, joined with ` · ` | One line, truncated with an ellipsis |
 | Selling price | `products.price` → **`Rs. 1,250`**, or `Rs. 1,250.50` when there are cents | Bold, the largest text on the label |
-| Barcode | `products.barcode`, else `products.sku` | Code128 or EAN-13 (rules below), with a human-readable line under the bars |
+| Barcode | `products.barcode` only; the SKU is never printed (decision #29) | Code128 or EAN-13 (rules below), with a human-readable line under the bars. No barcode ⇒ no bars and a `NO_CODE` warning. |
 
 **Reference layouts** (mm, before calibration offsets):
 
@@ -2649,14 +2649,14 @@ Sinhala/Tamil text: most printers lack those code pages. Render such lines as a 
 
 | Template | What fits at 203 dpi | Consequence |
 |---|---|---|
-| 2″×1″ (≈ 44.8 mm usable) | EAN-13 at a **3-dot** module (0.375 mm) is 113 modules ≈ 42.4 mm. Code128 for a 13-digit code at 2 dots ≈ 143 modules ≈ 35.8 mm. | Every code the shop uses fits. |
-| 1″×1″ (≈ 23.4 mm usable) | EAN-13 doesn't fit at any scannable size. Code128 at 2 dots fits **≤ 6 numeric digits** (68 + 20 quiet modules = 88 × 0.25 mm = 22.0 mm). | **3-up labels print the product's 6-digit in-store short code (`sku`) as Code128-C.** A 300 dpi printer allows up to 8 digits. |
+| 2″×1″ (≈ 44.8 mm usable) | EAN-13 at a **3-dot** module (0.375 mm) is 113 modules ≈ 42.4 mm. Code128 for a 13-digit code at 2 dots ≈ 143 modules ≈ 35.8 mm. The 8-digit in-store barcode is 79 + 20 quiet modules, at a 4-dot module. | Every code the shop uses fits. |
+| 1″×1″ / 30 × 16 mm (≈ 23.4–30 mm usable) | EAN-13 doesn't fit at any scannable size. Code128-C for the **8-digit in-store barcode** at 2 dots is 79 + 20 quiet modules = 99 × 0.25 mm ≈ 24.8 mm, which fits the 30 mm box. | **3-up labels print the product's barcode**: the 8-digit in-store code fits; a 13-digit manufacturer or older in-store code prints flagged `BARCODE_TOO_LONG`. |
 
 - **In-store codes, generated in Rust and unique offline:**
-  - Barcodes use the EAN-13 prefix `2` plus a store/device-unique number plus a check digit (for 2-up labels).
-  - SKUs are a 6-digit `{device_digit}{5-digit sequence}`, e.g. `104523` from T01. That gives each counter 100,000 codes, with no cross-counter collisions while offline.
-- **The scanner lookup** checks `barcode` first, then `sku`, so both kinds of label scan at the till.
-- If a product's code can't meet the rules on the chosen template, the preview shows a warning such as "barcode too long for 1″×1″; assign a short SKU". Printing is still allowed, but flagged.
+  - Barcodes are 8 digits, `2{device_digit}{5-digit sequence}{check}`, e.g. `21000423` for sequence 42 on T01 (decision #29). The `2` prefix marks in-store use; the check digit follows the EAN-8 rule, so a mistyped number almost never matches another product. Being 8 digits, a barcode can never equal a generated 6-digit SKU. Barcodes generated before 2026-11-22 are 13-digit EAN-13 (`2{device_digit}{10-digit sequence}{check}`); they stay valid, and the generator never reuses their numbers.
+  - SKUs are a 6-digit `{device_digit}{5-digit sequence}`, e.g. `104523` from T01: the cashier's typed shorthand for quick search, never printed on a label. SKUs and barcodes share one sequence per counter, which gives each counter 99,999 codes, with no cross-counter collisions while offline.
+- **The scanner lookup** checks `barcode` first, then `sku`, so a scanned label and a typed SKU both find the product at the till.
+- If a product's code can't meet the rules on the chosen template, the preview shows a warning (`BARCODE_TOO_LONG`, or `NO_CODE` when the product has no barcode). Printing is still allowed, but flagged; the fix is to generate a short in-store barcode for the product.
 
 **How a multi-column job prints:**
 - `print_labels({ template_id, items: [{product_id, copies}] })` expands copies into cells. The cells fill rows left to right. A partial last row leaves the remaining cells blank, or optionally fills them with copies of the last item.
@@ -3050,7 +3050,7 @@ cargo add --dev proptest
 | 6b | **Cashier discount ≤ 5%, combined per line (item + bill share)**, bill discounts apportioned pro-rata by largest remainder | Separate 5% caps for item and bill (which allows ~9.75% stacked) | Owner rule. Pro-rata shares keep batch margins exact, and future exchange values with them. |
 | 10 | **Dual-language UI (en/si), with receipts and labels in English** | Sinhala on receipts | Generic ESC/POS and TSPL printers have no Sinhala code page. Raster printing is Phase 5. |
 | 11 | **Customer phone optional, keyed by `UUIDv5(phone)`, never copied onto orders** | A mandatory customer; a phone snapshot on each order | Never slows a sale, merges cleanly offline, and makes PDPA erasure possible without touching immutable orders. |
-| 12 | **3-up 1″×1″ labels use a 6-digit Code128 SKU** | EAN-13 on 1″ labels | EAN-13 can't fit at a scannable module size on 1″ at 203 dpi. |
+| 12 | **~~3-up 1″×1″ labels use a 6-digit Code128 SKU~~ superseded by #29** | EAN-13 on 1″ labels | EAN-13 can't fit at a scannable module size on 1″ at 203 dpi. |
 | 13 | **Manual backup via `VACUUM INTO` on a read connection** | Copying `pos.db`; the SQLite backup API under the writer lock | A consistent snapshot without pausing the till. Raw copies of WAL databases can be torn. |
 | 14 | **TanStack Table v8 + Virtual, shadcn Charts (Recharts)** | TanStack Table v9 (newer); a heavier grid library | Owner choice. v8 is what the shadcn data-table pattern targets. Revisit v9 later. |
 | 7 | **The audit hash chain is per device**, and breaks are flagged, not rejected | A global chain; rejecting rows | A global chain forks under offline interleaving. Rejecting rows would lose evidence. |
@@ -3070,6 +3070,7 @@ cargo add --dev proptest
 | 26 | **Item-for-item exchange within 7 days of the sale; no cash refunds and no credit notes, ever. After 7 days a supervisor or owner PIN is required. Returned goods go straight back into stock** (owner-confirmed 2026-11-20; schema v4.5) | Cash refunds; credit notes; a restock-or-damage choice per item; blocking late exchanges outright | The owner wants goods to move, not money back. An exchange is a sale of the replacement goods credited with what the customer paid for the returned ones, so the ledger stays append-only and the drawer never pays out. The credit is per-unit with cumulative flooring, exact over any number of partial returns. A replacement worth less than the credit is refused, and a quick-sale or untracked line cannot be returned (no cost layer to restore). The window counts from the sale's business date and is `exchange.window_days`. Exchange orders and sales with returns can't be voided. Open for the owner: the footer wording, and the rule that the replacement must cost at least the returned value. |
 | 27 | **Cash drawer: Today / History tabs; guided close that shows over/short before confirming; any closed shift can be reprinted; cashiers see their own counter's history, `REPORT_SALES` sees all** (owner-confirmed 2026-11-20) | Everyone sees every counter; history behind `REPORT_SALES` only; a blind count that hides the expected cash | The shop is small and the owner wants cashiers to find their own shift's Z-report without a supervisor. Showing the expected figure while counting lets the cashier recount before closing, and the variance is still recorded and audited either way. No schema change; two new commands and one widened permission check. |
 | 28 | **Bills: one search box (receipt or phone, all dates), day shortcuts, one Filters dialog; cashiers see their own counter's bills and can reprint a receipt, `REPORT_SALES` sees all** (owner-confirmed 2026-11-21) | The old table with a period picker, three filters and two export buttons always on screen; Bills for `REPORT_SALES` only | A customer comes back with a receipt or says their phone number, and the cashier at the till must find the bill without a supervisor. Searching all dates and a single smart box removes the "which day was it?" step. No schema change; the query gained phone, payment and exchange filters, and `print_receipt_image` now audits a reprint when given the bill. |
+| 29 | **Labels print only the barcode, never the SKU; in-store barcodes are 8 digits, `2{device}{seq:05}{check}`** (owner-confirmed 2026-11-22) | The SKU as a label fallback (#12); 13-digit in-store EAN-13s; 6- or 7-digit codes | The SKU is the cashier's typed shorthand (`b400`, `red1`), not a scan code. A scratched sticker means typing the barcode by hand, and 8 digits are far quicker than 13. The EAN-8 check digit stops a mistyped number from selling a different product. 8 digits can never equal a 6-digit generated SKU, which a 6-digit barcode could. Code128-C encodes 8 digits in four pairs, so the barcode fits the 30 × 16 mm roll at a 2-dot module. Existing 13-digit barcodes stay valid and their numbers are never reused, but they are too wide for the 30 × 16 mm roll, and products without a barcode print no bars until one is generated. No schema change. |
 
 
 ---

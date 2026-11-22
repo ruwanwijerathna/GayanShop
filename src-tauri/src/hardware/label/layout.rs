@@ -96,7 +96,8 @@ pub struct LabelCell {
     pub name: String,
     pub attributes: String,
     pub price: String,
-    /// Candidate codes in order of preference: the barcode, then the short SKU.
+    /// The code to print: the product's barcode, or nothing (the SKU is never printed). Kept a list so a
+    /// custom layout can still offer alternatives; the first that fits wins.
     pub codes: Vec<String>,
 }
 

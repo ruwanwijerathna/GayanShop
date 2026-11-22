@@ -10,7 +10,7 @@ use gayanshop_lib::auth::guard::Actor;
 use gayanshop_lib::db::repo::WriteCtx;
 use gayanshop_lib::db::repo::categories::{self, CategoryInput};
 use gayanshop_lib::db::repo::products::{self, CodeChoice, ProductInput, ProductKind};
-use gayanshop_lib::domain::receipt_no::is_valid_ean13;
+use gayanshop_lib::domain::receipt_no::is_valid_ean8;
 use gayanshop_lib::error::AppError;
 use serde_json::Value;
 use sqlx::SqlitePool;
@@ -76,7 +76,9 @@ async fn generated_codes_are_device_prefixed_sequential_and_valid() {
     let a = products::create(&t.db, &ctx(), &owner(), &a, true).await.unwrap();
     assert_eq!(a.sku.as_deref(), Some("100001"));
     let a_barcode = a.barcode.clone().unwrap();
-    assert!(a_barcode.starts_with("210000000001") && is_valid_ean13(&a_barcode), "{a_barcode}");
+    // 8 digits: 2 + counter 1 + the SKU's sequence 00001 + EAN-8 check digit, never equal to a 6-digit SKU.
+    assert_eq!(a_barcode, "21000010");
+    assert!(is_valid_ean8(&a_barcode));
 
     let mut b = input("Red Bucket 10L", 45_000);
     b.sku = CodeChoice::Generate;
@@ -98,7 +100,7 @@ async fn generated_codes_are_device_prefixed_sequential_and_valid() {
     e.barcode = CodeChoice::Generate;
     let e = products::create(&t.db, &ctx(), &owner(), &e, true).await.unwrap();
     assert_eq!(e.sku.as_deref(), Some("100005"));
-    assert!(e.barcode.unwrap().starts_with("210000000005"));
+    assert!(e.barcode.unwrap().starts_with("2100005"));
 
     // Another counter uses its own digit (T02 → 2xxxxx), so offline counters never collide.
     let mut t02 = ctx();
@@ -159,7 +161,7 @@ async fn generated_in_store_barcodes_skip_ones_already_in_use() {
     let a = products::create(&t.db, &ctx(), &owner(), &a, true).await.unwrap();
     // Someone typed in the barcode the next sequence number would produce.
     let digit = gayanshop_lib::domain::receipt_no::device_digit("T01").unwrap();
-    let taken = gayanshop_lib::domain::receipt_no::in_store_ean13(digit, 2).unwrap();
+    let taken = gayanshop_lib::domain::receipt_no::in_store_barcode(digit, 2).unwrap();
     let squatter = ProductInput { barcode: manual(&taken), ..input("Squatter", 100) };
     products::create(&t.db, &ctx(), &owner(), &squatter, true).await.unwrap();
     let mut b = input("Red Bucket", 45_000);
@@ -167,6 +169,21 @@ async fn generated_in_store_barcodes_skip_ones_already_in_use() {
     let b = products::create(&t.db, &ctx(), &owner(), &b, true).await.unwrap();
     assert_ne!(b.barcode.as_deref(), Some(taken.as_str()), "skipped the code in use");
     assert_ne!(a.barcode, b.barcode);
+}
+
+#[tokio::test]
+async fn the_generator_never_reuses_a_number_from_an_older_13_digit_in_store_barcode() {
+    let t = open().await;
+    // A product from before the 8-digit format: 2 + counter 1 + 0000000007 + check.
+    let old = ProductInput { barcode: manual("2100000000074"), ..input("Old Bucket", 100) };
+    products::create(&t.db, &ctx(), &owner(), &old, true).await.unwrap();
+    exec(t.pool(), "DELETE FROM sku_counters").await;
+    let mut next = input("New Bucket", 45_000);
+    next.sku = CodeChoice::Generate;
+    next.barcode = CodeChoice::Generate;
+    let next = products::create(&t.db, &ctx(), &owner(), &next, true).await.unwrap();
+    assert_eq!(next.sku.as_deref(), Some("100008"));
+    assert!(next.barcode.as_deref().is_some_and(|b| b.len() == 8 && b.starts_with("2100008")), "{next:?}");
 }
 
 #[tokio::test]

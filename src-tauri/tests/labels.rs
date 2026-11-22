@@ -85,16 +85,18 @@ fn a_13_digit_code128_fits_a_2x1_label_at_two_dots() {
 }
 
 #[test]
-fn a_30x16_label_prints_the_six_digit_sku_as_code128_c() {
-    let p = layout::layout(
-        &builtin("three_up_30x16"),
-        &[cell("p1", "Ear Stud", &["2000123456782", "104523"])],
-        (0.0, 0.0),
-        false,
-    );
-    let b = p.labels[0].barcode.as_ref().unwrap();
-    assert_eq!((b.symbology, b.data.as_str(), b.module_dots, b.fits), (Symbology::Code128, "104523", 2, true));
-    assert!(p.warnings.is_empty(), "the EAN didn't fit, the SKU did: no warning");
+fn the_8_digit_in_store_barcode_prints_as_code128_c_on_both_rolls() {
+    // START C, 21, 00, 04, 23, check, STOP = 6 × 11 + 13 = 79 modules, 99 with the quiet zones.
+    for (id, module) in [("three_up_30x16", 2), ("two_up_50x25", 4)] {
+        let p = layout::layout(&builtin(id), &[cell("p1", "Ear Stud", &["21000423"])], (0.0, 0.0), false);
+        let b = p.labels[0].barcode.as_ref().unwrap();
+        assert_eq!(
+            (b.symbology, b.data.as_str(), b.module_dots, b.fits),
+            (Symbology::Code128, "21000423", module, true)
+        );
+        assert_eq!(b.widths.iter().map(|w| u32::from(*w)).sum::<u32>() + 2 * layout::QUIET_MODULES, 99);
+        assert!(p.warnings.is_empty(), "{id}: {:?}", codes(&p));
+    }
 }
 
 #[test]
@@ -232,7 +234,7 @@ fn tspl_golden_two_up() {
 #[test]
 fn tspl_golden_three_up() {
     let t = builtin("three_up_30x16");
-    let cells = vec![cell("p1", "Silver Ear Stud Round 6mm", &["2000123456782", "104523"]); 3];
+    let cells = vec![cell("p1", "Silver Ear Stud Round 6mm", &["21000423"]); 3];
     let p = layout::layout(&t, &cells, (0.0, 0.0), false);
     let bytes = label::emit(&p, &tspl_profile());
     assert!(String::from_utf8(bytes.clone()).unwrap().contains("\"128\""));
@@ -292,7 +294,7 @@ async fn the_test_label_is_a_sample_sticker_row_and_the_alignment_job_stays_an_o
     .await
     .unwrap();
     let text = String::from_utf8(bytes).unwrap();
-    assert!(text.contains("\"Rs. 1,250\"") && text.contains("BARCODE") && text.contains("\"100001\""));
+    assert!(text.contains("\"Rs. 1,250\"") && text.contains("BARCODE") && text.contains("\"21000010\""));
     let outline = label::render_job(t.pool(), "test", &serde_json::json!({"template_id": "three_up_30x16"}), &profile)
         .await
         .unwrap();
@@ -442,6 +444,38 @@ async fn a_job_previews_from_products_and_validates_copies() {
     }
     let empty = LabelJob { items: vec![], ..job.clone() };
     assert_eq!(validation(label::preview(t.pool(), &t.s.store_id, &empty).await.unwrap_err()), "LABEL_JOB_EMPTY");
+}
+
+#[tokio::test]
+async fn labels_print_only_the_barcode_never_the_sku() {
+    let t = till().await;
+    let job = |id: &str| LabelJob {
+        template_id: "three_up_30x16".into(),
+        items: vec![LabelJobItem { product_id: id.to_owned(), copies: 1 }],
+        fill_last_row: false,
+    };
+    // A product with a barcode prints that barcode.
+    let coded = product_with_codes(&t, "Ear Stud", 45_000, Some("21000423")).await;
+    let p = label::preview(t.pool(), &t.s.store_id, &job(&coded)).await.unwrap();
+    assert_eq!(p.labels[0].barcode.as_ref().map(|b| b.data.as_str()), Some("21000423"));
+    assert!(p.warnings.is_empty(), "{:?}", codes(&p));
+
+    // A product with only a SKU prints no bars at all and says so; its SKU is never printed.
+    let bare = product_with_codes(&t, "Hair Clip", 15_000, None).await;
+    let sku: String =
+        sqlx::query_scalar("SELECT sku FROM products WHERE id = ?1").bind(&bare).fetch_one(t.pool()).await.unwrap();
+    let p = label::preview(t.pool(), &t.s.store_id, &job(&bare)).await.unwrap();
+    assert!(p.labels[0].barcode.is_none());
+    assert_eq!(codes(&p), vec!["NO_CODE"]);
+    let payload = serde_json::json!({
+        "template_id": "three_up_30x16",
+        "items": [{ "product_id": bare, "copies": 1 }],
+        "store_id": t.s.store_id,
+    });
+    let bytes =
+        String::from_utf8(label::render_job(t.pool(), "labels", &payload, &tspl_profile()).await.unwrap()).unwrap();
+    assert!(!bytes.contains("BARCODE") && !bytes.contains(&sku), "{bytes}");
+    assert!(bytes.contains("\"Rs. 150\""), "the sticker still prints its shop name and price: {bytes}");
 }
 
 fn validation(e: gayanshop_lib::error::AppError) -> String {

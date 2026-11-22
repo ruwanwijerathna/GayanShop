@@ -213,7 +213,6 @@ struct ProductRow {
     id: String,
     name: String,
     price: i64,
-    sku: Option<String>,
     barcode: Option<String>,
     attributes: String,
 }
@@ -240,7 +239,7 @@ pub async fn cells(pool: &SqlitePool, store_id: &str, job: &LabelJob) -> AppResu
     let mut out = Vec::new();
     for item in &job.items {
         let p: ProductRow = sqlx::query_as(
-            "SELECT id, name, price, sku, barcode, attributes FROM products
+            "SELECT id, name, price, barcode, attributes FROM products
              WHERE id = ?1 AND store_id = ?2 AND deleted_at IS NULL",
         )
         .bind(&item.product_id)
@@ -254,7 +253,9 @@ pub async fn cells(pool: &SqlitePool, store_id: &str, job: &LabelJob) -> AppResu
             name: p.name,
             attributes: attributes_line(&p.attributes),
             price: format_label_price(p.price),
-            codes: [p.barcode, p.sku].into_iter().flatten().collect(),
+            // Only the barcode is printed. The SKU is the cashier's typed shorthand and never goes on a
+            // sticker; a product without a barcode lays out with a `NO_CODE` warning.
+            codes: p.barcode.into_iter().collect(),
         };
         for _ in 0..item.copies {
             out.push(cell.clone());
@@ -273,7 +274,7 @@ pub fn for_printer(mut t: LabelTemplate, profile: Option<&LabelPrinterProfile>) 
 }
 
 /// One sample sticker on the given roll, as this counter prints it (Settings → Label printer preview): the
-/// store's real name and printer calibration, a made-up price and a 6-digit code.
+/// store's real name and printer calibration, a made-up price and an 8-digit in-store barcode.
 pub async fn sample_preview(pool: &SqlitePool, template_id: &str) -> AppResult<LabelPreview> {
     let profile = load_profile(pool).await?;
     sample_layout(pool, template_id, profile.as_ref()).await
@@ -292,7 +293,7 @@ async fn sample_layout(
         name: "Sample item".into(),
         attributes: String::new(),
         price: format_label_price(125_000),
-        codes: vec!["100001".into()],
+        codes: vec!["21000010".into()],
     };
     let offset = profile.map_or((0.0, 0.0), LabelPrinterProfile::offset);
     Ok(layout::layout(&t, &vec![cell; usize::from(t.columns)], offset, false))

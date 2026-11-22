@@ -38,6 +38,8 @@
     "barcode": "Barcode",
     "skuPlaceholder": "Leave blank (None) or type SKU",
     "barcodePlaceholder": "Leave blank (None) or type/scan barcode",
+    "skuHint": "Cashier shorthand for quick search. Never printed on labels.",
+    "barcodeHint": "Printed on labels. Generate makes a short 8-digit code that is quick to type if a scan fails.",
     "generateSku": "Generate SKU",
     "generateBarcode": "Generate barcode",
     "codeMode": "How to set the {{field}}",
