@@ -47,17 +47,9 @@ fn method_label(m: &str) -> &'static str {
     }
 }
 
-#[allow(dead_code)]
 fn header(p: &mut EscPos, store: &str) {
     let half = p.columns() / 2;
     p.align(Align::Center).bold(true).double(true).wrapped(store, half).double(false).bold(false);
-}
-
-/// The sale receipt (doc §6.4): lines, totals, payments, masked customer phone, QR of the order id, the
-/// store footer, then the cut. Never the drawer kick (that's its own job, sent first).
-#[allow(dead_code)]
-pub fn receipt(r: &ReceiptData, layout: Layout, tz: Tz, logo: Option<&Logo>) -> Vec<u8> {
-    receipt_with_banner(r, layout, tz, logo, None)
 }
 
 /// [`receipt`] with an optional bold line under the store name (the sample receipt marks itself as not a sale).

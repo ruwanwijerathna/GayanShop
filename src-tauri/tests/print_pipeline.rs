@@ -181,6 +181,20 @@ fn contains(hay: &[u8], needle: &[u8]) -> bool {
     hay.windows(needle.len()).any(|w| w == needle)
 }
 
+/// The webview's picture of a receipt, as `print_receipt_image` queues it: 64 × 3 dots.
+fn image_receipt() -> serde_json::Value {
+    serde_json::json!({ "image": { "width": 64, "height": 3, "data": vec![0x55_u8; 24] } })
+}
+
+/// One raster band of [`image_receipt`] (`GS v 0`, 8 bytes wide, 3 rows).
+const IMAGE_BAND: [u8; 8] = [0x1D, b'v', b'0', 0, 8, 0, 3, 0];
+
+async fn enqueue_image_receipt(t: &Till) {
+    let mut tx = t.t.db.write().await.unwrap();
+    print_jobs::enqueue(tx.conn(), &t.ctx(), PrintKind::Receipt, None, &image_receipt()).await.unwrap();
+    tx.commit().await.unwrap();
+}
+
 fn cash_sale(t: &Till, token: &str, product: &str) -> CheckoutInput {
     let _ = t;
     let mut input = cart(token, vec![line(product, 25_000, 1)], vec![cash(25_000, Some(30_000))]);
@@ -193,7 +207,7 @@ async fn sell_now(t: &Till, input: &CheckoutInput) {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_cash_sale_kicks_the_drawer_then_prints_the_receipt() {
+async fn a_cash_sale_kicks_the_drawer_and_the_drawn_receipt_prints_through_the_same_queue() {
     let t = till().await;
     t.login(CASHIER, CASHIER_PIN).await;
     configure(&t).await;
@@ -205,25 +219,20 @@ async fn a_cash_sale_kicks_the_drawer_then_prints_the_receipt() {
     hub.notify();
     wait_until("both jobs done", || async { status_count(&t, "done").await == 2 }).await;
 
+    // The sale's own receipt job is the old text receipt: it completes without sending a byte, because the
+    // webview draws the receipt (Sinhala included) and prints it as a picture. Only the kick goes out.
+    assert_eq!(fake.sent(), vec![drawer_kick(DrawerPin::Pin2)], "the kick, on its own; no text receipt");
+    assert_eq!(fake.sends.load(Ordering::SeqCst), 1);
+
+    // The webview's picture goes through the same one-at-a-time queue: the raster, then the cut.
+    enqueue_image_receipt(&t).await;
+    hub.notify();
+    wait_until("the drawn receipt prints", || async { status_count(&t, "done").await == 3 }).await;
     let sent = fake.sent();
     assert_eq!(sent.len(), 2);
-    assert_eq!(sent[0], drawer_kick(DrawerPin::Pin2), "the kick goes first, on its own");
-    let receipt = &sent[1];
-    for needle in [
-        "GayanShop".as_bytes(),
-        b"T01-20261108-0001",
-        b"Mug",
-        b"Rs. 250.00",
-        b"Change",
-        b"Customer: 07X XXX X567",
-        b"Exchange within 7 days.",
-    ] {
-        assert!(contains(receipt, needle), "receipt lacks {:?}", String::from_utf8_lossy(needle));
-    }
-    assert!(!contains(receipt, b"771234567"), "the phone is masked");
-    assert!(contains(receipt, &[0x1D, b'k', 73]), "Code128 barcode of receipt_no");
-    assert!(contains(receipt, b"Powered By BraceFrame - (076 9950 199)"), "BraceFrame branding");
-    assert!(receipt.ends_with(&[0x1B, b'd', 4, 0x1D, b'V', 1]), "feed then partial cut");
+    assert!(contains(&sent[1], &IMAGE_BAND), "one raster band of the picture");
+    assert!(contains(&sent[1], &[0x1D, b'V', 1]), "then the partial cut");
+    assert!(!contains(&sent[1], &drawer_kick(DrawerPin::Pin2)), "the receipt never carries the kick");
     assert_eq!(hub.health().unwrap().health, PrinterHealth::Ready);
     assert_eq!(fake.max_in_flight.load(Ordering::SeqCst), 1, "one call at a time");
 }
@@ -244,9 +253,15 @@ async fn with_the_drawer_off_a_cash_sale_prints_the_receipt_and_sends_no_kick() 
     hub.notify();
     wait_until("both jobs done", || async { status_count(&t, "done").await == 2 }).await;
 
+    // No kick, and the sale's text receipt job sends nothing: the printer stays silent until the webview's
+    // picture of the receipt arrives, which carries no kick either.
+    assert!(fake.sent().is_empty(), "nothing reaches the printer from the sale itself");
+    enqueue_image_receipt(&t).await;
+    hub.notify();
+    wait_until("the drawn receipt prints", || async { status_count(&t, "done").await == 3 }).await;
     let sent = fake.sent();
-    assert_eq!(sent.len(), 1, "only the receipt reaches the printer");
-    assert!(contains(&sent[0], b"Mug"));
+    assert_eq!(sent.len(), 1);
+    assert!(contains(&sent[0], &IMAGE_BAND));
     assert!(!contains(&sent[0], &drawer_kick(DrawerPin::Pin2)), "no kick bytes anywhere");
     assert_eq!(status_count(&t, "failed").await, 0);
 }
@@ -316,12 +331,12 @@ async fn write_errors_retry_with_backoff_then_fail_until_retried() {
     let hub = hub(&t, &fake).await;
     {
         let mut tx = t.t.db.write().await.unwrap();
-        print_jobs::enqueue(tx.conn(), &t.ctx(), PrintKind::Test, None, &serde_json::json!({})).await.unwrap();
+        print_jobs::enqueue(tx.conn(), &t.ctx(), PrintKind::Receipt, None, &image_receipt()).await.unwrap();
         tx.commit().await.unwrap();
     }
     hub.notify();
     wait_until("the job fails", || async { status_count(&t, "failed").await == 1 }).await;
-    assert_eq!(jobs(&t).await, vec![("test".into(), "failed".into(), 5, Some("WRITE_FAILED".into()))]);
+    assert_eq!(jobs(&t).await, vec![("receipt".into(), "failed".into(), 5, Some("WRITE_FAILED".into()))]);
     assert_eq!(fake.sends.load(Ordering::SeqCst), 5, "five attempts");
     let health = hub.health().unwrap();
     assert_eq!((health.health, health.fault.as_deref()), (PrinterHealth::Fault, Some("WRITE_FAILED")));
@@ -332,7 +347,7 @@ async fn write_errors_retry_with_backoff_then_fail_until_retried() {
     hub.notify();
     wait_until("the retried job prints", || async { status_count(&t, "done").await == 1 }).await;
     let page = &fake.sent()[0];
-    assert!(contains(page, b"SAMPLE RECEIPT") && page.ends_with(&drawer_kick(DrawerPin::Pin2)));
+    assert!(contains(page, &IMAGE_BAND), "the same picture, re-rendered from the stored payload");
     assert_eq!(hub.health().unwrap().health, PrinterHealth::Ready);
 }
 
