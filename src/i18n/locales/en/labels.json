@@ -66,7 +66,7 @@
     "alignTest": "Print alignment test",
     "alignTestHint": "Prints only the outline of each label, to check the gaps and margins.",
     "autoPrint": "Print labels when stock arrives",
-    "autoPrintHint": "Prints one sticker for every unit you receive: a quick purchase or a late item. Uses the roll chosen below.",
+    "autoPrintHint": "Prints one sticker for every unit that arrives: a new product's opening stock, a restock, a quick purchase or a late item. Uses the sticker size chosen above, saved with the printer.",
     "dpiHint": "Resolution of the printer head. Use 300 dpi if the printed sticker looks larger than the preview.",
     "calibrationSaved": "Roll settings saved.",
     "calibrationReset": "Roll settings reset to the sticker size defaults."

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSession } from "@/app/session";
 import {
   commands,
-  type LabelPrinterProfile,
+  type LabelPrinterProfile_Serialize,
   type LabelPreview_Serialize as LabelPreview,
   type LabelTemplate_Serialize as LabelTemplate,
   type Perm,
@@ -42,7 +42,7 @@ const TEMPLATE = {
 
 const TWO_UP = { ...TEMPLATE, id: "two_up_50x25", name: "2-up", columns: 2 } as unknown as LabelTemplate;
 
-const PROFILE: LabelPrinterProfile = {
+const PROFILE: LabelPrinterProfile_Serialize = {
   transport: { kind: "network", host: "192.168.1.60", port: 9100 },
   language: "zpl",
   dpi: 300,
@@ -51,6 +51,7 @@ const PROFILE: LabelPrinterProfile = {
   offset_x_mm: 0.5,
   offset_y_mm: -0.25,
   auto_print_on_receive: true,
+  default_template_id: "three_up_30x16",
 };
 
 const SAMPLE = {
@@ -140,6 +141,7 @@ describe("LabelSettings", () => {
         offset_x_mm: 0,
         offset_y_mm: 0,
         auto_print_on_receive: false,
+        default_template_id: "three_up_30x16",
       }),
     );
   });
@@ -161,6 +163,25 @@ describe("LabelSettings", () => {
       expect(commands.setLabelPrinterProfile).toHaveBeenCalledWith(
         expect.objectContaining({ auto_print_on_receive: true }),
       ),
+    );
+  });
+
+  it("opens on the saved sticker size and saves the chosen one as the automatic-printing default", async () => {
+    vi.mocked(commands.labelTemplates).mockImplementation(() => ok([TWO_UP, TEMPLATE]));
+    vi.mocked(commands.labelPrinterProfile).mockImplementation(() => ok(PROFILE));
+    renderWithProviders(
+      <As>
+        <LabelSettings />
+      </As>,
+    );
+    expect(await screen.findByRole("radio", { name: /30 x 16 mm, 3 across/ })).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: /50 x 25 mm, 2 across/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save label printer" }));
+    await waitFor(() =>
+      expect(commands.setLabelPrinterProfile).toHaveBeenCalledWith({
+        ...PROFILE,
+        default_template_id: "two_up_50x25",
+      }),
     );
   });
 

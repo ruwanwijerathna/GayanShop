@@ -40,6 +40,10 @@ pub async fn set_label_printer_profile(
 ) -> AppResult<()> {
     let actor = require(&state.auth, state.clock.as_ref(), Perm::SETTINGS_MANAGE, "labels", None)?;
     profile.validate()?;
+    if let Some(id) = &profile.default_template_id {
+        // An unknown roll is refused here, so automatic printing never queues a job that can't lay out.
+        label::template(&state.db.pool, id).await?;
+    }
     let ctx = write_ctx(&state)?;
     let key = profile_key(LABEL_PRINTER);
     let before = label::load_profile(&state.db.pool).await?;

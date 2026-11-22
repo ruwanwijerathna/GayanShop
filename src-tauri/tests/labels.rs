@@ -201,6 +201,7 @@ fn tspl_profile() -> LabelPrinterProfile {
         offset_x_mm: 0.0,
         offset_y_mm: 0.0,
         auto_print_on_receive: false,
+        default_template_id: None,
     }
 }
 
@@ -306,10 +307,92 @@ fn a_300_dpi_head_gets_larger_font_cells_so_text_is_centred_and_fitted_correctly
     let p = layout::layout(&t, &[cell("p1", "Sandal", &["104523"])], (0.0, 0.0), false);
     let store = &p.labels[0].texts[0];
     let (cw, _) = layout::font_dots(store.font_size, 300);
-    let char_w = if store.bold { cw + cw / 4 } else { cw };
-    let text_w = i64::try_from(store.lines[0].chars().count()).unwrap() * char_w;
+    // Fixed pitch; bold is the same line struck again one dot to the right.
+    let text_w = i64::try_from(store.lines[0].chars().count()).unwrap() * cw + i64::from(store.bold);
     let expected = layout::dots(store.x_mm, 300) + (layout::dots(store.w_mm, 300) - text_w) / 2;
     assert_eq!(layout::text_x_dots(store, &store.lines[0], 300), expected);
+}
+
+/// The `x` of every `TEXT` line of a TSPL job, with its font and text.
+fn tspl_texts(bytes: &[u8]) -> Vec<(i64, u8, String)> {
+    String::from_utf8(bytes.to_vec())
+        .unwrap()
+        .lines()
+        .filter_map(|l| l.strip_prefix("TEXT "))
+        .map(|rest| {
+            let parts: Vec<&str> = rest.splitn(7, ',').collect();
+            let font = parts[2].trim_matches('"').parse().unwrap();
+            (parts[0].parse().unwrap(), font, parts[6].trim_matches('"').to_owned())
+        })
+        .collect()
+}
+
+#[test]
+fn centred_tspl_text_prints_centred_on_its_sticker_like_the_preview() {
+    for id in ["two_up_50x25", "three_up_30x16"] {
+        let t = builtin(id);
+        let cells = vec![cell("p1", "Sandal", &["104523"]); usize::from(t.columns)];
+        let p = layout::layout(&t, &cells, (0.0, 0.0), false);
+        let printed = tspl_texts(&label::emit(&p, &tspl_profile()));
+        for l in &p.labels {
+            for text in &l.texts {
+                let line = &text.lines[0];
+                let (x, font, _) = printed
+                    .iter()
+                    .find(|(x, _, s)| s == line && *x == layout::text_x_dots(text, line, 203))
+                    .cloned()
+                    .unwrap_or_else(|| panic!("{id}: {line} not printed at its laid-out x"));
+                // TSPL fonts are fixed pitch: each character is the font cell wide, bold adds the 1-dot restrike.
+                let (cw, _) = layout::font_dots(font, 203);
+                let width = i64::try_from(line.chars().count()).unwrap() * cw + i64::from(text.bold);
+                let centre_twice = 2 * x + width;
+                let box_centre_twice = 2 * layout::dots(text.x_mm, 203) + layout::dots(text.w_mm, 203);
+                assert!(
+                    (centre_twice - box_centre_twice).abs() <= 2,
+                    "{id}: {line} is centred at {centre_twice}/2, its sticker at {box_centre_twice}/2"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn font_steps_above_five_print_and_measure_as_tspl_font_five() {
+    assert_eq!(layout::font_dots(5, 203), (32, 48));
+    assert_eq!(layout::font_dots(6, 203), layout::font_dots(5, 203));
+    assert_eq!(layout::tspl_font(6), 5);
+    assert_eq!(layout::tspl_font(0), 1);
+    // The 50 x 25 price (step 6, bold) is font "5" and has room for "Rs. 12,500": 400 dots / 32 = 12 chars.
+    let t = builtin("two_up_50x25");
+    let c = LabelCell { price: "Rs. 12,500".into(), ..cell("p1", "Sandal", &["104523"]) };
+    let p = layout::layout(&t, &[c], (0.0, 0.0), false);
+    assert!(p.warnings.is_empty(), "{:?}", codes(&p));
+    let printed = tspl_texts(&label::emit(&p, &tspl_profile()));
+    assert!(printed.iter().any(|(_, f, s)| *f == 5 && s == "Rs. 12,500"), "{printed:?}");
+}
+
+#[test]
+fn zpl_aligns_every_text_line_inside_its_box() {
+    let t = builtin("two_up_50x25");
+    let p = layout::layout(&t, &[cell("p1", "Sandal", &["104523"])], (0.0, 0.0), false);
+    let zpl = LabelPrinterProfile { language: LabelLanguage::Zpl, ..tspl_profile() };
+    let text = String::from_utf8(label::emit(&p, &zpl)).unwrap();
+    for line in ["Sale Center", "Rs. 1,250"] {
+        assert!(text.contains(&format!(",1,0,C^FD{line}^FS")), "{line}: {text}");
+    }
+}
+
+#[test]
+fn a_saved_default_sticker_size_round_trips_and_old_profiles_have_none() {
+    let with = LabelPrinterProfile { default_template_id: Some("three_up_30x16".into()), ..tspl_profile() };
+    assert!(with.validate().is_ok());
+    let json = serde_json::to_value(&with).unwrap();
+    assert_eq!(serde_json::from_value::<LabelPrinterProfile>(json).unwrap(), with);
+    let mut old = serde_json::to_value(tspl_profile()).unwrap();
+    old.as_object_mut().unwrap().remove("default_template_id");
+    assert_eq!(serde_json::from_value::<LabelPrinterProfile>(old).unwrap().default_template_id, None);
+    let blank = LabelPrinterProfile { default_template_id: Some("  ".into()), ..tspl_profile() };
+    assert_eq!(validation(blank.validate().unwrap_err()), "LABEL_PROFILE_INVALID");
 }
 
 #[test]

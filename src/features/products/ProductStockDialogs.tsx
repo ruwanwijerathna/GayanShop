@@ -9,6 +9,7 @@ import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { SelectField } from "@/components/common/SelectField";
+import { useAutoPrintLabels } from "@/components/labels/useAutoPrintLabels";
 import { StockErrorText, useApprovedStock } from "@/components/stock/useApprovedStock";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -107,6 +108,7 @@ function NoteField({
 export function RestockDialog({ product, onClose }: { product: Product; onClose: () => void }) {
   const { t } = useTranslation(["products", "inventory"]);
   const adjust = useAdjustStock();
+  const autoPrint = useAutoPrintLabels();
   const { run, dialog } = useApprovedStock();
   const [qty, setQty] = useState("");
   const [note, setNote] = useState("");
@@ -125,6 +127,7 @@ export function RestockDialog({ product, onClose }: { product: Product; onClose:
       adjust.mutateAsync({ input, approvalId }).then(() => {
         playCue("complete");
         toast.success(t("products:stock.restock.done", { count: units, name: product.name }));
+        autoPrint([{ product_id: product.id, qty: units }]);
         onClose();
       }),
     );

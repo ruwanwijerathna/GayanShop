@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useSession } from "@/app/session";
+import { useAutoPrintLabels } from "@/components/labels/useAutoPrintLabels";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -69,6 +70,7 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
   const save = useSaveProduct();
   const remove = useDeleteProduct();
   const adjust = useAdjustStock();
+  const autoPrint = useAutoPrintLabels();
   const saveCategory = useSaveCategory();
   const products = useProducts();
   const status = useAppStatus();
@@ -140,6 +142,8 @@ function ProductForm({ product, categories, open, onClose, onSaved }: ProductFor
             },
             approvalId: null,
           });
+          // The opening stock is in: one sticker per unit when "Print labels when stock arrives" is on.
+          autoPrint([{ product_id: saved.id, qty: qtyNumber }]);
         } catch {
           // A refused stock entry does not roll back the saved product.
         }

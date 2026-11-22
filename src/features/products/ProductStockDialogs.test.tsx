@@ -1,6 +1,10 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { commands, type Product_Serialize as Product } from "@/db/bindings";
+import {
+  commands,
+  type LabelPrinterProfile_Serialize,
+  type Product_Serialize as Product,
+} from "@/db/bindings";
 import { chooseOption, err, ok, renderWithProviders } from "@/test/render";
 import { AdjustStockDialog, RestockDialog } from "./ProductStockDialogs";
 
@@ -11,8 +15,22 @@ vi.mock("@/db/bindings", () => ({
     recordStockCount: vi.fn(),
     listLoginStaff: vi.fn(),
     requestApproval: vi.fn(),
+    labelPrinterProfile: vi.fn(),
+    printLabels: vi.fn(),
   },
 }));
+
+const LABEL_PRINTER: LabelPrinterProfile_Serialize = {
+  transport: { kind: "spooler", printer_name: "Xprinter XP-365B" },
+  language: "tspl",
+  dpi: 203,
+  darkness: 8,
+  speed: 4,
+  offset_x_mm: 0,
+  offset_y_mm: 0,
+  auto_print_on_receive: true,
+  default_template_id: "three_up_30x16",
+};
 
 const POT = {
   id: "pot",
@@ -42,6 +60,9 @@ beforeEach(() => {
     ok([{ id: "sup", display_name: "Kamal", role_name: "Supervisor" }]),
   );
   vi.mocked(commands.requestApproval).mockImplementation(() => ok({ approval_id: "appr", expires_at: "" }));
+  vi.mocked(commands.labelPrinterProfile).mockImplementation(() => ok(null));
+  vi.mocked(commands.printLabels).mockReset();
+  vi.mocked(commands.printLabels).mockImplementation(() => ok({} as never));
 });
 
 describe("RestockDialog", () => {
@@ -61,6 +82,35 @@ describe("RestockDialog", () => {
       ),
     );
     await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it("prints one sticker per unit received on the saved sticker size when auto-print is on", async () => {
+    vi.mocked(commands.labelPrinterProfile).mockImplementation(() => ok(LABEL_PRINTER));
+    vi.mocked(commands.adjustStock).mockImplementation(() => ok({ ...CHANGE, qty_delta: 5 }));
+    renderWithProviders(<RestockDialog product={POT} onClose={vi.fn()} />);
+    await waitFor(() => expect(commands.labelPrinterProfile).toHaveBeenCalled());
+    fireEvent.change(await screen.findByLabelText("Units received"), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add 5 to stock" }));
+    await waitFor(() =>
+      expect(commands.printLabels).toHaveBeenCalledWith(
+        { template_id: "three_up_30x16", items: [{ product_id: "pot", copies: 5 }], fill_last_row: false },
+        null,
+      ),
+    );
+  });
+
+  it("prints nothing when auto-print is off", async () => {
+    vi.mocked(commands.labelPrinterProfile).mockImplementation(() =>
+      ok({ ...LABEL_PRINTER, auto_print_on_receive: false }),
+    );
+    vi.mocked(commands.adjustStock).mockImplementation(() => ok({ ...CHANGE, qty_delta: 5 }));
+    const onClose = vi.fn();
+    renderWithProviders(<RestockDialog product={POT} onClose={onClose} />);
+    await waitFor(() => expect(commands.labelPrinterProfile).toHaveBeenCalled());
+    fireEvent.change(await screen.findByLabelText("Units received"), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add 5 to stock" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(commands.printLabels).not.toHaveBeenCalled();
   });
 
   it("refuses zero, negative and non-numeric units", async () => {

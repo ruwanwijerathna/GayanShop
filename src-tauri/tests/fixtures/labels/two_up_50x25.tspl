@@ -5,21 +5,21 @@ REFERENCE 0,0
 DENSITY 8
 SPEED 4
 CLS
-TEXT 47,32,"4",0,1,1,"Sale Center"
-TEXT 48,32,"4",0,1,1,"Sale Center"
-TEXT 32,144,"5",0,1,1,"Rs. 1,250"
-TEXT 33,144,"5",0,1,1,"Rs. 1,250"
+TEXT 79,32,"4",0,1,1,"Sale Center"
+TEXT 80,32,"4",0,1,1,"Sale Center"
+TEXT 67,144,"5",0,1,1,"Rs. 1,250"
+TEXT 68,144,"5",0,1,1,"Rs. 1,250"
 BARCODE 69,68,"EAN13",36,1,0,3,3,"200012345678"
-TEXT 463,32,"4",0,1,1,"Sale Center"
-TEXT 464,32,"4",0,1,1,"Sale Center"
-TEXT 448,144,"5",0,1,1,"Rs. 1,250"
-TEXT 449,144,"5",0,1,1,"Rs. 1,250"
+TEXT 495,32,"4",0,1,1,"Sale Center"
+TEXT 496,32,"4",0,1,1,"Sale Center"
+TEXT 483,144,"5",0,1,1,"Rs. 1,250"
+TEXT 484,144,"5",0,1,1,"Rs. 1,250"
 BARCODE 485,68,"EAN13",36,1,0,3,3,"200012345678"
 PRINT 2
 CLS
-TEXT 47,32,"4",0,1,1,"Sale Center"
-TEXT 48,32,"4",0,1,1,"Sale Center"
-TEXT 72,144,"5",0,1,1,"Rs. 450"
-TEXT 73,144,"5",0,1,1,"Rs. 450"
+TEXT 79,32,"4",0,1,1,"Sale Center"
+TEXT 80,32,"4",0,1,1,"Sale Center"
+TEXT 99,144,"5",0,1,1,"Rs. 450"
+TEXT 100,144,"5",0,1,1,"Rs. 450"
 BARCODE 76,68,"128",36,1,0,4,4,"104523"
 PRINT 1

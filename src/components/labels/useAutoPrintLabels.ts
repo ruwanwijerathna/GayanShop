@@ -1,5 +1,6 @@
 // "Print labels when stock arrives" (Settings → Label printer). Each receiving flow hands over what arrived;
-// when the switch is on this queues one sticker per unit on the roll chosen in Settings. The stock is already
+// when the switch is on this queues one sticker per unit on the sticker size saved in Settings (or, for a
+// profile saved before that existed, the roll this counter used last). The stock is already
 // in by then, so a print failure only warns and never undoes the receipt.
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
@@ -22,7 +23,10 @@ export function useAutoPrintLabels(): (arrived: ArrivedStock[]) => void {
   const profile = useLabelPrinterProfile();
   const print = usePrintLabels();
   const enabled = profile.data?.auto_print_on_receive === true;
-  const { mutate } = print;
+  const defaultTemplate = profile.data?.default_template_id ?? null;
+  // `mutateAsync`, not `mutate` with callbacks: the receiving dialog closes straight after, and a mutation's
+  // per-call callbacks are dropped once its component unmounts, so the queued / failed toast would vanish.
+  const { mutateAsync } = print;
 
   return useCallback(
     (arrived: ArrivedStock[]) => {
@@ -37,19 +41,17 @@ export function useAutoPrintLabels(): (arrived: ArrivedStock[]) => void {
         copies: Math.min(qty, MAX_COPIES),
       }));
       const count = items.reduce((n, i) => n + i.copies, 0);
-      mutate(
-        { job: { template_id: lastTemplate(), items, fill_last_row: false }, approvalId: null },
-        {
-          onSuccess: () => toast.success(t("auto.queued", { count })),
-          onError: (e) =>
-            toast.error(
-              e instanceof CommandError
-                ? `${t("auto.failed")} ${translateError(i18n.t, e.error)}`
-                : t("auto.failed"),
-            ),
-        },
+      const job = { template_id: defaultTemplate ?? lastTemplate(), items, fill_last_row: false };
+      mutateAsync({ job, approvalId: null }).then(
+        () => toast.success(t("auto.queued", { count })),
+        (e: unknown) =>
+          toast.error(
+            e instanceof CommandError
+              ? `${t("auto.failed")} ${translateError(i18n.t, e.error)}`
+              : t("auto.failed"),
+          ),
       );
     },
-    [enabled, mutate, t, i18n],
+    [enabled, defaultTemplate, mutateAsync, t, i18n],
   );
 }

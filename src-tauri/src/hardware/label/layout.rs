@@ -198,7 +198,8 @@ pub fn mm_text(mm: f64) -> String {
     format!("{:.1}", (mm * 10.0).round() / 10.0)
 }
 
-/// The built-in font cell for a font step, in dots (TSPL fonts "1"–"4": 8×12, 12×20, 16×24, 24×32).
+/// The built-in font cell for a font step, in dots: the TSPL fixed-pitch fonts "1"–"5" (at 203 dpi 8×12,
+/// 12×20, 16×24, 24×32, 32×48). Font "5" is the largest, so every step above 5 prints, and measures, as 5.
 pub fn font_dots(step: u8, dpi: u16) -> (i64, i64) {
     // The printers' built-in bitmap fonts are drawn in dots, so the same font is larger in dots on a 300 dpi
     // head (TSPL font table); either way each step measures about the same on the label.
@@ -208,7 +209,6 @@ pub fn font_dots(step: u8, dpi: u16) -> (i64, i64) {
             2 => (16, 28),
             3 => (24, 32),
             4 => (32, 48),
-            5 => (40, 60),
             _ => (48, 72),
         }
     } else {
@@ -217,10 +217,21 @@ pub fn font_dots(step: u8, dpi: u16) -> (i64, i64) {
             2 => (12, 20),
             3 => (16, 24),
             4 => (24, 32),
-            5 => (28, 40),
             _ => (32, 48),
         }
     }
+}
+
+/// The TSPL font number a step prints with (`TEXT x,y,"n",...`).
+pub fn tspl_font(step: u8) -> u8 {
+    step.clamp(1, 5)
+}
+
+/// How wide a line prints in a built-in font, in dots: fixed pitch, and a bold line is the same line drawn
+/// again one dot to the right, so it is one dot wider (not a wider font).
+pub fn text_width_dots(chars: usize, step: u8, bold: bool, dpi: u16) -> i64 {
+    let (cw, _) = font_dots(step, dpi);
+    i64::try_from(chars).unwrap_or(0) * cw + i64::from(bold)
 }
 
 pub fn roll_width_mm(t: &LabelTemplate) -> f64 {
@@ -298,9 +309,11 @@ pub fn fit_lines(s: &str, max: usize, lines: usize) -> (Vec<String>, bool) {
     (out, !all_used)
 }
 
-fn chars_per_line(w_mm: f64, step: u8, dpi: u16) -> usize {
+/// The most characters that fit a box, measured exactly as `text_x_dots` centres them.
+fn chars_per_line(w_mm: f64, step: u8, bold: bool, dpi: u16) -> usize {
     let (cw, _) = font_dots(step, dpi);
-    usize::try_from((dots(w_mm, dpi) / cw).max(1)).unwrap_or(1)
+    let room = dots(w_mm, dpi) - i64::from(bold);
+    usize::try_from((room / cw).max(1)).unwrap_or(1)
 }
 
 /// Choose the code and module size for a barcode box: the first candidate that fits at ≥ 2 dots, the largest
@@ -385,7 +398,7 @@ fn place_label(
         if lost {
             warn("TEXT_NOT_PRINTABLE");
         }
-        let per_line = chars_per_line(e.w_mm, e.font_size, t.dpi);
+        let per_line = chars_per_line(e.w_mm, e.font_size, e.bold, t.dpi);
         let (lines, cut) = if max_lines > 1 {
             fit_lines(&clean, per_line, max_lines)
         } else {
@@ -445,11 +458,10 @@ pub fn layout(t: &LabelTemplate, cells: &[LabelCell], offset_mm: (f64, f64), fil
     }
 }
 
-/// The x position (dots) of a text line inside its box, by alignment and built-in font width.
+/// The x position (dots) of a text line inside its box, by alignment and its printed width (TSPL; ZPL lets
+/// the printer align inside a `^FB` box).
 pub fn text_x_dots(t: &PlacedText, line: &str, dpi: u16) -> i64 {
-    let (cw, _) = font_dots(t.font_size, dpi);
-    let char_w = if t.bold { cw + cw / 4 } else { cw };
-    let text = i64::try_from(line.chars().count()).unwrap_or(0) * char_w;
+    let text = text_width_dots(line.chars().count(), t.font_size, t.bold, dpi);
     let x = dots(t.x_mm, dpi);
     let w = dots(t.w_mm, dpi);
     match t.align {

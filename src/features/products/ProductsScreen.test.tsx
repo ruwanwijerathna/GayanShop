@@ -25,6 +25,8 @@ vi.mock("@/db/bindings", () => ({
     appStatus: vi.fn(),
     adjustStock: vi.fn(),
     stockMovements: vi.fn(),
+    labelPrinterProfile: vi.fn(),
+    printLabels: vi.fn(),
   },
 }));
 
@@ -88,6 +90,9 @@ beforeEach(() => {
   vi.mocked(commands.appStatus).mockImplementation(() => ok({ device_code: "T02" } as never));
   vi.mocked(commands.deleteCategory).mockReset();
   vi.mocked(commands.adjustStock).mockReset();
+  vi.mocked(commands.labelPrinterProfile).mockImplementation(() => ok(null));
+  vi.mocked(commands.printLabels).mockReset();
+  vi.mocked(commands.printLabels).mockImplementation(() => ok({} as never));
 });
 
 const grid = () => screen.getByRole("grid", { name: "Products", hidden: true });
@@ -285,6 +290,67 @@ describe("ProductsScreen", () => {
       },
       null,
     );
+  });
+
+  it("prints the opening stock's stickers on the saved sticker size when auto-print is on", async () => {
+    vi.mocked(commands.labelPrinterProfile).mockImplementation(() =>
+      ok({
+        transport: { kind: "spooler", printer_name: "Xprinter XP-365B" },
+        language: "tspl",
+        dpi: 203,
+        darkness: 8,
+        speed: 4,
+        offset_x_mm: 0,
+        offset_y_mm: 0,
+        auto_print_on_receive: true,
+        default_template_id: "two_up_50x25",
+      }),
+    );
+    vi.mocked(commands.createProduct).mockImplementation(() =>
+      ok(product({ id: "soap1", name: "Sunlight Soap" })),
+    );
+    vi.mocked(commands.adjustStock).mockImplementation(() => ok({} as never));
+    renderAs(MANAGER);
+    fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
+    const dialog = await screen.findByRole("dialog");
+    await waitFor(() => expect(commands.labelPrinterProfile).toHaveBeenCalled());
+    fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Sunlight Soap" } });
+    fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "150" } });
+    fireEvent.change(within(dialog).getByLabelText("Quantity"), { target: { value: "12" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(commands.printLabels).toHaveBeenCalledWith(
+        { template_id: "two_up_50x25", items: [{ product_id: "soap1", copies: 12 }], fill_last_row: false },
+        null,
+      ),
+    );
+  });
+
+  it("prints no stickers for a new product without stock", async () => {
+    vi.mocked(commands.labelPrinterProfile).mockImplementation(() =>
+      ok({
+        transport: { kind: "spooler", printer_name: "Xprinter XP-365B" },
+        language: "tspl",
+        dpi: 203,
+        darkness: 8,
+        speed: 4,
+        offset_x_mm: 0,
+        offset_y_mm: 0,
+        auto_print_on_receive: true,
+        default_template_id: "two_up_50x25",
+      }),
+    );
+    vi.mocked(commands.createProduct).mockImplementation(() => ok(product({ id: "n0", name: "Comb" })));
+    renderAs(MANAGER);
+    fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
+    const dialog = await screen.findByRole("dialog");
+    await waitFor(() => expect(commands.labelPrinterProfile).toHaveBeenCalled());
+    fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Comb" } });
+    fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "90" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(commands.adjustStock).not.toHaveBeenCalled();
+    expect(commands.printLabels).not.toHaveBeenCalled();
   });
 
   it("keeps the dialog open with the field error for a bad amount, without calling Rust", async () => {

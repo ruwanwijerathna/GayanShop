@@ -145,6 +145,7 @@ const AUTO_PROFILE = {
   offset_x_mm: 0,
   offset_y_mm: 0,
   auto_print_on_receive: true,
+  default_template_id: null,
 } as const;
 
 async function openDraft() {

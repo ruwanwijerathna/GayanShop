@@ -1666,6 +1666,11 @@ export type LabelPrinterProfile_Deserialize = {
 	 *  Profiles saved before this field existed keep it off.
 	 */
 	auto_print_on_receive?: boolean,
+	/**
+	 *  The sticker roll chosen in Settings → Label printer: what "print when stock arrives" prints on.
+	 *  `None` (profiles saved before this field existed) falls back to the roll this counter used last.
+	 */
+	default_template_id?: string | null,
 };
 
 export type LabelPrinterProfile_Serialize = {
@@ -1685,6 +1690,11 @@ export type LabelPrinterProfile_Serialize = {
 	 *  Profiles saved before this field existed keep it off.
 	 */
 	auto_print_on_receive: boolean,
+	/**
+	 *  The sticker roll chosen in Settings → Label printer: what "print when stock arrives" prints on.
+	 *  `None` (profiles saved before this field existed) falls back to the roll this counter used last.
+	 */
+	default_template_id: string | null,
 };
 
 export type LabelTemplate = LabelTemplate_Serialize | LabelTemplate_Deserialize;

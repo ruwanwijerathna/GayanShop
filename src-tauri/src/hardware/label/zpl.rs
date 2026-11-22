@@ -21,20 +21,16 @@ fn label_body(l: &PlacedLabel, dpi: u16, label_w_mm: f64) -> String {
         let w = if t.bold { cw + cw / 4 } else { cw };
         let box_w = layout::dots(t.w_mm, dpi);
         let box_x = layout::dots(t.x_mm, dpi);
+        let justify = match t.align {
+            layout::Align::Left => 'L',
+            layout::Align::Center => 'C',
+            layout::Align::Right => 'R',
+        };
         for (i, line) in t.lines.iter().enumerate() {
             let y = layout::text_y_dots(t, i, dpi);
-            match t.align {
-                layout::Align::Center => {
-                    out.push_str(&format!("^FO{box_x},{y}^A0N,{ch},{w}^FB{box_w},1,0,C^FD{line}^FS\r\n"));
-                }
-                layout::Align::Right => {
-                    out.push_str(&format!("^FO{box_x},{y}^A0N,{ch},{w}^FB{box_w},1,0,R^FD{line}^FS\r\n"));
-                }
-                layout::Align::Left => {
-                    let x = layout::text_x_dots(t, line, dpi);
-                    out.push_str(&format!("^FO{x},{y}^A0N,{ch},{w}^FD{line}^FS\r\n"));
-                }
-            }
+            // `^A0` is proportional, so its width is the printer's to measure: every line is aligned inside its
+            // box by a one-line `^FB` rather than by an estimate.
+            out.push_str(&format!("^FO{box_x},{y}^A0N,{ch},{w}^FB{box_w},1,0,{justify}^FD{line}^FS\r\n"));
         }
     }
     if let Some(b) = &l.barcode {

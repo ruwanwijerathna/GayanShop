@@ -47,6 +47,10 @@ pub struct LabelPrinterProfile {
     /// Profiles saved before this field existed keep it off.
     #[serde(default)]
     pub auto_print_on_receive: bool,
+    /// The sticker roll chosen in Settings → Label printer: what "print when stock arrives" prints on.
+    /// `None` (profiles saved before this field existed) falls back to the roll this counter used last.
+    #[serde(default)]
+    pub default_template_id: Option<String>,
 }
 
 /// The shop name printed at the top of every sticker.
@@ -67,6 +71,11 @@ impl LabelPrinterProfile {
         }
         if !(-10.0..=10.0).contains(&self.offset_x_mm) || !(-10.0..=10.0).contains(&self.offset_y_mm) {
             return bad("offset");
+        }
+        if let Some(id) = &self.default_template_id
+            && (id.trim().is_empty() || id.len() > 64)
+        {
+            return bad("default template");
         }
         Ok(())
     }

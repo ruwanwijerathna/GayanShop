@@ -58,6 +58,8 @@ export interface LabelPrinterForm {
   offsetX: string;
   offsetY: string;
   autoPrint: boolean;
+  /** The sticker size automatic printing uses (the roll picked under "Sticker size"). */
+  defaultTemplate: string | null;
 }
 
 export function toForm(p: LabelPrinterProfile | null): LabelPrinterForm {
@@ -81,6 +83,7 @@ export function toForm(p: LabelPrinterProfile | null): LabelPrinterForm {
     offsetX: String(p?.offset_x_mm ?? 0),
     offsetY: String(p?.offset_y_mm ?? 0),
     autoPrint: p?.auto_print_on_receive ?? false,
+    defaultTemplate: p?.default_template_id ?? null,
   };
 }
 
@@ -111,6 +114,7 @@ export function toProfile(f: LabelPrinterForm): LabelPrinterProfile | null {
     offset_x_mm: offsetX,
     offset_y_mm: offsetY,
     auto_print_on_receive: f.autoPrint,
+    default_template_id: f.defaultTemplate,
   };
 }
 
@@ -158,7 +162,7 @@ function LabelCard({
   const sample = useLabelSamplePrint();
   const [form, setForm] = useState(() => toForm(profile));
   const [invalid, setInvalid] = useState(false);
-  const [chosen, setChosen] = useState(lastTemplate);
+  const [chosen, setChosen] = useState(() => profile?.default_template_id ?? lastTemplate());
   const selected = templates.find((tpl) => tpl.id === chosen) ?? templates[0];
   const set = <K extends keyof LabelPrinterForm>(k: K, v: LabelPrinterForm[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -169,7 +173,8 @@ function LabelCard({
   };
 
   const savePrinter = () => {
-    const p = toProfile(form);
+    // The roll shown under "Sticker size" is saved as this printer's default, for automatic printing.
+    const p = toProfile({ ...form, defaultTemplate: selected?.id ?? null });
     setInvalid(p === null);
     if (p) save.mutate(p, { onSuccess: () => toast.success(t("settings.saved")) });
   };
