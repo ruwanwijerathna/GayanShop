@@ -17,7 +17,9 @@ import {
   type CategoryInput,
   type CountInput,
   type DamageInput,
+  type LabelBitmap,
   type LabelJob,
+  type LabelPrintJob_Deserialize as LabelPrintJob,
   type LabelPrinterProfile,
   type Logo,
   type ReceiptImage,
@@ -690,10 +692,6 @@ export function useLabelSamplePreview(templateId: string | null) {
   });
 }
 
-export function useLabelSamplePrint() {
-  return useLabelMutation((templateId: string) => unwrap(commands.labelSamplePrint(templateId)));
-}
-
 export function useLabelAlignmentTest() {
   return useLabelMutation((templateId: string) => unwrap(commands.labelAlignmentTest(templateId)));
 }
@@ -708,11 +706,17 @@ export function useLabelPreview(job: LabelJob | null) {
   });
 }
 
-export function usePrintLabels() {
-  return useLabelMutation(({ job, approvalId }: { job: LabelJob; approvalId: string | null }) =>
-    unwrap(commands.printLabels(job, approvalId)),
-  );
-}
+/**
+ * The label printing calls `components/labels/stickerPrint` makes around drawing the stickers (decision #30):
+ * plain promises, so printing can finish after the dialog that started it has closed.
+ */
+export const labelPrinting = {
+  layout: (job: LabelJob) => unwrap(commands.labelPreview(job)),
+  sampleLayout: (templateId: string) => unwrap(commands.labelSamplePreview(templateId)),
+  print: (job: LabelPrintJob, approvalId: string | null) => unwrap(commands.printLabels(job, approvalId)),
+  printSample: (templateId: string, image: LabelBitmap) =>
+    unwrap(commands.labelSamplePrint(templateId, image)),
+};
 
 // ───────── stock operations (doc §3.1, §5) ─────────
 

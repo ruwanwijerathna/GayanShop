@@ -1,6 +1,7 @@
 // "Print labels" (doc §7.4), from the product list or a received batch: choose a template, adjust copies,
-// see exactly what will print (the Rust layout as SVG, with warnings), then queue it for the label printer.
-// `LABEL_PRINT` is approvable, so a cashier can print with a supervisor's PIN.
+// see exactly what will print (the sticker drawn by the same HTML/CSS template that becomes the printer's
+// picture, with warnings), then queue it for the label printer. `LABEL_PRINT` is approvable, so a cashier
+// can print with a supervisor's PIN.
 import { Minus, Plus, Printer } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -11,10 +12,11 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import type { LabelJob } from "@/db/bindings";
 import { CommandError } from "@/db/client";
-import { useLabelPreview, useLabelTemplates, usePrintLabels } from "@/db/hooks";
+import { useLabelPreview, useLabelTemplates } from "@/db/hooks";
 import { translateError } from "@/i18n";
 import { cn } from "@/lib/utils";
-import { LabelPreviewSvg } from "./LabelPreviewSvg";
+import { LabelStickerPreview } from "./LabelSticker";
+import { printLabelJob } from "./stickerPrint";
 import { lastTemplate, rememberTemplate } from "./templatePreference";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -85,7 +87,8 @@ function CopiesStepper({
 export function PrintLabelsDialog({ items, onClose }: { items: LabelItem[]; onClose: () => void }) {
   const { t, i18n } = useTranslation("labels");
   const templates = useLabelTemplates();
-  const print = usePrintLabels();
+  const [printing, setPrinting] = useState(false);
+  const [printError, setPrintError] = useState<CommandError | null>(null);
   const [templateId, setTemplateId] = useState(lastTemplate);
   const [copies, setCopies] = useState<Record<string, string>>(() =>
     Object.fromEntries(items.map((i) => [i.product_id, String(i.copies)])),
@@ -122,26 +125,28 @@ export function PrintLabelsDialog({ items, onClose }: { items: LabelItem[]; onCl
   const send = (approvalId: string | null) => {
     if (!job) return;
     rememberTemplate(templateId);
-    print.mutate(
-      { job, approvalId },
-      {
-        onSuccess: () => {
-          toast.success(t("print.queued", { count: total }));
-          onClose();
-        },
-        onError: (e) => {
-          if (e instanceof CommandError && e.needsApproval) setApproving(true);
-        },
+    setPrinting(true);
+    setPrintError(null);
+    printLabelJob(job, approvalId).then(
+      (count) => {
+        setPrinting(false);
+        toast.success(t("print.queued", { count }));
+        onClose();
+      },
+      (e: unknown) => {
+        setPrinting(false);
+        if (e instanceof CommandError && e.needsApproval) setApproving(true);
+        else if (e instanceof CommandError) setPrintError(e);
+        else toast.error(t("print.failed"));
       },
     );
   };
 
   const error =
-    (print.error instanceof CommandError &&
-      !print.error.needsApproval &&
-      translateError(i18n.t, print.error.error)) ||
+    (printError && translateError(i18n.t, printError.error)) ||
     (one.error instanceof CommandError && translateError(i18n.t, one.error.error)) ||
     null;
+  const shown = one.data?.stickers[0];
 
   const setCount = (id: string, v: string) => setCopies((c) => ({ ...c, [id]: v }));
   const invalid = (id: string) => (parsed.find((p) => p.product_id === id)?.copies ?? 0) < 1;
@@ -245,12 +250,13 @@ export function PrintLabelsDialog({ items, onClose }: { items: LabelItem[]; onCl
 
             <aside className="flex flex-col gap-3">
               <div className="flex flex-col items-center gap-3 rounded-xl bg-muted p-4">
-                {one.data ? (
-                  <LabelPreviewSvg
-                    single
-                    preview={one.data}
+                {one.data && shown ? (
+                  <LabelStickerPreview
+                    layout={one.data}
+                    sticker={shown}
+                    width={256}
                     title={t("print.preview")}
-                    className="w-full rounded-md bg-white text-black shadow-md"
+                    className="rounded-md bg-white shadow-md"
                   />
                 ) : (
                   <div className="h-28 w-full animate-pulse rounded-md bg-background/60 motion-reduce:animate-none" />
@@ -296,12 +302,7 @@ export function PrintLabelsDialog({ items, onClose }: { items: LabelItem[]; onCl
               <Button type="button" size="pos" variant="outline" onClick={onClose}>
                 {t("common:actions.cancel")}
               </Button>
-              <Button
-                type="button"
-                size="pos-lg"
-                disabled={!job || print.isPending}
-                onClick={() => send(null)}
-              >
+              <Button type="button" size="pos-lg" disabled={!job || printing} onClick={() => send(null)}>
                 <Printer aria-hidden />
                 {t("print.submit", { count: total })}
               </Button>

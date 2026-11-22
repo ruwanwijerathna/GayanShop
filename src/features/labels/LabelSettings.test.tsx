@@ -5,11 +5,11 @@ import { useSession } from "@/app/session";
 import {
   commands,
   type LabelPrinterProfile_Serialize,
-  type LabelPreview_Serialize as LabelPreview,
   type LabelTemplate_Serialize as LabelTemplate,
   type Perm,
 } from "@/db/bindings";
 import { chooseOption, ok, renderWithProviders, session } from "@/test/render";
+import { STICKER, stickerLayout } from "@/test/labels";
 import { LabelSettings, parseMm, toForm, toProfile } from "./LabelSettings";
 
 vi.mock("@/db/bindings", () => ({
@@ -23,6 +23,11 @@ vi.mock("@/db/bindings", () => ({
     labelSamplePrint: vi.fn(),
     listSystemPrinters: vi.fn(),
   },
+}));
+
+vi.mock("@/lib/labelImage", () => ({
+  labelBitmapFromElement: (_node: HTMLElement, width: number, height: number) =>
+    Promise.resolve({ width, height, data: [] }),
 }));
 
 const TEMPLATE = {
@@ -54,39 +59,11 @@ const PROFILE: LabelPrinterProfile_Serialize = {
   default_template_id: "three_up_30x16",
 };
 
-const SAMPLE = {
+const SAMPLE = stickerLayout({
   template_id: "three_up_30x16",
-  dpi: 203,
-  columns: 3,
-  rows: 1,
-  roll_width_mm: 97,
-  label_w_mm: 30,
-  label_h_mm: 16,
-  row_gap_mm: 3,
-  labels: [
-    {
-      row: 0,
-      col: 0,
-      product_id: "sample",
-      x_mm: 1.5,
-      texts: [
-        {
-          kind: "price",
-          x_mm: 2.5,
-          y_mm: 10.4,
-          w_mm: 28,
-          h_mm: 4,
-          font_size: 4,
-          bold: true,
-          align: "center",
-          lines: ["Rs. 1,250"],
-        },
-      ],
-      barcode: null,
-    },
-  ],
-  warnings: [],
-} as unknown as LabelPreview;
+  items: [{ product_id: "sample", copies: 1 }],
+  fill_last_row: false,
+});
 
 const MANAGER: Perm[] = ["SETTINGS_MANAGE"];
 
@@ -227,7 +204,9 @@ describe("LabelSettings", () => {
     expect(localStorage.getItem("gayanshop.label.template")).toBe("three_up_30x16");
 
     fireEvent.click(screen.getByRole("button", { name: "Print Test Label" }));
-    await waitFor(() => expect(commands.labelSamplePrint).toHaveBeenCalledWith("three_up_30x16"));
+    await waitFor(() =>
+      expect(commands.labelSamplePrint).toHaveBeenCalledWith("three_up_30x16", { ...STICKER, data: [] }),
+    );
     expect(commands.labelAlignmentTest).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Advanced Calibration" }));

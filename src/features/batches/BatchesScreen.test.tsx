@@ -7,6 +7,7 @@ import {
   type ProductSummary_Serialize as ProductSummary,
 } from "@/db/bindings";
 import { chooseOption, err, ok, renderWithProviders } from "@/test/render";
+import { drawnJob, stickerLayout } from "@/test/labels";
 import { parseOptionalMoney, parseQty } from "./batchForm";
 import { BatchesScreen } from "./BatchesScreen";
 
@@ -27,7 +28,13 @@ vi.mock("@/db/bindings", () => ({
     searchProducts: vi.fn(),
     labelPrinterProfile: vi.fn(),
     printLabels: vi.fn(),
+    labelPreview: vi.fn(),
   },
+}));
+
+vi.mock("@/lib/labelImage", () => ({
+  labelBitmapFromElement: (_node: HTMLElement, width: number, height: number) =>
+    Promise.resolve({ width, height, data: [] }),
 }));
 
 function batch(over: Partial<Batch>): Batch {
@@ -133,7 +140,8 @@ beforeEach(() => {
   vi.mocked(commands.labelPrinterProfile).mockReset();
   vi.mocked(commands.labelPrinterProfile).mockImplementation(() => ok(null));
   vi.mocked(commands.printLabels).mockReset();
-  vi.mocked(commands.printLabels).mockImplementation(() => ok({} as never));
+  vi.mocked(commands.printLabels).mockImplementation(() => ok(null));
+  vi.mocked(commands.labelPreview).mockImplementation((job) => ok(stickerLayout(job)));
 });
 
 const AUTO_PROFILE = {
@@ -228,7 +236,11 @@ describe("BatchesScreen", () => {
     fireEvent.click(within(detail).getByRole("button", { name: "Yes, receive" }));
     await waitFor(() =>
       expect(commands.printLabels).toHaveBeenCalledWith(
-        { template_id: "two_up_50x25", items: [{ product_id: "p1", copies: 10 }], fill_last_row: false },
+        drawnJob({
+          template_id: "two_up_50x25",
+          items: [{ product_id: "p1", copies: 10 }],
+          fill_last_row: false,
+        }),
         null,
       ),
     );

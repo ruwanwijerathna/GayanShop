@@ -13,6 +13,7 @@
     "warnings": "Warnings",
     "submit": "Print {{count}} label(s)",
     "queued": "{{count}} label(s) sent to the label printer.",
+    "failed": "The stickers could not be drawn for printing. Try again.",
     "open": "Print labels",
     "copies": "Copies",
     "fewer": "Fewer copies of {{name}}",
@@ -24,9 +25,7 @@
   },
   "warnings": {
     "BARCODE_TOO_LONG": "{{name}}: the code is too long for this label. Assign a short SKU or use the 2\" x 1\" roll.",
-    "NO_CODE": "{{name}} has no barcode: the label has no bars. Add or generate one in Products.",
-    "TEXT_NOT_PRINTABLE": "{{name}}: some letters can't be printed (labels are English only) and show as ?.",
-    "TEXT_TRUNCATED": "{{name}}: the price doesn't fit and was shortened."
+    "NO_CODE": "{{name}} has no barcode: the label has no bars. Add or generate one in Products."
   },
   "settings": {
     "printerTitle": "Label printer",

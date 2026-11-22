@@ -1,6 +1,7 @@
-//! Barcode labels (doc §7.4): templates and the label printer (Settings → Labels, `SETTINGS_MANAGE`), the
-//! WYSIWYG preview, and printing (`LABEL_PRINT`, audited once per job). Printing goes through the label
-//! printer's own print worker, so a jammed label printer never touches the till.
+//! Barcode labels (doc §7.4, decision #30): templates and the label printer (Settings → Labels,
+//! `SETTINGS_MANAGE`), the sticker layout the webview draws (and shows as the preview), and printing the
+//! pictures it draws (`LABEL_PRINT`, audited once per job). Printing goes through the label printer's own
+//! print worker, so a jammed label printer never touches the till.
 
 use serde_json::json;
 use tauri::{AppHandle, State};
@@ -12,8 +13,9 @@ use crate::db::repo::print_jobs::{self, PrintKind};
 use crate::db::settings;
 use crate::domain::permissions::Perm;
 use crate::error::AppResult;
-use crate::hardware::label::layout::{LabelPreview, LabelTemplate};
-use crate::hardware::label::{self, LABEL_PRINTER, LabelJob, LabelPrinterProfile, TemplateCalibration};
+use crate::hardware::label::bitmap::LabelBitmap;
+use crate::hardware::label::layout::{LabelLayout, LabelTemplate};
+use crate::hardware::label::{self, LABEL_PRINTER, LabelJob, LabelPrintJob, LabelPrinterProfile, TemplateCalibration};
 use crate::hardware::printer::profile_key;
 use crate::state::AppState;
 
@@ -88,38 +90,36 @@ pub async fn calibrate_label_template(
     Ok(t)
 }
 
-/// The Rust-computed layout the UI draws as SVG: exactly what will print, with warnings.
+/// Each product's sticker in printer dots, which the webview draws: the preview, and the picture it prints.
 #[tauri::command]
 #[specta::specta]
-pub async fn label_preview(state: State<'_, AppState>, job: LabelJob) -> AppResult<LabelPreview> {
+pub async fn label_preview(state: State<'_, AppState>, job: LabelJob) -> AppResult<LabelLayout> {
     // Seeing the layout needs only a login; printing it needs LABEL_PRINT (approvable).
     super::session(&state)?;
     label::preview(&state.db.pool, &store_id(&state)?, &job).await
 }
 
-/// One sample sticker row on a roll, for the Settings preview.
+/// One sample sticker on a roll, for the Settings preview and "Print test label".
 #[tauri::command]
 #[specta::specta]
-pub async fn label_sample_preview(state: State<'_, AppState>, template_id: String) -> AppResult<LabelPreview> {
+pub async fn label_sample_preview(state: State<'_, AppState>, template_id: String) -> AppResult<LabelLayout> {
     super::session(&state)?;
     label::sample_preview(&state.db.pool, &template_id).await
 }
 
-/// Queue a label job for the label printer (audited `LABEL_PRINT`: template, products, labels).
+/// Queue the stickers the webview drew for the label printer (audited `LABEL_PRINT`: template, products,
+/// labels). Each picture must be exactly the template's sticker at this printer's dpi.
 #[tauri::command]
 #[specta::specta]
 pub async fn print_labels(
     app: AppHandle,
     state: State<'_, AppState>,
-    job: LabelJob,
+    job: LabelPrintJob,
     approval_id: Option<String>,
-) -> AppResult<LabelPreview> {
+) -> AppResult<()> {
     let actor = require(&state.auth, state.clock.as_ref(), Perm::LABEL_PRINT, "labels", approval_id.as_deref())?;
     let ctx = write_ctx(&state)?;
-    let preview = label::preview(&state.db.pool, &ctx.store_id, &job).await?;
-    let labels = job.validate()?;
-    let mut payload = serde_json::to_value(&job)?;
-    payload["store_id"] = json!(ctx.store_id);
+    let (payload, labels, preview) = label::prepare_print(&state.db.pool, &ctx.store_id, &job).await?;
     let mut tx = state.db.write().await?;
     let conn = tx.conn();
     let job_id = print_jobs::enqueue_for(conn, &ctx, LABEL_PRINTER, PrintKind::Labels, None, &payload).await?;
@@ -145,37 +145,37 @@ pub async fn print_labels(
     tx.commit().await?;
     state.label_printer.notify();
     emit_changed(&app, &["print_jobs", "audit_logs"]);
-    Ok(preview)
+    Ok(())
 }
 
 /// Settings → Labels "Alignment test": every cell's outline, for calibrating gaps and margins.
 #[tauri::command]
 #[specta::specta]
 pub async fn label_alignment_test(app: AppHandle, state: State<'_, AppState>, template_id: String) -> AppResult<()> {
-    queue_test(&app, &state, template_id, false).await
-}
-
-/// Settings → Labels "Print test label": one sample sticker row on the chosen roll, as real labels print.
-#[tauri::command]
-#[specta::specta]
-pub async fn label_sample_print(app: AppHandle, state: State<'_, AppState>, template_id: String) -> AppResult<()> {
-    queue_test(&app, &state, template_id, true).await
-}
-
-async fn queue_test(app: &AppHandle, state: &State<'_, AppState>, template_id: String, sample: bool) -> AppResult<()> {
     require(&state.auth, state.clock.as_ref(), Perm::SETTINGS_MANAGE, "labels", None)?;
     label::template(&state.db.pool, &template_id).await?;
+    queue_test(&app, &state, &json!({ "template_id": template_id, "sample": false })).await
+}
+
+/// Settings → Labels "Print test label": the sample sticker the webview drew, across one row of the roll,
+/// exactly as real labels print.
+#[tauri::command]
+#[specta::specta]
+pub async fn label_sample_print(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    template_id: String,
+    image: LabelBitmap,
+) -> AppResult<()> {
+    require(&state.auth, state.clock.as_ref(), Perm::SETTINGS_MANAGE, "labels", None)?;
+    let payload = label::prepare_sample(&state.db.pool, &template_id, &image).await?;
+    queue_test(&app, &state, &payload).await
+}
+
+async fn queue_test(app: &AppHandle, state: &State<'_, AppState>, payload: &serde_json::Value) -> AppResult<()> {
     let ctx = write_ctx(state)?;
     let mut tx = state.db.write().await?;
-    print_jobs::enqueue_for(
-        tx.conn(),
-        &ctx,
-        LABEL_PRINTER,
-        PrintKind::Test,
-        None,
-        &json!({ "template_id": template_id, "sample": sample }),
-    )
-    .await?;
+    print_jobs::enqueue_for(tx.conn(), &ctx, LABEL_PRINTER, PrintKind::Test, None, payload).await?;
     tx.commit().await?;
     state.label_printer.notify();
     emit_changed(app, &["print_jobs"]);

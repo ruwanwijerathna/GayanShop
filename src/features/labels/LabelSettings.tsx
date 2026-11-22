@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { LabelPreviewSvg } from "@/components/labels/LabelPreviewSvg";
+import { LabelStickerPreview } from "@/components/labels/LabelSticker";
+import { printSampleLabel } from "@/components/labels/stickerPrint";
 import type { LabelLanguage, LabelPrinterProfile, LabelTemplate, TransportConfig } from "@/db/bindings";
 import { CommandError } from "@/db/client";
 import {
@@ -18,7 +19,6 @@ import {
   useLabelAlignmentTest,
   useLabelPrinterProfile,
   useLabelSamplePreview,
-  useLabelSamplePrint,
   useLabelTemplates,
   useSetLabelPrinterProfile,
 } from "@/db/hooks";
@@ -159,7 +159,8 @@ function LabelCard({
   const { t, i18n } = useTranslation("labels");
   const save = useSetLabelPrinterProfile();
   const align = useLabelAlignmentTest();
-  const sample = useLabelSamplePrint();
+  const [sampling, setSampling] = useState(false);
+  const [sampleError, setSampleError] = useState<CommandError | null>(null);
   const [form, setForm] = useState(() => toForm(profile));
   const [invalid, setInvalid] = useState(false);
   const [chosen, setChosen] = useState(() => profile?.default_template_id ?? lastTemplate());
@@ -186,7 +187,23 @@ function LabelCard({
         ? t("settings.host")
         : t("settings.comPort");
   const samplePreview = useLabelSamplePreview(selected?.id ?? null);
-  const error = [save.error, align.error, sample.error].find((e) => e instanceof CommandError);
+  const error = [save.error, align.error, sampleError].find((e) => e instanceof CommandError);
+
+  const printSample = (templateId: string) => {
+    setSampling(true);
+    setSampleError(null);
+    printSampleLabel(templateId).then(
+      () => {
+        setSampling(false);
+        toast.success(t("settings.testQueued"));
+      },
+      (e: unknown) => {
+        setSampling(false);
+        if (e instanceof CommandError) setSampleError(e);
+        else toast.error(t("print.failed"));
+      },
+    );
+  };
 
   return (
     <SettingsCard
@@ -203,11 +220,8 @@ function LabelCard({
             type="button"
             size="pos"
             variant="outline"
-            disabled={!selected || sample.isPending}
-            onClick={() =>
-              selected &&
-              sample.mutate(selected.id, { onSuccess: () => toast.success(t("settings.testQueued")) })
-            }
+            disabled={!selected || sampling}
+            onClick={() => selected && printSample(selected.id)}
           >
             {t("settings.testLabel")}
           </Button>
@@ -426,8 +440,14 @@ function LabelCard({
           </AdvancedSection>
         </div>
         <aside aria-label={t("settings.previewTitle")} className="flex flex-col gap-2 self-start">
-          {samplePreview.data ? (
-            <LabelPreviewSvg preview={samplePreview.data} title={t("settings.previewTitle")} maxRows={1} />
+          {samplePreview.data?.stickers[0] ? (
+            <LabelStickerPreview
+              layout={samplePreview.data}
+              sticker={samplePreview.data.stickers[0]}
+              width={320}
+              title={t("settings.previewTitle")}
+              className="rounded-md border border-border bg-white"
+            />
           ) : (
             <div className="aspect-[2/1] rounded-md border border-dashed bg-muted/40" aria-hidden />
           )}

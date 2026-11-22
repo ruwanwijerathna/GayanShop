@@ -88,16 +88,22 @@ export const commands = {
 	setLabelPrinterProfile: (profile: LabelPrinterProfile_Deserialize) => typedError<null, AppError>(__TAURI_INVOKE("set_label_printer_profile", { profile })),
 	/**  Correct a template's column gap, row gap and left margin for this counter's roll; `None` = reset to default. */
 	calibrateLabelTemplate: (id: string, calibration: TemplateCalibration | null) => typedError<LabelTemplate_Serialize, AppError>(__TAURI_INVOKE("calibrate_label_template", { id, calibration })),
-	/**  The Rust-computed layout the UI draws as SVG: exactly what will print, with warnings. */
-	labelPreview: (job: LabelJob_Deserialize) => typedError<LabelPreview_Serialize, AppError>(__TAURI_INVOKE("label_preview", { job })),
-	/**  One sample sticker row on a roll, for the Settings preview. */
-	labelSamplePreview: (templateId: string) => typedError<LabelPreview_Serialize, AppError>(__TAURI_INVOKE("label_sample_preview", { templateId })),
-	/**  Queue a label job for the label printer (audited `LABEL_PRINT`: template, products, labels). */
-	printLabels: (job: LabelJob_Deserialize, approvalId: string | null) => typedError<LabelPreview_Serialize, AppError>(__TAURI_INVOKE("print_labels", { job, approvalId })),
+	/**  Each product's sticker in printer dots, which the webview draws: the preview, and the picture it prints. */
+	labelPreview: (job: LabelJob_Deserialize) => typedError<LabelLayout_Serialize, AppError>(__TAURI_INVOKE("label_preview", { job })),
+	/**  One sample sticker on a roll, for the Settings preview and "Print test label". */
+	labelSamplePreview: (templateId: string) => typedError<LabelLayout_Serialize, AppError>(__TAURI_INVOKE("label_sample_preview", { templateId })),
+	/**
+	 *  Queue the stickers the webview drew for the label printer (audited `LABEL_PRINT`: template, products,
+	 *  labels). Each picture must be exactly the template's sticker at this printer's dpi.
+	 */
+	printLabels: (job: LabelPrintJob_Deserialize, approvalId: string | null) => typedError<null, AppError>(__TAURI_INVOKE("print_labels", { job, approvalId })),
 	/**  Settings → Labels "Alignment test": every cell's outline, for calibrating gaps and margins. */
 	labelAlignmentTest: (templateId: string) => typedError<null, AppError>(__TAURI_INVOKE("label_alignment_test", { templateId })),
-	/**  Settings → Labels "Print test label": one sample sticker row on the chosen roll, as real labels print. */
-	labelSamplePrint: (templateId: string) => typedError<null, AppError>(__TAURI_INVOKE("label_sample_print", { templateId })),
+	/**
+	 *  Settings → Labels "Print test label": the sample sticker the webview drew, across one row of the roll,
+	 *  exactly as real labels print.
+	 */
+	labelSamplePrint: (templateId: string, image: LabelBitmap) => typedError<null, AppError>(__TAURI_INVOKE("label_sample_print", { templateId, image })),
 	recordDamage: (input: DamageInput_Deserialize, approvalId: string | null) => typedError<StockChange, AppError>(__TAURI_INVOKE("record_damage", { input, approvalId })),
 	adjustStock: (input: AdjustmentInput, approvalId: string | null) => typedError<StockChange, AppError>(__TAURI_INVOKE("adjust_stock", { input, approvalId })),
 	recordStockCount: (input: CountInput_Deserialize, approvalId: string | null) => typedError<CountResult, AppError>(__TAURI_INVOKE("record_stock_count", { input, approvalId })),
@@ -1579,6 +1585,16 @@ export type JoinInput_Serialize = {
 	ui_language: string,
 };
 
+/**
+ *  One sticker as the webview drew it: `width` × `height` dots, row by row, 8 dots per byte with the
+ *  leftmost dot in the high bit, and a 1 bit for black (the receipt picture's packing).
+ */
+export type LabelBitmap = {
+	width: number,
+	height: number,
+	data: number[],
+};
+
 export type LabelElement = LabelElement_Serialize | LabelElement_Deserialize;
 
 export type LabelElement_Deserialize = {
@@ -1587,7 +1603,7 @@ export type LabelElement_Deserialize = {
 	y_mm: number,
 	w_mm: number,
 	h_mm: number,
-	/**  Printer built-in font step 1–4. */
+	/**  Text size step 1–6 (see [`font_mm`]). */
 	font_size: number,
 	bold?: boolean,
 	align?: Align,
@@ -1600,14 +1616,14 @@ export type LabelElement_Serialize = {
 	y_mm: number,
 	w_mm: number,
 	h_mm: number,
-	/**  Printer built-in font step 1–4. */
+	/**  Text size step 1–6 (see [`font_mm`]). */
 	font_size: number,
 	bold: boolean,
 	align: Align,
 	max_lines: number | null,
 };
 
-/**  What a label job prints (also the `print_jobs` payload, re-laid out from the database at print time). */
+/**  Which products, how many of each, on which roll: what the stickers are laid out from. */
 export type LabelJob = LabelJob_Serialize | LabelJob_Deserialize;
 
 export type LabelJobItem = {
@@ -1615,7 +1631,7 @@ export type LabelJobItem = {
 	copies: number,
 };
 
-/**  What a label job prints (also the `print_jobs` payload, re-laid out from the database at print time). */
+/**  Which products, how many of each, on which roll: what the stickers are laid out from. */
 export type LabelJob_Deserialize = {
 	template_id: string,
 	items: LabelJobItem[],
@@ -1623,7 +1639,7 @@ export type LabelJob_Deserialize = {
 	fill_last_row?: boolean,
 };
 
-/**  What a label job prints (also the `print_jobs` payload, re-laid out from the database at print time). */
+/**  Which products, how many of each, on which roll: what the stickers are laid out from. */
 export type LabelJob_Serialize = {
 	template_id: string,
 	items: LabelJobItem[],
@@ -1633,32 +1649,65 @@ export type LabelJob_Serialize = {
 
 export type LabelLanguage = "tspl" | "zpl";
 
-export type LabelPreview = LabelPreview_Serialize | LabelPreview_Deserialize;
+/**  The stickers of a job, one per product, as this counter's printer will print them. */
+export type LabelLayout = LabelLayout_Serialize | LabelLayout_Deserialize;
 
-export type LabelPreview_Deserialize = {
+/**  The stickers of a job, one per product, as this counter's printer will print them. */
+export type LabelLayout_Deserialize = {
 	template_id: string,
 	dpi: number,
 	columns: number,
-	rows: number,
-	roll_width_mm: number,
+	/**
+	 *  The sticker picture's size in dots. The width is rounded up to whole bytes (the printers take 8 dots
+	 *  per byte); the extra columns stay white.
+	 */
+	width: number,
+	height: number,
 	label_w_mm: number,
 	label_h_mm: number,
-	row_gap_mm: number,
-	labels: PlacedLabel_Deserialize[],
+	stickers: Sticker_Deserialize[],
 	warnings: LabelWarning[],
 };
 
-export type LabelPreview_Serialize = {
+/**  The stickers of a job, one per product, as this counter's printer will print them. */
+export type LabelLayout_Serialize = {
 	template_id: string,
 	dpi: number,
 	columns: number,
-	rows: number,
-	roll_width_mm: number,
+	/**
+	 *  The sticker picture's size in dots. The width is rounded up to whole bytes (the printers take 8 dots
+	 *  per byte); the extra columns stay white.
+	 */
+	width: number,
+	height: number,
 	label_w_mm: number,
 	label_h_mm: number,
-	row_gap_mm: number,
-	labels: PlacedLabel_Serialize[],
+	stickers: Sticker_Serialize[],
 	warnings: LabelWarning[],
+};
+
+/**  One product of a print job, with the sticker picture the webview drew for it. */
+export type LabelPrintItem = {
+	product_id: string,
+	copies: number,
+	image: LabelBitmap,
+};
+
+/**  A label job as `print_labels` receives it: the [`LabelJob`] plus one picture per product. */
+export type LabelPrintJob = LabelPrintJob_Serialize | LabelPrintJob_Deserialize;
+
+/**  A label job as `print_labels` receives it: the [`LabelJob`] plus one picture per product. */
+export type LabelPrintJob_Deserialize = {
+	template_id: string,
+	items: LabelPrintItem[],
+	fill_last_row?: boolean,
+};
+
+/**  A label job as `print_labels` receives it: the [`LabelJob`] plus one picture per product. */
+export type LabelPrintJob_Serialize = {
+	template_id: string,
+	items: LabelPrintItem[],
+	fill_last_row: boolean,
 };
 
 export type LabelPrinterProfile = LabelPrinterProfile_Serialize | LabelPrinterProfile_Deserialize;
@@ -1748,7 +1797,7 @@ export type LabelTemplate_Serialize = {
 };
 
 export type LabelWarning = {
-	/**  `BARCODE_TOO_LONG`, `NO_CODE`, `TEXT_NOT_PRINTABLE`, `TEXT_TRUNCATED`. */
+	/**  `BARCODE_TOO_LONG`, `NO_CODE`. */
 	code: string,
 	product_id: string,
 };
@@ -2064,57 +2113,6 @@ export type PeriodSales = {
 
 /**  Permission key as seen by the UI and stored in audit metadata. */
 export type Perm = "SALE_CREATE" | "QUICK_SALE" | "PRICE_OVERRIDE" | "LINE_DISCOUNT" | "ORDER_DISCOUNT" | "VOID_ORDER" | "EXCHANGE_PROCESS" | "EXCHANGE_LATE" | "DRAWER_NO_SALE" | "CASH_PAY_IN_OUT" | "CASH_SESSION_MANAGE" | "CASH_SESSION_FORCE_CLOSE" | "REPRINT_RECEIPT" | "STOCK_ADJUST" | "STOCK_DAMAGE" | "BATCH_MANAGE" | "PRODUCT_MANAGE" | "QUICK_SALE_PROMOTE" | "LABEL_PRINT" | "VIEW_COST" | "REPORT_SALES" | "REPORT_FINANCIAL" | "EXPENSE_MANAGE" | "SETTINGS_MANAGE" | "USER_MANAGE" | "AUDIT_VIEW" | "SYNC_MANAGE" | "BACKUP_RESTORE" | "DATA_EXPORT" | "CUSTOMER_VIEW" | "BACKUP_CREATE";
-
-export type PlacedBarcode = {
-	symbology: Symbology,
-	data: string,
-	x_mm: number,
-	y_mm: number,
-	/**  Bars only (the human-readable line sits under them, inside the element box). */
-	bar_h_mm: number,
-	module_dots: number,
-	module_mm: number,
-	/**  Alternating bar / space widths in modules, starting with a bar (for the SVG preview). */
-	widths: number[],
-	/**  Bars plus quiet zones fit the element box. */
-	fits: boolean,
-};
-
-export type PlacedLabel = PlacedLabel_Serialize | PlacedLabel_Deserialize;
-
-export type PlacedLabel_Deserialize = {
-	row: number,
-	col: number,
-	product_id: string,
-	/**  Top-left of the label on the roll, mm. */
-	x_mm: number,
-	texts: PlacedText[],
-	barcode?: PlacedBarcode | null,
-};
-
-export type PlacedLabel_Serialize = {
-	row: number,
-	col: number,
-	product_id: string,
-	/**  Top-left of the label on the roll, mm. */
-	x_mm: number,
-	texts: PlacedText[],
-	barcode: PlacedBarcode | null,
-};
-
-export type PlacedText = {
-	kind: ElementKind,
-	/**  Absolute position on the roll, mm (calibration offset included). */
-	x_mm: number,
-	y_mm: number,
-	w_mm: number,
-	h_mm: number,
-	font_size: number,
-	bold: boolean,
-	align: Align,
-	/**  One entry per printed line, already fitted (wrapped, truncated, unprintable characters as `?`). */
-	lines: string[],
-};
 
 export type PrinterHealth = 
 /**  No profile in `device_settings` yet: jobs wait, selling continues. */
@@ -2846,6 +2844,61 @@ export type StaffSales = {
 	month: PeriodSales,
 	/**  The calendar year containing today. */
 	year: PeriodSales,
+};
+
+/**  One product's sticker. */
+export type Sticker = Sticker_Serialize | Sticker_Deserialize;
+
+/**
+ *  The bars of one sticker, in dots from the sticker's top-left corner: every bar and space is a whole
+ *  number of dots wide, so the picture's bars are exactly what the scanner expects.
+ */
+export type StickerBarcode = {
+	symbology: Symbology,
+	/**  What the scanner reads (EAN-13 includes its check digit), also the human-readable line. */
+	data: string,
+	x: number,
+	y: number,
+	/**  Bars only; the human-readable line sits under them. */
+	bar_h: number,
+	/**  Dots per module (2–4). */
+	module: number,
+	/**  Alternating bar / space widths in modules, starting with a bar. */
+	widths: number[],
+	/**  Font size of the human-readable line, in dots. */
+	hri_px: number,
+	/**  Bars plus quiet zones fit the element box. */
+	fits: boolean,
+};
+
+/**  One text box on a sticker, in dots from the sticker's top-left corner. */
+export type StickerText = {
+	kind: ElementKind,
+	x: number,
+	y: number,
+	w: number,
+	h: number,
+	/**  Font size in dots (one CSS pixel per dot when the sticker is drawn). */
+	font_px: number,
+	bold: boolean,
+	align: Align,
+	/**  More than 1: wrap, then cut with an ellipsis after this many lines. */
+	max_lines: number,
+	text: string,
+};
+
+/**  One product's sticker. */
+export type Sticker_Deserialize = {
+	product_id: string,
+	texts: StickerText[],
+	barcode?: StickerBarcode | null,
+};
+
+/**  One product's sticker. */
+export type Sticker_Serialize = {
+	product_id: string,
+	texts: StickerText[],
+	barcode: StickerBarcode | null,
 };
 
 /**  What a write did: the units and their cost, per layer touched. */

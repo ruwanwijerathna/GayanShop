@@ -1,10 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  commands,
-  type LabelPreview_Serialize as LabelPreview,
-  type LabelTemplate_Serialize as LabelTemplate,
-} from "@/db/bindings";
+import { commands, type LabelTemplate_Serialize as LabelTemplate } from "@/db/bindings";
+import { drawnJob, stickerLayout } from "@/test/labels";
 import { err, ok, renderWithProviders } from "@/test/render";
 import { PrintLabelsDialog } from "./PrintLabelsDialog";
 
@@ -18,60 +15,24 @@ vi.mock("@/db/bindings", () => ({
   },
 }));
 
+vi.mock("@/lib/labelImage", () => ({
+  labelBitmapFromElement: (_node: HTMLElement, width: number, height: number) =>
+    Promise.resolve({ width, height, data: [] }),
+}));
+
 const TEMPLATES = [
   { id: "two_up_50x25", name: "2-up", columns: 2, dpi: 203 },
   { id: "three_up_30x16", name: "3-up", columns: 3, dpi: 203 },
 ] as unknown as LabelTemplate[];
 
-const PREVIEW: LabelPreview = {
-  template_id: "two_up_50x25",
-  dpi: 203,
-  columns: 2,
-  rows: 1,
-  roll_width_mm: 106.6,
-  label_w_mm: 50,
-  label_h_mm: 25,
-  row_gap_mm: 2,
-  labels: [
-    {
-      row: 0,
-      col: 0,
-      product_id: "p1",
-      x_mm: 1.5,
-      texts: [
-        {
-          kind: "price",
-          x_mm: 31.5,
-          y_mm: 10.5,
-          w_mm: 18.8,
-          h_mm: 4,
-          font_size: 3,
-          bold: true,
-          align: "right",
-          lines: ["Rs. 1,250"],
-        },
-      ],
-      barcode: {
-        symbology: "ean13",
-        data: "2000123456782",
-        x_mm: 5,
-        y_mm: 15,
-        bar_h_mm: 6.5,
-        module_dots: 3,
-        module_mm: 0.375,
-        widths: [1, 1, 1, 3, 2, 1, 1],
-        fits: true,
-      },
-    },
-  ],
-  warnings: [{ code: "BARCODE_TOO_LONG", product_id: "p1" }],
-};
-
 beforeEach(() => {
   localStorage.clear();
   vi.mocked(commands.labelTemplates).mockImplementation(() => ok(TEMPLATES));
-  vi.mocked(commands.labelPreview).mockImplementation(() => ok(PREVIEW));
+  vi.mocked(commands.labelPreview).mockImplementation((job) =>
+    ok(stickerLayout(job, [{ code: "BARCODE_TOO_LONG", product_id: "p1" }])),
+  );
   vi.mocked(commands.printLabels).mockReset();
+  vi.mocked(commands.printLabels).mockImplementation(() => ok(null));
   vi.mocked(commands.listLoginStaff).mockImplementation(() =>
     ok([
       { id: "cashier", display_name: "Nimal", role_name: "Cashier" },
@@ -82,8 +43,7 @@ beforeEach(() => {
 });
 
 describe("PrintLabelsDialog", () => {
-  it("previews a single label, with warnings, then prints every copy", async () => {
-    vi.mocked(commands.printLabels).mockImplementation(() => ok(PREVIEW));
+  it("previews a single label, with warnings, then prints every copy as the drawn sticker", async () => {
     const onClose = vi.fn();
     renderWithProviders(
       <PrintLabelsDialog
@@ -91,9 +51,20 @@ describe("PrintLabelsDialog", () => {
         onClose={onClose}
       />,
     );
-    const svg = await screen.findByRole("img", { name: "Label preview" });
-    expect(within(svg).getByText("Rs. 1,250")).toBeInTheDocument();
-    expect(within(svg).getByTestId("barcode")).toHaveAttribute("data-fits", "true");
+    const preview = await screen.findByRole("img", { name: "Label preview" });
+    expect(within(preview).getByText("Rs. 1,250")).toBeInTheDocument();
+    expect(within(preview).getByText("21000423")).toBeInTheDocument();
+    const bars = within(preview).getByTestId("sticker-bars");
+    expect(bars).toHaveAttribute("shape-rendering", "crispEdges");
+    // The bars are whole-dot rectangles: modules [2, 1, 1, 2, 2, 2] at 4 dots each, so bars of 8, 4 and 8
+    // dots at dot offsets 0, 12 and 24.
+    expect(
+      [...bars.querySelectorAll("rect")].map((r) => [r.getAttribute("x"), r.getAttribute("width")]),
+    ).toEqual([
+      ["0", "8"],
+      ["12", "4"],
+      ["24", "8"],
+    ]);
     expect(screen.getByText(/Ladies Sandal: the code is too long/)).toBeInTheDocument();
     expect(commands.labelPreview).toHaveBeenCalledWith({
       template_id: "two_up_50x25",
@@ -107,7 +78,11 @@ describe("PrintLabelsDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Print 3 label(s)" }));
     await waitFor(() =>
       expect(commands.printLabels).toHaveBeenCalledWith(
-        { template_id: "three_up_30x16", items: [{ product_id: "p1", copies: 3 }], fill_last_row: false },
+        drawnJob({
+          template_id: "three_up_30x16",
+          items: [{ product_id: "p1", copies: 3 }],
+          fill_last_row: false,
+        }),
         null,
       ),
     );
@@ -116,7 +91,6 @@ describe("PrintLabelsDialog", () => {
   });
 
   it("previews one label however many copies are requested", async () => {
-    vi.mocked(commands.printLabels).mockImplementation(() => ok(PREVIEW));
     renderWithProviders(
       <PrintLabelsDialog
         items={[{ product_id: "p1", name: "Ladies Sandal", copies: 20 }]}
@@ -132,7 +106,11 @@ describe("PrintLabelsDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Print 21 label(s)" }));
     await waitFor(() =>
       expect(commands.printLabels).toHaveBeenCalledWith(
-        { template_id: "two_up_50x25", items: [{ product_id: "p1", copies: 21 }], fill_last_row: false },
+        drawnJob({
+          template_id: "two_up_50x25",
+          items: [{ product_id: "p1", copies: 21 }],
+          fill_last_row: false,
+        }),
         null,
       ),
     );
@@ -198,7 +176,7 @@ describe("PrintLabelsDialog", () => {
   it("asks a supervisor when the cashier lacks LABEL_PRINT, then prints with the approval", async () => {
     vi.mocked(commands.printLabels)
       .mockImplementationOnce(() => err({ kind: "APPROVAL_REQUIRED", perm: "LABEL_PRINT" }))
-      .mockImplementationOnce(() => ok(PREVIEW));
+      .mockImplementationOnce(() => ok(null));
     renderWithProviders(
       <PrintLabelsDialog
         items={[{ product_id: "p1", name: "Ladies Sandal", copies: 2 }]}
@@ -213,5 +191,26 @@ describe("PrintLabelsDialog", () => {
     await waitFor(() => expect(commands.printLabels).toHaveBeenCalledTimes(2));
     expect(commands.requestApproval).toHaveBeenCalledWith("LABEL_PRINT", "labels", "sup", "2222");
     expect(vi.mocked(commands.printLabels).mock.calls[1]?.[1]).toBe("appr");
+  });
+
+  it("shows Rust's refusal of a picture and keeps the dialog open", async () => {
+    vi.mocked(commands.printLabels).mockImplementation(() =>
+      err({
+        kind: "VALIDATION",
+        code: "LABEL_IMAGE_INVALID",
+        detail: "240x128 dots, the sticker is 400x200",
+      }),
+    );
+    const onClose = vi.fn();
+    renderWithProviders(
+      <PrintLabelsDialog
+        items={[{ product_id: "p1", name: "Ladies Sandal", copies: 1 }]}
+        onClose={onClose}
+      />,
+    );
+    await screen.findByRole("img", { name: "Label preview" });
+    fireEvent.click(screen.getByRole("button", { name: "Print 1 label(s)" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/sticker/i);
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

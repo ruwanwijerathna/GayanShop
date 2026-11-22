@@ -1,9 +1,11 @@
-//! Barcode labels (doc §7.4): one layout engine (`layout`) feeding the SVG preview and two printer languages
-//! (`tspl`, `zpl`) on multi-column rolls: the built-in 2-up 2″×1″ and 3-up 1″×1″ templates at 203 dpi with a
-//! 2 mm die-cut gap. Templates and the label printer profile (language, dpi, darkness, speed, calibration
-//! offsets) are device-local, because each counter's printer and roll can differ.
+//! Barcode labels (doc §7.4, decision #30). Rust lays each product's sticker out in whole printer dots
+//! (`layout`); the webview draws it as HTML/CSS, turns it into a 1-bit picture (`bitmap`) and sends it back;
+//! the emitters place those pictures on the roll's columns in TSPL (`BITMAP`) or ZPL (`^GFA`). Templates and
+//! the label printer profile (language, dpi, darkness, speed, calibration offsets) are device-local, because
+//! each counter's printer and roll can differ.
 
 pub mod barcode;
+pub mod bitmap;
 pub mod layout;
 pub mod tspl;
 pub mod zpl;
@@ -19,7 +21,8 @@ use crate::db::settings;
 use crate::domain::money::format_label_price;
 use crate::error::{AppError, AppResult};
 use crate::hardware::printer::TransportConfig;
-use layout::{LabelCell, LabelLanguage, LabelPreview, LabelTemplate};
+use bitmap::{LabelBitmap, StoredBitmap};
+use layout::{LabelCell, LabelLanguage, LabelLayout, LabelTemplate};
 
 /// `print_jobs.printer_key` (and `device_settings` `printer.label`) of this counter's label printer.
 pub const LABEL_PRINTER: &str = "label";
@@ -179,7 +182,7 @@ pub struct LabelJobItem {
     pub copies: i64,
 }
 
-/// What a label job prints (also the `print_jobs` payload, re-laid out from the database at print time).
+/// Which products, how many of each, on which roll: what the stickers are laid out from.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 pub struct LabelJob {
     pub template_id: String,
@@ -208,6 +211,63 @@ impl LabelJob {
     }
 }
 
+/// One product of a print job, with the sticker picture the webview drew for it.
+#[derive(Debug, Clone, Deserialize, Type, PartialEq, Eq)]
+pub struct LabelPrintItem {
+    pub product_id: String,
+    #[specta(type = specta_typescript::Number)]
+    pub copies: i64,
+    pub image: LabelBitmap,
+}
+
+/// A label job as `print_labels` receives it: the [`LabelJob`] plus one picture per product.
+#[derive(Debug, Clone, Deserialize, Type, PartialEq, Eq)]
+pub struct LabelPrintJob {
+    pub template_id: String,
+    pub items: Vec<LabelPrintItem>,
+    #[serde(default)]
+    pub fill_last_row: bool,
+}
+
+impl LabelPrintJob {
+    pub fn job(&self) -> LabelJob {
+        LabelJob {
+            template_id: self.template_id.clone(),
+            items: self
+                .items
+                .iter()
+                .map(|i| LabelJobItem { product_id: i.product_id.clone(), copies: i.copies })
+                .collect(),
+            fill_last_row: self.fill_last_row,
+        }
+    }
+}
+
+/// The `print_jobs` payload of a label job: the pictures and how many of each, at the dpi they were drawn for.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct StoredJob {
+    template_id: String,
+    fill_last_row: bool,
+    dpi: u16,
+    items: Vec<StoredItem>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct StoredItem {
+    product_id: String,
+    copies: u32,
+    image: StoredBitmap,
+}
+
+/// The `print_jobs` payload of a "Print test label" job: one sample picture, printed across one row.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct StoredSample {
+    template_id: String,
+    sample: bool,
+    dpi: u16,
+    image: StoredBitmap,
+}
+
 #[derive(FromRow)]
 struct ProductRow {
     id: String,
@@ -217,7 +277,7 @@ struct ProductRow {
     attributes: String,
 }
 
-/// `size` first, then the other attributes in name order, joined with " - " (the printer fonts have no `·`).
+/// `size` first, then the other attributes in name order, joined with " - ".
 pub fn attributes_line(json: &str) -> String {
     let map: BTreeMap<String, Value> = serde_json::from_str(json).unwrap_or_default();
     let text = |v: &Value| match v {
@@ -233,10 +293,9 @@ pub fn attributes_line(json: &str) -> String {
     parts.into_iter().filter(|p| !p.is_empty()).collect::<Vec<_>>().join(" - ")
 }
 
-/// One cell per copy, in job order.
+/// One cell per job item, in job order.
 pub async fn cells(pool: &SqlitePool, store_id: &str, job: &LabelJob) -> AppResult<Vec<LabelCell>> {
-    let store_name = STICKER_SHOP_NAME.to_owned();
-    let mut out = Vec::new();
+    let mut out = Vec::with_capacity(job.items.len());
     for item in &job.items {
         let p: ProductRow = sqlx::query_as(
             "SELECT id, name, price, barcode, attributes FROM products
@@ -247,19 +306,16 @@ pub async fn cells(pool: &SqlitePool, store_id: &str, job: &LabelJob) -> AppResu
         .fetch_optional(pool)
         .await?
         .ok_or_else(|| AppError::validation("LABEL_PRODUCT_INVALID", item.product_id.clone()))?;
-        let cell = LabelCell {
+        out.push(LabelCell {
             product_id: p.id,
-            store_name: store_name.clone(),
+            store_name: STICKER_SHOP_NAME.to_owned(),
             name: p.name,
             attributes: attributes_line(&p.attributes),
             price: format_label_price(p.price),
             // Only the barcode is printed. The SKU is the cashier's typed shorthand and never goes on a
             // sticker; a product without a barcode lays out with a `NO_CODE` warning.
             codes: p.barcode.into_iter().collect(),
-        };
-        for _ in 0..item.copies {
-            out.push(cell.clone());
-        }
+        });
     }
     Ok(out)
 }
@@ -273,50 +329,103 @@ pub fn for_printer(mut t: LabelTemplate, profile: Option<&LabelPrinterProfile>) 
     t
 }
 
-/// One sample sticker on the given roll, as this counter prints it (Settings → Label printer preview): the
-/// store's real name and printer calibration, a made-up price and an 8-digit in-store barcode.
-pub async fn sample_preview(pool: &SqlitePool, template_id: &str) -> AppResult<LabelPreview> {
-    let profile = load_profile(pool).await?;
-    sample_layout(pool, template_id, profile.as_ref()).await
-}
-
-async fn sample_layout(
-    pool: &SqlitePool,
-    template_id: &str,
-    profile: Option<&LabelPrinterProfile>,
-) -> AppResult<LabelPreview> {
-    let t = for_printer(template(pool, template_id).await?, profile);
-    let store_name = STICKER_SHOP_NAME.to_owned();
-    let cell = LabelCell {
+fn sample_cell() -> LabelCell {
+    LabelCell {
         product_id: "sample".into(),
-        store_name,
+        store_name: STICKER_SHOP_NAME.to_owned(),
         name: "Sample item".into(),
         attributes: String::new(),
         price: format_label_price(125_000),
         codes: vec!["21000010".into()],
-    };
-    let offset = profile.map_or((0.0, 0.0), LabelPrinterProfile::offset);
-    Ok(layout::layout(&t, &vec![cell; usize::from(t.columns)], offset, false))
-}
-
-pub async fn preview(pool: &SqlitePool, store_id: &str, job: &LabelJob) -> AppResult<LabelPreview> {
-    job.validate()?;
-    let profile = load_profile(pool).await?;
-    let t = for_printer(template(pool, &job.template_id).await?, profile.as_ref());
-    let cells = cells(pool, store_id, job).await?;
-    let offset = profile.as_ref().map_or((0.0, 0.0), LabelPrinterProfile::offset);
-    Ok(layout::layout(&t, &cells, offset, job.fill_last_row))
-}
-
-/// Printer bytes for a job.
-pub fn emit(preview: &LabelPreview, profile: &LabelPrinterProfile) -> Vec<u8> {
-    match profile.language {
-        LabelLanguage::Tspl => tspl::emit(preview, profile.darkness, profile.speed),
-        LabelLanguage::Zpl => zpl::emit(preview, profile.darkness),
     }
 }
 
-/// The print worker's renderer for the label printer: `labels` jobs and the `test` job: a sample sticker row, or the alignment outline.
+/// One sample sticker on the given roll, as this counter prints it (Settings → Label printer): the shop name,
+/// a made-up price and an 8-digit in-store barcode.
+pub async fn sample_preview(pool: &SqlitePool, template_id: &str) -> AppResult<LabelLayout> {
+    let profile = load_profile(pool).await?;
+    let t = for_printer(template(pool, template_id).await?, profile.as_ref());
+    Ok(layout::layout(&t, &[sample_cell()]))
+}
+
+/// The stickers of a job, one per item, laid out for this counter's printer.
+pub async fn preview(pool: &SqlitePool, store_id: &str, job: &LabelJob) -> AppResult<LabelLayout> {
+    job.validate()?;
+    let profile = load_profile(pool).await?;
+    let t = for_printer(template(pool, &job.template_id).await?, profile.as_ref());
+    Ok(layout::layout(&t, &cells(pool, store_id, job).await?))
+}
+
+/// Check a print job against the products and the sticker size, and turn it into its `print_jobs` payload.
+/// Returns the payload, the number of labels and the layout (its warnings go into the audit row).
+pub async fn prepare_print(
+    pool: &SqlitePool,
+    store_id: &str,
+    job: &LabelPrintJob,
+) -> AppResult<(Value, i64, LabelLayout)> {
+    let plain = job.job();
+    let labels = plain.validate()?;
+    let laid = preview(pool, store_id, &plain).await?;
+    let mut items = Vec::with_capacity(job.items.len());
+    for i in &job.items {
+        i.image.validate((laid.width, laid.height))?;
+        let copies =
+            u32::try_from(i.copies).map_err(|_| AppError::validation("LABEL_COPIES_INVALID", i.copies.to_string()))?;
+        items.push(StoredItem { product_id: i.product_id.clone(), copies, image: StoredBitmap::from(&i.image) });
+    }
+    let stored =
+        StoredJob { template_id: job.template_id.clone(), fill_last_row: job.fill_last_row, dpi: laid.dpi, items };
+    Ok((serde_json::to_value(&stored)?, labels, laid))
+}
+
+/// Check a "Print test label" picture against the sample sticker and turn it into its `print_jobs` payload.
+pub async fn prepare_sample(pool: &SqlitePool, template_id: &str, image: &LabelBitmap) -> AppResult<Value> {
+    let laid = sample_preview(pool, template_id).await?;
+    image.validate((laid.width, laid.height))?;
+    let stored = StoredSample {
+        template_id: template_id.to_owned(),
+        sample: true,
+        dpi: laid.dpi,
+        image: StoredBitmap::from(image),
+    };
+    Ok(serde_json::to_value(&stored)?)
+}
+
+/// Printer bytes for the pictures laid out in `rows`.
+pub fn emit(
+    t: &LabelTemplate,
+    profile: &LabelPrinterProfile,
+    pictures: &[LabelBitmap],
+    rows: &[Vec<usize>],
+) -> Vec<u8> {
+    match profile.language {
+        LabelLanguage::Tspl => tspl::emit(t, profile.offset(), profile.darkness, profile.speed, pictures, rows),
+        LabelLanguage::Zpl => zpl::emit(t, profile.offset(), profile.darkness, pictures, rows),
+    }
+}
+
+/// The pictures of a stored job, checked against the roll they will print on. A job drawn for another dpi
+/// (the printer was changed after it was queued) fails rather than printing at the wrong size.
+fn pictures_for(t: &LabelTemplate, dpi: u16, stored: &[&StoredBitmap]) -> AppResult<Vec<LabelBitmap>> {
+    if dpi != t.dpi {
+        return Err(AppError::validation(
+            "LABEL_DPI_CHANGED",
+            format!("drawn for {dpi} dpi, the printer is {}", t.dpi),
+        ));
+    }
+    let size = layout::sticker_size(t);
+    stored
+        .iter()
+        .map(|s| {
+            let b = s.decode()?;
+            b.validate(size)?;
+            Ok(b)
+        })
+        .collect()
+}
+
+/// The print worker's renderer for the label printer: `labels` jobs, and the `test` job (a sample sticker
+/// row, or the alignment outline).
 pub async fn render_job(
     pool: &SqlitePool,
     kind: &str,
@@ -325,17 +434,20 @@ pub async fn render_job(
 ) -> AppResult<Vec<u8>> {
     match kind {
         "labels" => {
-            let job: LabelJob = serde_json::from_value(payload.clone())?;
-            let store_id: String = payload.get("store_id").and_then(Value::as_str).unwrap_or_default().to_owned();
+            let job: StoredJob = serde_json::from_value(payload.clone())?;
             let t = for_printer(template(pool, &job.template_id).await?, Some(profile));
-            let cells = cells(pool, &store_id, &job).await?;
-            Ok(emit(&layout::layout(&t, &cells, profile.offset(), job.fill_last_row), profile))
+            let pictures = pictures_for(&t, job.dpi, &job.items.iter().map(|i| &i.image).collect::<Vec<_>>())?;
+            let copies: Vec<(usize, u32)> = job.items.iter().enumerate().map(|(i, item)| (i, item.copies)).collect();
+            Ok(emit(&t, profile, &pictures, &bitmap::rows(&copies, t.columns, job.fill_last_row)))
+        }
+        "test" if payload.get("sample").and_then(Value::as_bool) == Some(true) => {
+            let s: StoredSample = serde_json::from_value(payload.clone())?;
+            let t = for_printer(template(pool, &s.template_id).await?, Some(profile));
+            let pictures = pictures_for(&t, s.dpi, &[&s.image])?;
+            Ok(emit(&t, profile, &pictures, &bitmap::rows(&[(0, u32::from(t.columns))], t.columns, false)))
         }
         "test" => {
             let id = payload.get("template_id").and_then(Value::as_str).unwrap_or("two_up_50x25");
-            if payload.get("sample").and_then(Value::as_bool) == Some(true) {
-                return Ok(emit(&sample_layout(pool, id, Some(profile)).await?, profile));
-            }
             let t = for_printer(template(pool, id).await?, Some(profile));
             Ok(match profile.language {
                 LabelLanguage::Tspl => tspl::alignment_test(&t, profile.offset(), profile.darkness, profile.speed),

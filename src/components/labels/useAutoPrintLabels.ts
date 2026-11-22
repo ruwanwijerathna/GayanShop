@@ -1,13 +1,15 @@
 // "Print labels when stock arrives" (Settings → Label printer). Each receiving flow hands over what arrived;
-// when the switch is on this queues one sticker per unit on the sticker size saved in Settings (or, for a
-// profile saved before that existed, the roll this counter used last). The stock is already
-// in by then, so a print failure only warns and never undoes the receipt.
+// when the switch is on this draws one sticker per product and queues a copy per unit on the sticker size
+// saved in Settings (or, for a profile saved before that existed, the roll this counter used last). The stock
+// is already in by then, so a print failure only warns and never undoes the receipt. Drawing and queueing is
+// a plain promise, so it finishes even though the receiving dialog closes straight away.
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { CommandError } from "@/db/client";
-import { useLabelPrinterProfile, usePrintLabels } from "@/db/hooks";
+import { useLabelPrinterProfile } from "@/db/hooks";
 import { translateError } from "@/i18n";
+import { printLabelJob } from "./stickerPrint";
 import { lastTemplate } from "./templatePreference";
 
 export interface ArrivedStock {
@@ -21,12 +23,8 @@ const MAX_COPIES = 999;
 export function useAutoPrintLabels(): (arrived: ArrivedStock[]) => void {
   const { t, i18n } = useTranslation("labels");
   const profile = useLabelPrinterProfile();
-  const print = usePrintLabels();
   const enabled = profile.data?.auto_print_on_receive === true;
   const defaultTemplate = profile.data?.default_template_id ?? null;
-  // `mutateAsync`, not `mutate` with callbacks: the receiving dialog closes straight after, and a mutation's
-  // per-call callbacks are dropped once its component unmounts, so the queued / failed toast would vanish.
-  const { mutateAsync } = print;
 
   return useCallback(
     (arrived: ArrivedStock[]) => {
@@ -40,10 +38,9 @@ export function useAutoPrintLabels(): (arrived: ArrivedStock[]) => void {
         product_id,
         copies: Math.min(qty, MAX_COPIES),
       }));
-      const count = items.reduce((n, i) => n + i.copies, 0);
       const job = { template_id: defaultTemplate ?? lastTemplate(), items, fill_last_row: false };
-      mutateAsync({ job, approvalId: null }).then(
-        () => toast.success(t("auto.queued", { count })),
+      printLabelJob(job, null).then(
+        (count) => toast.success(t("auto.queued", { count })),
         (e: unknown) =>
           toast.error(
             e instanceof CommandError
@@ -52,6 +49,6 @@ export function useAutoPrintLabels(): (arrived: ArrivedStock[]) => void {
           ),
       );
     },
-    [enabled, defaultTemplate, mutateAsync, t, i18n],
+    [enabled, defaultTemplate, t, i18n],
   );
 }

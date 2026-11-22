@@ -1402,7 +1402,7 @@ export type LabelElementKind = 'store_name' | 'product_name' | 'attributes' | 'p
 export interface LabelElement {       // positions in mm, relative to ONE label's top-left
   kind: LabelElementKind;
   x_mm: number; y_mm: number; w_mm: number; h_mm: number;
-  font_size: 1 | 2 | 3 | 4;           // printer built-in font scale step
+  font_size: 1 | 2 | 3 | 4 | 5 | 6;   // text size step: 1.5, 2.5, 3, 4, 6 mm (layout::font_mm)
   bold?: boolean;
   max_lines?: 1 | 2;                  // product_name wrapping
   align?: 'left' | 'center' | 'right';
@@ -1424,12 +1424,13 @@ export interface LabelTemplate {
 
 export interface LabelJobItem { product_id: UUID; copies: number; }
 
-export interface LabelPreview {       // Rust-computed layout the UI renders as SVG (WYSIWYG)
-  rows: number;
-  roll_width_mm: number;
-  labels: { row: number; col: number; product_id: UUID; elements: (LabelElement & { text: string })[] }[];
-  warnings: string[];                 // e.g. "barcode module < 2 dots — use a shorter code or a 300 dpi printer"
+export interface LabelLayout {        // one sticker per product, every box in whole printer dots (#30)
+  width: number; height: number;     // the sticker picture's size in dots (width rounded up to whole bytes)
+  stickers: { product_id: UUID; texts: StickerText[]; barcode: StickerBarcode | null }[];
+  warnings: { code: 'BARCODE_TOO_LONG' | 'NO_CODE'; product_id: UUID }[];
 }
+// The webview draws each sticker (HTML/CSS, 1 CSS px = 1 dot) into a 1-bit picture and sends it back:
+export interface LabelBitmap { width: number; height: number; data: number[]; }   // MSB first, 1 = black
 
 // ───────── backup ─────────
 export interface BackupResult {
@@ -2583,7 +2584,7 @@ Sinhala/Tamil text: most printers lack those code pages. Render such lines as a 
 ### 7.4 Barcode label printers: TSPL / ZPL, multi-column rolls
 
 **Printers and languages.**
-- `hardware/label` emits two printer languages from one layout engine, selected by the `LabelLanguage` enum:
+- **Every sticker is a picture (decision #30).** Rust lays each product's sticker out in whole printer dots; the webview draws it with the HTML/CSS sticker template and turns it into a 1-bit picture, like receipts (§7.2); Rust places the pictures on the roll. Nothing is drawn with the printer's own fonts. `hardware/label` sends the pictures in two printer languages, selected by the `LabelLanguage` enum:
   - **TSPL**, the default (Xprinter, TSC and most generic thermal label printers)
   - **ZPL** (Zebra and compatibles)
 - Both use the same transports as receipts (§7.2).
@@ -2598,17 +2599,17 @@ Sinhala/Tamil text: most printers lack those code pages. Render such lines as a 
 
 **The defaults are owner-confirmed: 203 dpi and the ~3 mm row gap of the owner's sticker rolls (50 × 25 mm 2-up and 30 × 16 mm 3-up; replaced the earlier 2″×1″ and 1″×1″ rolls in November 2026).**
 - Stores that seeded the earlier rolls are moved to the new ones when the template list is read (`label::reconcile`); calibrated current rolls and custom templates are kept.
-- **Sticker design (both rolls), top to bottom:** the shop name ("Sale Center", fixed; not the store name), the barcode with its human-readable digits directly under the bars, then the price in the largest built-in font (step 4, bold, centred). No product name is printed. A calibrated roll keeps its geometry but always takes the built-in element layout when the list is read.
+- **Sticker design (both rolls), top to bottom:** the shop name ("Sale Center", fixed; not the store name), the barcode with its human-readable digits directly under the bars, then the price as the largest text (bold, centred). No product name is printed. A calibrated roll keeps its geometry but always takes the built-in element layout when the list is read.
 - The row gap goes straight into TSPL `GAP 3 mm,0` and the ZPL label length.
 - The column gap and left margin vary between roll suppliers. They default to 2.0 mm and 1.5 mm, and are corrected per device in Settings → Labels.
-- **Print Test Label** prints one sample sticker row on the chosen roll (the store name, a sample price and a 6-digit code), and the Settings card previews the same layout beside the form. The **alignment test** (under Advanced Calibration) prints the outline of every cell, which makes calibration take a minute.
+- **Print Test Label** prints one sample sticker across a row of the chosen roll (the shop name, a sample price and an 8-digit barcode). It is drawn by the same sticker template the Settings card shows beside the form as its preview. The **alignment test** (under Advanced Calibration) prints the outline of every cell, which makes calibration take a minute.
 
 **Printable elements** (each template positions these, in mm relative to one label's top-left corner):
 
 | Element | Source | Rules |
 |---|---|---|
 | Store name | `store_settings` `store.name` → **"GayanShop"** | Small, centred, single line |
-| Product name | `products.name` (Latin; `name_si` is never printed) | Up to 2 lines on both label sizes, with word wrap then ellipsis. Characters outside the printer's built-in font are replaced with `?`, and the preview warns. |
+| Product name | `products.name` (Latin; `name_si` is never printed) | Up to 2 lines on both label sizes, with word wrap then ellipsis. Drawn by the webview, so any text prints. |
 | Attributes / size | `products.attributes`: `size` first, then the others, joined with ` · ` | One line, truncated with an ellipsis |
 | Selling price | `products.price` → **`Rs. 1,250`**, or `Rs. 1,250.50` when there are cents | Bold, the largest text on the label |
 | Barcode | `products.barcode` only; the SKU is never printed (decision #29) | Code128 or EAN-13 (rules below), with a human-readable line under the bars. No barcode ⇒ no bars and a `NO_CODE` warning. |
@@ -2660,14 +2661,16 @@ Sinhala/Tamil text: most printers lack those code pages. Render such lines as a 
 - **Products → "Short barcodes (N)"** (`assign_in_store_barcodes`, `PRODUCT_MANAGE`) does that for every listed standard product without a barcode in one transaction. Each product is versioned, queued for sync and audited as a `PRODUCT_UPDATE` with `bulk: true`. Generic products and existing barcodes (manufacturer codes or older 13-digit in-store ones) are never touched. The newly coded products are left selected, so their labels can be printed straight away.
 
 **How a multi-column job prints:**
-- `print_labels({ template_id, items: [{product_id, copies}] })` expands copies into cells. The cells fill rows left to right. A partial last row leaves the remaining cells blank, or optionally fills them with copies of the last item.
+1. `label_preview({ template_id, items: [{product_id, copies}] })` returns a `LabelLayout`: one sticker per product with every text box and every bar in whole dots, at this counter's dpi.
+2. The webview draws each sticker off-screen with `LabelSticker` (HTML/CSS at one CSS pixel per dot; the bars as whole-dot `<rect>`s with `shape-rendering="crispEdges"`, so each bar is exactly `module` dots per module) and turns it into a 1-bit picture (`labelBitmapFromElement`: pixel ratio 1, thresholded like the receipt picture).
+3. `print_labels({ template_id, items: [{product_id, copies, image}] })` checks every picture is exactly the sticker's size, stores them in the job (hex), and audits `LABEL_PRINT`. The pictures repeat `copies` times and fill rows left to right; a partial last row is left blank, or filled with copies of the last item.
 - **TSPL**, per row:
   - The setup is `SIZE {roll_width} mm,{label_h} mm` / `GAP {row_gap} mm,0` / `DIRECTION 1` / `REFERENCE 0,0`.
-  - Each row is `CLS`, then for each column `TEXT` / `BARCODE` (`"128"` or `"EAN13"`) at `x = left_margin + col × (label_w + col_gap) + offset_x`, then `PRINT 1`.
+  - Each row is `CLS`, then for each column `BITMAP x,y,{width/8},{height},0,<bytes>` at `x = left_margin + col × (label_w + col_gap) + offset_x`, then `PRINT 1`. **TSPL prints a 0 bit black**, so the bytes are inverted on the way out.
   - Consecutive identical rows collapse into `PRINT n`.
-- **ZPL**, per row: `^XA ^PW{roll_width_dots} ^LL{label_h_dots} ^LH0,0`, then the fields per column via `^FO` / `^A0` / `^BY{module}` / `^BC` or `^BE`, then `^PQ{n}` for identical rows, then `^XZ`.
-- Layout is in **mm**, and the conversion to dots happens only at emit time: `dots = round(mm × dpi / 25.4)`. Both DPIs therefore share one template.
-- **WYSIWYG preview:** Rust returns the computed `LabelPreview` (rows, cells, positioned texts, warnings). The UI renders it as SVG at scale, from the same data the emitters use.
+- **ZPL**, per row: `^XA ^PW{roll_width_dots} ^LL{label_h_dots} ^LH0,0`, then per column `^FO{x},{y}^GFA,…,{width/8},<hex>^FS` (1 = black, not inverted), then `^PQ{n}` for identical rows, then `^XZ`.
+- Templates are in **mm**, converted once by `dots = round(mm × dpi / 25.4)`. Both DPIs share one template; a job stores the dpi it was drawn for and fails (`LABEL_DPI_CHANGED`) rather than print at the wrong size if the printer's dpi changed before it printed.
+- **WYSIWYG preview:** the print dialog and Settings show the same `LabelSticker` element, scaled down, so the preview is the picture that prints.
 - **Templates** are device-local JSON in `device_settings` (`label.templates`), because each counter's printer and roll can differ. The two built-ins can be edited but not deleted, and "Reset to default" restores them.
 - **Bulk flows:**
   - Receive a batch → "Print labels". The copies default to `qty_received`, and the template choice is remembered per category.
@@ -2675,22 +2678,23 @@ Sinhala/Tamil text: most printers lack those code pages. Render such lines as a 
   - Each job is audited once as `LABEL_PRINT` (template, product count, label count) and requires `LABEL_PRINT`.
 
 **Block 2.2 implementation notes (`hardware/label/`).**
-- `barcode.rs` encodes Code128 (subset C for all-digit codes, with a final CODE B for an odd last digit; else B) and EAN-13, so the fit rules count real modules and the SVG preview draws the real bars. `layout.rs` is the only module allowed float arithmetic (mm geometry and `dots = round(mm × dpi / 25.4)`); it never sees money.
-- Code choice per label: the first candidate (barcode, then SKU) that fits the box with ≥ 10 quiet modules each side at a 2–4-dot module (the largest that fits). If none fits, the first is printed at 2 dots with a `BARCODE_TOO_LONG` warning. Other warnings: `NO_CODE`, `TEXT_NOT_PRINTABLE` (anything outside printable ASCII prints as `?`; `"` becomes `'` and `^` / `~` become `?` because they are TSPL / ZPL syntax) and `TEXT_TRUNCATED`.
-- Attributes are joined with ` - ` rather than ` · `, because the printers' built-in fonts have no middle dot.
-- TSPL has no bold attribute, so a bold line is drawn twice, one dot apart. ZPL sets the darkness with `~SD` (0–30, twice the stored TSPL `DENSITY` 0–15).
-- Text widths follow the printed font exactly (2026-11-21). TSPL fonts are fixed pitch (`font_dots`; at 203 dpi fonts 1–5 are 8×12, 12×20, 16×24, 24×32, 32×48, and every step above 5 prints and measures as font 5). A line is `chars × cell width` wide, plus 1 dot when bold for the restrike. That one measure drives both centring (`text_x_dots`) and the characters-per-line fit, so a centred TSPL line lands where the SVG preview's `text-anchor="middle"` puts it. ZPL's `^A0` is proportional, so every ZPL text line (left, centre or right) is aligned by the printer inside a one-line `^FB` box rather than by an estimate.
+- `barcode.rs` encodes Code128 (subset C for all-digit codes, with a final CODE B for an odd last digit; else B) and EAN-13, so the fit rules count real modules and the sticker template draws the real bars. `layout.rs` is the only module allowed float arithmetic (mm geometry and `dots = round(mm × dpi / 25.4)`); it never sees money.
+- Code choice per label: the product's barcode (never the SKU, #29), at the largest 2–4-dot module that fits the box with ≥ 10 quiet modules each side. If it doesn't fit, it is printed at 2 dots with a `BARCODE_TOO_LONG` warning; a product without a barcode prints no bars, with `NO_CODE`.
+- Text sizes are in mm (`layout::font_mm`: steps 1–6 are 1.5, 2.5, 3, 4 and 6 mm, the sizes the stickers had when they used printer fonts), so a template looks the same on a 203 or 300 dpi head. Rust passes text whole; the template ends a line with an ellipsis (or wraps to `max_lines`) in CSS.
+- The sticker picture is the label rounded to dots, its width rounded up to whole bytes (50 × 25 mm at 203 dpi is 400 × 200 dots; 30 × 16 mm is 240 × 128). The extra columns at 300 dpi stay white.
+- ZPL sets the darkness with `~SD` (0–30, twice the stored TSPL `DENSITY` 0–15). A calibration offset that pulls a column past the roll's edge is clamped to 0.
+- Drawing is a short-lived React root of its own (`components/labels/stickerPrint.tsx`), not a portal mounted in the app: printing works after the dialog that started it has closed, and callers await the result (a supervisor approval request comes back as a `CommandError`).
 - **Print labels when stock arrives** (`auto_print_on_receive`) prints one sticker per unit for every arrival: a batch receive, a quick purchase, a late item, a new product's opening stock and a product restock. It prints on the profile's `default_template_id`, the sticker size saved in Settings → Label printer, which `set_label_printer_profile` checks against the counter's templates. Profiles saved before that field existed fall back to the roll the counter used last. Counts and damage write-offs never print.
 - The label printer has its own `print_jobs` queue (`printer_key = 'label'`) and its own print worker, so a jammed label printer never holds up receipts. The worker never sends it ESC/POS `DLE EOT`. Its profile lives in `device_settings` `printer.label`; templates live in `label.templates` and are calibrated per counter (gaps and margin; "Reset to default" restores the built-in).
 - `LABEL_PRINT` is approvable, so the print dialog asks for a supervisor's approval bound to the target `labels`. The preview itself needs only a login. The last template used is remembered per counter rather than per category (batch lines carry no category).
-- Golden TSPL / ZPL byte snapshots live in `src-tauri/tests/fixtures/labels/` (`UPDATE_FIXTURES=1 cargo test --test labels`, then review the bytes).
+- `tests/labels.rs` pins the exact TSPL `BITMAP` and ZPL `^GFA` bytes of a job (built from the same pictures, inversion included). The alignment outlines keep golden snapshots in `src-tauri/tests/fixtures/labels/` (`UPDATE_FIXTURES=1 cargo test --test labels`, then review the bytes).
 
 ### 7.5 Hardware abstraction
 ```rust
 pub trait PrinterTransport: Send + Sync { fn send(&self, bytes: &[u8]) -> Result<(), AppError>; }
 pub enum PrinterKind { Receipt { width: PaperWidth, codepage: CodePage }, Label { lang: LabelLanguage, dpi: u16, offset_mm: (f32, f32) } }
-pub fn layout(t: &LabelTemplate, cells: &[LabelCell]) -> LabelPreview;              // one engine for preview + print
-pub fn emit(t: &LabelTemplate, p: &LabelPreview, lang: LabelLanguage, dpi: u16) -> Vec<u8>; // TSPL or ZPL bytes
+pub fn layout(t: &LabelTemplate, cells: &[LabelCell]) -> LabelLayout;               // stickers in dots, drawn by the webview
+pub fn emit(t: &LabelTemplate, p: &LabelPrinterProfile, pictures: &[LabelBitmap], rows: &[Vec<usize>]) -> Vec<u8>; // TSPL BITMAP / ZPL ^GFA
 ```
 **Printing is decoupled from the sale (stress-tested in §13.3):**
 1. **The job is created in the sale's own transaction.** `checkout_order` inserts a `print_jobs` row (`queued`) together with the order, so the job exists exactly when the sale exists. A crash right after the commit can't lose it, and a rolled-back sale can't print.
@@ -3049,7 +3053,7 @@ cargo add --dev proptest
 | 5 | **Promotion is forward-only**, with no retroactive batch attribution | Re-attributing past quick sales to the batch | Past lines are immutable, and historical P&L shouldn't move when a manager tidies up. |
 | 6 | **~~All sales final~~ superseded by #26. The same-session, whole-order void** (a cashier needs supervisor approval) **remains the correction for a cashier mistake** | Refunds; 7-day exchanges with credit notes (v3); voiding past orders | Owner simplification (v4). Keeps closed Z-reports fixed and cash reconciliation true. Exchanges and credit notes move to Phase 5, and the schema keeps extension points. |
 | 6b | **Cashier discount ≤ 5%, combined per line (item + bill share)**, bill discounts apportioned pro-rata by largest remainder | Separate 5% caps for item and bill (which allows ~9.75% stacked) | Owner rule. Pro-rata shares keep batch margins exact, and future exchange values with them. |
-| 10 | **Dual-language UI (en/si), with receipts and labels in English** | Sinhala on receipts | Generic ESC/POS and TSPL printers have no Sinhala code page. Raster printing is Phase 5. |
+| 10 | **Dual-language UI (en/si), with receipts and labels in English** | Sinhala on receipts | Generic ESC/POS and TSPL printers have no Sinhala code page. Raster printing is Phase 5. *Since then receipts (§7.2) and labels (#30) print as pictures the webview draws, so Sinhala text can print; the sticker design still shows only the shop name, barcode and price.* |
 | 11 | **Customer phone optional, keyed by `UUIDv5(phone)`, never copied onto orders** | A mandatory customer; a phone snapshot on each order | Never slows a sale, merges cleanly offline, and makes PDPA erasure possible without touching immutable orders. |
 | 12 | **~~3-up 1″×1″ labels use a 6-digit Code128 SKU~~ superseded by #29** | EAN-13 on 1″ labels | EAN-13 can't fit at a scannable module size on 1″ at 203 dpi. |
 | 13 | **Manual backup via `VACUUM INTO` on a read connection** | Copying `pos.db`; the SQLite backup API under the writer lock | A consistent snapshot without pausing the till. Raw copies of WAL databases can be torn. |
@@ -3072,6 +3076,7 @@ cargo add --dev proptest
 | 27 | **Cash drawer: Today / History tabs; guided close that shows over/short before confirming; any closed shift can be reprinted; cashiers see their own counter's history, `REPORT_SALES` sees all** (owner-confirmed 2026-11-20) | Everyone sees every counter; history behind `REPORT_SALES` only; a blind count that hides the expected cash | The shop is small and the owner wants cashiers to find their own shift's Z-report without a supervisor. Showing the expected figure while counting lets the cashier recount before closing, and the variance is still recorded and audited either way. No schema change; two new commands and one widened permission check. |
 | 28 | **Bills: one search box (receipt or phone, all dates), day shortcuts, one Filters dialog; cashiers see their own counter's bills and can reprint a receipt, `REPORT_SALES` sees all** (owner-confirmed 2026-11-21) | The old table with a period picker, three filters and two export buttons always on screen; Bills for `REPORT_SALES` only | A customer comes back with a receipt or says their phone number, and the cashier at the till must find the bill without a supervisor. Searching all dates and a single smart box removes the "which day was it?" step. No schema change; the query gained phone, payment and exchange filters, and `print_receipt_image` now audits a reprint when given the bill. |
 | 29 | **Labels print only the barcode, never the SKU; in-store barcodes are 8 digits, `2{device}{seq:05}{check}`** (owner-confirmed 2026-11-22) | The SKU as a label fallback (#12); 13-digit in-store EAN-13s; 6- or 7-digit codes | The SKU is the cashier's typed shorthand (`b400`, `red1`), not a scan code. A scratched sticker means typing the barcode by hand, and 8 digits are far quicker than 13. The EAN-8 check digit stops a mistyped number from selling a different product. 8 digits can never equal a 6-digit generated SKU, which a 6-digit barcode could. Code128-C encodes 8 digits in four pairs, so the barcode fits the 30 × 16 mm roll at a 2-dot module. Existing 13-digit barcodes stay valid and their numbers are never reused, but they are too wide for the 30 × 16 mm roll, and products without a barcode print no bars until one is generated. No schema change. |
+| 30 | **Labels print as pictures: an HTML/CSS sticker template drawn by the webview at one pixel per printer dot, sent as TSPL `BITMAP` / ZPL `^GFA`; the printers' own fonts and text commands are no longer used** (owner-confirmed 2026-11-22) | Positioning `TEXT` in the printers' bitmap fonts (firmware-dependent widths, an estimate of every character); a printer-native `BARCODE` command over a text picture (two drawing paths) | One pipeline, like receipts, and the preview *is* the picture. The bars stay exact because Rust supplies them as whole-dot rectangles drawn with crisp edges at pixel ratio 1, so thresholding never moves a bar edge. One picture per product (about 10 KB for 50 × 25 mm), repeated with `PRINT n`, keeps jobs small. Each picture is checked against the template's exact sticker size, and a job drawn for another dpi refuses to print. TSPL prints a 0 bit black, so its bytes are inverted; this and scannability are confirmed with a test print on the shop's printers. |
 
 
 ---

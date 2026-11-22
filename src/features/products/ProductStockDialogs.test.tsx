@@ -6,6 +6,7 @@ import {
   type Product_Serialize as Product,
 } from "@/db/bindings";
 import { chooseOption, err, ok, renderWithProviders } from "@/test/render";
+import { drawnJob, stickerLayout } from "@/test/labels";
 import { AdjustStockDialog, RestockDialog } from "./ProductStockDialogs";
 
 vi.mock("@/db/bindings", () => ({
@@ -17,7 +18,13 @@ vi.mock("@/db/bindings", () => ({
     requestApproval: vi.fn(),
     labelPrinterProfile: vi.fn(),
     printLabels: vi.fn(),
+    labelPreview: vi.fn(),
   },
+}));
+
+vi.mock("@/lib/labelImage", () => ({
+  labelBitmapFromElement: (_node: HTMLElement, width: number, height: number) =>
+    Promise.resolve({ width, height, data: [] }),
 }));
 
 const LABEL_PRINTER: LabelPrinterProfile_Serialize = {
@@ -62,7 +69,8 @@ beforeEach(() => {
   vi.mocked(commands.requestApproval).mockImplementation(() => ok({ approval_id: "appr", expires_at: "" }));
   vi.mocked(commands.labelPrinterProfile).mockImplementation(() => ok(null));
   vi.mocked(commands.printLabels).mockReset();
-  vi.mocked(commands.printLabels).mockImplementation(() => ok({} as never));
+  vi.mocked(commands.printLabels).mockImplementation(() => ok(null));
+  vi.mocked(commands.labelPreview).mockImplementation((job) => ok(stickerLayout(job)));
 });
 
 describe("RestockDialog", () => {
@@ -93,7 +101,11 @@ describe("RestockDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add 5 to stock" }));
     await waitFor(() =>
       expect(commands.printLabels).toHaveBeenCalledWith(
-        { template_id: "three_up_30x16", items: [{ product_id: "pot", copies: 5 }], fill_last_row: false },
+        drawnJob({
+          template_id: "three_up_30x16",
+          items: [{ product_id: "pot", copies: 5 }],
+          fill_last_row: false,
+        }),
         null,
       ),
     );

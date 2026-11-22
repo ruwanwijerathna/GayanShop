@@ -114,6 +114,8 @@
     "LABEL_COPIES_INVALID": "Copies must be 1 to 999.",
     "LABEL_JOB_TOO_LARGE": "That's more than 5,000 labels in one go.",
     "LABEL_PRODUCT_INVALID": "One of the products no longer exists.",
+    "LABEL_IMAGE_INVALID": "The sticker picture doesn't match the chosen sticker size. Close the window and print again.",
+    "LABEL_DPI_CHANGED": "These stickers were drawn for a different printer resolution. Print them again.",
     "STOCK_INSUFFICIENT": "Only {{detail}} on hand: you can't remove more than that.",
     "STOCK_NOTE_REQUIRED": "Say why: a reason is required.",
     "COUNT_EMPTY": "Add at least one product to the count.",

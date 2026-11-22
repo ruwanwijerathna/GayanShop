@@ -9,6 +9,7 @@ import {
   type Product_Serialize as Product,
 } from "@/db/bindings";
 import { err, ok, renderWithProviders, session } from "@/test/render";
+import { drawnJob, stickerLayout } from "@/test/labels";
 import { ProductsScreen } from "./ProductsScreen";
 import { stockLevel } from "./stock";
 
@@ -27,8 +28,14 @@ vi.mock("@/db/bindings", () => ({
     stockMovements: vi.fn(),
     labelPrinterProfile: vi.fn(),
     printLabels: vi.fn(),
+    labelPreview: vi.fn(),
     assignInStoreBarcodes: vi.fn(),
   },
+}));
+
+vi.mock("@/lib/labelImage", () => ({
+  labelBitmapFromElement: (_node: HTMLElement, width: number, height: number) =>
+    Promise.resolve({ width, height, data: [] }),
 }));
 
 const MANAGER: Perm[] = ["PRODUCT_MANAGE", "VIEW_COST"];
@@ -93,7 +100,8 @@ beforeEach(() => {
   vi.mocked(commands.adjustStock).mockReset();
   vi.mocked(commands.labelPrinterProfile).mockImplementation(() => ok(null));
   vi.mocked(commands.printLabels).mockReset();
-  vi.mocked(commands.printLabels).mockImplementation(() => ok({} as never));
+  vi.mocked(commands.printLabels).mockImplementation(() => ok(null));
+  vi.mocked(commands.labelPreview).mockImplementation((job) => ok(stickerLayout(job)));
   vi.mocked(commands.assignInStoreBarcodes).mockReset();
 });
 
@@ -356,7 +364,11 @@ describe("ProductsScreen", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(commands.printLabels).toHaveBeenCalledWith(
-        { template_id: "two_up_50x25", items: [{ product_id: "soap1", copies: 12 }], fill_last_row: false },
+        drawnJob({
+          template_id: "two_up_50x25",
+          items: [{ product_id: "soap1", copies: 12 }],
+          fill_last_row: false,
+        }),
         null,
       ),
     );
