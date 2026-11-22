@@ -15,13 +15,10 @@
     "category": "Category",
     "price": "Price",
     "cost": "Cost",
-    "status": "Status",
     "stock": "Stock",
     "actions": "Actions"
   },
   "status": {
-    "active": "Active",
-    "inactive": "Inactive",
     "conflict": "Barcode conflict"
   },
   "form": {
@@ -47,9 +44,6 @@
     "codeManual": "Type or scan",
     "trackStock": "Track stock",
     "allowNegative": "Allow selling when stock shows zero",
-    "active": "Active (can be sold)",
-    "activeHint": "Available for sale on the POS terminal",
-    "inactiveHint": "Hidden from POS and cannot be sold",
     "quantity": "Quantity",
     "quantityPlaceholder": "Units on the shelf today (optional)",
     "quantityInvalid": "Enter a whole number of units (0 or more).",
@@ -70,7 +64,9 @@
     "addHint": "Add a product to the catalog.",
     "createCategory": "Create “{{name}}”",
     "noCategoryMatch": "No matching category",
-    "categoryPlaceholder": "Search or type a new category"
+    "categoryPlaceholder": "Search or type a new category",
+    "newProduct": "New product",
+    "deleteNeedsZero": "Stock must be 0 to delete ({{count}} on hand). Use Adjust stock in the row menu first."
   },
   "categories": {
     "title": "Categories",
@@ -115,7 +111,6 @@
   "filters": {
     "category": "Category",
     "stock": "Stock level",
-    "status": "Status",
     "reset": "Reset"
   },
   "stockLevel": {
@@ -134,7 +129,8 @@
     "dataHint": "Move product lists in and out of the shop as CSV files.",
     "export": "Export",
     "exportHint": "Save all products as a CSV file in a folder you choose.",
-    "import": "Import"
+    "import": "Import",
+    "categoriesHint": "Add, rename and remove the categories used to group products."
   },
   "import": {
     "hint": "Choose a CSV file with the columns: {{columns}}. Only name and price are required.",

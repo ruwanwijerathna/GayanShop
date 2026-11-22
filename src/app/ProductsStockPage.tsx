@@ -1,8 +1,9 @@
-import { ArrowLeftRight, MoreVertical, Scale } from "lucide-react";
+import { ArrowLeftRight, FolderTree, MoreVertical, Scale } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Can } from "@/components/auth/Can";
 import { ExportButton } from "@/components/export/ExportButton";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,6 +12,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { useCategories } from "@/db/hooks";
+import { CategoriesDialog } from "@/features/products/CategoriesDialog";
 import { StockPanel } from "@/features/inventory/StockPanel";
 import { ProductImportPanel } from "@/features/products/ProductImportPanel";
 import { ProductsScreen } from "@/features/products/ProductsScreen";
@@ -22,13 +25,15 @@ type Drawer = "valuation" | "data";
 /**
  * Products & Stock: the catalog with live on-hand counts. Page-wide tools sit behind the ⋮ beside the
  * title and open in a side drawer (stock valuation; export and import). Changing one product's stock
- * happens on its row (Restock / Adjust stock); adding a product is the toolbar button. Composed in
+ * happens on its row (Restock / Adjust stock); adding or editing a product is the panel beside the list. Composed in
  * `src/app` because features never import each other.
  */
 export function ProductsStockPage() {
   const { t } = useTranslation(["products", "app"]);
   const { session } = useSession();
   const [drawer, setDrawer] = useState<Drawer | null>(null);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const categories = useCategories();
   const canValue = hasPerm(session, "REPORT_FINANCIAL");
   const canData = hasPerm(session, "DATA_EXPORT") || hasPerm(session, "PRODUCT_MANAGE");
 
@@ -86,7 +91,29 @@ export function ProductsStockPage() {
             )}
             {drawer === "data" && (
               <div className="flex flex-col gap-6">
-                <section className="flex flex-col gap-3" aria-label={t("tools.export")}>
+                <Can perm="PRODUCT_MANAGE">
+                  <section className="flex flex-col gap-3" aria-label={t("categories.title")}>
+                    <h2 className="text-lg font-semibold">{t("categories.title")}</h2>
+                    <p className="text-sm text-muted-foreground">{t("tools.categoriesHint")}</p>
+                    <Button
+                      type="button"
+                      size="pos"
+                      variant="outline"
+                      className="self-start rounded-xl"
+                      onClick={() => {
+                        setDrawer(null);
+                        setCategoriesOpen(true);
+                      }}
+                    >
+                      <FolderTree aria-hidden />
+                      {t("categories.title")}
+                      <Badge variant="secondary" className="ml-1 rounded-md px-1.5 tabular-nums">
+                        {categories.data?.length ?? 0}
+                      </Badge>
+                    </Button>
+                  </section>
+                </Can>
+                <section className="flex flex-col gap-3 border-t pt-6" aria-label={t("tools.export")}>
                   <h2 className="text-lg font-semibold">{t("tools.export")}</h2>
                   <p className="text-sm text-muted-foreground">{t("tools.exportHint")}</p>
                   <div className="self-start">
@@ -104,6 +131,11 @@ export function ProductsStockPage() {
           </div>
         </SheetContent>
       </Sheet>
+      <CategoriesDialog
+        open={categoriesOpen}
+        onOpenChange={setCategoriesOpen}
+        categories={categories.data ?? []}
+      />
     </section>
   );
 }

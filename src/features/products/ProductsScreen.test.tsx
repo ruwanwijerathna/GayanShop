@@ -10,6 +10,7 @@ import {
 } from "@/db/bindings";
 import { err, ok, renderWithProviders, session } from "@/test/render";
 import { drawnJob, stickerLayout } from "@/test/labels";
+import { CategoriesDialog } from "./CategoriesDialog";
 import { ProductsScreen } from "./ProductsScreen";
 import { stockLevel } from "./stock";
 
@@ -117,8 +118,13 @@ const pickFacet = (filter: string, option: RegExp | string) => {
   fireEvent.click(screen.getByRole("menuitemcheckbox", { name: option }));
   fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
 };
-const openCategories = async () => {
-  fireEvent.click(await screen.findByRole("button", { name: /^Categories/ }));
+/** Categories now open from the page's Export & import panel; the dialog is exercised on its own. */
+const openCategories = async (perms: Perm[]) => {
+  renderWithProviders(
+    <As perms={perms}>
+      <CategoriesDialog open onOpenChange={() => undefined} categories={categories} />
+    </As>,
+  );
   return screen.findByRole("dialog", { name: "Categories" });
 };
 
@@ -127,10 +133,13 @@ describe("ProductsScreen", () => {
     renderAs(MANAGER);
     expect(await within(grid()).findByText("Blue Bucket 10L")).toBeInTheDocument();
     expect(within(grid()).queryByText("නිල් බාල්දිය")).not.toBeInTheDocument(); // no secondary name line
-    expect(within(grid()).getByText("Home › Kitchen")).toBeInTheDocument();
-    expect(within(grid()).getAllByText("Rs 200.00")).toHaveLength(2);
-    expect(within(grid()).queryByText("Old Mug")).not.toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("2 products");
+    expect(within(grid()).getAllByText("Home › Kitchen")[0]).toBeInTheDocument();
+    expect(within(grid()).getAllByText("Rs 200.00")).toHaveLength(3);
+    expect(within(grid()).getByText("Old Mug")).toBeInTheDocument(); // no Status concept: every product is listed
+    expect(screen.queryByRole("button", { name: "Add product" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Categories/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Status" })).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("3 products");
 
     fireEvent.change(screen.getByRole("searchbox", { name: "Search products" }), {
       target: { value: "බාල්" },
@@ -139,10 +148,6 @@ describe("ProductsScreen", () => {
     expect(screen.getByRole("status")).toHaveTextContent("1 product");
 
     fireEvent.change(screen.getByRole("searchbox", { name: "Search products" }), { target: { value: "" } });
-    pickFacet("Status", /^Inactive/);
-    expect(within(grid()).getByText("Old Mug")).toBeInTheDocument();
-    expect(within(grid()).getByText("Inactive")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("3 products");
 
     pickFacet("Category", /Home › Kitchen/);
     expect(screen.getByRole("status")).toHaveTextContent("2 products");
@@ -159,8 +164,8 @@ describe("ProductsScreen", () => {
     expect(screen.queryByRole("button", { name: /^Short barcode/ })).not.toBeInTheDocument();
     expect(within(grid()).queryByText("Cost")).not.toBeInTheDocument();
     fireEvent.click(within(grid()).getByText("Blue Bucket 10L"));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    const categories = await openCategories();
+    expect(screen.queryByRole("form")).not.toBeInTheDocument(); // no editor panel without PRODUCT_MANAGE
+    const categories = await openCategories(["SALE_CREATE"]);
     expect(within(categories).getByText("Kitchen")).toBeInTheDocument();
     expect(within(categories).queryByRole("button", { name: "Add category" })).not.toBeInTheDocument();
     expect(within(categories).queryByRole("button", { name: /^Delete / })).not.toBeInTheDocument();
@@ -183,7 +188,9 @@ describe("ProductsScreen", () => {
     expect(dialog).toHaveTextContent("2 products have no barcode");
     fireEvent.click(within(dialog).getByRole("button", { name: "Give 2 barcodes" }));
     await waitFor(() => expect(commands.assignInStoreBarcodes).toHaveBeenCalledWith(["p2", "p3"]));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(within(dialog).queryByRole("button", { name: "Saving…" })).not.toBeInTheDocument(),
+    );
     expect(await screen.findByText("2 selected")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Print labels (2)" })).toBeInTheDocument();
   });
@@ -202,8 +209,7 @@ describe("ProductsScreen", () => {
   it("fills the SKU and barcode inputs instantly on Generate, sending them as typed codes", async () => {
     vi.mocked(commands.createProduct).mockImplementation(() => ok(product({ id: "new", name: "Soap" })));
     renderAs(MANAGER);
-    fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("form", { name: "Add product" });
     const name = within(dialog).getByLabelText("Product Name");
     expect(name).toHaveAttribute("placeholder", "Enter product name");
     expect(within(dialog).queryByLabelText(/Sinhala/)).not.toBeInTheDocument();
@@ -216,7 +222,9 @@ describe("ProductsScreen", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Generate barcode" }));
     expect(within(dialog).getByLabelText(/^Barcode/)).toHaveValue("22000019");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(within(dialog).queryByRole("button", { name: "Saving…" })).not.toBeInTheDocument(),
+    );
     expect(commands.createProduct).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "Soap",
@@ -231,23 +239,95 @@ describe("ProductsScreen", () => {
 
   it("generates a different code each time Generate is clicked", async () => {
     renderAs(MANAGER);
-    fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
-    const dialog = await screen.findByRole("dialog");
+    await waitFor(() => expect(commands.appStatus).toHaveBeenCalled());
+    const dialog = await screen.findByRole("form", { name: "Add product" });
     const generate = within(dialog).getByRole("button", { name: "Generate SKU" });
     fireEvent.click(generate);
     fireEvent.click(generate);
     expect(within(dialog).getByLabelText(/^SKU/)).toHaveValue("200002");
   });
 
-  it("puts the note last, as a multi-line textarea", async () => {
+  it("asks for a note only once an opening quantity is typed, and puts it last", async () => {
     renderAs(MANAGER);
-    fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("form", { name: "Add product" });
+    expect(within(dialog).queryByLabelText("Note")).not.toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText("Quantity"), { target: { value: "5" } });
     const note = within(dialog).getByLabelText("Note");
     expect(note.tagName).toBe("TEXTAREA");
-    const fields = Array.from(dialog.querySelectorAll("input, textarea, [role='switch']"));
-    expect(fields.indexOf(note)).toBe(fields.length - 1 - fields.slice(fields.indexOf(note) + 1).length);
-    expect(fields.slice(fields.indexOf(note) + 1)).toHaveLength(0);
+    const fields = Array.from(dialog.querySelectorAll("input, textarea"));
+    expect(fields.at(-1)).toBe(note);
+  });
+
+  it("lays the form out beside the list: barcode, name, SKU, prices, quantity, category, then Save", async () => {
+    renderAs(MANAGER);
+    const dialog = await screen.findByRole("form", { name: "Add product" });
+    const order = ["Barcode", "Product Name", "SKU", "Purchase price (Rs)", "Selling price (Rs)", "Quantity"];
+    const fields = Array.from(dialog.querySelectorAll("input, [role='combobox']"));
+    const at = (label: RegExp | string) => fields.indexOf(within(dialog).getByLabelText(label));
+    const positions = order.map((l) => at(l === "Barcode" || l === "SKU" ? new RegExp(`^${l}`) : l));
+    expect(positions).toEqual([...positions].sort((x, y) => x - y));
+    expect(within(dialog).getByRole("combobox", { name: "Category" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeInTheDocument();
+    expect(within(dialog).queryByRole("switch")).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+  });
+
+  it("clears the form after saving, ready for the next product", async () => {
+    vi.mocked(commands.createProduct).mockImplementation(() => ok(product({ id: "new3", name: "Apple" })));
+    renderAs(MANAGER);
+    const dialog = await screen.findByRole("form", { name: "Add product" });
+    fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Apple" } });
+    fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "50" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(commands.createProduct).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole("form", { name: "Add product" })).getByLabelText("Product Name"),
+      ).toHaveValue(""),
+    );
+  });
+
+  it("goes back to a blank new-product form from edit mode", async () => {
+    renderAs(MANAGER);
+    fireEvent.click(await within(grid()).findByText("Blue Bucket 10L"));
+    const edit = await screen.findByRole("form", { name: "Edit product" });
+    fireEvent.click(screen.getByRole("button", { name: "New product" }));
+    expect(edit).not.toBeInTheDocument();
+    expect(
+      within(await screen.findByRole("form", { name: "Add product" })).getByLabelText("Product Name"),
+    ).toHaveValue("");
+  });
+
+  it("deletes only a product whose stock is 0, and explains why otherwise", async () => {
+    vi.mocked(commands.deleteProduct).mockImplementation(() => ok(null));
+    vi.mocked(commands.listProducts).mockImplementation(() =>
+      ok([
+        product({ on_hand: 45 }),
+        product({ id: "p9", name: "Empty Tin", sku: "100009", barcode: null, on_hand: 0 }),
+        product({
+          id: "p8",
+          name: "Gift Card",
+          sku: "100008",
+          barcode: null,
+          track_stock: false,
+          on_hand: 0,
+        }),
+      ]),
+    );
+    renderAs(MANAGER);
+    fireEvent.click(await within(grid()).findByText("Blue Bucket 10L"));
+    let form = await screen.findByRole("form", { name: "Edit product" });
+    expect(within(form).getByRole("button", { name: "Delete" })).toBeDisabled();
+    expect(within(form).getByText(/Stock must be 0 to delete \(45 on hand\)/)).toBeInTheDocument();
+
+    fireEvent.click(within(grid()).getByText("Empty Tin"));
+    form = await screen.findByRole("form", { name: "Edit product" });
+    await waitFor(() => expect(within(form).getByLabelText("Selling price (Rs)")).toBeInTheDocument());
+    const del = within(form).getByRole("button", { name: "Delete" });
+    expect(del).toBeEnabled();
+    fireEvent.click(del);
+    fireEvent.click(within(form).getByRole("button", { name: "Yes, delete" }));
+    await waitFor(() => expect(commands.deleteProduct).toHaveBeenCalledWith("p9"));
   });
 
   it("suggests existing categories while typing and creates a new one on the fly", async () => {
@@ -256,8 +336,8 @@ describe("ProductsScreen", () => {
     );
     vi.mocked(commands.createProduct).mockImplementation(() => ok(product({ id: "n", name: "Boot" })));
     renderAs(MANAGER);
-    fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
-    const dialog = await screen.findByRole("dialog");
+    await within(grid()).findByText("Blue Bucket 10L"); // categories are loaded with the list
+    const dialog = await screen.findByRole("form", { name: "Add product" });
     const box = within(dialog).getByRole("combobox", { name: "Category" });
     fireEvent.change(box, { target: { value: "kitch" } });
     expect(await screen.findByRole("option", { name: "Home › Kitchen" })).toBeInTheDocument();
@@ -279,8 +359,8 @@ describe("ProductsScreen", () => {
   it("picks an existing category with the keyboard and offers no duplicate create row", async () => {
     vi.mocked(commands.createProduct).mockImplementation(() => ok(product({ id: "k", name: "Pan" })));
     renderAs(MANAGER);
-    fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
-    const dialog = await screen.findByRole("dialog");
+    await within(grid()).findByText("Blue Bucket 10L"); // categories are loaded with the list
+    const dialog = await screen.findByRole("form", { name: "Add product" });
     const box = within(dialog).getByRole("combobox", { name: "Category" });
     fireEvent.change(box, { target: { value: "Home › Kitchen" } });
     expect(screen.queryByRole("option", { name: /^Create/ })).not.toBeInTheDocument();
@@ -296,12 +376,13 @@ describe("ProductsScreen", () => {
   it("creates a product with no SKU or barcode when left blank (None state)", async () => {
     vi.mocked(commands.createProduct).mockImplementation(() => ok(product({ id: "new2", name: "Apple" })));
     renderAs(MANAGER);
-    fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("form", { name: "Add product" });
     fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Apple" } });
     fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "50" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(within(dialog).queryByRole("button", { name: "Saving…" })).not.toBeInTheDocument(),
+    );
     expect(commands.createProduct).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "Apple",
@@ -317,14 +398,15 @@ describe("ProductsScreen", () => {
     );
     vi.mocked(commands.adjustStock).mockImplementation(() => ok({} as never));
     renderAs(MANAGER);
-    fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("form", { name: "Add product" });
     fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Sunlight Soap" } });
     fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "150" } });
     fireEvent.change(within(dialog).getByLabelText("Quantity"), { target: { value: "50" } });
     fireEvent.change(within(dialog).getByLabelText("Note"), { target: { value: "Initial opening batch" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(within(dialog).queryByRole("button", { name: "Saving…" })).not.toBeInTheDocument(),
+    );
     expect(commands.createProduct).toHaveBeenCalled();
     expect(commands.adjustStock).toHaveBeenCalledWith(
       {
@@ -355,8 +437,7 @@ describe("ProductsScreen", () => {
     );
     vi.mocked(commands.adjustStock).mockImplementation(() => ok({} as never));
     renderAs(MANAGER);
-    fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("form", { name: "Add product" });
     await waitFor(() => expect(commands.labelPrinterProfile).toHaveBeenCalled());
     fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Sunlight Soap" } });
     fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "150" } });
@@ -390,21 +471,21 @@ describe("ProductsScreen", () => {
     );
     vi.mocked(commands.createProduct).mockImplementation(() => ok(product({ id: "n0", name: "Comb" })));
     renderAs(MANAGER);
-    fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("form", { name: "Add product" });
     await waitFor(() => expect(commands.labelPrinterProfile).toHaveBeenCalled());
     fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Comb" } });
     fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "90" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(within(dialog).queryByRole("button", { name: "Saving…" })).not.toBeInTheDocument(),
+    );
     expect(commands.adjustStock).not.toHaveBeenCalled();
     expect(commands.printLabels).not.toHaveBeenCalled();
   });
 
   it("keeps the dialog open with the field error for a bad amount, without calling Rust", async () => {
     renderAs(MANAGER);
-    fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("form", { name: "Add product" });
     fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "12.345" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     expect(await within(dialog).findByText("Enter an amount such as 450 or 450.50.")).toBeInTheDocument();
@@ -418,7 +499,7 @@ describe("ProductsScreen", () => {
     );
     renderAs(MANAGER);
     fireEvent.click(await within(grid()).findByText("Blue Bucket 10L"));
-    const dialog = await screen.findByRole("dialog", { name: "Edit product" });
+    const dialog = await screen.findByRole("form", { name: "Edit product" });
     expect(within(dialog).getByLabelText("Selling price (Rs)")).toHaveValue("450.00");
     fireEvent.change(within(dialog).getByLabelText(/^Barcode/), { target: { value: "4792024015103" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
@@ -441,8 +522,7 @@ describe("ProductsScreen", () => {
     vi.mocked(commands.deleteCategory).mockImplementation(() =>
       err({ kind: "VALIDATION", code: "CATEGORY_IN_USE", detail: "1 products" }),
     );
-    renderAs(MANAGER);
-    const dialog = await openCategories();
+    const dialog = await openCategories(MANAGER);
     fireEvent.click(within(dialog).getByRole("button", { name: "Add category" }));
     const nameField = within(dialog).getByLabelText("Category name");
     fireEvent.change(nameField, { target: { value: "Shoes" } });
@@ -483,7 +563,7 @@ describe("ProductsScreen", () => {
     expect(names()[0]).toContain("Black Sandal");
     openMenu(within(grid()).getByRole("button", { name: "Name" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Desc" }));
-    expect(names()[0]).toContain("Blue Bucket 10L");
+    expect(names()[0]).toContain("Old Mug");
   });
 
   it("pages through a long list", async () => {
@@ -530,7 +610,7 @@ describe("ProductsScreen", () => {
     await within(grid()).findByText("Blue Bucket 10L");
     openMenu(screen.getByRole("button", { name: "Actions for Blue Bucket 10L" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Edit product" }));
-    expect(await screen.findByRole("dialog", { name: "Edit product" })).toBeInTheDocument();
+    expect(await screen.findByRole("form", { name: "Edit product" })).toBeInTheDocument();
   });
 
   it("offers Restock and Adjust stock on a tracked product's row, opening separate dialogs", async () => {
@@ -548,7 +628,7 @@ describe("ProductsScreen", () => {
     await within(grid()).findByText("Blue Bucket 10L");
     openMenu(screen.getByRole("button", { name: "Actions for Blue Bucket 10L" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Edit product" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("form", { name: "Edit product" });
     expect(within(dialog).queryByLabelText("Quantity")).not.toBeInTheDocument();
     expect(within(dialog).getByText(/use Restock or Adjust stock/)).toBeInTheDocument();
   });

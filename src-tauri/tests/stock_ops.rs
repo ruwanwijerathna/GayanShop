@@ -303,3 +303,25 @@ async fn stock_writes_need_their_permission_or_a_supervisor() {
     t.login(SUP, common::SUP_PIN).await;
     assert!(require(&t.auth, &t.clock, Perm::STOCK_DAMAGE, "stock", None).is_ok(), "supervisors record damage");
 }
+
+#[tokio::test]
+async fn a_product_with_stock_on_hand_cannot_be_deleted_until_its_stock_is_zero() {
+    use gayanshop_lib::db::repo::products;
+    let t = till().await;
+    let bucket = t.stocked("Bucket", 45_000, &[(3, 20_000)]).await;
+
+    let err = products::delete(&t.t.db, &t.ctx(), &t.owner(), &bucket).await.unwrap_err();
+    assert_eq!(code(err), "PRODUCT_HAS_STOCK");
+    assert_eq!(on_hand(&t, &bucket).await, 3, "the refused delete changed nothing");
+    assert_eq!(
+        t.count(&format!("SELECT COUNT(*) FROM products WHERE id = '{bucket}' AND deleted_at IS NULL")).await,
+        1
+    );
+
+    inventory::adjust(&t.t.db, &t.ctx(), &t.owner(), &adjust(&bucket, -3, "written off before delete")).await.unwrap();
+    products::delete(&t.t.db, &t.ctx(), &t.owner(), &bucket).await.unwrap();
+    assert_eq!(
+        t.count(&format!("SELECT COUNT(*) FROM products WHERE id = '{bucket}' AND deleted_at IS NOT NULL")).await,
+        1
+    );
+}
