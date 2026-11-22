@@ -5,7 +5,7 @@ import {
   type LabelPreview_Serialize as LabelPreview,
   type LabelTemplate_Serialize as LabelTemplate,
 } from "@/db/bindings";
-import { chooseOption, err, ok, renderWithProviders } from "@/test/render";
+import { err, ok, renderWithProviders } from "@/test/render";
 import { PrintLabelsDialog } from "./PrintLabelsDialog";
 
 vi.mock("@/db/bindings", () => ({
@@ -82,7 +82,7 @@ beforeEach(() => {
 });
 
 describe("PrintLabelsDialog", () => {
-  it("previews exactly what will print, with warnings, then prints", async () => {
+  it("previews a single label, with warnings, then prints every copy", async () => {
     vi.mocked(commands.printLabels).mockImplementation(() => ok(PREVIEW));
     const onClose = vi.fn();
     renderWithProviders(
@@ -97,12 +97,13 @@ describe("PrintLabelsDialog", () => {
     expect(screen.getByText(/Ladies Sandal: the code is too long/)).toBeInTheDocument();
     expect(commands.labelPreview).toHaveBeenCalledWith({
       template_id: "two_up_50x25",
-      items: [{ product_id: "p1", copies: 12 }],
+      items: [{ product_id: "p1", copies: 1 }],
       fill_last_row: false,
     });
+    expect(screen.getAllByRole("img", { name: "Label preview" })).toHaveLength(1);
 
     fireEvent.change(screen.getByLabelText("Copies of Ladies Sandal"), { target: { value: "3" } });
-    chooseOption(screen.getByLabelText("Label roll"), "30 x 16 mm, 3 across");
+    fireEvent.click(screen.getByRole("radio", { name: "30 x 16 mm, 3 across" }));
     fireEvent.click(screen.getByRole("button", { name: "Print 3 label(s)" }));
     await waitFor(() =>
       expect(commands.printLabels).toHaveBeenCalledWith(
@@ -112,6 +113,74 @@ describe("PrintLabelsDialog", () => {
     );
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(localStorage.getItem("gayanshop.label.template")).toBe("three_up_30x16");
+  });
+
+  it("previews one label however many copies are requested", async () => {
+    vi.mocked(commands.printLabels).mockImplementation(() => ok(PREVIEW));
+    renderWithProviders(
+      <PrintLabelsDialog
+        items={[{ product_id: "p1", name: "Ladies Sandal", copies: 20 }]}
+        onClose={vi.fn()}
+      />,
+    );
+    await screen.findByRole("img", { name: "Label preview" });
+    expect(screen.getAllByRole("img", { name: "Label preview" })).toHaveLength(1);
+    for (const [job] of vi.mocked(commands.labelPreview).mock.calls) {
+      expect(job.items).toEqual([{ product_id: "p1", copies: 1 }]);
+    }
+    fireEvent.click(screen.getByRole("button", { name: "More copies of Ladies Sandal" }));
+    fireEvent.click(screen.getByRole("button", { name: "Print 21 label(s)" }));
+    await waitFor(() =>
+      expect(commands.printLabels).toHaveBeenCalledWith(
+        { template_id: "two_up_50x25", items: [{ product_id: "p1", copies: 21 }], fill_last_row: false },
+        null,
+      ),
+    );
+  });
+
+  it("lets several products be previewed one at a time, and checks warnings across all", async () => {
+    renderWithProviders(
+      <PrintLabelsDialog
+        items={[
+          { product_id: "p1", name: "Ladies Sandal", copies: 4 },
+          { product_id: "p2", name: "Kids Shoe", copies: 6 },
+        ]}
+        onClose={vi.fn()}
+      />,
+    );
+    await screen.findByRole("img", { name: "Label preview" });
+    fireEvent.click(screen.getByRole("button", { name: "Kids Shoe" }));
+    await waitFor(() =>
+      expect(commands.labelPreview).toHaveBeenCalledWith({
+        template_id: "two_up_50x25",
+        items: [{ product_id: "p2", copies: 1 }],
+        fill_last_row: false,
+      }),
+    );
+    expect(commands.labelPreview).toHaveBeenCalledWith({
+      template_id: "two_up_50x25",
+      items: [
+        { product_id: "p1", copies: 4 },
+        { product_id: "p2", copies: 6 },
+      ],
+      fill_last_row: false,
+    });
+    expect(await screen.findAllByRole("img", { name: "Label preview" })).toHaveLength(1);
+  });
+
+  it("offers to fill the last row only on rolls with several labels across", async () => {
+    vi.mocked(commands.labelTemplates).mockImplementation(() =>
+      ok([{ id: "one_up", name: "1-up", columns: 1, dpi: 203 }] as unknown as LabelTemplate[]),
+    );
+    localStorage.setItem("gayanshop.label.template", "one_up");
+    renderWithProviders(
+      <PrintLabelsDialog
+        items={[{ product_id: "p1", name: "Ladies Sandal", copies: 2 }]}
+        onClose={vi.fn()}
+      />,
+    );
+    await screen.findByRole("img", { name: "Label preview" });
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
   it("refuses zero copies", async () => {
