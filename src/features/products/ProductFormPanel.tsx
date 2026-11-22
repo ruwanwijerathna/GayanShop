@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import { useSession } from "@/app/session";
 import { useAutoPrintLabels } from "@/components/labels/useAutoPrintLabels";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Category, Product } from "@/db/bindings";
@@ -34,8 +33,8 @@ export interface ProductFormPanelProps {
   /** `null` = create. */
   product: Product | null;
   categories: Category[];
-  /** Leave edit mode (or finish a save): the panel goes back to an empty "new product" form. */
-  onDone: () => void;
+  /** A save, a delete or "New product": the parent decides whether to keep the slider open. */
+  onDone: (why: "saved" | "deleted" | "new") => void;
   onSaved?: (product: Product) => void;
 }
 
@@ -149,7 +148,7 @@ export function ProductFormPanel({ product, categories, onDone, onSaved }: Produ
       await qc.invalidateQueries({ queryKey: ["catalog"] });
       playCue("complete");
       onSaved?.(!product && qtyNumber > 0 ? { ...saved, on_hand: qtyNumber } : saved);
-      onDone();
+      onDone("saved");
     } catch {
       playCue("error");
     }
@@ -157,7 +156,7 @@ export function ProductFormPanel({ product, categories, onDone, onSaved }: Produ
 
   const doDelete = () => {
     if (!product) return;
-    remove.mutate(product.id, { onSuccess: onDone, onError: () => playCue("error") });
+    remove.mutate(product.id, { onSuccess: () => onDone("deleted"), onError: () => playCue("error") });
   };
 
   const codeField = (which: "sku" | "barcode") => {
@@ -225,14 +224,20 @@ export function ProductFormPanel({ product, categories, onDone, onSaved }: Produ
   const stocked = product !== null && product.track_stock && product.on_hand !== 0;
 
   return (
-    <Card className="gap-0 py-0 shadow-sm lg:sticky lg:top-4">
-      <div className="flex items-start justify-between gap-2 border-b px-4 py-3">
+    <div className="flex flex-col">
+      <div className="flex items-start justify-between gap-2 border-b py-3 pr-14 pl-4">
         <div className="min-w-0">
           <h3 className="text-base font-semibold">{product ? t("edit") : t("add")}</h3>
           <p className="truncate text-sm text-muted-foreground">{product?.name ?? t("form.addHint")}</p>
         </div>
         {product && (
-          <Button type="button" size="pos" variant="outline" className="shrink-0" onClick={onDone}>
+          <Button
+            type="button"
+            size="pos"
+            variant="outline"
+            className="shrink-0"
+            onClick={() => onDone("new")}
+          >
             <Plus aria-hidden />
             {t("form.newProduct")}
           </Button>
@@ -355,6 +360,6 @@ export function ProductFormPanel({ product, categories, onDone, onSaved }: Produ
           </div>
         )}
       </form>
-    </Card>
+    </div>
   );
 }

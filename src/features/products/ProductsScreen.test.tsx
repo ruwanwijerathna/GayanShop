@@ -106,6 +106,12 @@ beforeEach(() => {
   vi.mocked(commands.assignInStoreBarcodes).mockReset();
 });
 
+/** New products are added from the slider's edge handle. */
+const openAddForm = async () => {
+  fireEvent.click(await screen.findByRole("button", { name: "Add product" }));
+  return screen.findByRole("form", { name: "Add product" });
+};
+
 const grid = () => screen.getByRole("grid", { name: "Products", hidden: true });
 
 /** Radix menus open on Enter / pointer-down; jsdom gets the keyboard route. */
@@ -136,7 +142,6 @@ describe("ProductsScreen", () => {
     expect(within(grid()).getAllByText("Home › Kitchen")[0]).toBeInTheDocument();
     expect(within(grid()).getAllByText("Rs 200.00")).toHaveLength(3);
     expect(within(grid()).getByText("Old Mug")).toBeInTheDocument(); // no Status concept: every product is listed
-    expect(screen.queryByRole("button", { name: "Add product" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Categories/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Status" })).not.toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("3 products");
@@ -209,7 +214,7 @@ describe("ProductsScreen", () => {
   it("fills the SKU and barcode inputs instantly on Generate, sending them as typed codes", async () => {
     vi.mocked(commands.createProduct).mockImplementation(() => ok(product({ id: "new", name: "Soap" })));
     renderAs(MANAGER);
-    const dialog = await screen.findByRole("form", { name: "Add product" });
+    const dialog = await openAddForm();
     const name = within(dialog).getByLabelText("Product Name");
     expect(name).toHaveAttribute("placeholder", "Enter product name");
     expect(within(dialog).queryByLabelText(/Sinhala/)).not.toBeInTheDocument();
@@ -239,9 +244,9 @@ describe("ProductsScreen", () => {
 
   it("generates a different code each time Generate is clicked", async () => {
     renderAs(MANAGER);
-    await waitFor(() => expect(commands.appStatus).toHaveBeenCalled());
-    const dialog = await screen.findByRole("form", { name: "Add product" });
+    const dialog = await openAddForm();
     const generate = within(dialog).getByRole("button", { name: "Generate SKU" });
+    await waitFor(() => expect(generate).toBeEnabled());
     fireEvent.click(generate);
     fireEvent.click(generate);
     expect(within(dialog).getByLabelText(/^SKU/)).toHaveValue("200002");
@@ -249,7 +254,7 @@ describe("ProductsScreen", () => {
 
   it("asks for a note only once an opening quantity is typed, and puts it last", async () => {
     renderAs(MANAGER);
-    const dialog = await screen.findByRole("form", { name: "Add product" });
+    const dialog = await openAddForm();
     expect(within(dialog).queryByLabelText("Note")).not.toBeInTheDocument();
     fireEvent.change(within(dialog).getByLabelText("Quantity"), { target: { value: "5" } });
     const note = within(dialog).getByLabelText("Note");
@@ -260,7 +265,7 @@ describe("ProductsScreen", () => {
 
   it("lays the form out beside the list: barcode, name, SKU, prices, quantity, category, then Save", async () => {
     renderAs(MANAGER);
-    const dialog = await screen.findByRole("form", { name: "Add product" });
+    const dialog = await openAddForm();
     const order = ["Barcode", "Product Name", "SKU", "Purchase price (Rs)", "Selling price (Rs)", "Quantity"];
     const fields = Array.from(dialog.querySelectorAll("input, [role='combobox']"));
     const at = (label: RegExp | string) => fields.indexOf(within(dialog).getByLabelText(label));
@@ -275,7 +280,7 @@ describe("ProductsScreen", () => {
   it("clears the form after saving, ready for the next product", async () => {
     vi.mocked(commands.createProduct).mockImplementation(() => ok(product({ id: "new3", name: "Apple" })));
     renderAs(MANAGER);
-    const dialog = await screen.findByRole("form", { name: "Add product" });
+    const dialog = await openAddForm();
     fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Apple" } });
     fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "50" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
@@ -337,7 +342,7 @@ describe("ProductsScreen", () => {
     vi.mocked(commands.createProduct).mockImplementation(() => ok(product({ id: "n", name: "Boot" })));
     renderAs(MANAGER);
     await within(grid()).findByText("Blue Bucket 10L"); // categories are loaded with the list
-    const dialog = await screen.findByRole("form", { name: "Add product" });
+    const dialog = await openAddForm();
     const box = within(dialog).getByRole("combobox", { name: "Category" });
     fireEvent.change(box, { target: { value: "kitch" } });
     expect(await screen.findByRole("option", { name: "Home › Kitchen" })).toBeInTheDocument();
@@ -360,7 +365,7 @@ describe("ProductsScreen", () => {
     vi.mocked(commands.createProduct).mockImplementation(() => ok(product({ id: "k", name: "Pan" })));
     renderAs(MANAGER);
     await within(grid()).findByText("Blue Bucket 10L"); // categories are loaded with the list
-    const dialog = await screen.findByRole("form", { name: "Add product" });
+    const dialog = await openAddForm();
     const box = within(dialog).getByRole("combobox", { name: "Category" });
     fireEvent.change(box, { target: { value: "Home › Kitchen" } });
     expect(screen.queryByRole("option", { name: /^Create/ })).not.toBeInTheDocument();
@@ -376,7 +381,7 @@ describe("ProductsScreen", () => {
   it("creates a product with no SKU or barcode when left blank (None state)", async () => {
     vi.mocked(commands.createProduct).mockImplementation(() => ok(product({ id: "new2", name: "Apple" })));
     renderAs(MANAGER);
-    const dialog = await screen.findByRole("form", { name: "Add product" });
+    const dialog = await openAddForm();
     fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Apple" } });
     fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "50" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
@@ -398,7 +403,7 @@ describe("ProductsScreen", () => {
     );
     vi.mocked(commands.adjustStock).mockImplementation(() => ok({} as never));
     renderAs(MANAGER);
-    const dialog = await screen.findByRole("form", { name: "Add product" });
+    const dialog = await openAddForm();
     fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Sunlight Soap" } });
     fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "150" } });
     fireEvent.change(within(dialog).getByLabelText("Quantity"), { target: { value: "50" } });
@@ -437,7 +442,7 @@ describe("ProductsScreen", () => {
     );
     vi.mocked(commands.adjustStock).mockImplementation(() => ok({} as never));
     renderAs(MANAGER);
-    const dialog = await screen.findByRole("form", { name: "Add product" });
+    const dialog = await openAddForm();
     await waitFor(() => expect(commands.labelPrinterProfile).toHaveBeenCalled());
     fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Sunlight Soap" } });
     fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "150" } });
@@ -471,7 +476,7 @@ describe("ProductsScreen", () => {
     );
     vi.mocked(commands.createProduct).mockImplementation(() => ok(product({ id: "n0", name: "Comb" })));
     renderAs(MANAGER);
-    const dialog = await screen.findByRole("form", { name: "Add product" });
+    const dialog = await openAddForm();
     await waitFor(() => expect(commands.labelPrinterProfile).toHaveBeenCalled());
     fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Comb" } });
     fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "90" } });
@@ -485,7 +490,7 @@ describe("ProductsScreen", () => {
 
   it("keeps the dialog open with the field error for a bad amount, without calling Rust", async () => {
     renderAs(MANAGER);
-    const dialog = await screen.findByRole("form", { name: "Add product" });
+    const dialog = await openAddForm();
     fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "12.345" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     expect(await within(dialog).findByText("Enter an amount such as 450 or 450.50.")).toBeInTheDocument();
