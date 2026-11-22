@@ -53,46 +53,57 @@ function Bars({ b }: { b: PlacedBarcode }) {
   );
 }
 
+const SINGLE_PAD_MM = 1.5;
+
+/**
+ * The roll as it will print, or with `single` just the first label, cropped to it: what "Print labels" shows,
+ * since twenty copies of the same label add nothing.
+ */
 export function LabelPreviewSvg({
   preview,
   title,
   maxRows = 6,
+  single = false,
+  className = "w-full rounded-md border border-border bg-white text-black",
 }: {
   preview: LabelPreview;
   title: string;
   maxRows?: number;
+  single?: boolean;
+  className?: string;
 }) {
   const rows = Math.min(preview.rows, maxRows);
   const pitch = preview.label_h_mm + preview.row_gap_mm;
-  const height = Math.max(rows, 1) * pitch;
+  const first = preview.labels[0];
+  if (single && !first) return null;
+  const labels = single && first ? [first] : preview.labels.filter((l) => l.row < rows);
+  const viewBox =
+    single && first
+      ? `${first.x_mm - SINGLE_PAD_MM} ${-SINGLE_PAD_MM} ${preview.label_w_mm + 2 * SINGLE_PAD_MM} ${
+          preview.label_h_mm + 2 * SINGLE_PAD_MM
+        }`
+      : `0 0 ${preview.roll_width_mm} ${Math.max(rows, 1) * pitch}`;
   return (
-    <svg
-      role="img"
-      aria-label={title}
-      viewBox={`0 0 ${preview.roll_width_mm} ${height}`}
-      className="w-full rounded-md border border-border bg-white text-black"
-    >
-      {preview.labels
-        .filter((l) => l.row < rows)
-        .map((l) => (
-          <g key={`${l.row}:${l.col}`} transform={`translate(0 ${l.row * pitch})`}>
-            <rect
-              x={l.x_mm}
-              y={0}
-              width={preview.label_w_mm}
-              height={preview.label_h_mm}
-              rx={1}
-              fill="white"
-              stroke="currentColor"
-              strokeOpacity={0.35}
-              strokeWidth={0.2}
-            />
-            {l.texts.map((t, i) => (
-              <Text key={i} t={t} dpi={preview.dpi} />
-            ))}
-            {l.barcode && <Bars b={l.barcode} />}
-          </g>
-        ))}
+    <svg role="img" aria-label={title} viewBox={viewBox} className={className}>
+      {labels.map((l) => (
+        <g key={`${l.row}:${l.col}`} transform={`translate(0 ${single ? 0 : l.row * pitch})`}>
+          <rect
+            x={l.x_mm}
+            y={0}
+            width={preview.label_w_mm}
+            height={preview.label_h_mm}
+            rx={1}
+            fill="white"
+            stroke="currentColor"
+            strokeOpacity={0.35}
+            strokeWidth={0.2}
+          />
+          {l.texts.map((t, i) => (
+            <Text key={i} t={t} dpi={preview.dpi} />
+          ))}
+          {l.barcode && <Bars b={l.barcode} />}
+        </g>
+      ))}
     </svg>
   );
 }
