@@ -175,7 +175,6 @@ export function ProductFormPanel({ product, categories, onDone, onSaved }: Produ
             maxLength={which === "sku" ? 16 : 32}
             autoComplete="off"
             placeholder={which === "sku" ? t("form.skuPlaceholder") : t("form.barcodePlaceholder")}
-            aria-describedby={`product-${which}-hint`}
             onChange={(e) => {
               const val = e.target.value;
               set(which, val);
@@ -195,9 +194,6 @@ export function ProductFormPanel({ product, categories, onDone, onSaved }: Produ
             </Button>
           </WithTooltip>
         </div>
-        <p id={`product-${which}-hint`} className="text-sm text-muted-foreground">
-          {which === "sku" ? t("form.skuHint") : t("form.barcodeHint")}
-        </p>
       </Field>
     );
   };
@@ -241,8 +237,8 @@ export function ProductFormPanel({ product, categories, onDone, onSaved }: Produ
             <Plus aria-hidden />
             {t("form.newProduct")}
           </Button>
-        )}
-      </div>
+        </div>
+      )}
       <form
         aria-label={product ? t("edit") : t("add")}
         className="flex flex-col gap-4 p-4"
@@ -266,11 +262,7 @@ export function ProductFormPanel({ product, categories, onDone, onSaved }: Produ
         {codeField("sku")}
         {canViewCost && money("cost", "product-cost", t("form.cost"))}
         {money("price", "product-price", t("form.price"))}
-        {product ? (
-          <p className="rounded-md border border-dashed bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-            {t("form.stockElsewhere", { count: product.on_hand })}
-          </p>
-        ) : (
+        {!product && (
           <Field id="product-quantity" label={t("form.quantity")}>
             <Input
               id="product-quantity"

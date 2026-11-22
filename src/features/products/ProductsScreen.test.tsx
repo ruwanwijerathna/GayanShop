@@ -635,7 +635,7 @@ describe("ProductsScreen", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Edit product" }));
     const dialog = await screen.findByRole("form", { name: "Edit product" });
     expect(within(dialog).queryByLabelText("Quantity")).not.toBeInTheDocument();
-    expect(within(dialog).getByText(/use Restock or Adjust stock/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/use Restock or Adjust stock/)).not.toBeInTheDocument();
   });
 
   it("shows live stock: a count, low, out, oversold, or a dash when untracked", async () => {
