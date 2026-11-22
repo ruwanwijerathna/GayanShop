@@ -190,5 +190,16 @@
       "writeOff": "Write off",
       "done": "Stock updated: {{name}}."
     }
+  },
+  "shortBarcodes": {
+    "open_one": "Short barcode ({{count}})",
+    "open_other": "Short barcodes ({{count}})",
+    "title": "Give products a short barcode",
+    "description_one": "{{count}} product has no barcode, so its labels print without bars. It gets a new 8-digit in-store barcode. Barcodes already on products are not changed.",
+    "description_other": "{{count}} products have no barcode, so their labels print without bars. Each gets a new 8-digit in-store barcode. Barcodes already on products are not changed.",
+    "confirm_one": "Give {{count}} barcode",
+    "confirm_other": "Give {{count}} barcodes",
+    "done_one": "{{count}} product now has a barcode. It is selected, so you can print its labels.",
+    "done_other": "{{count}} products now have a barcode. They are selected, so you can print their labels."
   }
 }

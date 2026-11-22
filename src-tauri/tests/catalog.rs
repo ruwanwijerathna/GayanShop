@@ -187,6 +187,70 @@ async fn the_generator_never_reuses_a_number_from_an_older_13_digit_in_store_bar
 }
 
 #[tokio::test]
+async fn short_barcodes_go_to_every_listed_product_without_one_and_nothing_else() {
+    let t = open().await;
+    async fn make(t: &common::TestDb, i: ProductInput) -> products::Product {
+        products::create(&t.db, &ctx(), &owner(), &i, true).await.unwrap()
+    }
+    let code = |seq: u32| gayanshop_lib::domain::receipt_no::in_store_barcode(1, seq).unwrap();
+    // Sequence 1 is taken by a product that got both codes when it was created.
+    let mut coded = input("Coded", 100);
+    coded.sku = CodeChoice::Generate;
+    coded.barcode = CodeChoice::Generate;
+    let coded = make(&t, coded).await;
+    assert_eq!(coded.barcode, Some(code(1)));
+    let bare_a = make(&t, input("Bare A", 100)).await;
+    let bare_b = make(&t, ProductInput { is_active: false, ..input("Bare B", 100) }).await;
+    let maker = make(&t, ProductInput { barcode: manual("4792024015103"), ..input("Maker", 100) }).await;
+    let generic = make(&t, ProductInput { kind: ProductKind::Generic, ..input("Plasticware", 25_000) }).await;
+    let gone = make(&t, input("Gone", 100)).await;
+    products::delete(&t.db, &ctx(), &owner(), &gone.id).await.unwrap();
+    let audits_before = scalar_i64(t.pool(), "SELECT COUNT(*) FROM audit_logs").await;
+    let products_queued = "SELECT COUNT(*) FROM sync_outbox WHERE table_name = 'products'";
+    let outbox_before = scalar_i64(t.pool(), products_queued).await;
+
+    let ids = vec![
+        bare_a.id.clone(),
+        coded.id.clone(),
+        bare_b.id.clone(),
+        maker.id.clone(),
+        generic.id.clone(),
+        gone.id.clone(),
+        bare_a.id.clone(),
+        "nope".to_owned(),
+    ];
+    let done = products::assign_in_store_barcodes(&t.db, &ctx(), &owner(), &ids).await.unwrap();
+    let got: Vec<(String, String)> = done.assigned.iter().map(|a| (a.product_id.clone(), a.barcode.clone())).collect();
+    assert_eq!(got, vec![(bare_a.id.clone(), code(2)), (bare_b.id.clone(), code(3))], "in listed order");
+    assert_eq!(done.skipped, 5, "coded, maker, generic, deleted and unknown are left alone; the repeat is ignored");
+
+    let stored = products::get(t.pool(), "s", &bare_b.id, true).await.unwrap();
+    assert_eq!((stored.barcode, stored.version, stored.is_active), (Some(code(3)), 2, false));
+    let untouched = products::get(t.pool(), "s", &maker.id, true).await.unwrap();
+    assert_eq!((untouched.barcode.as_deref(), untouched.version), (Some("4792024015103"), 1));
+    assert_eq!(scalar_i64(t.pool(), "SELECT COUNT(*) FROM audit_logs").await - audits_before, 2);
+    assert_eq!(scalar_i64(t.pool(), products_queued).await - outbox_before, 2, "each coded product syncs");
+    let audit = audit_rows(t.pool(), "PRODUCT_UPDATE").await;
+    assert_eq!(audit[0]["changes"]["barcode"], serde_json::json!([null, code(2)]));
+    assert_eq!(audit[0]["bulk"], true);
+
+    // The counter moved past every number used, so the next generated SKU continues after sequence 3.
+    let mut next = input("Next", 100);
+    next.sku = CodeChoice::Generate;
+    assert_eq!(make(&t, next).await.sku.as_deref(), Some("100004"));
+
+    // Run again: everything listed already has a barcode now.
+    let again =
+        products::assign_in_store_barcodes(&t.db, &ctx(), &owner(), std::slice::from_ref(&bare_a.id)).await.unwrap();
+    assert!(again.assigned.is_empty() && again.skipped == 1);
+    let empty = products::assign_in_store_barcodes(&t.db, &ctx(), &owner(), &[]).await.unwrap_err();
+    assert_eq!(validation_code(empty), "BARCODE_ASSIGN_EMPTY");
+    let flood = vec!["x".to_owned(); products::ASSIGN_MAX + 1];
+    let too_many = products::assign_in_store_barcodes(&t.db, &ctx(), &owner(), &flood).await.unwrap_err();
+    assert_eq!(validation_code(too_many), "BARCODE_ASSIGN_TOO_MANY");
+}
+
+#[tokio::test]
 async fn writes_are_audited_and_queued_for_sync() {
     let t = open().await;
     let p = t.pool();

@@ -6,7 +6,7 @@ use tauri::{AppHandle, State};
 use super::{emit_changed, session, store_id, write_ctx};
 use crate::auth::guard::{Actor, require};
 use crate::db::repo::categories::{self, Category, CategoryInput};
-use crate::db::repo::products::{self, Product, ProductInput, ProductSummary};
+use crate::db::repo::products::{self, AssignedBarcodes, Product, ProductInput, ProductSummary};
 use crate::domain::permissions::Perm;
 use crate::error::AppResult;
 use crate::state::AppState;
@@ -101,6 +101,20 @@ pub async fn delete_product(app: AppHandle, state: State<'_, AppState>, id: Stri
     products::delete(&state.db, &write_ctx(&state)?, &actor, &id).await?;
     emit_changed(&app, &["products", "audit_logs"]);
     Ok(())
+}
+
+/// Products → "Short barcodes": an 8-digit in-store barcode for each listed product that has none.
+#[tauri::command]
+#[specta::specta]
+pub async fn assign_in_store_barcodes(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    product_ids: Vec<String>,
+) -> AppResult<AssignedBarcodes> {
+    let (actor, _) = manager(&state)?;
+    let done = products::assign_in_store_barcodes(&state.db, &write_ctx(&state)?, &actor, &product_ids).await?;
+    emit_changed(&app, &["products", "audit_logs"]);
+    Ok(done)
 }
 
 /// Type-ahead search (English names, SKUs, barcodes; Sinhala names by substring).

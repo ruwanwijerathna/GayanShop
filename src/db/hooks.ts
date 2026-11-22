@@ -268,6 +268,11 @@ export function useSaveProduct() {
   );
 }
 
+/** Products → "Short barcodes": an 8-digit in-store barcode for each listed product that has none. */
+export function useAssignInStoreBarcodes() {
+  return useCatalogMutation((productIds: string[]) => unwrap(commands.assignInStoreBarcodes(productIds)));
+}
+
 export function useDeleteProduct() {
   return useCatalogMutation((id: string) => unwrap(commands.deleteProduct(id)));
 }

@@ -2657,6 +2657,7 @@ Sinhala/Tamil text: most printers lack those code pages. Render such lines as a 
   - SKUs are a 6-digit `{device_digit}{5-digit sequence}`, e.g. `104523` from T01: the cashier's typed shorthand for quick search, never printed on a label. SKUs and barcodes share one sequence per counter, which gives each counter 99,999 codes, with no cross-counter collisions while offline.
 - **The scanner lookup** checks `barcode` first, then `sku`, so a scanned label and a typed SKU both find the product at the till.
 - If a product's code can't meet the rules on the chosen template, the preview shows a warning (`BARCODE_TOO_LONG`, or `NO_CODE` when the product has no barcode). Printing is still allowed, but flagged; the fix is to generate a short in-store barcode for the product.
+- **Products → "Short barcodes (N)"** (`assign_in_store_barcodes`, `PRODUCT_MANAGE`) does that for every listed standard product without a barcode in one transaction. Each product is versioned, queued for sync and audited as a `PRODUCT_UPDATE` with `bulk: true`. Generic products and existing barcodes (manufacturer codes or older 13-digit in-store ones) are never touched. The newly coded products are left selected, so their labels can be printed straight away.
 
 **How a multi-column job prints:**
 - `print_labels({ template_id, items: [{product_id, copies}] })` expands copies into cells. The cells fill rows left to right. A partial last row leaves the remaining cells blank, or optionally fills them with copies of the last item.

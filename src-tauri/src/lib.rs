@@ -78,6 +78,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::products::create_product,
         commands::products::update_product,
         commands::products::delete_product,
+        commands::products::assign_in_store_barcodes,
         commands::products::search_products,
         commands::products::lookup_product_code_matches,
         commands::batches::list_batches,

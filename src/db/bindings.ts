@@ -54,6 +54,8 @@ export const commands = {
 	createProduct: (input: ProductInput_Deserialize) => typedError<Product_Serialize, AppError>(__TAURI_INVOKE("create_product", { input })),
 	updateProduct: (id: string, input: ProductInput_Deserialize) => typedError<Product_Serialize, AppError>(__TAURI_INVOKE("update_product", { id, input })),
 	deleteProduct: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_product", { id })),
+	/**  Products → "Short barcodes": an 8-digit in-store barcode for each listed product that has none. */
+	assignInStoreBarcodes: (productIds: string[]) => typedError<AssignedBarcodes, AppError>(__TAURI_INVOKE("assign_in_store_barcodes", { productIds })),
 	/**  Type-ahead search (English names, SKUs, barcodes; Sinhala names by substring). */
 	searchProducts: (query: string, limit: number) => typedError<ProductSummary_Serialize[], AppError>(__TAURI_INVOKE("search_products", { query, limit })),
 	/**
@@ -374,6 +376,18 @@ export type AppStatus_Serialize = {
 export type ApprovalGrant = {
 	approval_id: string,
 	expires_at: string,
+};
+
+export type AssignedBarcode = {
+	product_id: string,
+	barcode: string,
+};
+
+export type AssignedBarcodes = {
+	/**  In the order the products were listed. */
+	assigned: AssignedBarcode[],
+	/**  Listed products left alone: deleted, generic ("any item Rs 250"), or already carrying a barcode. */
+	skipped: number,
 };
 
 export type AuditChainSummary = AuditChainSummary_Serialize | AuditChainSummary_Deserialize;

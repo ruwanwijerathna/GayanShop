@@ -15,6 +15,7 @@ import {
   type VisibilityState,
 } from "@tanstack/react-table";
 import {
+  Barcode,
   ClipboardCheck,
   FolderTree,
   History,
@@ -62,6 +63,7 @@ import { CategoriesDialog } from "./CategoriesDialog";
 import { MovementHistorySheet } from "./MovementHistorySheet";
 import { categoryPath } from "./categories";
 import { ProductFormDialog } from "./ProductFormDialog";
+import { ShortBarcodesDialog, withoutBarcode } from "./ShortBarcodesDialog";
 import { AdjustStockDialog, RestockDialog } from "./ProductStockDialogs";
 import { matchesText } from "./productForm";
 import { LOW_STOCK_MAX, stockLevel, type StockLevel } from "./stock";
@@ -124,6 +126,7 @@ export function ProductsScreen() {
   const [editing, setEditing] = useState<{ product: Product | null } | null>(null);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [printIds, setPrintIds] = useState<string[] | null>(null);
+  const [shortBarcodesOpen, setShortBarcodesOpen] = useState(false);
   const [historyFor, setHistoryFor] = useState<Product | null>(null);
   const [restockFor, setRestockFor] = useState<Product | null>(null);
   const [adjustFor, setAdjustFor] = useState<Product | null>(null);
@@ -136,6 +139,7 @@ export function ProductsScreen() {
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 25 });
 
   const cats = useMemo(() => categories.data ?? [], [categories.data]);
+  const uncoded = useMemo(() => withoutBarcode(products.data ?? []), [products.data]);
   const catName = useMemo(() => {
     const m = new Map<string, string>();
     for (const c of cats) m.set(c.id, categoryPath(c, cats));
@@ -400,6 +404,18 @@ export function ProductsScreen() {
           </Badge>
         </Button>
         <Can perm="PRODUCT_MANAGE">
+          {uncoded.length > 0 && (
+            <Button
+              type="button"
+              size="pos"
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => setShortBarcodesOpen(true)}
+            >
+              <Barcode aria-hidden />
+              {t("shortBarcodes.open", { count: uncoded.length })}
+            </Button>
+          )}
           <Button
             type="button"
             size="pos"
@@ -596,6 +612,13 @@ export function ProductsScreen() {
       </Card>
 
       <CategoriesDialog open={categoriesOpen} onOpenChange={setCategoriesOpen} categories={cats} />
+      {shortBarcodesOpen && (
+        <ShortBarcodesDialog
+          products={uncoded}
+          onClose={() => setShortBarcodesOpen(false)}
+          onDone={(ids) => setRowSelection(Object.fromEntries(ids.map((id) => [id, true])))}
+        />
+      )}
       <ProductFormDialog
         open={editing !== null}
         product={editing?.product ?? null}

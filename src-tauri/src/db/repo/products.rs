@@ -1,7 +1,7 @@
 //! Products: CRUD with audit + outbox, offline-unique in-store codes, the scanner lookup and FTS search
 //! (doc §4.3 catalog, §7.4 in-store codes, §13.4 search budgets).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::LazyLock;
 
 use serde::{Deserialize, Serialize};
@@ -534,15 +534,21 @@ async fn next_code_seq(conn: &mut SqliteConnection, store_id: &str, digit: u8) -
     .await?;
     let next = counter.unwrap_or(0).max(in_use.unwrap_or(0)) + 1;
     let next = u32::try_from(next).map_err(|_| code_err(CodeError::SequenceExhausted))?;
+    set_code_counter(conn, digit, next).await?;
+    Ok(next)
+}
+
+/// Remember the last sequence number this counter handed out.
+async fn set_code_counter(conn: &mut SqliteConnection, digit: u8, seq: u32) -> AppResult<()> {
     sqlx::query(
         "INSERT INTO sku_counters (device_digit, last_seq) VALUES (?1, ?2)
          ON CONFLICT(device_digit) DO UPDATE SET last_seq = excluded.last_seq",
     )
     .bind(i64::from(digit))
-    .bind(i64::from(next))
+    .bind(i64::from(seq))
     .execute(&mut *conn)
     .await?;
-    Ok(next)
+    Ok(())
 }
 
 /// Resolve both code choices. Generated codes skip any number a hand-typed code already took.
@@ -823,4 +829,110 @@ mod tests {
         assert!(clean_barcode("CODE 128").is_err());
         assert_eq!(clean_barcode("ABC-123").as_deref(), Ok("ABC-123"));
     }
+}
+
+// ───────── bulk in-store barcodes (decision #29) ─────────
+
+/// Most products one "Short barcodes" run may code: far above the shop's catalogue, below a runaway list.
+pub const ASSIGN_MAX: usize = 10_000;
+
+#[derive(Debug, Clone, Serialize, Type, PartialEq, Eq)]
+pub struct AssignedBarcode {
+    pub product_id: String,
+    pub barcode: String,
+}
+
+#[derive(Debug, Clone, Serialize, Type, PartialEq, Eq)]
+pub struct AssignedBarcodes {
+    /// In the order the products were listed.
+    pub assigned: Vec<AssignedBarcode>,
+    /// Listed products left alone: deleted, generic ("any item Rs 250"), or already carrying a barcode.
+    pub skipped: u32,
+}
+
+/// Products → "Short barcodes": give every listed standard product without a barcode an 8-digit in-store
+/// barcode, so its labels print and scan. One transaction; each product is versioned, queued for sync and
+/// audited like a hand edit (`PRODUCT_UPDATE`, `bulk: true`). Barcodes already on a product are never
+/// changed, and a code already in use is skipped. The counter's sequence is read once and advanced locally,
+/// so a long list stays fast, and later SKUs and barcodes continue above the last number used.
+pub async fn assign_in_store_barcodes(
+    db: &Db,
+    ctx: &WriteCtx,
+    actor: &Actor,
+    product_ids: &[String],
+) -> AppResult<AssignedBarcodes> {
+    if product_ids.is_empty() {
+        return Err(AppError::validation("BARCODE_ASSIGN_EMPTY", "no products"));
+    }
+    if product_ids.len() > ASSIGN_MAX {
+        return Err(AppError::validation("BARCODE_ASSIGN_TOO_MANY", product_ids.len().to_string()));
+    }
+    let digit = receipt_no::device_digit(&ctx.device_code).map_err(code_err)?;
+    let mut tx = db.write().await?;
+    let mut seen: HashSet<&str> = HashSet::new();
+    let mut assigned = Vec::new();
+    let mut skipped: u32 = 0;
+    let mut seq: Option<u32> = None;
+    for id in product_ids {
+        if !seen.insert(id.as_str()) {
+            continue;
+        }
+        let row: Option<(String, String, Option<String>)> = sqlx::query_as(
+            "SELECT kind, name, barcode FROM products WHERE id = ?1 AND store_id = ?2 AND deleted_at IS NULL",
+        )
+        .bind(id)
+        .bind(&ctx.store_id)
+        .fetch_optional(tx.conn())
+        .await?;
+        let name = match row {
+            Some((kind, name, None)) if kind == ProductKind::Standard.code() => name,
+            _ => {
+                skipped += 1;
+                continue;
+            }
+        };
+        let code = loop {
+            let next = match seq {
+                None => next_code_seq(tx.conn(), &ctx.store_id, digit).await?,
+                Some(s) => s.checked_add(1).ok_or_else(|| code_err(CodeError::SequenceExhausted))?,
+            };
+            seq = Some(next);
+            let code = receipt_no::in_store_barcode(digit, next).map_err(code_err)?;
+            if !barcode_taken(tx.conn(), &ctx.store_id, &code, id).await? {
+                break code;
+            }
+        };
+        sqlx::query(
+            "UPDATE products SET barcode = ?1, barcode_conflict = 0, updated_at = ?2, updated_by_device = ?3,
+                    version = version + 1
+             WHERE id = ?4 AND store_id = ?5 AND deleted_at IS NULL AND barcode IS NULL",
+        )
+        .bind(&code)
+        .bind(&ctx.now)
+        .bind(&ctx.device_id)
+        .bind(id)
+        .bind(&ctx.store_id)
+        .execute(tx.conn())
+        .await?;
+        outbox::enqueue_upsert(tx.conn(), "products", id, &ctx.now).await?;
+        audit::record(
+            tx.conn(),
+            &audit_ctx(ctx),
+            AuditEntry {
+                action: AuditAction::PRODUCT_UPDATE,
+                staff_id: Some(&actor.staff_id),
+                approved_by: actor.approved_by.as_deref(),
+                entity_type: Some("product"),
+                entity_id: Some(id),
+                metadata: json!({ "name": name, "changes": { "barcode": [Value::Null, code] }, "bulk": true }),
+            },
+        )
+        .await?;
+        assigned.push(AssignedBarcode { product_id: id.clone(), barcode: code });
+    }
+    if let Some(last) = seq {
+        set_code_counter(tx.conn(), digit, last).await?;
+    }
+    tx.commit().await?;
+    Ok(AssignedBarcodes { assigned, skipped })
 }

@@ -27,6 +27,7 @@ vi.mock("@/db/bindings", () => ({
     stockMovements: vi.fn(),
     labelPrinterProfile: vi.fn(),
     printLabels: vi.fn(),
+    assignInStoreBarcodes: vi.fn(),
   },
 }));
 
@@ -93,6 +94,7 @@ beforeEach(() => {
   vi.mocked(commands.labelPrinterProfile).mockImplementation(() => ok(null));
   vi.mocked(commands.printLabels).mockReset();
   vi.mocked(commands.printLabels).mockImplementation(() => ok({} as never));
+  vi.mocked(commands.assignInStoreBarcodes).mockReset();
 });
 
 const grid = () => screen.getByRole("grid", { name: "Products", hidden: true });
@@ -146,6 +148,7 @@ describe("ProductsScreen", () => {
     renderAs(["SALE_CREATE"]);
     expect(await within(grid()).findByText("Blue Bucket 10L")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add product" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Short barcode/ })).not.toBeInTheDocument();
     expect(within(grid()).queryByText("Cost")).not.toBeInTheDocument();
     fireEvent.click(within(grid()).getByText("Blue Bucket 10L"));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -153,6 +156,39 @@ describe("ProductsScreen", () => {
     expect(within(categories).getByText("Kitchen")).toBeInTheDocument();
     expect(within(categories).queryByRole("button", { name: "Add category" })).not.toBeInTheDocument();
     expect(within(categories).queryByRole("button", { name: /^Delete / })).not.toBeInTheDocument();
+  });
+
+  it("gives every product without a barcode a short one, then selects them for printing", async () => {
+    vi.mocked(commands.assignInStoreBarcodes).mockImplementation(() =>
+      ok({
+        assigned: [
+          { product_id: "p2", barcode: "21000027" },
+          { product_id: "p3", barcode: "21000034" },
+        ],
+        skipped: 0,
+      }),
+    );
+    renderAs(MANAGER);
+    // Black Sandal and the inactive Old Mug have no barcode; Blue Bucket keeps its own.
+    fireEvent.click(await screen.findByRole("button", { name: "Short barcodes (2)" }));
+    const dialog = await screen.findByRole("dialog", { name: "Give products a short barcode" });
+    expect(dialog).toHaveTextContent("2 products have no barcode");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Give 2 barcodes" }));
+    await waitFor(() => expect(commands.assignInStoreBarcodes).toHaveBeenCalledWith(["p2", "p3"]));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(await screen.findByText("2 selected")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Print labels (2)" })).toBeInTheDocument();
+  });
+
+  it("keeps the short-barcode dialog open with Rust's message when it refuses", async () => {
+    vi.mocked(commands.assignInStoreBarcodes).mockImplementation(() =>
+      err({ kind: "VALIDATION", code: "BARCODE_ASSIGN_TOO_MANY", detail: "10001" }),
+    );
+    renderAs(MANAGER);
+    fireEvent.click(await screen.findByRole("button", { name: "Short barcodes (2)" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Give 2 barcodes" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("at most 10,000");
   });
 
   it("fills the SKU and barcode inputs instantly on Generate, sending them as typed codes", async () => {
