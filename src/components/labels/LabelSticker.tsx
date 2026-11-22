@@ -61,7 +61,7 @@ function Bars({ b }: { b: StickerBarcode }) {
         style={{
           position: "absolute",
           left: b.x,
-          top: b.y + b.bar_h,
+          top: b.y + b.bar_h + Math.max(3, Math.round(b.hri_px * 0.25)),
           width: x,
           textAlign: "center",
           fontFamily: MONO,
