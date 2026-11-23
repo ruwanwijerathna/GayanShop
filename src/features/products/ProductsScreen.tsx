@@ -204,7 +204,7 @@ export function ProductsScreen() {
           const p = row.original;
           const codes = [p.sku, p.barcode].filter((v): v is string => Boolean(v));
           return (
-            <div className="flex min-w-0 flex-col gap-0.5 py-1">
+            <div className="flex min-w-0 flex-col gap-0.5 py-0.5">
               {canManage ? (
                 <button
                   type="button"
@@ -297,8 +297,8 @@ export function ProductsScreen() {
               <Button
                 type="button"
                 variant="ghost"
-                size="icon-pos"
-                className="rounded-xl data-[state=open]:bg-accent"
+                size="icon"
+                className="size-9 rounded-xl data-[state=open]:bg-accent"
                 aria-label={t("rowActions", { name: row.original.name })}
               >
                 <MoreHorizontal aria-hidden />
@@ -531,9 +531,9 @@ export function ProductsScreen() {
           <TableBody>
             {products.isLoading &&
               Array.from({ length: SKELETON_ROWS }, (_, i) => (
-                <TableRow key={i} className="h-16 hover:bg-transparent" aria-hidden>
+                <TableRow key={i} className="h-12 hover:bg-transparent" aria-hidden>
                   {Array.from({ length: visibleColumns }, (_, j) => (
-                    <TableCell key={j}>
+                    <TableCell key={j} className="py-1.5">
                       <Skeleton className="h-5 w-full max-w-32" />
                     </TableCell>
                   ))}
@@ -545,7 +545,7 @@ export function ProductsScreen() {
                   key={row.id}
                   data-state={row.getIsSelected() ? "selected" : undefined}
                   className={cn(
-                    "h-16 motion-safe:animate-in motion-safe:fade-in-0",
+                    "h-12 motion-safe:animate-in motion-safe:fade-in-0",
                     editing?.id === row.original.id && "bg-primary/5",
                   )}
                   style={{ animationDelay: `${Math.min(i, 10) * 20}ms`, animationFillMode: "backwards" }}
@@ -556,6 +556,7 @@ export function ProductsScreen() {
                       <TableCell
                         key={cell.id}
                         className={cn(
+                          "py-1.5",
                           id === "select" && "w-12 pl-4",
                           id === "name" && "max-w-64",
                           (id === "price" || id === "cost") && "text-right",
