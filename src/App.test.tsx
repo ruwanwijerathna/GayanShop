@@ -300,6 +300,7 @@ describe("Products & Stock", () => {
     expect(screen.queryByRole("tab", { name: "Stock Valuation" })).not.toBeInTheDocument();
     await openTools();
     expect((await screen.findAllByRole("menuitem")).map((x) => x.textContent)).toEqual([
+      "Categories",
       "Stock Valuation",
       "Export & Import",
     ]);

@@ -18,6 +18,7 @@ use crate::auth::guard::Actor;
 use crate::db::Db;
 use crate::domain::business_date::{StoreCalendar, parse_date};
 use crate::domain::period::{DateRange, Granularity, Period, bucket_of, bucket_sql};
+use crate::domain::receipt_no;
 use crate::error::AppResult;
 
 /// Inclusive business-date bounds for SQL: an open end becomes a sentinel, so every filter is a plain
@@ -539,17 +540,16 @@ pub async fn voids(
 #[derive(Debug, Clone, Serialize, Type, PartialEq, Eq, FromRow)]
 pub struct ReportDevice {
     pub device_id: String,
-    /// `T01`…, from its receipt numbers.
+    /// `T01`…, from its receipt numbers (`T01-…` or the letter of `A1234`).
     pub device_code: String,
 }
 
 pub async fn devices(pool: &SqlitePool) -> AppResult<Vec<ReportDevice>> {
-    Ok(sqlx::query_as(
-        "SELECT device_id, MIN(CASE WHEN instr(receipt_no, '-') > 0
-                                    THEN substr(receipt_no, 1, instr(receipt_no, '-') - 1) ELSE receipt_no END)
-                           AS device_code
+    Ok(sqlx::query_as(&format!(
+        "SELECT device_id, MIN({}) AS device_code
          FROM orders WHERE status <> 'pending' GROUP BY device_id ORDER BY device_code",
-    )
+        receipt_no::device_code_sql("receipt_no"),
+    ))
     .fetch_all(pool)
     .await?)
 }

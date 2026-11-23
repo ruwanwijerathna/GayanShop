@@ -183,7 +183,7 @@ async fn returning_a_line_in_pieces_credits_exactly_what_was_paid_and_never_more
     let third = exchanging(cart("ex-c", vec![line(&mug, 25_000, 2)], vec![cash(7_250, None)]), &[(&item, 1)]);
     assert_eq!(code(sell_at(&t, CASHIER, &third, None, SOLD_ON).await.unwrap_err()), "RETURN_QTY_EXCEEDS");
     // …and the lookup says so.
-    let src = exchange::lookup(t.pool(), &t.s.store_id, " t01-20261108-0001 ", "2026-11-08").await.unwrap();
+    let src = exchange::lookup(t.pool(), &t.s.store_id, " a1 ", "2026-11-08").await.unwrap();
     assert_eq!((src.lines[0].returned_qty, src.lines[0].returnable_qty, src.lines[0].eligible), (3, 0, false));
     assert_eq!(t.count("SELECT COUNT(*) FROM v_integrity_over_returned").await, 0);
 }
@@ -206,7 +206,11 @@ async fn never_a_refund_the_replacement_must_be_worth_at_least_the_returned_good
     let even = exchanging(cart("ex-even", vec![line(&pail, 42_750, 1)], vec![]), &[(&item, 1)]);
     let r = sell_at(&t, CASHIER, &even, None, SOLD_ON).await.unwrap();
     assert_eq!((r.grand_total, r.exchange_credit, r.change_due), (42_750, 42_750, 0));
-    assert_eq!(t.count("SELECT COUNT(*) FROM order_payments WHERE order_id = (SELECT id FROM orders WHERE receipt_no = 'T01-20261108-0002')").await, 0);
+    assert_eq!(
+        t.count("SELECT COUNT(*) FROM order_payments WHERE order_id = (SELECT id FROM orders WHERE receipt_no = 'A2')")
+            .await,
+        0
+    );
 }
 
 async fn second_cashier(t: &Till) {
@@ -278,9 +282,9 @@ async fn the_window_is_a_store_setting_counted_from_the_sale_business_date() {
     let (_, mug, item, _) = bucket_sale(&t).await;
     let swap =
         |token: &str| exchanging(cart(token, vec![line(&mug, 25_000, 2)], vec![cash(7_250, None)]), &[(&item, 1)]);
-    let src = exchange::lookup(t.pool(), &t.s.store_id, "T01-20261108-0001", "2026-11-15").await.unwrap();
+    let src = exchange::lookup(t.pool(), &t.s.store_id, "A1", "2026-11-15").await.unwrap();
     assert_eq!((src.days_since, src.window_days, src.late), (7, 7, false));
-    let src = exchange::lookup(t.pool(), &t.s.store_id, "T01-20261108-0001", "2026-11-16").await.unwrap();
+    let src = exchange::lookup(t.pool(), &t.s.store_id, "A1", "2026-11-16").await.unwrap();
     assert_eq!((src.days_since, src.late), (8, true));
 
     let mut tx = t.t.db.write().await.unwrap();
@@ -296,7 +300,7 @@ async fn the_window_is_a_store_setting_counted_from_the_sale_business_date() {
     .unwrap();
     tx.commit().await.unwrap();
     assert!(sell_at(&t, CASHIER, &swap("ok-30"), None, DAY_8).await.is_ok(), "30-day window: day 8 is fine");
-    let src = exchange::lookup(t.pool(), &t.s.store_id, "T01-20261108-0001", "2026-11-16").await.unwrap();
+    let src = exchange::lookup(t.pool(), &t.s.store_id, "A1", "2026-11-16").await.unwrap();
     assert_eq!((src.window_days, src.late), (30, false));
 }
 

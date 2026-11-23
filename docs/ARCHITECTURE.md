@@ -1203,7 +1203,7 @@ export interface Order extends InsertOnlyMeta {
   updated_by_device: UUID;
   version: number;
   cash_session_id: UUID;
-  receipt_no: string;                 // "T01-20261108-0042"
+  receipt_no: string;                 // "A1234" (bills before v4.8: "T01-20261108-0042")
   checkout_token: UUID;               // client-generated per cart; UNIQUE ⇒ double-tap / retry can't duplicate
   type: OrderType;
   line_count: number;                 // number of order_items (verified at seal)
@@ -2517,7 +2517,7 @@ GROUP BY b.id;
 | `customers` | Deterministic id `UUIDv5(store_id, phone_e164)`, so two counters registering the same number offline converge on one row (LWW for name and note). An erasure (`erased_at` set) wins over any concurrent edit: the server and the pull both refuse to re-populate an erased row, except through an explicit re-activation by Rust. |
 
 ### 6.4 Receipt numbers offline
-The format is `{device_code}-{YYYYMMDD}-{seq:04}`, e.g. `T01-20261108-0042`. The date is the business date. `device_code` (T01–T03) is assigned at first run or registration. `seq` comes from `receipt_counters` and is incremented inside the checkout transaction. Receipts print a QR code of the order `id` (for reprint and void lookup during the session), plus the `receipt.footer` policy text.
+The format (v4.8, decision #31) is `{letter}{seq}`, e.g. `A1234`. The letter is the counter's: T01 = A, T02 = B … T09 = I. `seq` is that counter's running number, with no leading zeros and **no daily reset**, so a bill number is unique for the life of the store and short enough to type when a receipt's barcode is damaged. `device_code` (T01–T03) is assigned at first run or registration. `seq` comes from the `receipt_counters` row keyed `receipt` and is incremented inside the checkout transaction. Bills made before v4.8 keep their old number, `{device_code}-{YYYYMMDD}-{seq:04}` (e.g. `T01-20261108-0042`); every lookup accepts both, and `domain::receipt_no::device_code_sql` traces either back to its counter (counter filter, restore's free code, quick-sale counters). Receipts print a QR code of the order `id` (for reprint and void lookup during the session), plus the `receipt.footer` policy text.
 
 
 ### 6.5 Device registration (Block 3.3)
@@ -3077,6 +3077,7 @@ cargo add --dev proptest
 | 28 | **Bills: one search box (receipt or phone, all dates), day shortcuts, one Filters dialog; cashiers see their own counter's bills and can reprint a receipt, `REPORT_SALES` sees all** (owner-confirmed 2026-11-21) | The old table with a period picker, three filters and two export buttons always on screen; Bills for `REPORT_SALES` only | A customer comes back with a receipt or says their phone number, and the cashier at the till must find the bill without a supervisor. Searching all dates and a single smart box removes the "which day was it?" step. No schema change; the query gained phone, payment and exchange filters, and `print_receipt_image` now audits a reprint when given the bill. |
 | 29 | **Labels print only the barcode, never the SKU; in-store barcodes are 8 digits, `2{device}{seq:05}{check}`** (owner-confirmed 2026-11-22) | The SKU as a label fallback (#12); 13-digit in-store EAN-13s; 6- or 7-digit codes | The SKU is the cashier's typed shorthand (`b400`, `red1`), not a scan code. A scratched sticker means typing the barcode by hand, and 8 digits are far quicker than 13. The EAN-8 check digit stops a mistyped number from selling a different product. 8 digits can never equal a 6-digit generated SKU, which a 6-digit barcode could. Code128-C encodes 8 digits in four pairs, so the barcode fits the 30 × 16 mm roll at a 2-dot module. Existing 13-digit barcodes stay valid and their numbers are never reused, but they are too wide for the 30 × 16 mm roll, and products without a barcode print no bars until one is generated. No schema change. |
 | 30 | **Labels print as pictures: an HTML/CSS sticker template drawn by the webview at one pixel per printer dot, sent as TSPL `BITMAP` / ZPL `^GFA`; the printers' own fonts and text commands are no longer used** (owner-confirmed 2026-11-22) | Positioning `TEXT` in the printers' bitmap fonts (firmware-dependent widths, an estimate of every character); a printer-native `BARCODE` command over a text picture (two drawing paths) | One pipeline, like receipts, and the preview *is* the picture. The bars stay exact because Rust supplies them as whole-dot rectangles drawn with crisp edges at pixel ratio 1, so thresholding never moves a bar edge. One picture per product (about 10 KB for 50 × 25 mm), repeated with `PRINT n`, keeps jobs small. Each picture is checked against the template's exact sticker size, and a job drawn for another dpi refuses to print. TSPL prints a 0 bit black, so its bytes are inverted; this and scannability are confirmed with a test print on the shop's printers. |
+| 31 | **Short bill numbers: a counter letter plus a running number (`A1234`), never reset** (owner 2026-11-24; v4.8) | `T01-20261121-0004` (kept); digits only; a number that restarts each day | The long number took too long to type when a receipt's barcode was damaged. Letter + number is 5 characters, can't be mistaken for a phone number in the Bills search (anything starting with a letter is a receipt number), and stays unique store-wide without the date. Old bills keep their numbers. |
 
 
 ---
@@ -3094,7 +3095,7 @@ The §4.3 schema's triggers and invariants were first exercised in a scratch har
 | Step | What happens |
 |---|---|
 | Local sale | Each counter's FIFO (`domain::fifo`) sees `on_hand = 2` locally and draws from L. No counter blocks: `allow_negative_stock` defaults to true, and a sale must never wait on the network. |
-| IDs | Every row is UUIDv7 with the device id inside the row. Receipt numbers are `T0x-YYYYMMDD-seq`, unique per device. **No two counters can create the same primary key or receipt number.** |
+| IDs | Every row is UUIDv7 with the device id inside the row. Receipt numbers are a counter letter plus a running number (`A1234`; before v4.8 `T0x-YYYYMMDD-seq`), unique per device. **No two counters can create the same primary key or receipt number.** |
 | Sync | `stock_movements` is insert-only, so the merge is a set union. `INSERT OR IGNORE` is idempotent, and there's no conflict to resolve and no last-write-wins on quantities. After all three sync, every counter computes `on_hand(L) = 2 − 4 = −2`, the same everywhere. |
 | After sync | FIFO only draws from layers with `on_hand > 0`, so new sales take the next layer automatically. The layer appears in **Oversold layers** (`ix_bis_negative`). COGS for the four sales used L's cost, which is the best-known cost when they were sold. |
 

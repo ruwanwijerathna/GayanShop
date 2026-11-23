@@ -49,6 +49,7 @@ use crate::db::Db;
 use crate::db::repo::{WriteCtx, reports};
 use crate::db::settings::{self, keys};
 use crate::domain::business_date::{StoreCalendar, format_date};
+use crate::domain::receipt_no::{self, RECEIPT_COUNTER_KEY};
 use crate::error::{AppError, AppResult};
 use crate::sync::api::SyncApi;
 use crate::sync::engine::{self, PullOptions};
@@ -451,16 +452,18 @@ pub async fn verify_owner(db: &Db, hasher: &PinHasher, clock: &dyn Clock, staff_
     Err(AppError::InvalidPin { attempts_left: u32::try_from((5 - failed).max(0)).unwrap_or(0) })
 }
 
-/// Set each business day's receipt counter to the highest receipt this counter issued that day
-/// (`{code}-{YYYYMMDD}-{seq}`).
+/// Set the receipt counter to the highest short bill number (`A1234`) this counter issued. Older bills
+/// (`T01-20261108-0042`) don't count: the running number started after them.
 async fn reset_receipt_counters(c: &mut SqliteConnection, device_id: &str) -> AppResult<()> {
     sqlx::query(
         "INSERT INTO receipt_counters (day, last_seq)
-         SELECT business_date, MAX(CAST(substr(receipt_no, 14) AS INTEGER)) FROM orders
-         WHERE device_id = ?1 GROUP BY business_date
+         SELECT ?2, MAX(CAST(substr(receipt_no, 2) AS INTEGER)) FROM orders
+         WHERE device_id = ?1 AND receipt_no GLOB '[A-I][0-9]*'
+         HAVING COUNT(*) > 0
          ON CONFLICT(day) DO UPDATE SET last_seq = MAX(last_seq, excluded.last_seq)",
     )
     .bind(device_id)
+    .bind(RECEIPT_COUNTER_KEY)
     .execute(&mut *c)
     .await?;
     Ok(())
@@ -589,11 +592,12 @@ pub async fn recover_online(
 
 /// The smallest counter code no counter of this store is known to have used.
 async fn free_code(pool: &sqlx::SqlitePool, current: &str) -> AppResult<String> {
-    let used: Vec<String> = sqlx::query_scalar(
-        "SELECT substr(receipt_no, 1, 3) FROM orders
+    let used: Vec<String> = sqlx::query_scalar(&format!(
+        "SELECT {} FROM orders
          UNION SELECT json_extract(metadata, '$.device_code') FROM audit_logs
            WHERE action IN ('STORE_INITIALIZED', 'DEVICE_REGISTER') AND json_extract(metadata, '$.device_code') IS NOT NULL",
-    )
+        receipt_no::device_code_sql("receipt_no"),
+    ))
     .fetch_all(pool)
     .await?;
     (1..=9)

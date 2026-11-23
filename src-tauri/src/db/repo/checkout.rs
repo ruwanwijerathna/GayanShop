@@ -36,7 +36,6 @@ use crate::audit::{self, AuditAction, AuditCtx, AuditEntry};
 use crate::auth::guard::Actor;
 use crate::clock::new_id;
 use crate::db::{Db, outbox};
-use crate::domain::business_date::parse_date;
 use crate::domain::exchange as exchange_rules;
 use crate::domain::fifo::Slice;
 use crate::domain::payments::{PaymentInput, PaymentMethod, PaymentRuleError, validate_payments};
@@ -566,16 +565,16 @@ pub async fn checkout(
     };
     cp.reached("customer")?;
 
-    // 3. Receipt number from this counter's per-business-day sequence.
+    // 3. Receipt number from this counter's running sequence (it never resets, so a number is never reused).
     let seq: i64 = sqlx::query_scalar(
         "INSERT INTO receipt_counters (day, last_seq) VALUES (?1, 1)
          ON CONFLICT(day) DO UPDATE SET last_seq = last_seq + 1 RETURNING last_seq",
     )
-    .bind(&ctx.business_date)
+    .bind(receipt_no::RECEIPT_COUNTER_KEY)
     .fetch_one(&mut *conn)
     .await?;
-    let day = parse_date(&ctx.business_date).ok_or_else(|| AppError::internal("bad business date"))?;
-    let receipt = receipt_no::receipt_no(&ctx.device_code, day, u32::try_from(seq).unwrap_or(u32::MAX));
+    let receipt = receipt_no::receipt_no(&ctx.device_code, u32::try_from(seq).unwrap_or(u32::MAX))
+        .map_err(|e| AppError::internal(e.to_string()))?;
     cp.reached("receipt_counter")?;
 
     // 4. The order, born pending.

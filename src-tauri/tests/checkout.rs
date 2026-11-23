@@ -51,10 +51,7 @@ async fn a_cash_sale_is_one_sealed_transaction() {
     );
     input.note = Some("gift".into());
     let r = sell_as(&t, CASHIER, &input, None).await.unwrap();
-    assert_eq!(
-        (r.receipt_no.as_str(), r.grand_total, r.change_due, r.replayed),
-        ("T01-20261108-0001", 220_000, 30_000, false)
-    );
+    assert_eq!((r.receipt_no.as_str(), r.grand_total, r.change_due, r.replayed), ("A1", 220_000, 30_000, false));
 
     // Header = Σ lines; the SQL seal accepted it, so every identity in §13.5 holds.
     let (status, lines, items, net, cost, quick_net, unknown): (String, i64, i64, i64, i64, i64, i64) = sqlx::query_as(
@@ -99,11 +96,26 @@ async fn a_cash_sale_is_one_sealed_transaction() {
     assert_eq!(t.count("SELECT sales_count FROM daily_sales_summary").await, 1);
     assert_eq!(t.count("SELECT amount FROM daily_payment_summary WHERE method = 'cash'").await, 220_000);
 
-    // Receipt numbers count up per business day.
+    // Receipt numbers count up: A1, A2, …
     let r2 = sell_as(&t, CASHIER, &cart("tok-2", vec![line(&mug, 25_000, 1)], vec![cash(25_000, None)]), None)
         .await
         .unwrap();
-    assert_eq!(r2.receipt_no, "T01-20261108-0002");
+    assert_eq!(r2.receipt_no, "A2");
+
+    // The running number does not restart on a new business day: a bill number stays unique and short.
+    let mut next_day = t.ctx();
+    next_day.business_date = "2026-11-09".to_owned();
+    let r3 = checkout::checkout(
+        &t.t.db,
+        &next_day,
+        &t.seller(CASHIER).await,
+        &cart("tok-3", vec![line(&mug, 25_000, 1)], vec![cash(25_000, None)]),
+        None,
+        &NoFaults,
+    )
+    .await
+    .unwrap();
+    assert_eq!(r3.receipt_no, "A3");
 }
 
 async fn exec_held_cart(t: &Till) {

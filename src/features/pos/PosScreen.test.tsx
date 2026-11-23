@@ -784,8 +784,12 @@ describe("PosScreen", () => {
       expect(within(dialog).queryByRole("group", { name: /Add payment/ })).not.toBeInTheDocument();
       // Pay Now button present
       expect(within(dialog).getByRole("button", { name: "Pay Now" })).toBeInTheDocument();
-      // Select trigger has default Cash
-      expect(within(dialog).getByRole("combobox", { name: /Payment method/ })).toHaveTextContent("Cash");
+      // One tap per method, Cash selected to start
+      expect(within(dialog).getByRole("radio", { name: "Cash" })).toBeChecked();
+      expect(within(dialog).getByRole("radio", { name: "Card" })).not.toBeChecked();
+      fireEvent.click(within(dialog).getByRole("radio", { name: "Card" }));
+      expect(within(dialog).getByRole("radio", { name: "Card" })).toBeChecked();
+      expect(within(dialog).getByLabelText(/Reference/)).toBeInTheDocument();
     });
   });
 });

@@ -22,6 +22,7 @@ use crate::auth::guard::Actor;
 use crate::clock::{new_id, stable_id};
 use crate::db::{Db, outbox};
 use crate::domain::quick_sale::custom_key;
+use crate::domain::receipt_no;
 use crate::error::{AppError, AppResult};
 
 const SHELF_MAX: i64 = 1_000_000;
@@ -149,13 +150,14 @@ pub async fn detail(pool: &SqlitePool, key: &str) -> AppResult<QuickSaleDetail> 
     }
     let n = prices.len();
     let median = if n % 2 == 1 { prices[n / 2] } else { (prices[n / 2 - 1] + prices[n / 2]) / 2 };
-    let counters: Vec<(String, i64, i64)> = sqlx::query_as(
-        // Receipt numbers start with the counter code (`T01-20261108-0042`).
-        "SELECT substr(o.receipt_no, 1, instr(o.receipt_no, '-') - 1) AS code, COUNT(*), SUM(oi.qty)
+    // A receipt number leads back to its counter: `T01-20261108-0042` carries the code, `A1234` its letter.
+    let counters: Vec<(String, i64, i64)> = sqlx::query_as(&format!(
+        "SELECT {} AS code, COUNT(*), SUM(oi.qty)
          FROM order_items oi JOIN orders o ON o.id = oi.order_id
          WHERE oi.is_custom = 1 AND oi.custom_key = ?1 AND o.status = 'completed'
          GROUP BY code ORDER BY COUNT(*) DESC, code",
-    )
+        receipt_no::device_code_sql("o.receipt_no"),
+    ))
     .bind(key)
     .fetch_all(pool)
     .await?;

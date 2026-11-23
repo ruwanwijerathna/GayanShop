@@ -1,7 +1,5 @@
 //! Offline-unique document numbers and in-store codes (ARCHITECTURE §6.4, §7.4).
 
-use chrono::NaiveDate;
-
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum CodeError {
     #[error("device code must be 2–4 uppercase letters/digits ending in a digit 1–9 (e.g. T01)")]
@@ -17,9 +15,25 @@ pub fn is_valid_device_code(code: &str) -> bool {
     (2..=4).contains(&code.len()) && code.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
 }
 
-/// `T01-20261108-0042` — the business date, not the calendar date.
-pub fn receipt_no(device_code: &str, business_date: NaiveDate, seq: u32) -> String {
-    format!("{device_code}-{}-{seq:04}", business_date.format("%Y%m%d"))
+/// The `receipt_counters` row that holds a counter's running bill number. It never resets: a bill number is
+/// unique for the life of the store, and short enough to type when a receipt's barcode is damaged.
+pub const RECEIPT_COUNTER_KEY: &str = "receipt";
+
+/// `A1234`: the counter's letter (T01 → A, T02 → B … T09 → I) and its running number. Bills made before v4.8 are
+/// `T01-20261108-0042` and keep that number.
+pub fn receipt_no(device_code: &str, seq: u32) -> Result<String, CodeError> {
+    let digit = device_digit(device_code)?;
+    let letter = char::from(b'A' + digit - 1);
+    Ok(format!("{letter}{seq}"))
+}
+
+/// SQL that turns a `receipt_no` column into its counter code: `T01-…` bills carry it, `A1234` bills carry
+/// the letter. Use it wherever a bill must be traced back to its counter.
+pub fn device_code_sql(column: &str) -> String {
+    format!(
+        "CASE WHEN instr({column}, '-') > 0 THEN substr({column}, 1, instr({column}, '-') - 1)
+              ELSE 'T0' || (unicode(substr({column}, 1, 1)) - 64) END"
+    )
 }
 
 /// The device digit used in SKUs and in-store barcodes: the last digit of the device code (T01 → 1).
@@ -94,13 +108,14 @@ pub fn in_store_barcode(device_digit: u8, seq: u32) -> Result<String, CodeError>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::business_date::parse_date;
 
     #[test]
     fn receipt_numbers() {
-        let d = parse_date("2026-11-08").unwrap();
-        assert_eq!(receipt_no("T01", d, 42), "T01-20261108-0042");
-        assert_eq!(receipt_no("T01", d, 12_345), "T01-20261108-12345");
+        assert_eq!(receipt_no("T01", 1).as_deref(), Ok("A1"));
+        assert_eq!(receipt_no("T01", 4_523).as_deref(), Ok("A4523"));
+        assert_eq!(receipt_no("T02", 42).as_deref(), Ok("B42"));
+        assert_eq!(receipt_no("T09", 123_456).as_deref(), Ok("I123456"));
+        assert_eq!(receipt_no("T10", 1), Err(CodeError::BadDeviceCode));
     }
 
     #[test]

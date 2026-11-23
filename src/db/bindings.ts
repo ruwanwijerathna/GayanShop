@@ -2592,7 +2592,7 @@ export type Registered = {
 /**  A counter for the report's counter filter. */
 export type ReportDevice = {
 	device_id: string,
-	/**  `T01`…, from its receipt numbers. */
+	/**  `T01`…, from its receipt numbers (`T01-…` or the letter of `A1234`). */
 	device_code: string,
 };
 
