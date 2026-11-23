@@ -36,7 +36,7 @@ beforeEach(() => {
 });
 
 describe("ProductsStockPage", () => {
-  it("has no Categories button in the page header; Categories sits in Export & Import", async () => {
+  it("opens Categories from the tools menu, not inside Export & Import", async () => {
     renderWithProviders(
       <As perms={["PRODUCT_MANAGE", "DATA_EXPORT"]}>
         <ProductsStockPage />
@@ -46,10 +46,8 @@ describe("ProductsStockPage", () => {
     expect(screen.queryByRole("button", { name: /^Categories/ })).not.toBeInTheDocument();
 
     fireEvent.keyDown(screen.getByRole("button", { name: "Products & Stock tools" }), { key: "Enter" });
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Export & Import" }));
-    const open = await screen.findByRole("button", { name: /^Categories/ });
-    expect(open).toHaveTextContent("2");
-    fireEvent.click(open);
+    const catItem = await screen.findByRole("menuitem", { name: "Categories" });
+    fireEvent.click(catItem);
     const dialog = await screen.findByRole("dialog", { name: "Categories" });
     expect(within(dialog).getByText("Kitchen")).toBeInTheDocument();
   });

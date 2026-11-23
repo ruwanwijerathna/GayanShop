@@ -3,7 +3,6 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Can } from "@/components/auth/Can";
 import { ExportButton } from "@/components/export/ExportButton";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -24,7 +23,7 @@ type Drawer = "valuation" | "data";
 
 /**
  * Products & Stock: the catalog with live on-hand counts. Page-wide tools sit behind the ⋮ beside the
- * title and open in a side drawer (stock valuation; export and import). Changing one product's stock
+ * title (categories dialog; stock valuation; export and import). Changing one product's stock
  * happens on its row (Restock / Adjust stock); adding or editing a product is the panel beside the list. Composed in
  * `src/app` because features never import each other.
  */
@@ -34,6 +33,7 @@ export function ProductsStockPage() {
   const [drawer, setDrawer] = useState<Drawer | null>(null);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const categories = useCategories();
+  const canManage = hasPerm(session, "PRODUCT_MANAGE");
   const canValue = hasPerm(session, "REPORT_FINANCIAL");
   const canData = hasPerm(session, "DATA_EXPORT") || hasPerm(session, "PRODUCT_MANAGE");
 
@@ -44,7 +44,7 @@ export function ProductsStockPage() {
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t("app:nav.products")}</h1>
           <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
         </div>
-        {(canValue || canData) && (
+        {(canManage || canValue || canData) && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -58,6 +58,12 @@ export function ProductsStockPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {canManage && (
+                <DropdownMenuItem className="min-h-11" onSelect={() => setCategoriesOpen(true)}>
+                  <FolderTree aria-hidden />
+                  {t("categories.title")}
+                </DropdownMenuItem>
+              )}
               {canValue && (
                 <DropdownMenuItem className="min-h-11" onSelect={() => setDrawer("valuation")}>
                   <Scale aria-hidden />
@@ -91,29 +97,7 @@ export function ProductsStockPage() {
             )}
             {drawer === "data" && (
               <div className="flex flex-col gap-6">
-                <Can perm="PRODUCT_MANAGE">
-                  <section className="flex flex-col gap-3" aria-label={t("categories.title")}>
-                    <h2 className="text-lg font-semibold">{t("categories.title")}</h2>
-                    <p className="text-sm text-muted-foreground">{t("tools.categoriesHint")}</p>
-                    <Button
-                      type="button"
-                      size="pos"
-                      variant="outline"
-                      className="self-start rounded-xl"
-                      onClick={() => {
-                        setDrawer(null);
-                        setCategoriesOpen(true);
-                      }}
-                    >
-                      <FolderTree aria-hidden />
-                      {t("categories.title")}
-                      <Badge variant="secondary" className="ml-1 rounded-md px-1.5 tabular-nums">
-                        {categories.data?.length ?? 0}
-                      </Badge>
-                    </Button>
-                  </section>
-                </Can>
-                <section className="flex flex-col gap-3 border-t pt-6" aria-label={t("tools.export")}>
+                <section className="flex flex-col gap-3" aria-label={t("tools.export")}>
                   <h2 className="text-lg font-semibold">{t("tools.export")}</h2>
                   <p className="text-sm text-muted-foreground">{t("tools.exportHint")}</p>
                   <div className="self-start">
