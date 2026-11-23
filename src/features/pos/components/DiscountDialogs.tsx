@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +23,7 @@ const FIELD = "h-12 text-lg tabular-nums";
  */
 export function LineEditDialog({ line, onClose }: { line: CartLine; onClose: () => void }) {
   const { t } = useTranslation("pos");
+  const discountRef = useRef<HTMLInputElement>(null);
   const [qty, setQty] = useState(String(line.qty));
   const [price, setPrice] = useState(toMajorInput(line.unitPrice));
   const [reason, setReason] = useState(line.overrideReason ?? "");
@@ -55,7 +56,13 @@ export function LineEditDialog({ line, onClose }: { line: CartLine; onClose: () 
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          discountRef.current?.focus();
+          discountRef.current?.select();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{t("line.title")}</DialogTitle>
           <DialogDescription>{line.name}</DialogDescription>
@@ -108,6 +115,7 @@ export function LineEditDialog({ line, onClose }: { line: CartLine; onClose: () 
             <Label htmlFor="line-discount">{t("line.discount")}</Label>
             <Input
               id="line-discount"
+              ref={discountRef}
               className={FIELD}
               value={discount}
               placeholder="0 / 5%"

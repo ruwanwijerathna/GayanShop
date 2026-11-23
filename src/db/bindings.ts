@@ -18,10 +18,10 @@ export const commands = {
 	firstRunSetup: (input: SetupInput) => typedError<SetupResult, AppError>(__TAURI_INVOKE("first_run_setup", { input })),
 	/**  Active staff for the login picker (names and roles only). */
 	listLoginStaff: () => typedError<LoginStaff[], AppError>(__TAURI_INVOKE("list_login_staff")),
-	login: (staffId: string, pin: string) => typedError<SessionInfo, AppError>(__TAURI_INVOKE("login", { staffId, pin })),
+	login: (staffId: string, pin: string) => typedError<SessionInfo_Serialize, AppError>(__TAURI_INVOKE("login", { staffId, pin })),
 	logout: () => typedError<null, AppError>(__TAURI_INVOKE("logout")),
 	/**  The active session, if any (idle sessions are reported as logged out). */
-	currentSession: () => typedError<SessionInfo | null, AppError>(__TAURI_INVOKE("current_session")),
+	currentSession: () => typedError<SessionInfo_Serialize | null, AppError>(__TAURI_INVOKE("current_session")),
 	/**  A supervisor enters their PIN to authorise `perm` on `target_ref` for the logged-in staff member. */
 	requestApproval: (perm: Perm, targetRef: string, approverId: string, pin: string) => typedError<ApprovalGrant, AppError>(__TAURI_INVOKE("request_approval", { perm, targetRef, approverId, pin })),
 	/**
@@ -361,7 +361,7 @@ export type AppStatus_Deserialize = {
 	initialized: boolean,
 	store_name?: string | null,
 	device_code?: string | null,
-	session?: SessionInfo | null,
+	session?: SessionInfo_Deserialize | null,
 	/**  A counter that joined the store and hasn't pulled its history yet (doc §6.2): the till stays closed. */
 	bootstrap_pending: boolean,
 	/**  A restored backup awaits recovery (Block 4.1): the recovery screen replaces the login. */
@@ -372,7 +372,7 @@ export type AppStatus_Serialize = {
 	initialized: boolean,
 	store_name: string | null,
 	device_code: string | null,
-	session: SessionInfo | null,
+	session: SessionInfo_Serialize | null,
 	/**  A counter that joined the store and hasn't pulled its history yet (doc §6.2): the till stays closed. */
 	bootstrap_pending: boolean,
 	/**  A restored backup awaits recovery (Block 4.1): the recovery screen replaces the login. */
@@ -2730,7 +2730,10 @@ export type SessionHistory_Serialize = {
 };
 
 /**  What the UI receives — never the PIN hash; permissions as keys, not a mask. */
-export type SessionInfo = {
+export type SessionInfo = SessionInfo_Serialize | SessionInfo_Deserialize;
+
+/**  What the UI receives — never the PIN hash; permissions as keys, not a mask. */
+export type SessionInfo_Deserialize = {
 	staff_id: string,
 	display_name: string,
 	role_name: string,
@@ -2738,6 +2741,19 @@ export type SessionInfo = {
 	max_discount_bp: number,
 	max_override_bp: number,
 	ui_language: string,
+	staff_no?: number | null,
+};
+
+/**  What the UI receives — never the PIN hash; permissions as keys, not a mask. */
+export type SessionInfo_Serialize = {
+	staff_id: string,
+	display_name: string,
+	role_name: string,
+	permissions: Perm[],
+	max_discount_bp: number,
+	max_override_bp: number,
+	ui_language: string,
+	staff_no: number | null,
 };
 
 /**  An order of the counter's open session, for the till's void list (F10). */

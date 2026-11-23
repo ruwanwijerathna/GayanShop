@@ -2,7 +2,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { Providers } from "@/app/providers";
-import type { AppError, SessionInfo } from "@/db/bindings";
+import type { AppError, SessionInfo_Serialize } from "@/db/bindings";
 
 export const ok = <T,>(data: T) => Promise.resolve({ status: "ok" as const, data });
 export const err = (error: AppError) => Promise.resolve({ status: "error" as const, error });
@@ -11,7 +11,7 @@ export function renderWithProviders(ui: ReactElement) {
   return render(<Providers>{ui}</Providers>);
 }
 
-export function session(overrides: Partial<SessionInfo> = {}): SessionInfo {
+export function session(overrides: Partial<SessionInfo_Serialize> = {}): SessionInfo_Serialize {
   return {
     staff_id: "cashier",
     display_name: "Nimal",
@@ -20,6 +20,7 @@ export function session(overrides: Partial<SessionInfo> = {}): SessionInfo {
     max_discount_bp: 500,
     max_override_bp: 0,
     ui_language: "en",
+    staff_no: 1,
     ...overrides,
   };
 }

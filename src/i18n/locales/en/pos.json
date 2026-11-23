@@ -5,7 +5,7 @@
   "title": "Till",
   "scan": {
     "label": "Scan or search",
-    "placeholder": "Scan a barcode or type a name, SKU or code",
+    "placeholder": "Scan a barcode or type a name, SKU (F3)",
     "results": "Products",
     "noResults": "No product matches “{{query}}”.",
     "hint": "Scan, or type and press Enter. ↓ ↑ choose a result."
@@ -38,11 +38,13 @@
   },
   "cart": {
     "title": "Cart",
+    "clear": "Clear cart",
     "empty": "Scan an item to start a sale.",
     "qty": "Qty",
     "each": "{{price}} each",
     "was": "was {{price}}",
     "discount": "− {{amount}}",
+    "discountAction": "Item discount (F6)",
     "remove": "Remove {{name}}",
     "more": "One more {{name}}",
     "less": "One less {{name}}",
@@ -103,17 +105,18 @@
     "methods": {
       "cash": "Cash",
       "card": "Card",
-      "bank_transfer": "Bank transfer",
-      "qr": "QR payment",
+      "bank_transfer": "Bank Transfer",
+      "qr": "QR Payment",
       "other": "Other"
     },
-    "tendered": "Cash received (Rs)",
+    "methodLabel": "Payment method",
+    "tendered": "Cash Received (Rs)",
     "amount": "Amount (Rs)",
     "reference": "Reference (optional)",
     "add": "Add payment",
     "exact": "Exact",
     "remove": "Remove payment",
-    "complete": "Complete sale",
+    "complete": "Pay Now",
     "notEnough": "Payments don't cover the amount due yet.",
     "tooMuch": "Card, transfer and QR payments can't exceed what is due.",
     "processing": "Saving the sale…",
@@ -162,19 +165,28 @@
   },
   "help": {
     "title": "Till shortcuts",
+    "sectionFunction": "Function Keys (press again to close)",
+    "sectionCart": "Cart Navigation & Actions",
+    "sectionSystem": "System",
     "keys": {
-      "help": "This list",
-      "quickSale": "Quick sale bar",
+      "help": "This list (toggle)",
+      "quickSale": "Quick sale bar (toggle)",
       "search": "Scan / search field",
       "phone": "Customer phone (also Numpad /)",
-      "lineDiscount": "Edit the selected line: qty, price, discount",
-      "billDiscount": "Bill discount",
+      "lineDiscount": "Item discount & line edit (toggle)",
+      "billDiscount": "Bill discount (toggle)",
       "hold": "Hold this sale",
-      "pay": "Pay (also Numpad +)",
-      "void": "Void a sale from this session",
-      "recall": "Recall a held sale",
+      "pay": "Pay / Checkout (toggle, also Numpad +)",
+      "void": "Void a sale from this session (toggle)",
+      "recall": "Recall a held sale (toggle)",
       "cancel": "Cancel / back to the scan field",
-      "exchange": "Exchange goods (item for item)"
+      "exchange": "Exchange goods (toggle)"
+    },
+    "cartKeys": {
+      "nav": "Navigate cart items (or search results)",
+      "delete": "Remove selected item from cart",
+      "qtyIncrease": "Increase selected item quantity (+1)",
+      "qtyDecrease": "Decrease selected item quantity (-1)"
     },
     "lock": "Lock the till",
     "language": "Switch language"

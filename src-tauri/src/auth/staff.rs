@@ -15,6 +15,7 @@ pub struct StaffAuthRow {
     pub deny_mask: i64,
     pub staff_max_discount_bp: Option<i64>,
     pub ui_language: String,
+    pub staff_no: Option<i64>,
     pub role_name: String,
     pub role_permissions: i64,
     pub role_is_system: bool,
@@ -44,7 +45,7 @@ impl StaffAuthRow {
 pub async fn load(pool: &SqlitePool, staff_id: &str) -> AppResult<StaffAuthRow> {
     sqlx::query_as(
         "SELECT s.id, s.display_name, s.pin_hash, s.is_active, s.grant_mask, s.deny_mask,
-                s.max_discount_bp AS staff_max_discount_bp, s.ui_language,
+                s.max_discount_bp AS staff_max_discount_bp, s.ui_language, s.staff_no,
                 r.name AS role_name, r.permissions AS role_permissions, r.is_system AS role_is_system,
                 r.max_discount_bp AS role_max_discount_bp, r.max_override_bp AS role_max_override_bp
          FROM staff s JOIN roles r ON r.id = s.role_id

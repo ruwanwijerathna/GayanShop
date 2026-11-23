@@ -334,14 +334,15 @@ describe("PosScreen", () => {
     expect(cartStore.getState().lines[0]).toMatchObject({ productId: null, name: "Blue Bucket" });
   });
 
-  it("F4 shows a known customer by phone", async () => {
+  it("shows a known customer by phone in payment dialog", async () => {
     await renderTill();
-    key("F4");
-    const phone = screen.getByLabelText(/Customer phone/);
-    expect(phone).toHaveFocus();
+    act(() => cartStore.getState().addProduct(BUCKET));
+    key("F9");
+    const dialog = await screen.findByRole("dialog");
+    const phone = within(dialog).getByLabelText(/Customer phone/);
     fireEvent.change(phone, { target: { value: "0771234567" } });
     expect(phone).toHaveValue("077 123 4567");
-    expect(await screen.findByText("Saman · Visit #5")).toBeInTheDocument();
+    expect(await within(dialog).findByText("Saman · Visit #5")).toBeInTheDocument();
   });
 
   it("F9 pays in cash with change and starts a fresh cart", async () => {
@@ -362,12 +363,12 @@ describe("PosScreen", () => {
     const token = cartStore.getState().token;
     key("F9");
     const dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText(/Cash received/), { target: { value: "500" } });
+    fireEvent.change(within(dialog).getByLabelText(/Cash received/i), { target: { value: "500" } });
     expect(within(dialog).getByText("Rs 50.00")).toBeInTheDocument();
     // Who made the sale is required: no number, no sale.
-    const complete = within(dialog).getByRole("button", { name: "Complete sale" });
+    const complete = within(dialog).getByRole("button", { name: "Pay Now" });
     expect(within(dialog).getByLabelText("Salesperson no.")).toHaveFocus();
-    expect(complete).toBeDisabled();
+    expect(within(dialog).getByLabelText("Salesperson no.")).toHaveValue("1");
     fireEvent.change(within(dialog).getByLabelText("Salesperson no."), { target: { value: "0" } });
     expect(complete).toBeDisabled();
     fireEvent.change(within(dialog).getByLabelText("Salesperson no."), { target: { value: "3a" } });
@@ -407,7 +408,7 @@ describe("PosScreen", () => {
     key("F9");
     const pay = await screen.findByRole("dialog");
     fireEvent.change(within(pay).getByLabelText("Salesperson no."), { target: { value: "2" } });
-    fireEvent.click(within(pay).getByRole("button", { name: "Complete sale" }));
+    fireEvent.click(within(pay).getByRole("button", { name: "Pay Now" }));
     fireEvent.click(await screen.findByRole("button", { name: "Kamal" }));
     fireEvent.change(screen.getByLabelText("PIN"), { target: { value: "2222" } });
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
@@ -462,10 +463,15 @@ describe("PosScreen", () => {
     expect(cartStore.getState().lines).toHaveLength(1);
   });
 
-  it("shows the shortcut sheet on F1", async () => {
+  it("shows the shortcut sheet on F1 with function keys and cart navigation shortcuts", async () => {
     await renderTill();
     key("F1");
-    expect(await screen.findByRole("dialog", { name: "Till shortcuts" })).toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog", { name: "Till shortcuts" });
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByText("F6")).toBeInTheDocument();
+    expect(within(dialog).getByText("Delete")).toBeInTheDocument();
+    expect(within(dialog).getByText("Ctrl+→")).toBeInTheDocument();
+    expect(within(dialog).getByText("Ctrl+←")).toBeInTheDocument();
   });
 
   describe("exchange (F12)", () => {
@@ -537,7 +543,7 @@ describe("PosScreen", () => {
       key("F9");
       const dialog = await screen.findByRole("dialog");
       fireEvent.change(within(dialog).getByLabelText("Salesperson no."), { target: { value: "1" } });
-      fireEvent.click(within(dialog).getByRole("button", { name: "Complete sale" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Pay Now" }));
       await waitFor(() => expect(commands.checkoutOrder).toHaveBeenCalledTimes(1));
       expect(vi.mocked(commands.checkoutOrder).mock.calls[0]?.[0]).toMatchObject({
         lines: [{ product_id: "p1", qty: 2 }],
@@ -565,7 +571,7 @@ describe("PosScreen", () => {
       key("F9");
       const dialog = await screen.findByRole("dialog");
       fireEvent.change(within(dialog).getByLabelText("Salesperson no."), { target: { value: "1" } });
-      fireEvent.click(within(dialog).getByRole("button", { name: "Complete sale" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Pay Now" }));
       await waitFor(() => expect(commands.checkoutOrder).toHaveBeenCalledTimes(1));
       expect(vi.mocked(commands.checkoutOrder).mock.calls[0]?.[0].payments).toEqual([]);
     });
@@ -582,7 +588,7 @@ describe("PosScreen", () => {
       key("F9");
       const pay = await screen.findByRole("dialog");
       fireEvent.change(within(pay).getByLabelText("Salesperson no."), { target: { value: "2" } });
-      fireEvent.click(within(pay).getByRole("button", { name: "Complete sale" }));
+      fireEvent.click(within(pay).getByRole("button", { name: "Pay Now" }));
       fireEvent.click(await screen.findByRole("button", { name: "Kamal" }));
       fireEvent.change(screen.getByLabelText("PIN"), { target: { value: "2222" } });
       fireEvent.click(screen.getByRole("button", { name: "Approve" }));
@@ -616,6 +622,170 @@ describe("PosScreen", () => {
       expect(await screen.findByText("Finish or cancel the exchange first.")).toBeInTheDocument();
       expect(commands.cartHold).not.toHaveBeenCalled();
       expect(cartStore.getState().lines).toHaveLength(1);
+    });
+  });
+
+  describe("cart keyboard navigation and shortcuts", () => {
+    it("navigates cart items with Up and Down arrows when search field is empty", async () => {
+      const input = await renderTill();
+      act(() => {
+        cartStore.getState().addProduct(BUCKET);
+        cartStore.getState().addProduct(LIME);
+      });
+      expect(cartStore.getState().selectedKey).toBe(cartStore.getState().lines[1]?.key);
+
+      fireEvent.keyDown(input, { key: "ArrowUp", code: "ArrowUp" });
+      expect(cartStore.getState().selectedKey).toBe(cartStore.getState().lines[0]?.key);
+
+      fireEvent.keyDown(input, { key: "ArrowDown", code: "ArrowDown" });
+      expect(cartStore.getState().selectedKey).toBe(cartStore.getState().lines[1]?.key);
+    });
+
+    it("adjusts quantity of selected item with Ctrl+ArrowRight and Ctrl+ArrowLeft", async () => {
+      const input = await renderTill();
+      act(() => {
+        cartStore.getState().addProduct(BUCKET);
+      });
+      const lineKey = cartStore.getState().lines[0]?.key;
+      expect(lineKey).toBeDefined();
+      expect(cartStore.getState().lines[0]?.qty).toBe(1);
+
+      fireEvent.keyDown(input, { key: "ArrowRight", code: "ArrowRight", ctrlKey: true });
+      expect(cartStore.getState().lines.find((l) => l.key === lineKey)?.qty).toBe(2);
+
+      fireEvent.keyDown(input, { key: "ArrowLeft", code: "ArrowLeft", ctrlKey: true });
+      expect(cartStore.getState().lines.find((l) => l.key === lineKey)?.qty).toBe(1);
+
+      fireEvent.keyDown(input, { key: "ArrowLeft", code: "ArrowLeft", ctrlKey: true });
+      expect(cartStore.getState().lines.find((l) => l.key === lineKey)?.qty).toBe(1);
+    });
+
+    it("deletes selected cart item with Delete key when search field is empty", async () => {
+      const input = await renderTill();
+      act(() => {
+        cartStore.getState().addProduct(BUCKET);
+        cartStore.getState().addProduct(LIME);
+      });
+      expect(cartStore.getState().lines).toHaveLength(2);
+      expect(cartStore.getState().selectedKey).toBe(cartStore.getState().lines[1]?.key);
+
+      fireEvent.keyDown(input, { key: "Delete", code: "Delete" });
+      expect(cartStore.getState().lines).toHaveLength(1);
+      expect(cartStore.getState().lines[0]?.name).toBe("Blue Bucket");
+    });
+
+    it("removes line via dedicated remove button in cart row", async () => {
+      await renderTill();
+      act(() => {
+        cartStore.getState().addProduct(BUCKET);
+      });
+      expect(cartStore.getState().lines).toHaveLength(1);
+
+      const removeBtn = screen.getByRole("button", { name: `Remove ${BUCKET.name}` });
+      fireEvent.click(removeBtn);
+      expect(cartStore.getState().lines).toHaveLength(0);
+    });
+
+    it("opens and cancels dialog using the same function key", async () => {
+      await renderTill();
+      act(() => {
+        cartStore.getState().addProduct(BUCKET);
+      });
+
+      // Press F1 opens Help dialog
+      key("F1");
+      expect(await screen.findByRole("dialog", { name: "Till shortcuts" })).toBeInTheDocument();
+
+      // Press F1 again cancels/closes Help dialog
+      key("F1");
+      await waitFor(() =>
+        expect(screen.queryByRole("dialog", { name: "Till shortcuts" })).not.toBeInTheDocument(),
+      );
+
+      // Press F9 opens Payment dialog
+      key("F9");
+      expect(await screen.findByRole("dialog")).toBeInTheDocument();
+
+      // Press F9 again cancels/closes Payment dialog
+      key("F9");
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    });
+
+    it("counts items by cart rows count (row=3 means items=3 even if qty > 1)", async () => {
+      await renderTill();
+      act(() => {
+        cartStore.getState().addProduct(BUCKET);
+        const firstKey = cartStore.getState().lines[0]?.key;
+        if (firstKey) cartStore.getState().increment(firstKey, 4); // qty = 5
+        cartStore.getState().addProduct(LIME);
+        cartStore.getState().addProduct(MINT);
+      });
+      expect(screen.getByText("Items: 3")).toBeInTheDocument();
+    });
+
+    it("renders Clear cart button with red border class", async () => {
+      await renderTill();
+      act(() => {
+        cartStore.getState().addProduct(BUCKET);
+      });
+      const clearBtn = screen.getByRole("button", { name: /Clear cart/i });
+      expect(clearBtn).toHaveClass("border-destructive");
+      expect(clearBtn).toHaveClass("text-destructive");
+    });
+
+    it("opens item discount dialog with F6 and applies single item discount (% button removed)", async () => {
+      await renderTill();
+      act(() => {
+        cartStore.getState().addProduct(BUCKET);
+      });
+      // % button removed from cart row
+      expect(screen.queryByRole("button", { name: /Item discount/ })).not.toBeInTheDocument();
+
+      // Open line discount dialog with F6
+      key("F6");
+      const dialog = await screen.findByRole("dialog", { name: /Edit line/ });
+      const discountInput = within(dialog).getByLabelText(/Line discount/);
+      fireEvent.change(discountInput, { target: { value: "50" } });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(cartStore.getState().lines[0]?.lineDiscount).toBe(5_000);
+    });
+
+    it("renders line total with whitespace-nowrap preventing awkward line breaks", async () => {
+      await renderTill();
+      act(() => {
+        cartStore.getState().addProduct(BUCKET);
+        const firstKey = cartStore.getState().lines[0]?.key;
+        if (firstKey) cartStore.getState().increment(firstKey, 150);
+      });
+      const cart = screen.getByRole("list", { name: "Cart" });
+      const totalEl = within(cart).getByText(/Rs 67,950.00/);
+      expect(totalEl).toHaveClass("whitespace-nowrap");
+    });
+
+    it("payment dialog uses Select for method, defaults to Cash and cashier staff_no, has Pay Now button", async () => {
+      await renderTill();
+      act(() => {
+        cartStore.getState().addProduct(BUCKET);
+      });
+      key("F9");
+      const dialog = await screen.findByRole("dialog", { name: /Payment/ });
+      // Salesperson defaults to logged-in user staff_no (1)
+      const salesInput = within(dialog).getByLabelText("Salesperson no.");
+      expect(salesInput).toHaveValue("1");
+      // Helper text removed
+      expect(within(dialog).queryByText(/Type the staff number/)).not.toBeInTheDocument();
+      // Cash Received (Rs) label
+      expect(within(dialog).getByLabelText(/Cash Received \(Rs\)/)).toBeInTheDocument();
+      // No Exact button
+      expect(within(dialog).queryByRole("button", { name: "Exact" })).not.toBeInTheDocument();
+      // No + Card / + Bank transfer add buttons
+      expect(within(dialog).queryByRole("group", { name: /Add payment/ })).not.toBeInTheDocument();
+      // Pay Now button present
+      expect(within(dialog).getByRole("button", { name: "Pay Now" })).toBeInTheDocument();
+      // Select trigger has default Cash
+      expect(within(dialog).getByRole("combobox", { name: /Payment method/ })).toHaveTextContent("Cash");
     });
   });
 });

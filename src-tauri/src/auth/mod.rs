@@ -181,6 +181,7 @@ pub async fn login(
         ui_language: staff.ui_language.clone(),
         logged_in_at: now,
         last_activity: now,
+        staff_no: staff.staff_no,
     };
     let info = SessionInfo::from(&session);
     auth.approvals.clear();

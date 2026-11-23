@@ -6,15 +6,15 @@ import {
   Hand,
   History,
   Percent,
-  Phone,
   Printer,
   Search,
   SquarePen,
+  Trash2,
   Undo2,
   X,
   Zap,
 } from "lucide-react";
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useSession } from "@/app/session";
@@ -56,7 +56,6 @@ import { playCue } from "@/lib/audio";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { Cart } from "./components/Cart";
-import { CustomerPhoneField, formatTyped } from "./components/CustomerPhoneField";
 import { ExchangeDialog } from "./components/ExchangeDialog";
 import { BillDiscountDialog, LineEditDialog } from "./components/DiscountDialogs";
 import { PaymentDialog } from "./components/PaymentDialog";
@@ -74,6 +73,16 @@ export const SAVE_DEBOUNCE_MS = 500;
 const DONE_BANNER_MS = 2_000;
 
 type Dialog = "pay" | "line" | "bill" | "void" | "recall" | "help" | "exchange";
+
+const DIALOG_TO_KEY: Record<Dialog, string> = {
+  help: "F1",
+  line: "F6",
+  bill: "F7",
+  pay: "F9",
+  void: "F10",
+  recall: "F11",
+  exchange: "F12",
+};
 
 /** The till (doc §1.9). Needs an open cash session on this counter. */
 export function PosScreen() {
@@ -107,20 +116,18 @@ function Till() {
   const billDiscount = useCart((s) => s.billDiscount);
   const selectedKey = useCart((s) => s.selectedKey);
   const exchange = useCart((s) => s.exchange);
-  const customerPhone = useCart((s) => s.customerPhone);
   const priced = previewTotals({ lines, billDiscount });
   // An exchange: the cart is the replacement; the customer pays only what exceeds the returned goods' value.
   const credit = exchange ? totalCredit(exchange.source, exchange.picks) : 0;
   const owed = amountDue(priced?.grand_total ?? 0, credit);
 
   const scanRef = useRef<HTMLInputElement>(null);
-  const phoneRef = useRef<HTMLInputElement>(null);
   const quickRef = useRef<HTMLInputElement>(null);
+  const activeResultRef = useRef<HTMLButtonElement>(null);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [quickText, setQuickText] = useState("");
-  // The optional phone / quick-sale fields live in one inline panel that is closed until asked for (F4 / F2).
-  const [extra, setExtra] = useState<{ kind: "phone" | "quick"; n: number } | null>(null);
+  const [quickOpen, setQuickOpen] = useState(false);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [voidPreselect, setVoidPreselect] = useState<string | null>(null);
   const [approval, setApproval] = useState<{ perm: Perm; payments: PaymentLine[]; soldByNo: number } | null>(
@@ -135,7 +142,13 @@ function Till() {
   } | null>(null);
 
   const search = useProductSearch(query);
-  const results = query.trim() === "" ? [] : (search.data ?? []);
+  const results = useMemo(() => (query.trim() === "" ? [] : (search.data ?? [])), [query, search.data]);
+
+  useEffect(() => {
+    if (results.length > 0) {
+      activeResultRef.current?.scrollIntoView({ block: "nearest" });
+    }
+  }, [active, results]);
   const checkout = useCheckoutOrder();
   const hold = useHoldCart();
   const recall = useRecallCart();
@@ -152,16 +165,16 @@ function Till() {
     scanRef.current?.focus();
   }, []);
 
-  const openExtra = (kind: "phone" | "quick") => setExtra((e) => ({ kind, n: (e?.n ?? 0) + 1 }));
-  const closeExtra = () => {
-    setExtra(null);
+  const openQuick = () => setQuickOpen(true);
+  const closeQuick = () => {
+    setQuickOpen(false);
     focusScan();
   };
-  // Opening the panel (or pressing its key again) puts the cursor in its field.
   useEffect(() => {
-    if (!extra) return;
-    (extra.kind === "phone" ? phoneRef : quickRef).current?.focus();
-  }, [extra]);
+    if (quickOpen) {
+      quickRef.current?.focus();
+    }
+  }, [quickOpen]);
 
   // "Recover cart?" while the till is still empty, if the app closed with a sale in progress.
   const [recoverDismissed, setRecoverDismissed] = useState(false);
@@ -221,7 +234,7 @@ function Till() {
   const notFound = (code: string) => {
     notFoundToast(t("scanner.notFound", { code }));
     setQuickText(`${code} `);
-    openExtra("quick");
+    openQuick();
   };
 
   useScanHandler(async (code) => {
@@ -260,16 +273,69 @@ function Till() {
     }
   };
 
+  const navigateCart = (direction: "up" | "down") => {
+    const s = cartStore.getState();
+    const count = s.lines.length;
+    if (count === 0) return;
+    const currentIndex = s.lines.findIndex((l) => l.key === s.selectedKey);
+    let nextIndex: number;
+    if (currentIndex === -1) {
+      nextIndex = direction === "down" ? 0 : count - 1;
+    } else if (direction === "down") {
+      nextIndex = Math.min(count - 1, currentIndex + 1);
+    } else {
+      nextIndex = Math.max(0, currentIndex - 1);
+    }
+    const targetKey = s.lines[nextIndex]?.key;
+    if (targetKey && targetKey !== s.selectedKey) {
+      playCue("tick");
+      s.select(targetKey);
+    }
+  };
+
+  const deleteSelectedCartLine = () => {
+    const s = cartStore.getState();
+    const targetKey = s.selectedKey ?? s.lines.at(-1)?.key ?? null;
+    if (targetKey) {
+      playCue("tick");
+      s.removeLine(targetKey);
+    }
+  };
+
+  const adjustSelectedCartQty = (by: number) => {
+    const s = cartStore.getState();
+    const targetKey = s.selectedKey ?? s.lines.at(-1)?.key ?? null;
+    if (!targetKey) return;
+    const line = s.lines.find((l) => l.key === targetKey);
+    if (!line) return;
+    if (by < 0 && line.qty <= 1) return;
+    playCue("tick");
+    s.increment(line.key, by);
+  };
+
   const onScanKey = (e: ReactKeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
       void enterQuery();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActive((a) => Math.min(a + 1, Math.max(0, results.length - 1)));
+      if (query.trim() !== "") {
+        setActive((a) => Math.min(a + 1, Math.max(0, results.length - 1)));
+      } else {
+        navigateCart("down");
+      }
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActive((a) => Math.max(0, a - 1));
+      if (query.trim() !== "") {
+        setActive((a) => Math.max(0, a - 1));
+      } else {
+        navigateCart("up");
+      }
+    } else if (e.key === "Delete") {
+      if (query === "") {
+        e.preventDefault();
+        deleteSelectedCartLine();
+      }
     }
   };
 
@@ -366,42 +432,54 @@ function Till() {
     const has = cartStore.getState().lines.length > 0;
     switch (action) {
       case "help":
-        setDialog("help");
+        if (dialog === "help") closeDialog();
+        else setDialog("help");
         break;
       case "quickSale":
-        openExtra("quick");
+        setQuickOpen((q) => !q);
         break;
       case "search":
         scanRef.current?.focus();
         break;
-      case "phone":
-        openExtra("phone");
-        break;
       case "lineDiscount":
-        if (cartStore.getState().selectedKey) setDialog("line");
+        if (dialog === "line") closeDialog();
+        else if (cartStore.getState().selectedKey) setDialog("line");
         break;
       case "billDiscount":
-        if (has) setDialog("bill");
+        if (dialog === "bill") closeDialog();
+        else if (has) setDialog("bill");
         break;
       case "hold":
         holdSale();
         break;
       case "exchange":
-        checkout.reset();
-        setDialog("exchange");
+        if (dialog === "exchange") {
+          closeDialog();
+        } else {
+          checkout.reset();
+          setDialog("exchange");
+        }
         break;
       case "pay":
-        if (has && priced && !owed.short) {
+        if (dialog === "pay") {
+          closeDialog();
+        } else if (has && priced && !owed.short) {
           checkout.reset();
           setDialog("pay");
         }
         break;
       case "void":
-        setVoidPreselect(null);
-        setDialog("void");
+        if (dialog === "void") {
+          closeDialog();
+        } else {
+          setVoidPreselect(null);
+          setDialog("void");
+        }
         break;
       case "recall":
-        if (cartStore.getState().exchange) {
+        if (dialog === "recall") {
+          closeDialog();
+        } else if (cartStore.getState().exchange) {
           playCue("error");
           toast.error(t("exchange.finishFirst"));
         } else setDialog("recall");
@@ -409,7 +487,7 @@ function Till() {
       case "cancel":
         setQuery("");
         setQuickText("");
-        setExtra(null);
+        setQuickOpen(false);
         focusScan();
         break;
     }
@@ -417,15 +495,90 @@ function Till() {
 
   // Till shortcuts, after the scanner's capture-phase listener has had its say (doc §1.4, §7.1).
   const runRef = useRef(run);
+  const dialogRef = useRef(dialog);
+  const quickOpenRef = useRef(quickOpen);
+  const approvalRef = useRef(approval);
+  const closeDialogRef = useRef(closeDialog);
+  const closeQuickRef = useRef(closeQuick);
+
   useEffect(() => {
     runRef.current = run;
+    dialogRef.current = dialog;
+    quickOpenRef.current = quickOpen;
+    approvalRef.current = approval;
+    closeDialogRef.current = closeDialog;
+    closeQuickRef.current = closeQuick;
   });
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (scanner.isCapturing()) return;
+
+      const currentDialog = dialogRef.current;
+      if (currentDialog !== null) {
+        const dialogKey = DIALOG_TO_KEY[currentDialog];
+        const isMatch =
+          dialogKey &&
+          (e.code === dialogKey ||
+            e.key === dialogKey ||
+            (currentDialog === "pay" && e.code === "NumpadAdd"));
+        if (isMatch) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (approvalRef.current) setApproval(null);
+          closeDialogRef.current();
+          return;
+        }
+      }
+
+      if (quickOpenRef.current && (e.code === "F2" || e.key === "F2")) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeQuickRef.current();
+        return;
+      }
+
+      if (document.querySelector('[role="dialog"]') !== null) return;
       const el = document.activeElement;
+
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+        if (e.key === "ArrowRight" || e.code === "ArrowRight") {
+          if (!isTextField(el) || el === scanRef.current) {
+            e.preventDefault();
+            adjustSelectedCartQty(1);
+            return;
+          }
+        }
+        if (e.key === "ArrowLeft" || e.code === "ArrowLeft") {
+          if (!isTextField(el) || el === scanRef.current) {
+            e.preventDefault();
+            adjustSelectedCartQty(-1);
+            return;
+          }
+        }
+      }
+
+      if (!isTextField(el)) {
+        if (e.key === "ArrowDown" || e.code === "ArrowDown") {
+          e.preventDefault();
+          navigateCart("down");
+          return;
+        }
+        if (e.key === "ArrowUp" || e.code === "ArrowUp") {
+          e.preventDefault();
+          navigateCart("up");
+          return;
+        }
+        if (e.key === "Delete" || e.code === "Delete") {
+          e.preventDefault();
+          deleteSelectedCartLine();
+          return;
+        }
+      }
+
       const action = routeShortcut(e, {
-        capturing: scanner.isCapturing(),
-        dialogOpen: document.querySelector('[role="dialog"]') !== null,
+        capturing: false,
+        dialogOpen: false,
         inTextField: isTextField(el) && el !== scanRef.current,
       });
       if (!action) return;
@@ -443,7 +596,7 @@ function Till() {
     priced.lines.some(
       (l) => !withinLimit(l.line_discount + l.order_discount_share, l.line_gross, session.max_discount_bp),
     );
-  const itemCount = lines.reduce((a, l) => a + l.qty, 0);
+  const itemCount = lines.length;
   const payError =
     checkout.error instanceof CommandError && checkout.error.error.kind !== "APPROVAL_REQUIRED"
       ? translateError(i18n.t, checkout.error.error)
@@ -529,15 +682,40 @@ function Till() {
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[3fr_2fr]">
+      <div className="grid min-h-0 flex-1 grid-cols-[2fr_1fr]">
         <section className="flex min-h-0 flex-col border-r" aria-label={t("cart.title")}>
           <header className="flex h-14 shrink-0 items-center justify-between border-b px-4">
             <h1 className="text-xl font-semibold">{t("cart.title")}</h1>
-            <span className="text-base text-muted-foreground tabular-nums">
-              {t("totals.items")}: {itemCount}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-base text-muted-foreground tabular-nums">
+                {t("totals.items")}: {itemCount}
+              </span>
+              {lines.length > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 border-destructive text-destructive hover:bg-destructive/10 hover:border-destructive hover:text-destructive text-sm"
+                  onClick={() => {
+                    playCue("tick");
+                    cartStore.getState().clear();
+                    focusScan();
+                  }}
+                  title={t("cart.clear")}
+                >
+                  <Trash2 aria-hidden className="mr-1.5 size-4" />
+                  {t("cart.clear")}
+                </Button>
+              )}
+            </div>
           </header>
-          <Cart priced={priced} />
+          <Cart
+            priced={priced}
+            onEditLine={(line) => {
+              cartStore.getState().select(line.key);
+              setDialog("line");
+            }}
+          />
           <p className="sr-only" aria-live="polite">
             {t("cart.announce", { count: itemCount, total: formatMoney(priced?.grand_total ?? 0) })}
           </p>
@@ -545,31 +723,33 @@ function Till() {
 
         <section className="flex min-h-0 flex-col gap-3 bg-muted/40 p-4">
           <div className="flex flex-col gap-1">
-            <label htmlFor="scan-field" className="flex items-center gap-2 text-base font-medium">
-              <Search aria-hidden className="size-4" />
-              {t("scan.label")}
-              <Kbd>F3</Kbd>
-            </label>
-            <Input
-              id="scan-field"
-              ref={scanRef}
-              className="h-14 bg-background text-lg"
-              autoComplete="off"
-              placeholder={t("scan.placeholder")}
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setActive(0);
-              }}
-              onKeyDown={onScanKey}
-              aria-describedby="scan-hint"
-            />
+            <div className="relative">
+              <Search
+                aria-hidden
+                className="pointer-events-none absolute top-1/2 left-3.5 size-5 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                id="scan-field"
+                ref={scanRef}
+                className="h-14 bg-background pl-11 text-lg"
+                autoComplete="off"
+                aria-label={t("scan.label")}
+                placeholder={t("scan.placeholder")}
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setActive(0);
+                }}
+                onKeyDown={onScanKey}
+                aria-describedby="scan-hint"
+              />
+            </div>
             <p id="scan-hint" className="text-sm text-muted-foreground">
               {t("scan.hint")}
             </p>
           </div>
 
-          {extra && (
+          {quickOpen && (
             <div className="relative rounded-lg border bg-background p-3">
               <Button
                 type="button"
@@ -577,41 +757,25 @@ function Till() {
                 size="icon-pos"
                 className="absolute top-1 right-1"
                 aria-label={t("common:close")}
-                onClick={closeExtra}
+                onClick={closeQuick}
               >
                 <X aria-hidden />
               </Button>
-              {extra.kind === "phone" ? (
-                <CustomerPhoneField inputRef={phoneRef} onDone={closeExtra} />
-              ) : (
-                <QuickSaleBar
-                  inputRef={quickRef}
-                  value={quickText}
-                  onChange={setQuickText}
-                  onAdd={(q) => {
-                    cartStore.getState().addQuickSale(q);
-                    playCue("tick");
-                  }}
-                  onAddProduct={(p) => {
-                    addProduct(p);
-                    playCue("tick");
-                  }}
-                  onDone={closeExtra}
-                />
-              )}
+              <QuickSaleBar
+                inputRef={quickRef}
+                value={quickText}
+                onChange={setQuickText}
+                onAdd={(q) => {
+                  cartStore.getState().addQuickSale(q);
+                  playCue("tick");
+                }}
+                onAddProduct={(p) => {
+                  addProduct(p);
+                  playCue("tick");
+                }}
+                onDone={closeQuick}
+              />
             </div>
-          )}
-          {!extra && customerPhone !== "" && (
-            <Button
-              type="button"
-              variant="outline"
-              size="pos"
-              className="justify-start font-mono"
-              onClick={() => openExtra("phone")}
-            >
-              <Phone aria-hidden />
-              {formatTyped(customerPhone)}
-            </Button>
           )}
 
           <div className="min-h-0 flex-1 overflow-y-auto" aria-label={t("scan.results")}>
@@ -625,6 +789,7 @@ function Till() {
                   {results.map((p, i) => (
                     <li key={p.id} role="option" aria-selected={i === active}>
                       <button
+                        ref={i === active ? activeResultRef : undefined}
                         type="button"
                         className={cn(
                           "flex min-h-12 w-full items-center gap-3 rounded-md border bg-background px-3 text-left text-base",
@@ -738,7 +903,6 @@ function Till() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" side="top" className="w-72">
-                {menuItem("phone", t("customer.label"), <Phone aria-hidden />)}
                 {menuItem("quickSale", t("quick.label"), <Zap aria-hidden />)}
                 <DropdownMenuSeparator />
                 {menuItem(

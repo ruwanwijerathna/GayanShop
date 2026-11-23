@@ -15,7 +15,13 @@ const ROW = 64;
  * The cart (doc §1.9): virtualised 64 px lines, newest at the bottom with auto-scroll. A scanned or bumped
  * line flashes emerald and its qty bumps (transform/background only; off under reduced motion).
  */
-export function Cart({ priced }: { priced: PricedOrder | null }) {
+export function Cart({
+  priced,
+  onEditLine,
+}: {
+  priced: PricedOrder | null;
+  onEditLine?: (line: CartLine) => void;
+}) {
   "use no memo";
   const { t } = useTranslation("pos");
   const lines = useCart((s) => s.lines);
@@ -36,6 +42,12 @@ export function Cart({ priced }: { priced: PricedOrder | null }) {
     const index = cartStore.getState().lines.findIndex((l) => l.key === touch.key);
     if (index >= 0) virtualizer.scrollToIndex(index, { align: "end" });
   }, [touch, virtualizer]);
+
+  useEffect(() => {
+    if (!selected) return;
+    const index = lines.findIndex((l) => l.key === selected);
+    if (index >= 0) virtualizer.scrollToIndex(index, { align: "auto" });
+  }, [selected, lines, virtualizer]);
 
   if (lines.length === 0) {
     return (
@@ -60,6 +72,7 @@ export function Cart({ priced }: { priced: PricedOrder | null }) {
               selected={selected === line.key}
               flash={touch?.key === line.key}
               top={v.start}
+              onEditLine={onEditLine}
             />
           );
         })}
@@ -75,6 +88,7 @@ function CartRow(props: {
   selected: boolean;
   flash: boolean;
   top: number;
+  onEditLine?: (line: CartLine) => void;
 }) {
   const { t } = useTranslation("pos");
   const { line } = props;
@@ -93,16 +107,23 @@ function CartRow(props: {
       <button
         type="button"
         className="flex min-h-12 min-w-0 flex-1 flex-col items-start justify-center text-left"
-        onClick={() => s.select(line.key)}
+        onClick={() => {
+          s.select(line.key);
+          props.onEditLine?.(line);
+        }}
         aria-label={t("cart.select", { name: line.name })}
         aria-pressed={props.selected}
       >
         <span className="w-full truncate text-lg font-medium">{line.name}</span>
-        <span className="text-sm text-muted-foreground">
+        <span className="w-full truncate text-sm text-muted-foreground">
           {line.productId === null && `${t("cart.quickSale")} · `}
           {t("cart.each", { price: formatMoney(line.unitPrice) })}
           {line.unitPrice < line.listPrice && ` · ${t("cart.was", { price: formatMoney(line.listPrice) })}`}
-          {discount > 0 && ` · ${t("cart.discount", { amount: formatMoney(discount) })}`}
+          {discount > 0 && (
+            <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+              {` · ${t("cart.discount", { amount: formatMoney(discount) })}`}
+            </span>
+          )}
         </span>
       </button>
       <WithTooltip label={t("cart.less", { name: line.name })}>
@@ -110,15 +131,16 @@ function CartRow(props: {
           type="button"
           variant="outline"
           size="icon-pos"
+          className="shrink-0"
           aria-label={t("cart.less", { name: line.name })}
           onClick={() => (line.qty > 1 ? s.increment(line.key, -1) : s.removeLine(line.key))}
         >
-          {line.qty > 1 ? <Minus aria-hidden /> : <Trash2 aria-hidden />}
+          <Minus aria-hidden />
         </Button>
       </WithTooltip>
       <span
         className={cn(
-          "w-12 text-center text-lg font-semibold tabular-nums",
+          "w-12 shrink-0 text-center text-lg font-semibold tabular-nums",
           props.flash && "animate-qty-bump",
         )}
         aria-label={t("cart.qty")}
@@ -130,13 +152,28 @@ function CartRow(props: {
           type="button"
           variant="outline"
           size="icon-pos"
+          className="shrink-0"
           aria-label={t("cart.more", { name: line.name })}
           onClick={() => s.increment(line.key, 1)}
         >
           <Plus aria-hidden />
         </Button>
       </WithTooltip>
-      <span className="w-32 text-right text-lg font-semibold tabular-nums">{formatMoney(props.total)}</span>
+      <span className="min-w-32 shrink-0 text-right text-lg font-semibold tabular-nums whitespace-nowrap">
+        {formatMoney(props.total)}
+      </span>
+      <WithTooltip label={t("cart.remove", { name: line.name })}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-pos"
+          className="shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+          aria-label={t("cart.remove", { name: line.name })}
+          onClick={() => s.removeLine(line.key)}
+        >
+          <Trash2 aria-hidden className="size-5" />
+        </Button>
+      </WithTooltip>
     </div>
   );
 }

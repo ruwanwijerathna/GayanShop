@@ -22,6 +22,7 @@ pub struct Session {
     pub ui_language: String,
     pub logged_in_at: DateTime<Utc>,
     pub last_activity: DateTime<Utc>,
+    pub staff_no: Option<i64>,
 }
 
 /// What the UI receives — never the PIN hash; permissions as keys, not a mask.
@@ -36,6 +37,8 @@ pub struct SessionInfo {
     #[specta(type = specta_typescript::Number)]
     pub max_override_bp: i64,
     pub ui_language: String,
+    #[specta(type = Option<specta_typescript::Number>)]
+    pub staff_no: Option<i64>,
 }
 
 impl From<&Session> for SessionInfo {
@@ -48,6 +51,7 @@ impl From<&Session> for SessionInfo {
             max_discount_bp: s.max_discount_bp,
             max_override_bp: s.max_override_bp,
             ui_language: s.ui_language.clone(),
+            staff_no: s.staff_no,
         }
     }
 }
@@ -113,6 +117,7 @@ mod tests {
             ui_language: "si".into(),
             logged_in_at: at,
             last_activity: at,
+            staff_no: Some(1),
         }
     }
 
