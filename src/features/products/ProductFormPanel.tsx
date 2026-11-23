@@ -24,7 +24,6 @@ import { categoryPath } from "./categories";
 import { deviceDigit, nextBarcode, nextSku } from "./codes";
 import { emptyForm, fromProduct, toInput, type MoneyField, type ProductFormState } from "./productForm";
 import { CreatableCombobox } from "@/components/common/CreatableCombobox";
-import { Textarea } from "@/components/ui/textarea";
 import { WithTooltip } from "@/components/common/WithTooltip";
 
 const FIELD = "h-12 text-base";
@@ -76,6 +75,24 @@ export function ProductFormPanel({ product, categories, onDone, onSaved }: Produ
   const [moneyError, setMoneyError] = useState<MoneyField | null>(null);
   const [quantityError, setQuantityError] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const clearAll = () => {
+    setForm({ ...emptyForm(), isActive: true });
+    setMoneyError(null);
+    setQuantityError(false);
+    barcodeInput.current?.focus();
+  };
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && (e.key === "c" || e.key === "C")) {
+        e.preventDefault();
+        clearAll();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const set = <K extends keyof ProductFormState>(key: K, value: ProductFormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -221,12 +238,12 @@ export function ProductFormPanel({ product, categories, onDone, onSaved }: Produ
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-start justify-between gap-2 border-b py-3 pr-14 pl-4">
-        <div className="min-w-0">
-          <h3 className="text-base font-semibold">{product ? t("edit") : t("add")}</h3>
-          <p className="truncate text-sm text-muted-foreground">{product?.name ?? t("form.addHint")}</p>
-        </div>
-        {product && (
+      {product && (
+        <div className="flex items-start justify-between gap-2 border-b px-4 py-3">
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold">{t("edit")}</h3>
+            <p className="truncate text-sm text-muted-foreground">{product.name}</p>
+          </div>
           <Button
             type="button"
             size="pos"
@@ -297,20 +314,6 @@ export function ProductFormPanel({ product, categories, onDone, onSaved }: Produ
             placeholder={t("form.categoryPlaceholder")}
           />
         </Field>
-        {!product && /^\d{1,7}$/.test(form.quantity.trim()) && Number.parseInt(form.quantity, 10) > 0 && (
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="product-note">{t("form.note")}</Label>
-            <Textarea
-              id="product-note"
-              rows={2}
-              className="resize-y text-base"
-              value={form.note}
-              placeholder={t("form.notePlaceholder")}
-              maxLength={200}
-              onChange={(e) => set("note", e.target.value)}
-            />
-          </div>
-        )}
         {serverError && (
           <p role="alert" className="rounded-md bg-destructive px-3 py-2 text-destructive-foreground">
             {serverError}
@@ -329,9 +332,24 @@ export function ProductFormPanel({ product, categories, onDone, onSaved }: Produ
             </div>
           </div>
         )}
-        <Button type="submit" size="pos-lg" disabled={busy}>
-          {save.isPending ? t("form.saving") : t("common:actions.save")}
-        </Button>
+        <div className="flex gap-2">
+          <Button type="submit" size="pos-lg" className="flex-1" disabled={busy}>
+            {save.isPending ? t("form.saving") : t("common:actions.save")}
+          </Button>
+          <Button
+            type="button"
+            size="pos-lg"
+            variant="outline"
+            disabled={busy}
+            title={t("form.clearHint")}
+            onClick={clearAll}
+          >
+            {t("form.clear")}
+            <kbd className="ml-1 rounded bg-muted px-1.5 py-0.5 text-xs font-semibold text-muted-foreground">
+              Alt+C
+            </kbd>
+          </Button>
+        </div>
         {product && !confirmDelete && (
           <div className="flex flex-col gap-1.5">
             <Button

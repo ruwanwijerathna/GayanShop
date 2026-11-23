@@ -55,7 +55,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { Product } from "@/db/bindings";
 import { CommandError } from "@/db/client";
 import { useCategories, useProducts } from "@/db/hooks";
+import { useScanHandler } from "@/hardware/scanner/ScannerProvider";
 import { translateError } from "@/i18n";
+import { playCue } from "@/lib/audio";
 import { formatMoney } from "@/lib/money";
 import { hasPerm } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -126,7 +128,7 @@ export function ProductsScreen() {
   const [formKey, setFormKey] = useState(0);
   const openEditor = (p: Product | null) => {
     setEditing(p);
-    if (p === null) setFormKey((k) => k + 1);
+    setFormKey((k) => k + 1);
     setSliderOpen(true);
   };
   const [printIds, setPrintIds] = useState<string[] | null>(null);
@@ -150,6 +152,17 @@ export function ProductsScreen() {
     return m;
   }, [cats]);
   const data = useMemo(() => products.data ?? [], [products.data]);
+
+  useScanHandler((code) => {
+    if (!canManage) return;
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    const match = data.find((p) => p.barcode === trimmed) ?? data.find((p) => p.sku === trimmed);
+    if (match) {
+      playCue("tick");
+      openEditor(match);
+    }
+  });
 
   const columns = useMemo<ColumnDef<Product>[]>(() => {
     const cols: ColumnDef<Product>[] = [
@@ -584,11 +597,11 @@ export function ProductsScreen() {
             </Button>
           )}
           <Sheet open={sliderOpen} onOpenChange={setSliderOpen}>
-            <SheetContent className="w-full gap-0 overflow-y-auto p-0 sm:max-w-md">
+            <SheetContent showCloseButton={false} className="w-full gap-0 overflow-y-auto p-0 sm:max-w-md">
               <SheetTitle className="sr-only">{editing ? t("edit") : t("add")}</SheetTitle>
               <SheetDescription className="sr-only">{editing?.name ?? t("form.addHint")}</SheetDescription>
               <ProductFormPanel
-                key={editing?.id ?? `new-${formKey}`}
+                key={editing ? `${editing.id}-${formKey}` : `new-${formKey}`}
                 product={editing}
                 categories={cats}
                 onDone={(why) => {

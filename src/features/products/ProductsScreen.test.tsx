@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { useEffect, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSession } from "@/app/session";
@@ -252,15 +252,12 @@ describe("ProductsScreen", () => {
     expect(within(dialog).getByLabelText(/^SKU/)).toHaveValue("200002");
   });
 
-  it("asks for a note only once an opening quantity is typed, and puts it last", async () => {
+  it("has no note field even when an opening quantity is typed", async () => {
     renderAs(MANAGER);
     const dialog = await openAddForm();
     expect(within(dialog).queryByLabelText("Note")).not.toBeInTheDocument();
     fireEvent.change(within(dialog).getByLabelText("Quantity"), { target: { value: "5" } });
-    const note = within(dialog).getByLabelText("Note");
-    expect(note.tagName).toBe("TEXTAREA");
-    const fields = Array.from(dialog.querySelectorAll("input, textarea"));
-    expect(fields.at(-1)).toBe(note);
+    expect(within(dialog).queryByLabelText("Note")).not.toBeInTheDocument();
   });
 
   it("lays the form out beside the list: barcode, name, SKU, prices, quantity, category, then Save", async () => {
@@ -290,6 +287,22 @@ describe("ProductsScreen", () => {
         within(screen.getByRole("form", { name: "Add product" })).getByLabelText("Product Name"),
       ).toHaveValue(""),
     );
+  });
+
+  it("clears all input fields with the Clear button or Alt+C", async () => {
+    renderAs(MANAGER);
+    const dialog = await openAddForm();
+    fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Apple" } });
+    fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "50" } });
+    expect(within(dialog).getByLabelText("Product Name")).toHaveValue("Apple");
+    fireEvent.click(within(dialog).getByRole("button", { name: /^Clear/ }));
+    expect(within(dialog).getByLabelText("Product Name")).toHaveValue("");
+    expect(within(dialog).getByLabelText("Selling price (Rs)")).toHaveValue("");
+
+    fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Orange" } });
+    expect(within(dialog).getByLabelText("Product Name")).toHaveValue("Orange");
+    fireEvent.keyDown(window, { key: "c", altKey: true });
+    expect(within(dialog).getByLabelText("Product Name")).toHaveValue("");
   });
 
   it("goes back to a blank new-product form from edit mode", async () => {
@@ -397,7 +410,7 @@ describe("ProductsScreen", () => {
     );
   });
 
-  it("creates a product with initial stock quantity and note", async () => {
+  it("creates a product with initial stock quantity", async () => {
     vi.mocked(commands.createProduct).mockImplementation(() =>
       ok(product({ id: "soap1", name: "Sunlight Soap" })),
     );
@@ -407,7 +420,6 @@ describe("ProductsScreen", () => {
     fireEvent.change(within(dialog).getByLabelText("Product Name"), { target: { value: "Sunlight Soap" } });
     fireEvent.change(within(dialog).getByLabelText("Selling price (Rs)"), { target: { value: "150" } });
     fireEvent.change(within(dialog).getByLabelText("Quantity"), { target: { value: "50" } });
-    fireEvent.change(within(dialog).getByLabelText("Note"), { target: { value: "Initial opening batch" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(within(dialog).queryByRole("button", { name: "Saving…" })).not.toBeInTheDocument(),
@@ -417,7 +429,7 @@ describe("ProductsScreen", () => {
       {
         product_id: "soap1",
         qty_delta: 50,
-        note: "Initial opening batch",
+        note: "Opening stock",
       },
       null,
     );
@@ -699,4 +711,63 @@ describe("ProductsScreen", () => {
     ]);
     expect(stockLevel(at(-4, false))).toBe("untracked");
   });
+
+  it("opens the edit slider when a barcode is scanned and loads the product", async () => {
+    renderAs(MANAGER);
+    expect(await within(grid()).findByText("Blue Bucket 10L")).toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: "Edit product" })).not.toBeInTheDocument();
+
+    await scan("2100000000017");
+
+    const form = await screen.findByRole("form", { name: "Edit product" });
+    expect(form).toBeInTheDocument();
+    expect(within(form).getByLabelText("Product Name")).toHaveValue("Blue Bucket 10L");
+  });
+
+  it("does nothing when an unknown barcode is scanned", async () => {
+    renderAs(MANAGER);
+    expect(await within(grid()).findByText("Blue Bucket 10L")).toBeInTheDocument();
+
+    await scan("9999999999999");
+
+    expect(screen.queryByRole("form", { name: "Edit product" })).not.toBeInTheDocument();
+  });
+
+  it("switches product in open slider when scanning another barcode, and ignores unknown barcode", async () => {
+    vi.mocked(commands.listProducts).mockImplementation(() =>
+      ok([
+        product({ id: "p1", name: "Blue Bucket 10L", barcode: "2100000000017" }),
+        product({ id: "p2", name: "Red Mug 350ml", barcode: "2100000000024" }),
+      ]),
+    );
+    renderAs(MANAGER);
+    expect(await within(grid()).findByText("Blue Bucket 10L")).toBeInTheDocument();
+
+    await scan("2100000000017");
+    const form1 = await screen.findByRole("form", { name: "Edit product" });
+    expect(within(form1).getByLabelText("Product Name")).toHaveValue("Blue Bucket 10L");
+
+    await scan("2100000000024");
+    await waitFor(() => {
+      expect(
+        within(screen.getByRole("form", { name: "Edit product" })).getByLabelText("Product Name"),
+      ).toHaveValue("Red Mug 350ml");
+    });
+
+    await scan("9999999999999");
+    expect(
+      within(screen.getByRole("form", { name: "Edit product" })).getByLabelText("Product Name"),
+    ).toHaveValue("Red Mug 350ml");
+  });
 });
+
+async function scan(code: string) {
+  const press = (c: string, k: string) =>
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: c, key: k, bubbles: true, cancelable: true }));
+  await act(async () => {
+    press("F13", "F13");
+    for (const c of code) press(`Digit${c}`, c);
+    press("Enter", "Enter");
+    await new Promise((r) => setTimeout(r, 20));
+  });
+}
