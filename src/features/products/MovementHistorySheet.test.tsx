@@ -28,6 +28,7 @@ const POT: Product = {
   attributes: {},
   is_active: true,
   barcode_conflict: false,
+  created_at: "2026-11-08T09:00:00.000Z",
   updated_at: "2026-11-08T09:00:00.000Z",
   version: 1,
   on_hand: 7,

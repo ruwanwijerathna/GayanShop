@@ -12,9 +12,9 @@ import { SelectField } from "@/components/common/SelectField";
 import { useAutoPrintLabels } from "@/components/labels/useAutoPrintLabels";
 import { StockErrorText, useApprovedStock } from "@/components/stock/useApprovedStock";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import type { DamageReason, Product } from "@/db/bindings";
 import { useAdjustStock, useRecordDamage, useRecordStockCount } from "@/db/hooks";
 import { playCue } from "@/lib/audio";
@@ -37,10 +37,13 @@ function StockDialogShell({
   children: React.ReactNode;
 }) {
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-lg">
-        <DialogHeader className="border-b bg-muted/30 px-6 py-5">
-          <div className="flex items-center gap-3 pr-8">
+    <Sheet open onOpenChange={(o) => !o && onClose()}>
+      <SheetContent
+        showCloseButton={false}
+        className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-md"
+      >
+        <SheetHeader className="border-b bg-muted/30 px-6 py-5">
+          <div className="flex items-center gap-3">
             <span
               aria-hidden
               className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15"
@@ -48,14 +51,14 @@ function StockDialogShell({
               <Icon className="size-5" />
             </span>
             <div className="min-w-0 flex-1">
-              <DialogTitle className="text-xl tracking-tight">{title}</DialogTitle>
-              <DialogDescription>{description}</DialogDescription>
+              <SheetTitle className="text-xl tracking-tight">{title}</SheetTitle>
+              <SheetDescription>{description}</SheetDescription>
             </div>
           </div>
-        </DialogHeader>
-        <div className="flex flex-col gap-4 overflow-y-auto px-6 py-5">{children}</div>
-      </DialogContent>
-    </Dialog>
+        </SheetHeader>
+        <div className="flex flex-1 flex-col overflow-hidden">{children}</div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -142,24 +145,26 @@ export function RestockDialog({ product, onClose }: { product: Product; onClose:
     >
       <form
         onSubmit={submit}
-        className="flex flex-col gap-4"
+        className="flex flex-1 flex-col"
         aria-label={t("products:stock.restock.title", { name: product.name })}
       >
-        <OnHand product={product} after={ok && units !== null ? product.on_hand + units : null} />
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="restock-qty">{t("products:stock.restock.qty")}</Label>
-          <Input
-            id="restock-qty"
-            inputMode="numeric"
-            className={`${FIELD} font-mono`}
-            value={qty}
-            onChange={(e) => setQty(e.target.value)}
-            aria-invalid={qty.trim() !== "" && !ok}
-          />
+        <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-5">
+          <OnHand product={product} after={ok && units !== null ? product.on_hand + units : null} />
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="restock-qty">{t("products:stock.restock.qty")}</Label>
+            <Input
+              id="restock-qty"
+              inputMode="numeric"
+              className={`${FIELD} font-mono`}
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              aria-invalid={qty.trim() !== "" && !ok}
+            />
+          </div>
+          <NoteField id="restock-note" label={t("inventory:note")} value={note} onChange={setNote} />
+          <StockErrorText error={adjust.error} />
         </div>
-        <NoteField id="restock-note" label={t("inventory:note")} value={note} onChange={setNote} />
-        <StockErrorText error={adjust.error} />
-        <div className="flex justify-end gap-2">
+        <div className="mt-auto flex items-center justify-end gap-3 border-t bg-muted/20 px-6 py-4">
           <Button type="button" size="pos" variant="outline" onClick={onClose}>
             {t("products:stock.cancel")}
           </Button>
@@ -219,74 +224,80 @@ export function AdjustStockDialog({ product, onClose }: { product: Product; onCl
     >
       <form
         onSubmit={submit}
-        className="flex flex-col gap-4"
+        className="flex flex-1 flex-col"
         aria-label={t("products:stock.adjust.title", { name: product.name })}
       >
-        <div className="grid gap-2 sm:grid-cols-2" role="group" aria-label={t("products:stock.adjust.kind")}>
-          {(["recount", "writeoff"] as const).map((m) => {
-            const Icon = MODE_ICONS[m];
-            const active = mode === m;
-            return (
-              <button
-                key={m}
-                type="button"
-                aria-pressed={active}
-                onClick={() => {
-                  setMode(m);
-                  setQty("");
-                }}
-                className={`flex min-h-12 flex-col items-start gap-1 rounded-xl border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-ring ${
-                  active ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "hover:bg-muted/50"
-                }`}
-              >
-                <span className="flex items-center gap-2 font-medium">
-                  <Icon aria-hidden className="size-4" />
-                  {t(`products:stock.adjust.modes.${m}.label`)}
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  {t(`products:stock.adjust.modes.${m}.hint`)}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <OnHand product={product} after={after} />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="adjust-qty">
-              {mode === "recount"
-                ? t("products:stock.adjust.counted")
-                : t("products:stock.adjust.writeoffQty")}
-            </Label>
-            <Input
-              id="adjust-qty"
-              inputMode="numeric"
-              className={`${FIELD} font-mono`}
-              value={qty}
-              onChange={(e) => setQty(e.target.value)}
-              aria-invalid={qty.trim() !== "" && units === null}
-            />
+        <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-5">
+          <div
+            className="grid gap-2 sm:grid-cols-2"
+            role="group"
+            aria-label={t("products:stock.adjust.kind")}
+          >
+            {(["recount", "writeoff"] as const).map((m) => {
+              const Icon = MODE_ICONS[m];
+              const active = mode === m;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => {
+                    setMode(m);
+                    setQty("");
+                  }}
+                  className={`flex min-h-12 flex-col items-start gap-1 rounded-xl border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-ring ${
+                    active ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "hover:bg-muted/50"
+                  }`}
+                >
+                  <span className="flex items-center gap-2 font-medium">
+                    <Icon aria-hidden className="size-4" />
+                    {t(`products:stock.adjust.modes.${m}.label`)}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    {t(`products:stock.adjust.modes.${m}.hint`)}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-          {mode === "writeoff" && (
+          <OnHand product={product} after={after} />
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="adjust-reason">{t("inventory:damage.reason")}</Label>
-              <SelectField
-                id="adjust-reason"
-                value={reason}
-                onValueChange={(v) => setReason(REASONS.find((r) => r === v) ?? "other")}
-                options={REASONS.map((r) => ({ value: r, label: t(`inventory:damage.reasons.${r}`) }))}
+              <Label htmlFor="adjust-qty">
+                {mode === "recount"
+                  ? t("products:stock.adjust.counted")
+                  : t("products:stock.adjust.writeoffQty")}
+              </Label>
+              <Input
+                id="adjust-qty"
+                inputMode="numeric"
+                className={`${FIELD} font-mono`}
+                value={qty}
+                onChange={(e) => setQty(e.target.value)}
+                aria-invalid={qty.trim() !== "" && units === null}
               />
             </div>
-          )}
+            {mode === "writeoff" && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="adjust-reason">{t("inventory:damage.reason")}</Label>
+                <SelectField
+                  id="adjust-reason"
+                  value={reason}
+                  onValueChange={(v) => setReason(REASONS.find((r) => r === v) ?? "other")}
+                  options={REASONS.map((r) => ({ value: r, label: t(`inventory:damage.reasons.${r}`) }))}
+                />
+              </div>
+            )}
+          </div>
+          <NoteField
+            id="adjust-note"
+            label={noteNeeded ? t("inventory:noteRequired") : t("inventory:note")}
+            value={note}
+            onChange={setNote}
+          />
+          <StockErrorText error={mode === "recount" ? count.error : damage.error} />
         </div>
-        <NoteField
-          id="adjust-note"
-          label={noteNeeded ? t("inventory:noteRequired") : t("inventory:note")}
-          value={note}
-          onChange={setNote}
-        />
-        <StockErrorText error={mode === "recount" ? count.error : damage.error} />
-        <div className="flex justify-end gap-2">
+        <div className="mt-auto flex items-center justify-end gap-3 border-t bg-muted/20 px-6 py-4">
           <Button type="button" size="pos" variant="outline" onClick={onClose}>
             {t("products:stock.cancel")}
           </Button>

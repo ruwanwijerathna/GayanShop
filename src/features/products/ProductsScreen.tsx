@@ -137,7 +137,7 @@ export function ProductsScreen() {
   const [restockFor, setRestockFor] = useState<Product | null>(null);
   const [adjustFor, setAdjustFor] = useState<Product | null>(null);
 
-  const [sorting, setSorting] = useState<SortingState>([{ id: "name", desc: false }]);
+  const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
@@ -151,7 +151,13 @@ export function ProductsScreen() {
     for (const c of cats) m.set(c.id, categoryPath(c, cats));
     return m;
   }, [cats]);
-  const data = useMemo(() => products.data ?? [], [products.data]);
+  const data = useMemo(() => {
+    const list = products.data ?? [];
+    return [...list].sort(
+      (a, b) =>
+        (b.created_at ?? "").localeCompare(a.created_at ?? "") || (b.id ?? "").localeCompare(a.id ?? ""),
+    );
+  }, [products.data]);
 
   useScanHandler((code) => {
     if (!canManage) return;

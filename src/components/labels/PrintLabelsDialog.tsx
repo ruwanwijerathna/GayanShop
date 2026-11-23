@@ -8,8 +8,16 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ApprovalDialog } from "@/components/auth/ApprovalDialog";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import type { LabelJob } from "@/db/bindings";
 import { CommandError } from "@/db/client";
 import { useLabelPreview, useLabelTemplates } from "@/db/hooks";
@@ -18,7 +26,6 @@ import { cn } from "@/lib/utils";
 import { LabelStickerPreview } from "./LabelSticker";
 import { printLabelJob } from "./stickerPrint";
 import { lastTemplate, rememberTemplate } from "./templatePreference";
-import { Checkbox } from "@/components/ui/checkbox";
 
 export interface LabelItem {
   product_id: string;
@@ -107,6 +114,7 @@ export function PrintLabelsDialog({ items, onClose }: { items: LabelItem[]; onCl
   const total = parsed.reduce((a, p) => a + p.copies, 0);
   const names = new Map(items.map((i) => [i.product_id, i.name]));
   const many = items.length > 1;
+  const singleItem = items[0];
 
   // The preview is one label: every copy prints the same, so showing twenty adds nothing.
   const oneLabel: LabelJob = {
@@ -154,162 +162,203 @@ export function PrintLabelsDialog({ items, onClose }: { items: LabelItem[]; onCl
 
   return (
     <>
-      <Dialog open={!approving} onOpenChange={(o) => !o && onClose()}>
-        <DialogContent className="max-h-[92vh] sm:max-w-4xl gap-5 overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-xl">{t("print.title")}</DialogTitle>
-          </DialogHeader>
-
-          <div className="grid gap-6 md:grid-cols-[1fr_minmax(0,18rem)]">
-            <div className="flex flex-col gap-5">
-              <section className="flex flex-col gap-3" aria-label={t("print.copies")}>
-                <h3 className="text-sm font-medium text-muted-foreground">{t("print.copies")}</h3>
-                {many ? (
-                  <ul className="flex flex-col gap-2">
-                    {items.map((i) => (
-                      <li
-                        key={i.product_id}
-                        className={cn(
-                          "flex items-center gap-3 rounded-lg border p-2 pl-3",
-                          previewId === i.product_id ? "border-primary bg-primary/5" : "border-border",
-                        )}
-                      >
-                        <button
-                          type="button"
-                          aria-pressed={previewId === i.product_id}
-                          className="min-h-12 flex-1 truncate text-left text-base font-medium"
-                          onClick={() => setPreviewId(i.product_id)}
-                        >
-                          {i.name}
-                        </button>
-                        <CopiesStepper
-                          name={i.name}
-                          value={copies[i.product_id] ?? ""}
-                          invalid={invalid(i.product_id)}
-                          onChange={(v) => setCount(i.product_id, v)}
-                          onFocus={() => setPreviewId(i.product_id)}
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  items.map((i) => (
-                    <div key={i.product_id} className="flex flex-col gap-3">
-                      <p className="text-lg font-semibold">{i.name}</p>
-                      <CopiesStepper
-                        large
-                        name={i.name}
-                        value={copies[i.product_id] ?? ""}
-                        invalid={invalid(i.product_id)}
-                        onChange={(v) => setCount(i.product_id, v)}
-                      />
-                    </div>
-                  ))
-                )}
-              </section>
-
-              <section className="flex flex-col gap-3">
-                <h3 id="label-roll" className="text-sm font-medium text-muted-foreground">
-                  {t("print.template")}
-                </h3>
-                <div role="radiogroup" aria-labelledby="label-roll" className="grid grid-cols-2 gap-2">
-                  {(templates.data ?? []).map((tpl) => {
-                    const on = tpl.id === templateId;
-                    return (
-                      <button
-                        key={tpl.id}
-                        type="button"
-                        role="radio"
-                        aria-checked={on}
-                        className={cn(
-                          "min-h-14 rounded-lg border px-3 py-2 text-left text-base transition-colors",
-                          on ? "border-primary bg-primary/10 font-semibold" : "border-border hover:bg-accent",
-                        )}
-                        onClick={() => setTemplateId(tpl.id)}
-                      >
-                        {t(`templates.${tpl.id}`, { defaultValue: tpl.name })}
-                      </button>
-                    );
-                  })}
-                </div>
-                {columns > 1 && (
-                  <label className="flex items-start gap-3 text-base">
-                    <Checkbox
-                      className="mt-0.5 size-6"
-                      checked={fill}
-                      onCheckedChange={(v) => setFill(v === true)}
-                    />
-                    <span className="flex flex-col">
-                      {t("print.fill")}
-                      <span className="text-sm text-muted-foreground">{t("print.fillHint")}</span>
-                    </span>
-                  </label>
-                )}
-              </section>
+      <Sheet open={!approving} onOpenChange={(o) => !o && onClose()}>
+        <SheetContent
+          showCloseButton={false}
+          className="flex h-full w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-md"
+        >
+          <SheetHeader className="border-b bg-muted/30 px-6 py-5">
+            <div className="flex items-center gap-3">
+              <span
+                aria-hidden
+                className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15"
+              >
+                <Printer className="size-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <SheetTitle className="text-xl tracking-tight">{t("print.title")}</SheetTitle>
+                <SheetDescription className="truncate text-base font-medium text-foreground">
+                  {!many && singleItem
+                    ? singleItem.name
+                    : t("print.itemsCount", {
+                        count: items.length,
+                        defaultValue: `${items.length} items selected`,
+                      })}
+                </SheetDescription>
+              </div>
             </div>
+          </SheetHeader>
 
-            <aside className="flex flex-col gap-3">
-              <div className="flex flex-col items-center gap-3 rounded-xl bg-muted p-4">
-                {one.data && shown ? (
-                  <LabelStickerPreview
-                    layout={one.data}
-                    sticker={shown}
-                    width={256}
-                    title={t("print.preview")}
-                    className="rounded-md bg-white shadow-md"
-                  />
-                ) : (
-                  <div className="h-28 w-full animate-pulse rounded-md bg-background/60 motion-reduce:animate-none" />
-                )}
-                <p className="text-center text-sm text-muted-foreground">
+          <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
+            {/* Label preview placed cleanly at the top */}
+            <div className="flex flex-col items-center gap-3 rounded-xl border bg-muted/30 p-4">
+              {one.data && shown ? (
+                <LabelStickerPreview
+                  layout={one.data}
+                  sticker={shown}
+                  width={240}
+                  title={t("print.preview")}
+                  className="rounded-md bg-white shadow-md"
+                />
+              ) : (
+                <div className="h-28 w-full animate-pulse rounded-md bg-background/60 motion-reduce:animate-none" />
+              )}
+              <div className="text-center text-sm text-muted-foreground">
+                <p>
                   {one.data
                     ? t("print.previewNote", {
                         w: one.data.label_w_mm,
                         h: one.data.label_h_mm,
                       })
                     : t("print.previewLoading")}
-                  {many && previewName && (
-                    <span className="block font-medium text-foreground">{previewName}</span>
-                  )}
                 </p>
+                {many && previewName && (
+                  <span className="mt-1 block font-medium text-foreground">{previewName}</span>
+                )}
               </div>
-              {warnings.length > 0 && (
-                <ul className="flex flex-col gap-1 text-sm" aria-label={t("print.warnings")}>
-                  {warnings.map((w) => (
+            </div>
+
+            {warnings.length > 0 && (
+              <ul className="flex flex-col gap-1.5 text-sm" aria-label={t("print.warnings")}>
+                {warnings.map((w) => (
+                  <li
+                    key={`${w.code}:${w.product_id}`}
+                    role="status"
+                    className="rounded-md border border-warning/30 bg-warning/15 px-3 py-2 text-warning-foreground font-medium"
+                  >
+                    {t(`warnings.${w.code}`, { name: names.get(w.product_id) ?? "" })}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {/* Copies */}
+            {many ? (
+              <section className="flex flex-col gap-2" aria-label={t("print.copies")}>
+                <h3 className="text-sm font-medium text-muted-foreground">{t("print.copies")}</h3>
+                <ul className="flex flex-col gap-2">
+                  {items.map((i) => (
                     <li
-                      key={`${w.code}:${w.product_id}`}
-                      role="status"
-                      className="rounded-md bg-warning/15 px-3 py-2"
+                      key={i.product_id}
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg border p-2 pl-3 transition-colors",
+                        previewId === i.product_id ? "border-primary bg-primary/5" : "border-border",
+                      )}
                     >
-                      {t(`warnings.${w.code}`, { name: names.get(w.product_id) ?? "" })}
+                      <button
+                        type="button"
+                        aria-pressed={previewId === i.product_id}
+                        className="min-h-12 flex-1 truncate text-left text-base font-medium"
+                        onClick={() => setPreviewId(i.product_id)}
+                      >
+                        {i.name}
+                      </button>
+                      <CopiesStepper
+                        name={i.name}
+                        value={copies[i.product_id] ?? ""}
+                        invalid={invalid(i.product_id)}
+                        onChange={(v) => setCount(i.product_id, v)}
+                        onFocus={() => setPreviewId(i.product_id)}
+                      />
                     </li>
                   ))}
                 </ul>
+              </section>
+            ) : (
+              singleItem && (
+                <section className="flex flex-col gap-2" aria-label={t("print.copies")}>
+                  <div className="flex items-center justify-between rounded-lg border p-3">
+                    <span className="text-base font-medium">{t("print.copies")}</span>
+                    <CopiesStepper
+                      large
+                      name={singleItem.name}
+                      value={copies[singleItem.product_id] ?? ""}
+                      invalid={invalid(singleItem.product_id)}
+                      onChange={(v) => setCount(singleItem.product_id, v)}
+                    />
+                  </div>
+                </section>
+              )
+            )}
+
+            {/* Label roll: 3 options vertically stacked one below the other */}
+            <section className="flex flex-col gap-2.5">
+              <h3 id="label-roll" className="text-sm font-medium text-muted-foreground">
+                {t("print.template")}
+              </h3>
+              <div role="radiogroup" aria-labelledby="label-roll" className="flex flex-col gap-2">
+                {(templates.data ?? []).map((tpl) => {
+                  const on = tpl.id === templateId;
+                  return (
+                    <button
+                      key={tpl.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      className={cn(
+                        "flex min-h-12 items-center justify-between rounded-lg border px-4 py-3 text-left text-base transition-colors",
+                        on
+                          ? "border-primary bg-primary/10 font-semibold text-foreground ring-1 ring-primary/30"
+                          : "border-border hover:bg-accent text-muted-foreground hover:text-foreground",
+                      )}
+                      onClick={() => setTemplateId(tpl.id)}
+                    >
+                      <span>{t(`templates.${tpl.id}`, { defaultValue: tpl.name })}</span>
+                      <span
+                        className={cn(
+                          "flex size-4 items-center justify-center rounded-full border border-primary",
+                          on ? "bg-primary" : "bg-transparent",
+                        )}
+                      >
+                        {on && <span className="size-1.5 rounded-full bg-primary-foreground" />}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {columns > 1 && (
+                <label className="flex items-start gap-3 pt-1 text-base">
+                  <Checkbox
+                    className="mt-0.5 size-6"
+                    checked={fill}
+                    onCheckedChange={(v) => setFill(v === true)}
+                  />
+                  <span className="flex flex-col">
+                    {t("print.fill")}
+                    <span className="text-sm text-muted-foreground">{t("print.fillHint")}</span>
+                  </span>
+                </label>
               )}
-            </aside>
+            </section>
+
+            {error && (
+              <p role="alert" className="rounded-md bg-destructive/15 p-3 text-base text-destructive">
+                {error}
+              </p>
+            )}
           </div>
 
-          {error && (
-            <p role="alert" className="text-base text-destructive">
-              {error}
-            </p>
-          )}
-          <DialogFooter className="items-center gap-3 sm:justify-between">
-            <p className="text-sm text-muted-foreground">
-              {columns > 1 ? t("print.summary", { count: total, rows }) : t("print.count", { count: total })}
-            </p>
-            <div className="flex gap-2">
+          <SheetFooter className="mt-auto flex flex-col gap-3 border-t bg-muted/20 px-6 py-4">
+            <div className="flex items-center justify-between rounded-lg border bg-background/80 px-4 py-2.5 text-sm shadow-xs">
+              <span className="font-medium text-muted-foreground">{t("print.summaryLabel")}</span>
+              <span className="font-semibold text-foreground">
+                {columns > 1
+                  ? t("print.summary", { count: total, rows })
+                  : t("print.count", { count: total })}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <Button type="button" size="pos" variant="outline" onClick={onClose}>
                 {t("common:actions.cancel")}
               </Button>
-              <Button type="button" size="pos-lg" disabled={!job || printing} onClick={() => send(null)}>
+              <Button type="button" size="pos" disabled={!job || printing} onClick={() => send(null)}>
                 <Printer aria-hidden />
                 {t("print.submit", { count: total })}
               </Button>
             </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
       <ApprovalDialog
         open={approving}
         perm="LABEL_PRINT"

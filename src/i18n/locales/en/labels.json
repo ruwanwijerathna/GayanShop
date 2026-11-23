@@ -22,7 +22,8 @@
     "fillHint": "Adds copies so the last row has no empty spot.",
     "previewNote": "One label, {{w}} × {{h}} mm. Every copy prints the same.",
     "previewLoading": "Preparing the preview…",
-    "summary": "{{count}} label(s) on {{rows}} row(s)"
+    "summary": "{{count}} label(s) on {{rows}} row(s)",
+    "summaryLabel": "Print summary"
   },
   "warnings": {
     "BARCODE_TOO_LONG": "{{name}}: the code is too long for this label. Assign a short SKU or use the 2\" x 1\" roll.",

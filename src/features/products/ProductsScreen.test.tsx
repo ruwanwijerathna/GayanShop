@@ -58,6 +58,7 @@ function product(over: Partial<Product>): Product {
     attributes: {},
     is_active: true,
     barcode_conflict: false,
+    created_at: "2026-11-08T09:00:00.000Z",
     updated_at: "2026-11-08T09:00:00.000Z",
     version: 1,
     on_hand: 45,
@@ -577,10 +578,31 @@ describe("ProductsScreen", () => {
         .getAllByRole("row")
         .slice(1)
         .map((r) => r.querySelectorAll("td")[1]?.textContent ?? "");
+    openMenu(within(grid()).getByRole("button", { name: "Name" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Asc" }));
     expect(names()[0]).toContain("Black Sandal");
     openMenu(within(grid()).getByRole("button", { name: "Name" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Desc" }));
     expect(names()[0]).toContain("Old Mug");
+  });
+
+  it("shows newly added products at the top of the table by default", async () => {
+    vi.mocked(commands.listProducts).mockImplementation(() =>
+      ok([
+        product({ id: "p1", name: "Old Item", created_at: "2026-11-01T00:00:00.000Z" }),
+        product({ id: "p2", name: "Newest Item", created_at: "2026-11-20T00:00:00.000Z" }),
+        product({ id: "p3", name: "Middle Item", created_at: "2026-11-10T00:00:00.000Z" }),
+      ]),
+    );
+    renderAs(MANAGER);
+    await within(grid()).findByText("Newest Item");
+    const names = within(grid())
+      .getAllByRole("row")
+      .slice(1)
+      .map((r) => r.querySelectorAll("td")[1]?.textContent ?? "");
+    expect(names[0]).toContain("Newest Item");
+    expect(names[1]).toContain("Middle Item");
+    expect(names[2]).toContain("Old Item");
   });
 
   it("pages through a long list", async () => {
@@ -588,10 +610,11 @@ describe("ProductsScreen", () => {
       ok(
         Array.from({ length: 30 }, (_, i) =>
           product({
-            id: `p${i}`,
+            id: `p${String(i).padStart(2, "0")}`,
             name: `Item ${String(i).padStart(2, "0")}`,
             sku: String(200000 + i),
             barcode: null,
+            created_at: `2026-11-08T09:${String(30 - i).padStart(2, "0")}:00.000Z`,
           }),
         ),
       ),

@@ -80,6 +80,7 @@ pub struct Product {
     pub attributes: BTreeMap<String, String>,
     pub is_active: bool,
     pub barcode_conflict: bool,
+    pub created_at: String,
     pub updated_at: String,
     #[specta(type = specta_typescript::Number)]
     pub version: i64,
@@ -143,13 +144,14 @@ struct ProductRow {
     attributes: String,
     is_active: bool,
     barcode_conflict: bool,
+    created_at: String,
     updated_at: String,
     version: i64,
     on_hand: i64,
 }
 
 const PRODUCT_COLS: &str = "p.id, p.kind, p.name, p.name_si, p.sku, p.barcode, p.category_id, p.default_cost, p.price,
-    p.min_price, p.track_stock, p.allow_negative_stock, p.attributes, p.is_active, p.barcode_conflict, p.updated_at,
+    p.min_price, p.track_stock, p.allow_negative_stock, p.attributes, p.is_active, p.barcode_conflict, p.created_at, p.updated_at,
     p.version, COALESCE(sl.on_hand, 0) AS on_hand";
 
 /// `products p` plus its derived stock level (`PRODUCT_COLS` reads `sl.on_hand`).
@@ -210,6 +212,7 @@ impl ProductRow {
             attributes,
             is_active: self.is_active,
             barcode_conflict: self.barcode_conflict,
+            created_at: self.created_at,
             updated_at: self.updated_at,
             version: self.version,
             on_hand: self.on_hand,
@@ -248,12 +251,12 @@ impl SummaryRow {
 
 // ───────── reads ─────────
 
-/// Every live product (active and inactive), name order. Bounded (≤ ~50k), so the back office loads
+/// Every live product (active and inactive), newest first. Bounded (≤ ~50k), so the back office loads
 /// it once and filters client-side (doc §1.4).
 pub async fn list(pool: &SqlitePool, store_id: &str, view_cost: bool) -> AppResult<Vec<Product>> {
     let rows: Vec<ProductRow> = sqlx::query_as(&format!(
         "SELECT {PRODUCT_COLS} FROM {PRODUCT_FROM} WHERE p.store_id = ?1 AND p.deleted_at IS NULL
-         ORDER BY p.name COLLATE NOCASE, p.id"
+         ORDER BY p.created_at DESC, p.id DESC"
     ))
     .bind(store_id)
     .fetch_all(pool)

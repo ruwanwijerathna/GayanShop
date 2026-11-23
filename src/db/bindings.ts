@@ -2241,6 +2241,7 @@ export type Product_Deserialize = {
 	attributes: { [key in string]: string },
 	is_active: boolean,
 	barcode_conflict: boolean,
+	created_at: string,
 	updated_at: string,
 	version: number,
 	/**
@@ -2267,6 +2268,7 @@ export type Product_Serialize = {
 	attributes: { [key in string]: string },
 	is_active: boolean,
 	barcode_conflict: boolean,
+	created_at: string,
 	updated_at: string,
 	version: number,
 	/**
