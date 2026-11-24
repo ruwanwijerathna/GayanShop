@@ -23,6 +23,7 @@ use crate::clock::new_id;
 use crate::db::outbox;
 use crate::domain::business_date::parse_date;
 use crate::domain::exchange::{self, DEFAULT_WINDOW_DAYS, MAX_WINDOW_DAYS};
+use crate::domain::receipt_no::normalize_bill_query;
 use crate::error::{AppError, AppResult};
 
 const MAX_RETURN_LINES: usize = 100;
@@ -335,7 +336,9 @@ struct LookupHead {
 
 /// Find a completed sale by receipt number and report what can still be exchanged, and whether the window has passed.
 pub async fn lookup(pool: &SqlitePool, store_id: &str, receipt_no: &str, today: &str) -> AppResult<ExchangeSource> {
-    let receipt = receipt_no.trim().to_uppercase();
+    let today = parse_date(today).ok_or_else(|| AppError::internal("bad business date"))?;
+    // What the cashier typed becomes the full bill number: `T01-4` is bill 4 of today (decision #31).
+    let receipt = normalize_bill_query(receipt_no, today);
     let head: LookupHead = sqlx::query_as(
         "SELECT id, receipt_no, status, business_date FROM orders WHERE store_id = ?1 AND receipt_no = ?2",
     )
@@ -353,7 +356,6 @@ pub async fn lookup(pool: &SqlitePool, store_id: &str, receipt_no: &str, today: 
         .await?;
     let window = window_from(raw)?;
     let sold_on = parse_date(&head.business_date).ok_or_else(|| AppError::internal("bad business date"))?;
-    let today = parse_date(today).ok_or_else(|| AppError::internal("bad business date"))?;
     let rows: Vec<SourceRow> = sqlx::query_as(&format!("{SOURCE_SQL} WHERE oi.order_id = ?1 ORDER BY oi.line_no"))
         .bind(&head.id)
         .fetch_all(pool)

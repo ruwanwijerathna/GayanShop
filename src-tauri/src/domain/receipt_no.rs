@@ -1,5 +1,7 @@
 //! Offline-unique document numbers and in-store codes (ARCHITECTURE §6.4, §7.4).
 
+use chrono::NaiveDate;
+
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum CodeError {
     #[error("device code must be 2–4 uppercase letters/digits ending in a digit 1–9 (e.g. T01)")]
@@ -15,25 +17,57 @@ pub fn is_valid_device_code(code: &str) -> bool {
     (2..=4).contains(&code.len()) && code.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
 }
 
-/// The `receipt_counters` row that holds a counter's running bill number. It never resets: a bill number is
-/// unique for the life of the store, and short enough to type when a receipt's barcode is damaged.
-pub const RECEIPT_COUNTER_KEY: &str = "receipt";
-
-/// `A1234`: the counter's letter (T01 → A, T02 → B … T09 → I) and its running number. Bills made before v4.8 are
-/// `T01-20261108-0042` and keep that number.
-pub fn receipt_no(device_code: &str, seq: u32) -> Result<String, CodeError> {
-    let digit = device_digit(device_code)?;
-    let letter = char::from(b'A' + digit - 1);
-    Ok(format!("{letter}{seq}"))
+/// `T01-261108004` (decision #31): the counter, a dash, the business date as `YYMMDD`, then that day's bill
+/// number, at least three digits (it simply grows past 999: the date is always six digits, so it can't be misread).
+/// Bills made before v4.8 keep `T01-20261108-0042`.
+pub fn receipt_no(device_code: &str, business_date: NaiveDate, seq: u32) -> String {
+    format!("{device_code}-{}{seq:03}", business_date.format("%y%m%d"))
 }
 
-/// SQL that turns a `receipt_no` column into its counter code: `T01-…` bills carry it, `A1234` bills carry
-/// the letter. Use it wherever a bill must be traced back to its counter.
-pub fn device_code_sql(column: &str) -> String {
-    format!(
-        "CASE WHEN instr({column}, '-') > 0 THEN substr({column}, 1, instr({column}, '-') - 1)
-              ELSE 'T0' || (unicode(substr({column}, 1, 1)) - 64) END"
-    )
+/// Does a scanned or typed code look like a bill number of this store (either format)? Product codes are digits
+/// only, so a `T0x-` prefix can never be a product. This is the shape only; the lookup says whether it exists.
+pub fn looks_like_bill_no(code: &str) -> bool {
+    let up = code.trim().to_uppercase();
+    let Some(rest) = up.strip_prefix('T') else { return false };
+    let Some((counter, tail)) = rest.split_once('-') else { return false };
+    let counter_ok = counter.len() == 2 && counter.starts_with('0') && counter.bytes().all(|b| b.is_ascii_digit());
+    let digits = |t: &str| !t.is_empty() && t.bytes().all(|b| b.is_ascii_digit());
+    let new_format = digits(tail) && tail.len() >= 9;
+    let old_format = tail.split_once('-').is_some_and(|(d, n)| d.len() == 8 && digits(d) && n.len() >= 4 && digits(n));
+    counter_ok && (new_format || old_format)
+}
+
+/// Turn what a cashier typed into the full bill number to look up. It accepts any case, a space or a dash
+/// anywhere a dash goes, `T1` for `T01`, an unpadded daily number, and, for today's bills, just the counter and
+/// the daily number (`T01-4` is bill 4 of `today`). Anything it doesn't recognise comes back upper-cased and trimmed.
+pub fn normalize_bill_query(input: &str, today: NaiveDate) -> String {
+    let up = input.trim().to_uppercase();
+    let tokens: Vec<&str> = up.split(|c: char| c == '-' || c.is_whitespace()).filter(|t| !t.is_empty()).collect();
+    let all_digits = |t: &str| !t.is_empty() && t.bytes().all(|b| b.is_ascii_digit());
+    let Some((first, rest)) = tokens.split_first() else { return up };
+    let counter = first
+        .strip_prefix('T')
+        .filter(|d| (1..=3).contains(&d.len()) && all_digits(d))
+        .and_then(|d| d.parse::<u8>().ok())
+        .filter(|n| (1..=9).contains(n));
+    let Some(counter) = counter else { return up };
+    let code = format!("T0{counter}");
+    let day_and_seq = |date: &str, seq: &str| -> Option<String> {
+        let n = seq.parse::<u32>().ok()?;
+        Some(format!("{code}-{date}{n:03}"))
+    };
+    let found = match rest {
+        // `T01-4`: bill 4 of today.
+        [seq] if all_digits(seq) && seq.len() <= 5 => day_and_seq(&today.format("%y%m%d").to_string(), seq),
+        // `T01-261108004` (or the daily number unpadded): six date digits, then the number.
+        [num] if all_digits(num) && num.len() >= 7 => day_and_seq(&num[..6], &num[6..]),
+        // `T01-261108-004`.
+        [date, seq] if date.len() == 6 && all_digits(date) && all_digits(seq) => day_and_seq(date, seq),
+        // Old format `T01-20261108-0042`: leave it as it was issued.
+        [date, seq] if date.len() == 8 && all_digits(date) && all_digits(seq) => Some(format!("{code}-{date}-{seq}")),
+        _ => None,
+    };
+    found.unwrap_or(up)
 }
 
 /// The device digit used in SKUs and in-store barcodes: the last digit of the device code (T01 → 1).
@@ -105,17 +139,60 @@ pub fn in_store_barcode(device_digit: u8, seq: u32) -> Result<String, CodeError>
     Ok(format!("{first7}{}", ean8_check_digit(&first7)?))
 }
 
+/// SQL that gives a bill's daily number as an integer, in either format: `T01-261108004` carries it from
+/// character 11, an older `T01-20261108-0042` from character 14.
+pub fn seq_sql(column: &str) -> String {
+    format!("CAST(substr({column}, CASE WHEN instr(substr({column}, 5), '-') > 0 THEN 14 ELSE 11 END) AS INTEGER)")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::business_date::parse_date;
 
     #[test]
     fn receipt_numbers() {
-        assert_eq!(receipt_no("T01", 1).as_deref(), Ok("A1"));
-        assert_eq!(receipt_no("T01", 4_523).as_deref(), Ok("A4523"));
-        assert_eq!(receipt_no("T02", 42).as_deref(), Ok("B42"));
-        assert_eq!(receipt_no("T09", 123_456).as_deref(), Ok("I123456"));
-        assert_eq!(receipt_no("T10", 1), Err(CodeError::BadDeviceCode));
+        let d = parse_date("2026-11-08").unwrap();
+        assert_eq!(receipt_no("T01", d, 4), "T01-261108004");
+        assert_eq!(receipt_no("T01", d, 42), "T01-261108042");
+        assert_eq!(receipt_no("T02", d, 999), "T02-261108999");
+        assert_eq!(receipt_no("T01", d, 1_000), "T01-2611081000", "past 999 the number just grows");
+    }
+
+    #[test]
+    fn bill_numbers_are_told_apart_from_product_codes() {
+        for yes in ["T01-261121004", "t01-261121004", "T03-2611211000", "T01-20261121-0004", " T02-261121004 "] {
+            assert!(looks_like_bill_no(yes), "{yes}");
+        }
+        // Product barcodes and SKUs are digits only; short or malformed codes are not bills.
+        for no in
+            ["20000012", "100003", "8901234567890", "T01-4", "T01-26112", "T1-261121004", "X01-261121004", "T01", ""]
+        {
+            assert!(!looks_like_bill_no(no), "{no}");
+        }
+    }
+
+    #[test]
+    fn typed_bill_numbers_are_completed_and_cleaned() {
+        let today = parse_date("2026-11-21").unwrap();
+        let n = |s: &str| normalize_bill_query(s, today);
+        assert_eq!(n("T01-261121004"), "T01-261121004");
+        assert_eq!(n("t01-261121004"), "T01-261121004", "any case");
+        assert_eq!(n("T01-261121-004"), "T01-261121004", "a dash after the date is fine");
+        assert_eq!(n("t01 261121 004"), "T01-261121004", "so are spaces");
+        assert_eq!(n("T1-261121004"), "T01-261121004", "T1 means T01");
+        assert_eq!(n("T01-2611214"), "T01-261121004", "an unpadded daily number");
+        assert_eq!(n("T01-4"), "T01-261121004", "the counter and the number alone: today's bill");
+        assert_eq!(n("t1 42"), "T01-261121042");
+        assert_eq!(n("T02-12345"), "T02-261121".to_owned() + "12345");
+        assert_eq!(n("T01-261121-1000"), "T01-2611211000");
+        assert_eq!(n("T01-20261108-0042"), "T01-20261108-0042", "an old bill stays as issued");
+        assert_eq!(n("t01-20261108-42"), "T01-20261108-42");
+        // Not recognised: returned upper-cased, for the lookup to say "not found".
+        assert_eq!(n("T01-123456"), "T01-123456", "six digits is a date without a number");
+        assert_eq!(n("T10-4"), "T10-4");
+        assert_eq!(n("A1234"), "A1234");
+        assert_eq!(n("  "), "");
     }
 
     #[test]

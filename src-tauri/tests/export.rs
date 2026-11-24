@@ -333,7 +333,7 @@ async fn order_history_pages_newest_first_with_filters() {
     .await
     .unwrap();
     assert_eq!(one.rows.iter().map(|r| r.receipt_no.clone()).collect::<Vec<_>>(), vec![receipt]);
-    let prefix = orders::history(pool, &t.s.store_id, &cal(), &filter(Period::AllTime, None, Some("A")), None, 50)
+    let prefix = orders::history(pool, &t.s.store_id, &cal(), &filter(Period::AllTime, None, Some("T01-")), None, 50)
         .await
         .unwrap();
     assert_eq!(prefix.rows.len(), 5);

@@ -1,5 +1,5 @@
 import { Minus, Plus } from "lucide-react";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +25,8 @@ import type { ExchangeDraft } from "../store/cart.store";
 export interface ExchangeDialogProps {
   /** The exchange already started on this cart, to change its picks. */
   draft: ExchangeDraft | null;
+  /** A bill number scanned at the till: looked up straight away. */
+  initialReceipt?: string | null;
   onConfirm: (draft: ExchangeDraft) => void;
   onClose: () => void;
 }
@@ -35,17 +37,15 @@ export interface ExchangeDialogProps {
  * customer pays only the difference; there is never a cash refund or a credit note. After the 7-day window the
  * sale needs a supervisor or owner PIN, asked for at payment.
  */
-export function ExchangeDialog({ draft, onConfirm, onClose }: ExchangeDialogProps) {
+export function ExchangeDialog({ draft, initialReceipt = null, onConfirm, onClose }: ExchangeDialogProps) {
   const { t, i18n } = useTranslation("pos");
   const lookup = useExchangeLookup();
-  const [receipt, setReceipt] = useState(draft?.source.receipt_no ?? "");
+  const [receipt, setReceipt] = useState(initialReceipt ?? draft?.source.receipt_no ?? "");
   const [source, setSource] = useState<ExchangeSource | null>(draft?.source ?? null);
   const [picks, setPicks] = useState<ReturnPicks>(draft?.picks ?? {});
   const receiptRef = useRef<HTMLInputElement>(null);
 
-  const find = (e: FormEvent) => {
-    e.preventDefault();
-    const no = receipt.trim();
+  const search = (no: string) => {
     if (no === "" || lookup.isPending) return;
     lookup.mutate(no, {
       onSuccess: (s) => {
@@ -56,6 +56,20 @@ export function ExchangeDialog({ draft, onConfirm, onClose }: ExchangeDialogProp
       onError: () => playCue("error"),
     });
   };
+
+  const find = (e: FormEvent) => {
+    e.preventDefault();
+    search(receipt.trim());
+  };
+
+  const scanned = useRef(initialReceipt);
+  useEffect(() => {
+    const no = scanned.current;
+    scanned.current = null;
+    if (no) search(no);
+    // Runs once: the receipt scanned at the till.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const change = (itemId: string, delta: number, max: number) =>
     setPicks((p) => {
@@ -90,10 +104,11 @@ export function ExchangeDialog({ draft, onConfirm, onClose }: ExchangeDialogProp
               ref={receiptRef}
               className="h-12 font-mono text-base"
               autoComplete="off"
-              placeholder="T01-20261112-0001"
+              placeholder="T01-261112001"
               value={receipt}
               onChange={(e) => setReceipt(e.target.value)}
             />
+            <p className="text-sm text-muted-foreground">{t("exchange.receiptHint")}</p>
           </div>
           <Button type="submit" size="pos" disabled={receipt.trim() === "" || lookup.isPending}>
             {t("exchange.find")}

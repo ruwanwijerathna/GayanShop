@@ -205,6 +205,7 @@
     "title": "Exchange",
     "help": "Item for item, within 7 days of the sale. The customer pays only the difference. There are no cash refunds and no credit notes.",
     "receipt": "Receipt number of the sale",
+    "receiptHint": "Scan the bill barcode, or type it: T01-261121004. A short form like T01-4 finds today's bill 4.",
     "find": "Find sale",
     "sale": "{{receipt}} · sold {{date}} ({{days}} days ago)",
     "late": "More than {{days}} days ago. A supervisor or owner PIN is needed to finish this exchange.",

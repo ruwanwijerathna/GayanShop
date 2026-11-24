@@ -66,4 +66,11 @@ describe("routeScan", () => {
     expect(r.onOrder).toHaveBeenCalledWith(id.toLowerCase());
     expect(r.lookup).not.toHaveBeenCalled();
   });
+
+  it("opens the exchange for a scanned bill number without a product lookup", async () => {
+    const r = { ...routes([MUG]), onBill: vi.fn() };
+    expect(await routeScan("t01-261121004", r)).toBe("bill");
+    expect(r.onBill).toHaveBeenCalledWith("T01-261121004");
+    expect(r.lookup).not.toHaveBeenCalled();
+  });
 });

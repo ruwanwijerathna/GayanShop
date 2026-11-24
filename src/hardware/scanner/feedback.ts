@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { commands, type ProductSummary_Serialize as ProductSummary } from "@/db/bindings";
 import { unwrap } from "@/db/client";
 import { playCue } from "@/lib/audio";
+import { isBillNumber } from "@/lib/receipt";
 
 /** Receipts print a QR of the order id (a UUID). */
 const ORDER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -13,6 +14,8 @@ const ORDER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
 export interface ScanRoutes {
   onProduct: (product: ProductSummary, code: string) => void;
   onOrder: (orderId: string) => void;
+  /** A printed bill number (`T01-261121004`) was scanned: look the sale up for an exchange. */
+  onBill?: (receiptNo: string) => void;
   /** Unknown code: pre-fill Quick Sale with it. */
   onUnknown: (code: string) => void;
   /** The non-blocking "Not found: …" toast. */
@@ -27,13 +30,18 @@ export function notFoundToast(message: string) {
   toast.error(message, { duration: 4_000 });
 }
 
-export type ScanOutcome = "product" | "multiple" | "order" | "unknown";
+export type ScanOutcome = "product" | "multiple" | "order" | "bill" | "unknown";
 
 export async function routeScan(code: string, routes: ScanRoutes): Promise<ScanOutcome> {
   const trimmed = code.trim();
   if (ORDER_ID.test(trimmed)) {
     routes.onOrder(trimmed.toLowerCase());
     return "order";
+  }
+  if (routes.onBill && isBillNumber(trimmed)) {
+    playCue("tick");
+    routes.onBill(trimmed.toUpperCase());
+    return "bill";
   }
   const lookup = routes.lookup ?? ((c: string) => unwrap(commands.lookupProductCodeMatches(c)));
   const [first, ...rest] = await lookup(trimmed);

@@ -130,6 +130,7 @@ function Till() {
   const [quickOpen, setQuickOpen] = useState(false);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [voidPreselect, setVoidPreselect] = useState<string | null>(null);
+  const [exchangeReceipt, setExchangeReceipt] = useState<string | null>(null);
   const [approval, setApproval] = useState<{ perm: Perm; payments: PaymentLine[]; soldByNo: number } | null>(
     null,
   );
@@ -245,6 +246,10 @@ function Till() {
       onOrder: (id) => {
         setVoidPreselect(id);
         setDialog("void");
+      },
+      onBill: (receiptNo) => {
+        setExchangeReceipt(receiptNo);
+        setDialog("exchange");
       },
       onUnknown: () => undefined,
       notFound,
@@ -457,6 +462,7 @@ function Till() {
           closeDialog();
         } else {
           checkout.reset();
+          setExchangeReceipt(null);
           setDialog("exchange");
         }
         break;
@@ -959,6 +965,7 @@ function Till() {
       {dialog === "exchange" && (
         <ExchangeDialog
           draft={exchange}
+          initialReceipt={exchangeReceipt}
           onConfirm={(draft) => {
             cartStore.getState().setExchange(draft);
             playCue("tick");
