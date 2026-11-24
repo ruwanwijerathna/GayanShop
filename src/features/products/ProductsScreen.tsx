@@ -696,7 +696,7 @@ export function ProductsScreen() {
                   : t("form.deleteConfirm", { name: deleteTarget.name })}
               </DialogDescription>
             </DialogHeader>
-            <DialogFooter className="gap-2 sm:gap-0">
+            <DialogFooter className="gap-3">
               <Button
                 type="button"
                 variant="outline"
@@ -742,7 +742,7 @@ export function ProductsScreen() {
                 {t("deleteSelectedConfirm", { count: deleteMultipleIds.length })}
               </DialogDescription>
             </DialogHeader>
-            <DialogFooter className="gap-2 sm:gap-0">
+            <DialogFooter className="gap-3">
               <Button
                 type="button"
                 variant="outline"

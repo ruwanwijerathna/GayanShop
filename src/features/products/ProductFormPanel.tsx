@@ -372,7 +372,7 @@ export function ProductFormPanel({ product, categories, onDone, onSaved }: Produ
                   : t("form.deleteConfirm", { name: product.name })}
               </DialogDescription>
             </DialogHeader>
-            <DialogFooter className="gap-2 sm:gap-0">
+            <DialogFooter className="gap-3">
               <Button
                 type="button"
                 variant="outline"
