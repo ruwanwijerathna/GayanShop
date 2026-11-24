@@ -27,6 +27,7 @@ vi.mock("@/db/bindings", () => ({
     customerLookup: vi.fn(),
     checkoutOrder: vi.fn(),
     exchangeLookup: vi.fn(),
+    exchangeSuggest: vi.fn(),
     cartSaveCurrent: vi.fn(),
     cartDiscardCurrent: vi.fn(),
     cartCurrent: vi.fn(),
@@ -111,7 +112,11 @@ async function scan(code: string) {
     window.dispatchEvent(new KeyboardEvent("keydown", { code: c, key: k, bubbles: true, cancelable: true }));
   await act(async () => {
     press("F13", "F13");
-    for (const c of code) press(`Digit${c}`, c);
+    for (const c of code) {
+      if (c === "-") press("Minus", c);
+      else if (/[a-z]/i.test(c)) press(`Key${c.toUpperCase()}`, c);
+      else press(`Digit${c}`, c);
+    }
     press("Enter", "Enter");
     await new Promise((r) => setTimeout(r, 20));
   });
@@ -140,6 +145,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   cartStore.getState().clear();
+  vi.mocked(commands.exchangeSuggest).mockImplementation(() => ok([]));
   vi.mocked(commands.devicePreferences).mockImplementation(() =>
     ok({ default_language: "en", theme: "light", touch_mode: false }),
   );
@@ -574,6 +580,40 @@ describe("PosScreen", () => {
       fireEvent.click(within(dialog).getByRole("button", { name: "Pay Now" }));
       await waitFor(() => expect(commands.checkoutOrder).toHaveBeenCalledTimes(1));
       expect(vi.mocked(commands.checkoutOrder).mock.calls[0]?.[0].payments).toEqual([]);
+    });
+
+    it("suggests the bills that contain what is typed, and picking one looks it up", async () => {
+      vi.mocked(commands.exchangeLookup).mockImplementation(() => ok(SOURCE));
+      vi.mocked(commands.exchangeSuggest).mockImplementation(() =>
+        ok([
+          { receipt_no: "T01-261121154", business_date: "2026-11-21", item_count: 2, grand_total: 90_000 },
+          { receipt_no: "T02-261121154", business_date: "2026-11-21", item_count: 1, grand_total: 45_000 },
+        ]),
+      );
+      await renderTill();
+      key("F12");
+      const dialog = await screen.findByRole("dialog", { name: "Exchange" });
+      fireEvent.change(within(dialog).getByLabelText("Receipt number of the sale"), {
+        target: { value: "1154" },
+      });
+      const list = await within(dialog).findByRole("listbox", { name: "Matching bills" });
+      expect(commands.exchangeSuggest).toHaveBeenCalledWith("1154");
+      expect(within(list).getAllByRole("option")).toHaveLength(2);
+      fireEvent.click(within(list).getByText("T02-261121154"));
+      await within(dialog).findByText(/sold 2026-11-05/);
+      expect(commands.exchangeLookup).toHaveBeenCalledWith("T02-261121154");
+      expect(within(dialog).getByLabelText("Receipt number of the sale")).toHaveValue("T02-261121154");
+      expect(within(dialog).queryByRole("listbox")).not.toBeInTheDocument();
+    });
+
+    it("opens the exchange with the sale already found when a bill barcode is scanned at the till", async () => {
+      vi.mocked(commands.exchangeLookup).mockImplementation(() => ok(SOURCE));
+      await renderTill();
+      await scan("T01-261105007");
+      const dialog = await screen.findByRole("dialog", { name: "Exchange" });
+      await within(dialog).findByText(/sold 2026-11-05/);
+      expect(commands.exchangeLookup).toHaveBeenCalledWith("T01-261105007");
+      expect(commands.lookupProductCodeMatches).not.toHaveBeenCalled();
     });
 
     it("a late exchange asks a supervisor, then retries with the approval and the same returns", async () => {

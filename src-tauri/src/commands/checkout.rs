@@ -11,7 +11,7 @@ use crate::clock::Clock;
 use crate::db::Db;
 use crate::db::repo::WriteCtx;
 use crate::db::repo::checkout::{self, CheckoutInput, CheckoutResult, NoFaults, Seller};
-use crate::db::repo::exchange::{self, ExchangeSource};
+use crate::db::repo::exchange::{self, BillSuggestion, ExchangeSource};
 use crate::domain::permissions::Perm;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
@@ -85,4 +85,13 @@ pub async fn exchange_lookup(state: State<'_, AppState>, receipt_no: String) -> 
     require(&state.auth, state.clock.as_ref(), Perm::EXCHANGE_PROCESS, "exchange", None)?;
     let ctx = write_ctx(&state)?;
     exchange::lookup(&state.db.pool, &ctx.store_id, &receipt_no, &ctx.business_date).await
+}
+
+/// Bills whose number contains what the cashier has typed so far, offered while they type in the exchange dialog.
+#[tauri::command]
+#[specta::specta]
+pub async fn exchange_suggest(state: State<'_, AppState>, typed: String) -> AppResult<Vec<BillSuggestion>> {
+    require(&state.auth, state.clock.as_ref(), Perm::EXCHANGE_PROCESS, "exchange", None)?;
+    let ctx = write_ctx(&state)?;
+    exchange::suggest(&state.db.pool, &ctx.store_id, &typed).await
 }

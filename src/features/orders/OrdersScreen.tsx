@@ -4,8 +4,9 @@
 // A cashier sees this counter's bills; REPORT_SALES sees every counter (Rust enforces it).
 import type { ColumnDef } from "@tanstack/react-table";
 import { FileDown, Search, SlidersHorizontal } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import { Can } from "@/components/auth/Can";
 import { SelectField } from "@/components/common/SelectField";
 import { DataTable } from "@/components/data-table/DataTable";
@@ -203,7 +204,13 @@ function FiltersDialog({
   );
 }
 
-function Bills({ today }: { today: string }) {
+/** A bill number scanned elsewhere in the app; `at` tells two scans of the same bill apart. */
+export interface ScannedBill {
+  receipt: string;
+  at: number;
+}
+
+function Bills({ today, scanned }: { today: string; scanned: ScannedBill | null }) {
   const { t, i18n } = useTranslation(["orders", "common"]);
   const [text, setText] = useState("");
   const [quick, setQuick] = useState<Quick>("today");
@@ -212,6 +219,15 @@ function Bills({ today }: { today: string }) {
   const [filtering, setFiltering] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const listHeight = useListHeight();
+  const [wanted, setWanted] = useState<string | null>(null);
+
+  // A scanned bill fills the search box (all dates) and opens as soon as it is in the list.
+  const [seen, setSeen] = useState<ScannedBill | null>(null);
+  if (scanned && (scanned.at !== seen?.at || scanned.receipt !== seen.receipt)) {
+    setSeen(scanned);
+    setText(scanned.receipt);
+    setWanted(scanned.receipt.toUpperCase());
+  }
 
   const terms = searchTerms(useDebounced(text, SEARCH_DELAY_MS));
   const searching = terms.receipt !== null || terms.phone !== null;
@@ -232,6 +248,15 @@ function Bills({ today }: { today: string }) {
   const activeFilters = [extras.deviceId, extras.payment, extras.kind, extras.voidedOnly ? "v" : ""].filter(
     Boolean,
   ).length;
+  const settled =
+    wanted !== null && terms.receipt?.toUpperCase() === wanted && !!pages.data && !pages.isFetching;
+  const hit = settled ? rows.find((r) => r.receipt_no.toUpperCase() === wanted) : undefined;
+  const missed = useRef<ScannedBill | null>(null);
+  useEffect(() => {
+    if (!settled || hit || !seen || missed.current === seen) return;
+    missed.current = seen;
+    toast.error(t("search.scannedNotFound", { receipt: seen.receipt }), { duration: 4_000 });
+  }, [settled, hit, seen, t]);
   const singleDay = period.kind === "day";
   const locale = i18n.resolvedLanguage === "si" ? "si-LK" : "en-LK";
 
@@ -413,12 +438,20 @@ function Bills({ today }: { today: string }) {
       {filtering && (
         <FiltersDialog extras={extras} onChange={setExtras} onClose={() => setFiltering(false)} />
       )}
-      {open && <Receipt orderId={open} onClose={() => setOpen(null)} />}
+      {(open ?? hit?.id) && (
+        <Receipt
+          orderId={open ?? hit?.id ?? ""}
+          onClose={() => {
+            setOpen(null);
+            setWanted(null);
+          }}
+        />
+      )}
     </section>
   );
 }
 
-export function OrdersScreen() {
+export function OrdersScreen({ scanned = null }: { scanned?: ScannedBill | null }) {
   const today = useBusinessToday();
-  return today.data ? <Bills today={today.data} /> : null;
+  return today.data ? <Bills today={today.data} scanned={scanned} /> : null;
 }

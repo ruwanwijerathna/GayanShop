@@ -542,3 +542,47 @@ async fn the_rollups_a_rebuild_computes_from_the_base_rows_equal_the_ones_the_tr
     assert_eq!(t.count("SELECT COUNT(*) FROM v_integrity_over_returned").await, 0);
     assert_eq!(t.count("SELECT COUNT(*) FROM v_integrity_void_unreversed").await, 0);
 }
+
+#[tokio::test]
+async fn typing_part_of_a_bill_number_suggests_the_completed_bills_that_contain_it() {
+    let t = till().await;
+    let (_, mug, _, first) = bucket_sale(&t).await;
+    let second =
+        sell_at(&t, CASHIER, &cart("sale-2", vec![line(&mug, 25_000, 1)], vec![cash(25_000, None)]), None, SOLD_ON)
+            .await
+            .unwrap();
+    let (n1, n2) = (first.receipt_no, second.receipt_no);
+    assert_eq!((n1.as_str(), n2.as_str()), ("T01-261108001", "T01-261108002"));
+    let found = |typed: &'static str| {
+        let (pool, store) = (t.pool().clone(), t.s.store_id.clone());
+        async move {
+            let rows = exchange::suggest(&pool, &store, typed).await.unwrap();
+            rows.into_iter().map(|b| b.receipt_no).collect::<Vec<_>>()
+        }
+    };
+
+    assert_eq!(found("t01 2611").await, [n2.clone(), n1.clone()], "newest first");
+    assert_eq!(found("261108-002").await, std::slice::from_ref(&n2), "any part of the number, separators ignored");
+    assert_eq!(found("8001").await, std::slice::from_ref(&n1));
+    assert!(found("T").await.is_empty(), "too little typed");
+    assert!(found("999999").await.is_empty(), "nothing contains it");
+
+    // Voided bills can't be exchanged, so they are not offered.
+    let s = t.seller(SUP).await;
+    gayanshop_lib::db::repo::void::void_order(
+        &t.t.db,
+        &t.ctx(),
+        &gayanshop_lib::db::repo::void::Voider { staff_id: s.staff_id, perms: s.perms },
+        &gayanshop_lib::db::repo::void::VoidInput {
+            order_id: second.order_id.clone(),
+            reason: gayanshop_lib::db::repo::void::VoidReason::WrongItem,
+            note: None,
+            approval_id: None,
+        },
+        None,
+        &NoFaults,
+    )
+    .await
+    .unwrap();
+    assert_eq!(found("t01 2611").await, [n1]);
+}

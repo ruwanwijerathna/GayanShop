@@ -326,6 +326,42 @@ pub struct ExchangeSource {
     pub lines: Vec<ExchangeLine>,
 }
 
+/// A bill offered while the cashier is still typing its number.
+#[derive(Debug, Clone, Serialize, Type, PartialEq, Eq, FromRow)]
+pub struct BillSuggestion {
+    pub receipt_no: String,
+    pub business_date: String,
+    #[specta(type = specta_typescript::Number)]
+    pub item_count: i64,
+    #[specta(type = specta_typescript::Number)]
+    pub grand_total: i64,
+}
+
+const SUGGESTION_LIMIT: i64 = 8;
+const SUGGESTION_MIN_CHARS: usize = 2;
+
+/// Completed bills whose number contains what was typed, newest first, those starting with it ahead of the
+/// rest. Case, dashes, spaces and anything else that isn't a letter or digit are ignored on both sides, so
+/// `261121154`, `t01 261121 154` and `1154` all find `T01-261121154`. Voided bills can't be exchanged, so they
+/// are not offered.
+pub async fn suggest(pool: &SqlitePool, store_id: &str, typed: &str) -> AppResult<Vec<BillSuggestion>> {
+    let needle: String = typed.chars().filter(char::is_ascii_alphanumeric).collect::<String>().to_uppercase();
+    if needle.len() < SUGGESTION_MIN_CHARS {
+        return Ok(Vec::new());
+    }
+    let rows = sqlx::query_as(
+        "SELECT receipt_no, business_date, item_count, grand_total FROM orders
+         WHERE store_id = ?1 AND status = 'completed' AND instr(REPLACE(receipt_no, '-', ''), ?2) > 0
+         ORDER BY instr(REPLACE(receipt_no, '-', ''), ?2) = 1 DESC, completed_at DESC, id DESC LIMIT ?3",
+    )
+    .bind(store_id)
+    .bind(&needle)
+    .bind(SUGGESTION_LIMIT)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
 #[derive(FromRow)]
 struct LookupHead {
     id: String,

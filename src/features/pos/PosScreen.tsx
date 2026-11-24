@@ -238,23 +238,26 @@ function Till() {
     openQuick();
   };
 
-  useScanHandler(async (code) => {
-    setQuery("");
-    await routeScan(code, {
-      onProduct: addProduct,
-      onMultipleProducts: (products, shownCode) => setShared({ code: shownCode, products }),
-      onOrder: (id) => {
-        setVoidPreselect(id);
-        setDialog("void");
-      },
-      onBill: (receiptNo) => {
-        setExchangeReceipt(receiptNo);
-        setDialog("exchange");
-      },
-      onUnknown: () => undefined,
-      notFound,
-    });
-  });
+  useScanHandler(
+    async (code) => {
+      setQuery("");
+      await routeScan(code, {
+        onProduct: addProduct,
+        onMultipleProducts: (products, shownCode) => setShared({ code: shownCode, products }),
+        onOrder: (id) => {
+          setVoidPreselect(id);
+          setDialog("void");
+        },
+        onBill: (receiptNo) => {
+          setExchangeReceipt(receiptNo);
+          setDialog("exchange");
+        },
+        onUnknown: () => undefined,
+        notFound,
+      });
+    },
+    { handlesBills: true },
+  );
 
   /** Enter in the scan field: an exact barcode/SKU first, then the highlighted search result. */
   const enterQuery = async () => {

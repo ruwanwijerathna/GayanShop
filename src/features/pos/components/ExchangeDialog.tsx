@@ -1,5 +1,5 @@
 import { Minus, Plus } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,13 +14,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { ExchangeSource } from "@/db/bindings";
 import { CommandError } from "@/db/client";
-import { useExchangeLookup } from "@/db/hooks";
+import { useBillSuggestions, useExchangeLookup } from "@/db/hooks";
+import { useDebounced } from "@/hooks/useDebounced";
 import { translateError } from "@/i18n";
 import { playCue } from "@/lib/audio";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { lineCredit, pickedUnits, totalCredit, type ReturnPicks } from "../lib/exchange";
 import type { ExchangeDraft } from "../store/cart.store";
+
+const SUGGEST_DELAY_MS = 150;
 
 export interface ExchangeDialogProps {
   /** The exchange already started on this cart, to change its picks. */
@@ -44,6 +47,11 @@ export function ExchangeDialog({ draft, initialReceipt = null, onConfirm, onClos
   const [source, setSource] = useState<ExchangeSource | null>(draft?.source ?? null);
   const [picks, setPicks] = useState<ReturnPicks>(draft?.picks ?? {});
   const receiptRef = useRef<HTMLInputElement>(null);
+  // Bills containing what is typed are offered under the field; picking one looks it up at once.
+  const [suggesting, setSuggesting] = useState(false);
+  const [active, setActive] = useState(-1);
+  const suggestions = useBillSuggestions(useDebounced(receipt, SUGGEST_DELAY_MS));
+  const offered = suggesting && receipt.trim() !== "" ? (suggestions.data ?? []) : [];
 
   const search = (no: string) => {
     if (no === "" || lookup.isPending) return;
@@ -59,7 +67,31 @@ export function ExchangeDialog({ draft, initialReceipt = null, onConfirm, onClos
 
   const find = (e: FormEvent) => {
     e.preventDefault();
+    setSuggesting(false);
     search(receipt.trim());
+  };
+
+  const pick = (no: string) => {
+    setReceipt(no);
+    setSuggesting(false);
+    setActive(-1);
+    search(no);
+  };
+
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (offered.length === 0) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const step = e.key === "ArrowDown" ? 1 : -1;
+      setActive((a) => {
+        const next = a + step;
+        if (next >= offered.length) return -1;
+        return next < -1 ? offered.length - 1 : next;
+      });
+    } else if (e.key === "Enter" && active >= 0 && offered[active]) {
+      e.preventDefault();
+      pick(offered[active].receipt_no);
+    }
   };
 
   const scanned = useRef(initialReceipt);
@@ -86,6 +118,13 @@ export function ExchangeDialog({ draft, initialReceipt = null, onConfirm, onClos
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         className="max-w-3xl"
+        onEscapeKeyDown={(e) => {
+          // First Esc closes the suggestions, the next one the dialog.
+          if (offered.length > 0) {
+            e.preventDefault();
+            setSuggesting(false);
+          }
+        }}
         onOpenAutoFocus={(e) => {
           e.preventDefault();
           receiptRef.current?.focus();
@@ -105,10 +144,57 @@ export function ExchangeDialog({ draft, initialReceipt = null, onConfirm, onClos
               className="h-12 font-mono text-base"
               autoComplete="off"
               placeholder="T01-261112001"
+              role="combobox"
+              aria-expanded={offered.length > 0}
+              aria-controls="exchange-suggestions"
+              aria-autocomplete="list"
+              aria-activedescendant={active >= 0 ? `exchange-suggestion-${active}` : undefined}
               value={receipt}
-              onChange={(e) => setReceipt(e.target.value)}
+              onChange={(e) => {
+                setReceipt(e.target.value);
+                setSuggesting(true);
+                setActive(-1);
+              }}
+              onKeyDown={onKeyDown}
             />
-            <p className="text-sm text-muted-foreground">{t("exchange.receiptHint")}</p>
+            {offered.length > 0 ? (
+              <ul
+                id="exchange-suggestions"
+                role="listbox"
+                aria-label={t("exchange.suggestions")}
+                className="flex flex-col gap-1 rounded-md border bg-card p-1"
+              >
+                {offered.map((b, i) => (
+                  <li
+                    key={b.receipt_no}
+                    id={`exchange-suggestion-${i}`}
+                    role="option"
+                    aria-selected={i === active}
+                  >
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => pick(b.receipt_no)}
+                      className={cn(
+                        "flex min-h-12 w-full items-center justify-between gap-3 rounded-sm px-3 text-left hover:bg-accent",
+                        i === active && "bg-accent",
+                      )}
+                    >
+                      <span className="font-mono text-base">{b.receipt_no}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {t("exchange.suggestion", {
+                          date: b.business_date,
+                          count: b.item_count,
+                          total: formatMoney(b.grand_total),
+                        })}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">{t("exchange.receiptHint")}</p>
+            )}
           </div>
           <Button type="submit" size="pos" disabled={receipt.trim() === "" || lookup.isPending}>
             {t("exchange.find")}
