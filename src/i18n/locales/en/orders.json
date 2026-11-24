@@ -7,7 +7,8 @@
     "label": "Search bills",
     "placeholder": "Receipt number or customer phone",
     "allDates": "Searching all dates",
-    "tooShort": "Type at least 4 digits of the phone number."
+    "tooShort": "Type at least 4 digits of the phone number.",
+    "scannedNotFound": "Bill {{receipt}} was not found."
   },
   "period": {
     "label": "Day",

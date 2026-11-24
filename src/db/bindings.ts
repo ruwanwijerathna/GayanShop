@@ -142,6 +142,8 @@ export const commands = {
 	 *  back, and whether the 7-day window has passed (a late exchange needs a supervisor or owner PIN at checkout).
 	 */
 	exchangeLookup: (receiptNo: string) => typedError<ExchangeSource, AppError>(__TAURI_INVOKE("exchange_lookup", { receiptNo })),
+	/**  Bills whose number contains what the cashier has typed so far, offered while they type in the exchange dialog. */
+	exchangeSuggest: (typed: string) => typedError<BillSuggestion[], AppError>(__TAURI_INVOKE("exchange_suggest", { typed })),
 	customerLookup: (input: CustomerLookupInput) => typedError<CustomerLookup_Serialize, AppError>(__TAURI_INVOKE("customer_lookup", { input })),
 	customerList: (search: string | null, sort: CustomerSort | null) => typedError<CustomerList_Serialize, AppError>(__TAURI_INVOKE("customer_list", { search, sort })),
 	customerProfile: (id: string) => typedError<CustomerProfile_Serialize, AppError>(__TAURI_INVOKE("customer_profile", { id })),
@@ -697,6 +699,14 @@ export type Batch_Serialize = {
 
 /**  Exchange bills (replacement sales that took returned goods in) or the original sales those goods came from. */
 export type BillKind = "exchange" | "with_returns";
+
+/**  A bill offered while the cashier is still typing its number. */
+export type BillSuggestion = {
+	receipt_no: string,
+	business_date: string,
+	item_count: number,
+	grand_total: number,
+};
 
 /**  Progress of a bootstrap, for the first-run screen's progress bar. */
 export type BootstrapProgress = {

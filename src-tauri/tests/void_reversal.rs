@@ -331,5 +331,5 @@ async fn command_flow_binds_the_approval_to_the_order() {
     // The till's void list shows the session's orders with their status.
     let list = voids::session_orders(t.pool(), &t.s.device_id).await.unwrap();
     let statuses: Vec<(&str, &str)> = list.iter().map(|o| (o.receipt_no.as_str(), o.status.as_str())).collect();
-    assert_eq!(statuses, vec![("T01-20261108-0002", "voided"), ("T01-20261108-0001", "completed")]);
+    assert_eq!(statuses, vec![("T01-261108002", "voided"), ("T01-261108001", "completed")]);
 }

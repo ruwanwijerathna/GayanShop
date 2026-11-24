@@ -23,6 +23,7 @@ use crate::clock::new_id;
 use crate::db::outbox;
 use crate::domain::business_date::parse_date;
 use crate::domain::exchange::{self, DEFAULT_WINDOW_DAYS, MAX_WINDOW_DAYS};
+use crate::domain::receipt_no::normalize_bill_query;
 use crate::error::{AppError, AppResult};
 
 const MAX_RETURN_LINES: usize = 100;
@@ -325,6 +326,42 @@ pub struct ExchangeSource {
     pub lines: Vec<ExchangeLine>,
 }
 
+/// A bill offered while the cashier is still typing its number.
+#[derive(Debug, Clone, Serialize, Type, PartialEq, Eq, FromRow)]
+pub struct BillSuggestion {
+    pub receipt_no: String,
+    pub business_date: String,
+    #[specta(type = specta_typescript::Number)]
+    pub item_count: i64,
+    #[specta(type = specta_typescript::Number)]
+    pub grand_total: i64,
+}
+
+const SUGGESTION_LIMIT: i64 = 8;
+const SUGGESTION_MIN_CHARS: usize = 2;
+
+/// Completed bills whose number contains what was typed, newest first, those starting with it ahead of the
+/// rest. Case, dashes, spaces and anything else that isn't a letter or digit are ignored on both sides, so
+/// `261121154`, `t01 261121 154` and `1154` all find `T01-261121154`. Voided bills can't be exchanged, so they
+/// are not offered.
+pub async fn suggest(pool: &SqlitePool, store_id: &str, typed: &str) -> AppResult<Vec<BillSuggestion>> {
+    let needle: String = typed.chars().filter(char::is_ascii_alphanumeric).collect::<String>().to_uppercase();
+    if needle.len() < SUGGESTION_MIN_CHARS {
+        return Ok(Vec::new());
+    }
+    let rows = sqlx::query_as(
+        "SELECT receipt_no, business_date, item_count, grand_total FROM orders
+         WHERE store_id = ?1 AND status = 'completed' AND instr(REPLACE(receipt_no, '-', ''), ?2) > 0
+         ORDER BY instr(REPLACE(receipt_no, '-', ''), ?2) = 1 DESC, completed_at DESC, id DESC LIMIT ?3",
+    )
+    .bind(store_id)
+    .bind(&needle)
+    .bind(SUGGESTION_LIMIT)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
 #[derive(FromRow)]
 struct LookupHead {
     id: String,
@@ -335,7 +372,9 @@ struct LookupHead {
 
 /// Find a completed sale by receipt number and report what can still be exchanged, and whether the window has passed.
 pub async fn lookup(pool: &SqlitePool, store_id: &str, receipt_no: &str, today: &str) -> AppResult<ExchangeSource> {
-    let receipt = receipt_no.trim().to_uppercase();
+    let today = parse_date(today).ok_or_else(|| AppError::internal("bad business date"))?;
+    // What the cashier typed becomes the full bill number: `T01-4` is bill 4 of today (decision #31).
+    let receipt = normalize_bill_query(receipt_no, today);
     let head: LookupHead = sqlx::query_as(
         "SELECT id, receipt_no, status, business_date FROM orders WHERE store_id = ?1 AND receipt_no = ?2",
     )
@@ -353,7 +392,6 @@ pub async fn lookup(pool: &SqlitePool, store_id: &str, receipt_no: &str, today: 
         .await?;
     let window = window_from(raw)?;
     let sold_on = parse_date(&head.business_date).ok_or_else(|| AppError::internal("bad business date"))?;
-    let today = parse_date(today).ok_or_else(|| AppError::internal("bad business date"))?;
     let rows: Vec<SourceRow> = sqlx::query_as(&format!("{SOURCE_SQL} WHERE oi.order_id = ?1 ORDER BY oi.line_no"))
         .bind(&head.id)
         .fetch_all(pool)
