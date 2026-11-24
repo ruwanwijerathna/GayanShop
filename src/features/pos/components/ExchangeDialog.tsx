@@ -232,13 +232,13 @@ export function ExchangeDialog({ draft, initialReceipt = null, onConfirm, onClos
             {suggesting && offered.length > 0 && (
               <div
                 id="exchange-suggestions-container"
-                className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-64 overflow-y-auto overflow-x-hidden rounded-xl border bg-popover p-1.5 shadow-xl ring-1 ring-black/5"
+                className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-72 overflow-y-auto overflow-x-hidden rounded-2xl border bg-popover p-1.5 shadow-2xl ring-1 ring-black/5"
               >
                 <ul
                   id="exchange-suggestions"
                   role="listbox"
                   aria-label={t("exchange.suggestions")}
-                  className="flex flex-col gap-1"
+                  className="flex flex-col gap-1.5"
                 >
                   {offered.map((b, i) => (
                     <li
@@ -253,43 +253,55 @@ export function ExchangeDialog({ draft, initialReceipt = null, onConfirm, onClos
                         onMouseEnter={() => setActive(i)}
                         onClick={() => pick(b.receipt_no)}
                         className={cn(
-                          "grid grid-cols-[auto_auto_auto_1fr] items-center gap-2 sm:gap-4 w-full min-h-11 rounded-lg px-3 py-2 text-left transition-colors whitespace-nowrap",
-                          i === active ? "bg-primary text-primary-foreground" : "hover:bg-accent",
+                          "flex items-center justify-between gap-3 w-full rounded-xl px-3.5 py-2 text-left transition-all",
+                          i === active
+                            ? "bg-primary text-primary-foreground shadow-sm"
+                            : "hover:bg-accent/70 text-foreground border border-transparent hover:border-border/40",
                         )}
                       >
-                        <div className="flex items-center gap-2 min-w-[135px] whitespace-nowrap shrink-0">
-                          <Receipt className="size-4 shrink-0 opacity-70" />
-                          <span className="font-mono text-sm sm:text-base font-bold tracking-tight whitespace-nowrap">
-                            {b.receipt_no}
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div
+                            className={cn(
+                              "flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors",
+                              i === active
+                                ? "bg-primary-foreground/15 text-primary-foreground"
+                                : "bg-primary/10 text-primary dark:bg-primary/20",
+                            )}
+                          >
+                            <Receipt className="size-4" />
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-mono text-sm sm:text-base font-bold tracking-tight truncate">
+                              {b.receipt_no}
+                            </span>
+                            <div
+                              className={cn(
+                                "flex items-center gap-1.5 text-xs tabular-nums",
+                                i === active ? "text-primary-foreground/80" : "text-muted-foreground",
+                              )}
+                            >
+                              <span>{b.business_date}</span>
+                              <span className="opacity-40">•</span>
+                              <span>
+                                {t("exchange.itemCount", {
+                                  count: b.item_count,
+                                  defaultValue: `${b.item_count} ${b.item_count === 1 ? "item" : "items"}`,
+                                })}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0 pl-2">
+                          <span
+                            className={cn(
+                              "font-mono text-base sm:text-lg font-bold tabular-nums tracking-tight block",
+                              i === active ? "text-primary-foreground" : "text-foreground",
+                            )}
+                          >
+                            {formatMoney(b.grand_total)}
                           </span>
                         </div>
-                        <span
-                          className={cn(
-                            "text-xs sm:text-sm tabular-nums whitespace-nowrap shrink-0",
-                            i === active ? "text-primary-foreground/90" : "text-muted-foreground",
-                          )}
-                        >
-                          {b.business_date}
-                        </span>
-                        <span
-                          className={cn(
-                            "text-xs sm:text-sm tabular-nums whitespace-nowrap shrink-0 text-center",
-                            i === active ? "text-primary-foreground/90" : "text-muted-foreground",
-                          )}
-                        >
-                          {t("exchange.itemCount", {
-                            count: b.item_count,
-                            defaultValue: `${b.item_count} ${b.item_count === 1 ? "item" : "items"}`,
-                          })}
-                        </span>
-                        <span
-                          className={cn(
-                            "font-mono font-bold text-sm sm:text-base whitespace-nowrap tabular-nums text-right shrink-0",
-                            i === active ? "text-primary-foreground" : "text-foreground",
-                          )}
-                        >
-                          {formatMoney(b.grand_total)}
-                        </span>
                       </button>
                     </li>
                   ))}
