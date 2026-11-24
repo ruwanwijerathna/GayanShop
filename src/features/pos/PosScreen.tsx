@@ -130,6 +130,7 @@ function Till() {
   const [quickOpen, setQuickOpen] = useState(false);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [voidPreselect, setVoidPreselect] = useState<string | null>(null);
+  const [exchangeReceipt, setExchangeReceipt] = useState<string | null>(null);
   const [approval, setApproval] = useState<{ perm: Perm; payments: PaymentLine[]; soldByNo: number } | null>(
     null,
   );
@@ -237,19 +238,26 @@ function Till() {
     openQuick();
   };
 
-  useScanHandler(async (code) => {
-    setQuery("");
-    await routeScan(code, {
-      onProduct: addProduct,
-      onMultipleProducts: (products, shownCode) => setShared({ code: shownCode, products }),
-      onOrder: (id) => {
-        setVoidPreselect(id);
-        setDialog("void");
-      },
-      onUnknown: () => undefined,
-      notFound,
-    });
-  });
+  useScanHandler(
+    async (code) => {
+      setQuery("");
+      await routeScan(code, {
+        onProduct: addProduct,
+        onMultipleProducts: (products, shownCode) => setShared({ code: shownCode, products }),
+        onOrder: (id) => {
+          setVoidPreselect(id);
+          setDialog("void");
+        },
+        onBill: (receiptNo) => {
+          setExchangeReceipt(receiptNo);
+          setDialog("exchange");
+        },
+        onUnknown: () => undefined,
+        notFound,
+      });
+    },
+    { handlesBills: true },
+  );
 
   /** Enter in the scan field: an exact barcode/SKU first, then the highlighted search result. */
   const enterQuery = async () => {
@@ -457,6 +465,7 @@ function Till() {
           closeDialog();
         } else {
           checkout.reset();
+          setExchangeReceipt(null);
           setDialog("exchange");
         }
         break;
@@ -959,6 +968,7 @@ function Till() {
       {dialog === "exchange" && (
         <ExchangeDialog
           draft={exchange}
+          initialReceipt={exchangeReceipt}
           onConfirm={(draft) => {
             cartStore.getState().setExchange(draft);
             playCue("tick");

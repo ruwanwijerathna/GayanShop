@@ -53,7 +53,7 @@ async fn a_cash_sale_is_one_sealed_transaction() {
     let r = sell_as(&t, CASHIER, &input, None).await.unwrap();
     assert_eq!(
         (r.receipt_no.as_str(), r.grand_total, r.change_due, r.replayed),
-        ("T01-20261108-0001", 220_000, 30_000, false)
+        ("T01-261108001", 220_000, 30_000, false)
     );
 
     // Header = Σ lines; the SQL seal accepted it, so every identity in §13.5 holds.
@@ -103,7 +103,7 @@ async fn a_cash_sale_is_one_sealed_transaction() {
     let r2 = sell_as(&t, CASHIER, &cart("tok-2", vec![line(&mug, 25_000, 1)], vec![cash(25_000, None)]), None)
         .await
         .unwrap();
-    assert_eq!(r2.receipt_no, "T01-20261108-0002");
+    assert_eq!(r2.receipt_no, "T01-261108002");
 }
 
 async fn exec_held_cart(t: &Till) {

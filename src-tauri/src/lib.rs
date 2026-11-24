@@ -126,6 +126,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::cash::reprint_z_report,
         commands::checkout::checkout_order,
         commands::checkout::exchange_lookup,
+        commands::checkout::exchange_suggest,
         commands::customers::customer_lookup,
         commands::customers::customer_list,
         commands::customers::customer_profile,

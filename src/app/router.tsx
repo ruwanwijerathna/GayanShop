@@ -4,6 +4,7 @@ import {
   createRoute,
   createRouter,
   redirect,
+  useSearch,
 } from "@tanstack/react-router";
 import { AuditLogScreen } from "@/features/audit/AuditLogScreen";
 import { CashScreen } from "@/features/cash/CashScreen";
@@ -95,10 +96,26 @@ export const reportsRoute = createRoute({
   component: ReportsScreen,
 });
 
+export interface OrdersSearch {
+  /** A bill number scanned elsewhere in the app: Bills finds it and opens it. */
+  receipt?: string;
+  /** When it was scanned, so scanning the same bill twice opens it twice. */
+  at?: number;
+}
+
+function OrdersPage() {
+  const { receipt, at } = useSearch({ strict: false }) as OrdersSearch;
+  return <OrdersScreen scanned={receipt ? { receipt, at: at ?? 0 } : null} />;
+}
+
 export const ordersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/orders",
-  component: OrdersScreen,
+  validateSearch: (s: Record<string, unknown>): OrdersSearch => ({
+    receipt: typeof s.receipt === "string" && s.receipt !== "" ? s.receipt : undefined,
+    at: typeof s.at === "number" ? s.at : undefined,
+  }),
+  component: OrdersPage,
 });
 
 export const staffRoute = createRoute({

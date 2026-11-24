@@ -275,7 +275,7 @@ async fn online_recovery_brings_back_the_sales_made_after_the_backup() {
     // Selling continues without a receipt-number or audit-sequence collision.
     let o = a.sell("next", vec![line(&p, 45_000, 1)], None).await;
     let receipt = a.text(&format!("SELECT receipt_no FROM orders WHERE id = '{o}'")).await;
-    assert!(receipt.ends_with("-0008"), "{receipt}");
+    assert!(receipt.starts_with("T01-") && receipt.ends_with("008"), "{receipt}");
     a.round(&hub).await;
     assert_eq!(a.count("SELECT COUNT(*) FROM sync_outbox").await, 0, "every op accepted, none dead");
     assert_eq!(hub.count("orders"), 8);
@@ -327,7 +327,7 @@ async fn offline_recovery_retires_the_identity_and_nothing_is_lost() {
     a.open_session().await;
     let o = a.sell("new-identity", vec![line(&p, 45_000, 1)], None).await;
     let receipt = a.text(&format!("SELECT receipt_no FROM orders WHERE id = '{o}'")).await;
-    assert!(receipt.starts_with("T02-") && receipt.ends_with("-0001"), "{receipt}");
+    assert!(receipt.starts_with("T02-") && receipt.ends_with("001"), "{receipt}");
 
     // The backup's queued ops go under the retired identity, the new ones under the new identity.
     assert!(!engine::drain_retired(&a.db, &hub.client(&old_device), &a.clock).await.unwrap(), "all sent");
@@ -387,7 +387,7 @@ async fn a_store_that_never_synced_restores_and_keeps_its_identity() {
     assert_eq!((out.mode, out.device_code.as_str()), (RecoveryMode::Local, "T01"));
     let o = a.sell("s3", vec![line(&p, 45_000, 1)], None).await;
     let receipt = a.text(&format!("SELECT receipt_no FROM orders WHERE id = '{o}'")).await;
-    assert!(receipt.starts_with("T01-") && receipt.ends_with("-0002"), "continues from the restored data: {receipt}");
+    assert!(receipt.starts_with("T01-") && receipt.ends_with("002"), "continues from the restored data: {receipt}");
     assert!(gayanshop_lib::audit::verify(&a.db.pool).await.unwrap().iter().all(|r| r.ok));
     assert_eq!(rebuilt(&a.db).await, derived(&a.db).await);
     let err = restore::recover_local(&a.db, &a.clock, &a.owner).await.unwrap_err();

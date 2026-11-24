@@ -1,14 +1,18 @@
-import { Outlet } from "@tanstack/react-router";
+import { Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useDbChangedInvalidation } from "@/db/events";
 import { BackupReminder } from "@/features/backup/BackupSettings";
 import { PrinterBanner } from "@/features/printing/PrinterBanner";
+import { useBillScanFallback } from "@/hardware/scanner/ScannerProvider";
+import { playCue } from "@/lib/audio";
 import { useAppStatus, useLogout, useSetUiLanguage } from "@/db/hooks";
 import type { UiLanguage } from "@/i18n";
 import { AppSidebar } from "./layouts/AppSidebar";
 import { BackOfficeLayout } from "./layouts/BackOfficeLayout";
+import { hasPerm } from "@/lib/permissions";
 import { useMarkExplicitLock } from "./lock-context";
+import { useSession } from "./session";
 
 /** Logged-in shell: grouped sidebar navigation, lock (Ctrl+L) and language toggle (Ctrl+Shift+L). */
 export function AppShell() {
@@ -18,6 +22,18 @@ export function AppShell() {
   const logout = useLogout();
   const setLanguage = useSetUiLanguage();
   useDbChangedInvalidation();
+  const navigate = useNavigate();
+
+  // A bill barcode scanned anywhere but the till opens that bill on the Bills page.
+  const { session } = useSession();
+  useBillScanFallback((receipt) => {
+    if (!hasPerm(session, "REPORT_SALES") && !hasPerm(session, "REPRINT_RECEIPT")) {
+      playCue("error");
+      return;
+    }
+    playCue("tick");
+    void navigate({ to: "/orders", search: { receipt, at: Date.now() } });
+  });
 
   const lock = () => {
     markExplicitLock(); // so the login screen doesn't report this as an idle lock

@@ -49,6 +49,7 @@ use crate::db::Db;
 use crate::db::repo::{WriteCtx, reports};
 use crate::db::settings::{self, keys};
 use crate::domain::business_date::{StoreCalendar, format_date};
+use crate::domain::receipt_no;
 use crate::error::{AppError, AppResult};
 use crate::sync::api::SyncApi;
 use crate::sync::engine::{self, PullOptions};
@@ -451,15 +452,16 @@ pub async fn verify_owner(db: &Db, hasher: &PinHasher, clock: &dyn Clock, staff_
     Err(AppError::InvalidPin { attempts_left: u32::try_from((5 - failed).max(0)).unwrap_or(0) })
 }
 
-/// Set each business day's receipt counter to the highest receipt this counter issued that day
-/// (`{code}-{YYYYMMDD}-{seq}`).
+/// Set each business day's receipt counter to the highest receipt this counter issued that day:
+/// `T01-261108004` (the number starts at character 11) or, before v4.8, `T01-20261108-0042` (character 14).
 async fn reset_receipt_counters(c: &mut SqliteConnection, device_id: &str) -> AppResult<()> {
-    sqlx::query(
+    sqlx::query(&format!(
         "INSERT INTO receipt_counters (day, last_seq)
-         SELECT business_date, MAX(CAST(substr(receipt_no, 14) AS INTEGER)) FROM orders
+         SELECT business_date, MAX({}) FROM orders
          WHERE device_id = ?1 GROUP BY business_date
          ON CONFLICT(day) DO UPDATE SET last_seq = MAX(last_seq, excluded.last_seq)",
-    )
+        receipt_no::seq_sql("receipt_no"),
+    ))
     .bind(device_id)
     .execute(&mut *c)
     .await?;

@@ -516,6 +516,17 @@ export function useExchangeLookup() {
   return useMutation({ mutationFn: (receiptNo: string) => unwrap(commands.exchangeLookup(receiptNo)) });
 }
 
+/** Bills whose number contains what is typed in the exchange dialog (two or more letters or digits). */
+export function useBillSuggestions(typed: string) {
+  const needle = typed.replace(/[^a-z0-9]/gi, "");
+  return useQuery({
+    queryKey: ["orders", "exchange-suggest", needle.toUpperCase()] as const,
+    queryFn: () => unwrap(commands.exchangeSuggest(typed)),
+    enabled: needle.length >= 2,
+    staleTime: 5_000,
+  });
+}
+
 export function useSessionOrders(enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.sessionOrders,

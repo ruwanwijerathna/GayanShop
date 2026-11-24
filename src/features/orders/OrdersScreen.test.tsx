@@ -30,10 +30,10 @@ function As({ perms, children }: { perms: Perm[]; children: ReactNode }) {
 const MANAGER: Perm[] = ["REPORT_SALES", "REPRINT_RECEIPT", "DATA_EXPORT"];
 const CASHIER: Perm[] = ["REPRINT_RECEIPT"];
 
-function renderAs(perms: Perm[]) {
+function renderAs(perms: Perm[], scanned: { receipt: string; at: number } | null = null) {
   return renderWithProviders(
     <As perms={perms}>
-      <OrdersScreen />
+      <OrdersScreen scanned={scanned} />
     </As>,
   );
 }
@@ -290,5 +290,18 @@ describe("Bills", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Export order lines" }));
     await waitFor(() => expect(commands.exportPickFolder).toHaveBeenCalled());
     expect(commands.exportCsv).not.toHaveBeenCalled();
+  });
+
+  it("finds a bill scanned elsewhere in the app across all dates and opens its receipt", async () => {
+    vi.mocked(commands.orderHistory).mockReset();
+    vi.mocked(commands.orderHistory).mockImplementation(() => ok({ rows: [order(2)], next_cursor: null }));
+    renderAs(MANAGER, { receipt: "T01-20261108-0002", at: 1 });
+    expect(await screen.findByRole("searchbox", { name: "Search bills" })).toHaveValue("T01-20261108-0002");
+    await waitFor(() => expect(commands.orderReceipt).toHaveBeenCalledWith("o2"));
+    expect(commands.orderHistory).toHaveBeenCalledWith(
+      expect.objectContaining({ period: { kind: "all_time" }, receipt: "T01-20261108-0002" }),
+      null,
+      200,
+    );
   });
 });

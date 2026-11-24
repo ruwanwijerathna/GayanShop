@@ -1,12 +1,22 @@
 import { act, render } from "@testing-library/react";
 import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ScannerProvider, useScanHandler, useScanner } from "./ScannerProvider";
+import { ScannerProvider, useBillScanFallback, useScanHandler, useScanner } from "./ScannerProvider";
 
 function Screen({ name, log }: { name: string; log: string[] }) {
   useScanHandler((code) => {
     log.push(`${name}:${code}`);
   });
+  return null;
+}
+
+function Till({ log }: { log: string[] }) {
+  useScanHandler((code) => void log.push(`till:${code}`), { handlesBills: true });
+  return null;
+}
+
+function Elsewhere({ log }: { log: string[] }) {
+  useBillScanFallback((code) => void log.push(`bill:${code}`));
   return null;
 }
 
@@ -87,5 +97,39 @@ describe("ScannerProvider", () => {
       await vi.runAllTimersAsync();
     });
     expect(log).toEqual([]);
+  });
+
+  it("sends a scanned bill number to the fallback unless the screen in front handles bills", async () => {
+    const log: string[] = [];
+    const bill = (code: string) =>
+      act(async () => {
+        for (const c of code) {
+          const key = c === "-" ? "Minus" : /\d/.test(c) ? `Digit${c}` : `Key${c}`;
+          window.dispatchEvent(
+            new KeyboardEvent("keydown", { code: key, key: c, bubbles: true, cancelable: true }),
+          );
+          vi.advanceTimersByTime(5);
+        }
+        window.dispatchEvent(new KeyboardEvent("keydown", { code: "Enter", key: "Enter", bubbles: true }));
+        await vi.runAllTimersAsync();
+      });
+    const { rerender } = render(
+      <ScannerProvider>
+        <Elsewhere log={log} />
+        <Screen name="products" log={log} />
+      </ScannerProvider>,
+    );
+    await bill("T01-261121154");
+    await bill("2000123456781");
+    expect(log).toEqual(["bill:T01-261121154", "products:2000123456781"]);
+
+    rerender(
+      <ScannerProvider>
+        <Elsewhere log={log} />
+        <Till log={log} />
+      </ScannerProvider>,
+    );
+    await bill("T01-261121154");
+    expect(log.at(-1)).toBe("till:t01-261121154");
   });
 });
