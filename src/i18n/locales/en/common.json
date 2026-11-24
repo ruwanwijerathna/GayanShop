@@ -61,6 +61,8 @@
   },
   "receipt": {
     "title": "Receipt {{no}}",
+    "previewTitle": "Receipt Preview",
+    "print": "Print",
     "item": "Item",
     "qty": "Qty",
     "total": "Total",

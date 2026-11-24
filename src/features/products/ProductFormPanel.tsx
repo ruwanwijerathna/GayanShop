@@ -8,9 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Category, Product } from "@/db/bindings";
 import { CommandError } from "@/db/client";
+import { toast } from "sonner";
+import { OwnerPinDialog } from "@/components/auth/OwnerPinDialog";
 import {
   useAdjustStock,
   useAppStatus,
+  useClearProductStock,
   useDeleteProduct,
   useProducts,
   useSaveCategory,
@@ -57,6 +60,7 @@ export function ProductFormPanel({ product, categories, onDone, onSaved }: Produ
   const qc = useQueryClient();
   const save = useSaveProduct();
   const remove = useDeleteProduct();
+  const clearStock = useClearProductStock();
   const adjust = useAdjustStock();
   const autoPrint = useAutoPrintLabels();
   const saveCategory = useSaveCategory();
@@ -74,7 +78,7 @@ export function ProductFormPanel({ product, categories, onDone, onSaved }: Produ
   }, [product]);
   const [moneyError, setMoneyError] = useState<MoneyField | null>(null);
   const [quantityError, setQuantityError] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [pinAction, setPinAction] = useState<"delete" | "clear_stock" | null>(null);
 
   const clearAll = () => {
     setForm({ ...emptyForm(), isActive: true });
@@ -319,19 +323,6 @@ export function ProductFormPanel({ product, categories, onDone, onSaved }: Produ
             {serverError}
           </p>
         )}
-        {confirmDelete && product && (
-          <div role="alert" className="flex flex-col gap-3 rounded-md border border-destructive p-3">
-            <p>{t("form.deleteConfirm", { name: product.name })}</p>
-            <div className="flex gap-2">
-              <Button type="button" size="pos" variant="destructive" disabled={busy} onClick={doDelete}>
-                {t("form.confirmDelete")}
-              </Button>
-              <Button type="button" size="pos" variant="outline" onClick={() => setConfirmDelete(false)}>
-                {t("common:actions.cancel")}
-              </Button>
-            </div>
-          </div>
-        )}
         <div className="flex gap-2">
           <Button type="submit" size="pos-lg" className="flex-1" disabled={busy}>
             {save.isPending ? t("form.saving") : t("common:actions.save")}
@@ -350,26 +341,61 @@ export function ProductFormPanel({ product, categories, onDone, onSaved }: Produ
             </kbd>
           </Button>
         </div>
-        {product && !confirmDelete && (
-          <div className="flex flex-col gap-1.5">
+        {product && (
+          <div className="flex flex-col gap-2 pt-2 border-t">
+            {stocked && (
+              <Button
+                type="button"
+                size="pos"
+                variant="outline"
+                className="border-amber-500/50 text-amber-700 hover:bg-amber-50 dark:text-amber-400"
+                disabled={busy}
+                onClick={() => setPinAction("clear_stock")}
+              >
+                {t("form.clearStock")}
+              </Button>
+            )}
             <Button
               type="button"
               size="pos"
               variant="outline"
-              disabled={busy || stocked}
-              aria-describedby={stocked ? "product-delete-hint" : undefined}
-              onClick={() => setConfirmDelete(true)}
+              className="text-destructive hover:bg-destructive/10"
+              disabled={busy}
+              onClick={() => setPinAction("delete")}
             >
               {t("form.delete")}
             </Button>
-            {stocked && (
-              <p id="product-delete-hint" className="text-sm text-muted-foreground">
-                {t("form.deleteNeedsZero", { count: product.on_hand })}
-              </p>
-            )}
           </div>
         )}
       </form>
+
+      {pinAction && product && (
+        <OwnerPinDialog
+          open
+          title={pinAction === "delete" ? t("form.delete") : t("form.clearStock")}
+          description={
+            pinAction === "delete"
+              ? stocked
+                ? t("form.deleteWithStockConfirm", { name: product.name, count: product.on_hand })
+                : t("form.deleteConfirm", { name: product.name })
+              : t("form.clearStockConfirm", { name: product.name, count: product.on_hand })
+          }
+          onSuccess={() => {
+            if (pinAction === "delete") {
+              setPinAction(null);
+              doDelete();
+            } else {
+              setPinAction(null);
+              clearStock.mutate([product.id], {
+                onSuccess: () => {
+                  toast.success(t("form.clearStockDone", { name: product.name }));
+                },
+              });
+            }
+          }}
+          onCancel={() => setPinAction(null)}
+        />
+      )}
     </div>
   );
 }

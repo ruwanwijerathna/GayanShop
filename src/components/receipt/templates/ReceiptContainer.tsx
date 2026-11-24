@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { Logo } from "@/db/bindings";
+import type { Logo, PaperWidth } from "@/db/bindings";
 import { canvasFromLogo } from "@/lib/logoBitmap";
 
 export interface ReceiptContainerProps {
@@ -8,6 +8,7 @@ export interface ReceiptContainerProps {
   storeName?: string;
   children: ReactNode;
   className?: string;
+  paperWidth?: PaperWidth;
 }
 
 export function ReceiptContainer({
@@ -16,17 +17,20 @@ export function ReceiptContainer({
   storeName = "Gayan Sales Center",
   children,
   className = "",
+  paperWidth = "mm80",
 }: ReceiptContainerProps) {
   const logoSrc =
     propLogoUrl ??
-    (typeof window !== "undefined" ? localStorage.getItem("receipt_logo_source") : null) ??
-    (logo ? canvasFromLogo(logo).toDataURL() : null);
+    (logo ? canvasFromLogo(logo).toDataURL() : null) ??
+    (typeof window !== "undefined" ? localStorage.getItem("receipt_logo_source") : null);
+
+  const containerWidth = paperWidth === "mm58" ? "48mm" : "72mm";
 
   return (
     <div
       className={`receipt-container mx-auto flex flex-col gap-2 bg-white p-3 text-black selection:bg-none ${className}`}
       style={{
-        width: "72mm",
+        width: containerWidth,
         maxWidth: "100%",
         fontFamily: "'Noto Sans Sinhala', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
         fontSize: "12px",

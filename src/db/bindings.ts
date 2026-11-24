@@ -29,6 +29,8 @@ export const commands = {
 	 *  privileged screen; each mutating command still runs the guard itself.
 	 */
 	authorize: (perm: Perm, targetRef: string, approvalId: string | null) => typedError<Authorization_Serialize, AppError>(__TAURI_INVOKE("authorize", { perm, targetRef, approvalId })),
+	/**  Verifies an Owner PIN. Used for sensitive or destructive operations like deleting products or clearing stock. */
+	verifyOwnerPin: (pin: string) => typedError<null, AppError>(__TAURI_INVOKE("verify_owner_pin", { pin })),
 	/**  Newest-first keyset page of the audit trail. */
 	auditPage: (cursor: AuditCursor | null, limit: number) => typedError<AuditPage_Serialize, AppError>(__TAURI_INVOKE("audit_page", { cursor, limit })),
 	/**  Re-verify every device's hash chain. */
@@ -112,7 +114,9 @@ export const commands = {
 	stockMovements: (productId: string, batchItemId: string | null, cursor: MovementCursor | null, limit: number) => typedError<MovementPage_Serialize, AppError>(__TAURI_INVOKE("stock_movements", { productId, batchItemId, cursor, limit })),
 	/**  `as_of` = a business date (`YYYY-MM-DD`), or `None` for now. */
 	stockValuation: (asOf: string | null) => typedError<StockValuation_Serialize, AppError>(__TAURI_INVOKE("stock_valuation", { asOf })),
-	oversoldLayers: () => typedError<OversoldLayer[], AppError>(__TAURI_INVOKE("oversold_layers")),
+	oversoldLayers: (id: string | null) => typedError<OversoldLayer[], AppError>(__TAURI_INVOKE("oversold_layers", { id })),
+	/**  Clears stock to 0 for the specified products (or all products if empty). */
+	clearProductStock: (productIds: string[]) => typedError<number, AppError>(__TAURI_INVOKE("clear_product_stock", { productIds })),
 	quickSaleReview: (show: QuickSaleStatus | null) => typedError<QuickSaleRow_Serialize[], AppError>(__TAURI_INVOKE("quick_sale_review", { show })),
 	quickSaleDetail: (customKey: string) => typedError<QuickSaleDetail, AppError>(__TAURI_INVOKE("quick_sale_detail", { customKey })),
 	promoteQuickSale: (input: PromoteInput_Deserialize) => typedError<PromoteResult_Serialize, AppError>(__TAURI_INVOKE("promote_quick_sale", { input })),
@@ -2525,6 +2529,11 @@ export type ReceiptPrinterProfile_Deserialize = {
 	 *  before this field existed keep the drawer on.
 	 */
 	open_drawer?: boolean,
+	/**
+	 *  Whether to show a receipt preview dialog before printing when completing a sale at the POS terminal.
+	 *  If false (default), prints directly without preview.
+	 */
+	preview_before_print?: boolean,
 };
 
 /**  This counter's receipt printer (and the drawer on its RJ11 port). Device-local, not synced. */
@@ -2541,6 +2550,11 @@ export type ReceiptPrinterProfile_Serialize = {
 	 *  before this field existed keep the drawer on.
 	 */
 	open_drawer: boolean,
+	/**
+	 *  Whether to show a receipt preview dialog before printing when completing a sale at the POS terminal.
+	 *  If false (default), prints directly without preview.
+	 */
+	preview_before_print: boolean,
 };
 
 /**  A returned item on an exchange receipt: what the customer handed back and what it was credited at. */

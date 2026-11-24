@@ -7,7 +7,7 @@ interface Barcode128Props {
   className?: string;
 }
 
-export function Barcode128({ data, height = 42, moduleWidth = 1.6, className }: Barcode128Props) {
+export function Barcode128({ data, height = 24, moduleWidth = 1.15, className }: Barcode128Props) {
   const widths = encodeCode128(data);
   if (!widths) return null;
 
@@ -26,12 +26,14 @@ export function Barcode128({ data, height = 42, moduleWidth = 1.6, className }: 
   }
 
   return (
-    <div className={`flex flex-col items-center gap-1 ${className ?? ""}`}>
+    <div className={`flex flex-col items-center gap-1 max-w-full ${className ?? ""}`}>
       <svg
         width={totalWidth}
         height={height}
         viewBox={`0 0 ${totalWidth} ${height}`}
-        className="overflow-visible"
+        preserveAspectRatio="none"
+        className="max-w-full overflow-hidden"
+        style={{ maxWidth: "100%", height: `${height}px` }}
         aria-label={`Barcode: ${data}`}
       >
         {rects.map((r, idx) => (

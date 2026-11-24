@@ -31,6 +31,8 @@ vi.mock("@/db/bindings", () => ({
     printLabels: vi.fn(),
     labelPreview: vi.fn(),
     assignInStoreBarcodes: vi.fn(),
+    verifyOwnerPin: vi.fn(),
+    clearProductStock: vi.fn(),
   },
 }));
 
@@ -105,6 +107,8 @@ beforeEach(() => {
   vi.mocked(commands.printLabels).mockImplementation(() => ok(null));
   vi.mocked(commands.labelPreview).mockImplementation((job) => ok(stickerLayout(job)));
   vi.mocked(commands.assignInStoreBarcodes).mockReset();
+  vi.mocked(commands.verifyOwnerPin).mockImplementation(() => ok(null));
+  vi.mocked(commands.clearProductStock).mockImplementation(() => ok(1));
 });
 
 /** New products are added from the slider's edge handle. */
@@ -317,36 +321,39 @@ describe("ProductsScreen", () => {
     ).toHaveValue("");
   });
 
-  it("deletes only a product whose stock is 0, and explains why otherwise", async () => {
+  it("deletes a product even when it has stock on hand, requesting owner PIN confirmation", async () => {
     vi.mocked(commands.deleteProduct).mockImplementation(() => ok(null));
+    vi.mocked(commands.verifyOwnerPin).mockImplementation(() => ok(null));
     vi.mocked(commands.listProducts).mockImplementation(() =>
       ok([
-        product({ on_hand: 45 }),
-        product({ id: "p9", name: "Empty Tin", sku: "100009", barcode: null, on_hand: 0 }),
         product({
-          id: "p8",
-          name: "Gift Card",
-          sku: "100008",
+          id: "p-bucket",
+          name: "Blue Bucket 10L",
+          sku: "100001",
           barcode: null,
-          track_stock: false,
-          on_hand: 0,
+          track_stock: true,
+          on_hand: 45,
         }),
       ]),
     );
     renderAs(MANAGER);
     fireEvent.click(await within(grid()).findByText("Blue Bucket 10L"));
-    let form = await screen.findByRole("form", { name: "Edit product" });
-    expect(within(form).getByRole("button", { name: "Delete" })).toBeDisabled();
-    expect(within(form).getByText(/Stock must be 0 to delete \(45 on hand\)/)).toBeInTheDocument();
-
-    fireEvent.click(within(grid()).getByText("Empty Tin"));
-    form = await screen.findByRole("form", { name: "Edit product" });
-    await waitFor(() => expect(within(form).getByLabelText("Selling price (Rs)")).toBeInTheDocument());
+    const form = await screen.findByRole("form", { name: "Edit product" });
     const del = within(form).getByRole("button", { name: "Delete" });
     expect(del).toBeEnabled();
     fireEvent.click(del);
-    fireEvent.click(within(form).getByRole("button", { name: "Yes, delete" }));
-    await waitFor(() => expect(commands.deleteProduct).toHaveBeenCalledWith("p9"));
+
+    // Owner PIN dialog appears
+    const pinDialog = await screen.findByRole("dialog");
+    expect(within(pinDialog).getByText(/45/)).toBeInTheDocument();
+
+    // Type 4-digit PIN on the PinPad input
+    const pinInput = within(pinDialog).getByLabelText("PIN");
+    fireEvent.change(pinInput, { target: { value: "1234" } });
+    fireEvent.click(within(pinDialog).getByRole("button", { name: "Confirm" }));
+
+    await waitFor(() => expect(commands.verifyOwnerPin).toHaveBeenCalledWith("1234"));
+    await waitFor(() => expect(commands.deleteProduct).toHaveBeenCalledWith("p-bucket"));
   });
 
   it("suggests existing categories while typing and creates a new one on the fly", async () => {

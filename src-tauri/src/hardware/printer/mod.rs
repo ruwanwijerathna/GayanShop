@@ -104,6 +104,10 @@ pub struct ReceiptPrinterProfile {
     /// before this field existed keep the drawer on.
     #[serde(default = "drawer_on")]
     pub open_drawer: bool,
+    /// Whether to show a receipt preview dialog before printing when completing a sale at the POS terminal.
+    /// If false (default), prints directly without preview.
+    #[serde(default)]
+    pub preview_before_print: bool,
 }
 
 fn drawer_on() -> bool {

@@ -34,6 +34,7 @@ const NET: ReceiptPrinterProfile_Serialize = {
   qr: false,
   drawer_pin: "pin5",
   open_drawer: false,
+  preview_before_print: false,
 };
 
 const HEADER: ReceiptHeaderView_Serialize = {
@@ -87,6 +88,7 @@ describe("printer form mapping", () => {
       qr: false,
       drawer_pin: "pin2",
       open_drawer: true,
+      preview_before_print: false,
     });
   });
 
@@ -111,6 +113,24 @@ describe("PrinterSettings", () => {
       }),
     );
     expect(await screen.findByText("Printer settings saved.")).toBeInTheDocument();
+  });
+
+  it("toggles receipt print preview and saves it to profile and localStorage", async () => {
+    renderAs();
+    const previewSwitch = await screen.findByRole("switch", { name: "Receipt print preview" });
+    expect(previewSwitch).not.toBeChecked();
+    fireEvent.click(previewSwitch);
+    expect(previewSwitch).toBeChecked();
+    expect(localStorage.getItem("pos_preview_receipt")).toBe("true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(commands.setPrinterProfile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          preview_before_print: true,
+        }),
+      ),
+    );
   });
 
   it("loads the saved profile and prints the sample test receipt", async () => {

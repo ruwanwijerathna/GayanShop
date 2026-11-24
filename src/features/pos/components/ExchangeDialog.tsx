@@ -1,15 +1,9 @@
-import { Minus, Plus } from "lucide-react";
+import { Loader2, Minus, Plus, Receipt, Search, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { ExchangeSource } from "@/db/bindings";
@@ -35,10 +29,8 @@ export interface ExchangeDialogProps {
 }
 
 /**
- * F12 (decision #26): item-for-item exchange. The cashier finds the earlier sale by receipt number, picks the
- * units handed back and returns to the till, where the replacement goods are scanned as an ordinary cart. The
- * customer pays only the difference; there is never a cash refund or a credit note. After the 7-day window the
- * sale needs a supervisor or owner PIN, asked for at payment.
+ * F12: item-for-item exchange. The cashier finds the earlier sale by receipt number, picks the
+ * units handed back and returns to the till, where the replacement goods are scanned as an ordinary cart.
  */
 export function ExchangeDialog({ draft, initialReceipt = null, onConfirm, onClose }: ExchangeDialogProps) {
   const { t, i18n } = useTranslation("pos");
@@ -47,19 +39,24 @@ export function ExchangeDialog({ draft, initialReceipt = null, onConfirm, onClos
   const [source, setSource] = useState<ExchangeSource | null>(draft?.source ?? null);
   const [picks, setPicks] = useState<ReturnPicks>(draft?.picks ?? {});
   const receiptRef = useRef<HTMLInputElement>(null);
-  // Bills containing what is typed are offered under the field; picking one looks it up at once.
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Suggestions for bills containing what is typed
   const [suggesting, setSuggesting] = useState(false);
   const [active, setActive] = useState(-1);
-  const suggestions = useBillSuggestions(useDebounced(receipt, SUGGEST_DELAY_MS));
+  const debouncedReceipt = useDebounced(receipt, SUGGEST_DELAY_MS);
+  const suggestions = useBillSuggestions(debouncedReceipt);
   const offered = suggesting && receipt.trim() !== "" ? (suggestions.data ?? []) : [];
 
   const search = (no: string) => {
-    if (no === "" || lookup.isPending) return;
-    lookup.mutate(no, {
+    const trimmed = no.trim();
+    if (trimmed === "" || lookup.isPending) return;
+    lookup.mutate(trimmed, {
       onSuccess: (s) => {
         playCue("tick");
         setSource(s);
         setPicks({});
+        setSuggesting(false);
       },
       onError: () => playCue("error"),
     });
@@ -79,20 +76,56 @@ export function ExchangeDialog({ draft, initialReceipt = null, onConfirm, onClos
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (offered.length === 0) return;
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      if (offered.length === 0) return;
       e.preventDefault();
       const step = e.key === "ArrowDown" ? 1 : -1;
-      setActive((a) => {
-        const next = a + step;
-        if (next >= offered.length) return -1;
-        return next < -1 ? offered.length - 1 : next;
+      setActive((prev) => {
+        const next = prev + step;
+        if (next >= offered.length) return 0;
+        if (next < 0) return offered.length - 1;
+        return next;
       });
-    } else if (e.key === "Enter" && active >= 0 && offered[active]) {
+      return;
+    }
+
+    if (e.key === "Enter") {
       e.preventDefault();
-      pick(offered[active].receipt_no);
+      if (active >= 0 && offered[active]) {
+        pick(offered[active].receipt_no);
+      } else if (receipt.trim() !== "") {
+        setSuggesting(false);
+        search(receipt.trim());
+      }
+      return;
+    }
+
+    if (e.key === "Escape") {
+      if (suggesting && offered.length > 0) {
+        e.preventDefault();
+        setSuggesting(false);
+      }
     }
   };
+
+  // Scroll active suggestion into view when navigating via arrow keys
+  useEffect(() => {
+    if (active >= 0) {
+      const el = document.getElementById(`exchange-suggestion-${active}`);
+      el?.scrollIntoView({ block: "nearest" });
+    }
+  }, [active]);
+
+  // Close suggestions on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setSuggesting(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
 
   const scanned = useRef(initialReceipt);
   useEffect(() => {
@@ -117,7 +150,7 @@ export function ExchangeDialog({ draft, initialReceipt = null, onConfirm, onClos
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        className="max-w-3xl"
+        className="w-full max-w-xl gap-4 p-5 sm:p-6"
         onEscapeKeyDown={(e) => {
           // First Esc closes the suggestions, the next one the dialog.
           if (offered.length > 0) {
@@ -130,110 +163,175 @@ export function ExchangeDialog({ draft, initialReceipt = null, onConfirm, onClos
           receiptRef.current?.focus();
         }}
       >
-        <DialogHeader>
-          <DialogTitle className="text-xl">{t("exchange.title")}</DialogTitle>
-          <DialogDescription>{t("exchange.help")}</DialogDescription>
+        <DialogHeader className="pb-1 border-b">
+          <DialogTitle className="text-xl font-bold flex items-center gap-2">
+            <Receipt className="size-5 text-primary" />
+            <span>{t("exchange.title")}</span>
+          </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={find} className="flex flex-wrap items-end gap-3">
-          <div className="flex min-w-64 flex-1 flex-col gap-2">
-            <Label htmlFor="exchange-receipt">{t("exchange.receipt")}</Label>
-            <Input
-              id="exchange-receipt"
-              ref={receiptRef}
-              className="h-12 font-mono text-base"
-              autoComplete="off"
-              placeholder="T01-261112001"
-              role="combobox"
-              aria-expanded={offered.length > 0}
-              aria-controls="exchange-suggestions"
-              aria-autocomplete="list"
-              aria-activedescendant={active >= 0 ? `exchange-suggestion-${active}` : undefined}
-              value={receipt}
-              onChange={(e) => {
-                setReceipt(e.target.value);
-                setSuggesting(true);
-                setActive(-1);
-              }}
-              onKeyDown={onKeyDown}
-            />
-            {offered.length > 0 ? (
-              <ul
-                id="exchange-suggestions"
-                role="listbox"
-                aria-label={t("exchange.suggestions")}
-                className="flex flex-col gap-1 rounded-md border bg-card p-1"
+        <form onSubmit={find} className="flex flex-col gap-2">
+          <div ref={containerRef} className="relative w-full">
+            <Label htmlFor="exchange-receipt" className="text-sm font-semibold mb-1.5 block">
+              {t("exchange.receipt")}
+            </Label>
+            <div className="relative flex items-center">
+              <Search
+                aria-hidden
+                className="pointer-events-none absolute left-3.5 size-4 text-muted-foreground"
+              />
+              <Input
+                id="exchange-receipt"
+                ref={receiptRef}
+                className="h-12 pl-10 pr-10 font-mono text-base rounded-xl"
+                autoComplete="off"
+                placeholder={t("exchange.receiptPlaceholder", {
+                  defaultValue: "Type or scan bill number (e.g. T01-261124004 or T01-4)",
+                })}
+                role="combobox"
+                aria-expanded={offered.length > 0}
+                aria-controls="exchange-suggestions"
+                aria-autocomplete="list"
+                aria-activedescendant={active >= 0 ? `exchange-suggestion-${active}` : undefined}
+                value={receipt}
+                onFocus={() => {
+                  if (receipt.trim().length > 0) setSuggesting(true);
+                }}
+                onChange={(e) => {
+                  setReceipt(e.target.value);
+                  setSuggesting(true);
+                  setActive(-1);
+                }}
+                onKeyDown={onKeyDown}
+              />
+              {lookup.isPending ? (
+                <Loader2
+                  aria-hidden
+                  className="pointer-events-none absolute right-3.5 size-4 animate-spin text-muted-foreground"
+                />
+              ) : receipt.trim().length > 0 ? (
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  className="absolute right-3.5 text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    setReceipt("");
+                    setSource(null);
+                    setPicks({});
+                    setSuggesting(false);
+                    receiptRef.current?.focus();
+                  }}
+                  aria-label="Clear"
+                >
+                  <X className="size-4" />
+                </button>
+              ) : null}
+            </div>
+
+            {/* Floating Suggestions Dropdown */}
+            {suggesting && offered.length > 0 && (
+              <div
+                id="exchange-suggestions-container"
+                className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-64 overflow-y-auto rounded-xl border bg-popover p-1.5 shadow-xl ring-1 ring-black/5"
               >
-                {offered.map((b, i) => (
-                  <li
-                    key={b.receipt_no}
-                    id={`exchange-suggestion-${i}`}
-                    role="option"
-                    aria-selected={i === active}
-                  >
-                    <button
-                      type="button"
-                      tabIndex={-1}
-                      onClick={() => pick(b.receipt_no)}
-                      className={cn(
-                        "flex min-h-12 w-full items-center justify-between gap-3 rounded-sm px-3 text-left hover:bg-accent",
-                        i === active && "bg-accent",
-                      )}
+                <ul
+                  id="exchange-suggestions"
+                  role="listbox"
+                  aria-label={t("exchange.suggestions")}
+                  className="flex flex-col gap-1"
+                >
+                  {offered.map((b, i) => (
+                    <li
+                      key={b.receipt_no}
+                      id={`exchange-suggestion-${i}`}
+                      role="option"
+                      aria-selected={i === active}
                     >
-                      <span className="font-mono text-base">{b.receipt_no}</span>
-                      <span className="text-sm text-muted-foreground">
-                        {t("exchange.suggestion", {
-                          date: b.business_date,
-                          count: b.item_count,
-                          total: formatMoney(b.grand_total),
-                        })}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">{t("exchange.receiptHint")}</p>
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        onMouseEnter={() => setActive(i)}
+                        onClick={() => pick(b.receipt_no)}
+                        className={cn(
+                          "flex min-h-12 w-full items-center justify-between gap-4 rounded-lg px-3 py-2 text-left transition-colors",
+                          i === active ? "bg-primary text-primary-foreground" : "hover:bg-accent",
+                        )}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Receipt className="size-4 opacity-70" />
+                          <span className="font-mono text-base font-bold tracking-tight">{b.receipt_no}</span>
+                        </div>
+                        <div
+                          className={cn(
+                            "flex items-center gap-3 text-sm",
+                            i === active ? "text-primary-foreground/90" : "text-muted-foreground",
+                          )}
+                        >
+                          <span>{b.business_date}</span>
+                          <span>•</span>
+                          <span>
+                            {t("exchange.itemCount", {
+                              count: b.item_count,
+                              defaultValue: `${b.item_count} items`,
+                            })}
+                          </span>
+                          <span>•</span>
+                          <span className="font-mono font-semibold">{formatMoney(b.grand_total)}</span>
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
-          <Button type="submit" size="pos" disabled={receipt.trim() === "" || lookup.isPending}>
-            {t("exchange.find")}
-          </Button>
         </form>
+
         {error && (
-          <p role="alert" className="text-base text-destructive">
+          <p
+            role="alert"
+            className="text-base text-destructive bg-destructive/10 p-3 rounded-lg border border-destructive/20"
+          >
             {error}
           </p>
         )}
 
         {source && (
-          <div className="flex flex-col gap-3">
-            <p className="text-base">
-              {t("exchange.sale", {
-                receipt: source.receipt_no,
-                date: source.business_date,
-                days: source.days_since,
-              })}
-            </p>
-            {source.late && (
-              <p role="status" className="rounded-md border bg-warning/15 px-3 py-2 text-base">
-                {t("exchange.late", { days: source.window_days })}
+          <div className="flex flex-col gap-3 pt-1">
+            <div className="flex items-center justify-between border-b pb-2">
+              <p className="text-base font-semibold">
+                {t("exchange.sale", {
+                  receipt: source.receipt_no,
+                  date: source.business_date,
+                  days: source.days_since,
+                })}
               </p>
-            )}
+              {source.late && (
+                <Badge variant="outline" className="border-amber-500 text-amber-700 bg-amber-50 font-medium">
+                  {t("exchange.late", { days: source.window_days })}
+                </Badge>
+              )}
+            </div>
+
             {!anyEligible && <p className="text-base text-muted-foreground">{t("exchange.nothing")}</p>}
-            <ul className="flex max-h-72 flex-col gap-2 overflow-y-auto" aria-label={t("exchange.lines")}>
+
+            <ul
+              className="flex max-h-72 flex-col gap-2 overflow-y-auto pr-1"
+              aria-label={t("exchange.lines")}
+            >
               {source.lines.map((l) => {
                 const picked = picks[l.item_id] ?? 0;
                 return (
                   <li
                     key={l.item_id}
                     className={cn(
-                      "flex min-h-14 items-center gap-3 rounded-md border px-3 py-1 text-base",
+                      "flex min-h-14 items-center gap-3 rounded-lg border px-4 py-2.5 text-base transition-colors",
+                      picked > 0 ? "border-primary/50 bg-primary/5" : "bg-card",
                       !l.eligible && "opacity-60",
                     )}
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate">{l.name}</span>
+                      <span className="block truncate font-medium">{l.name}</span>
                       <span className="block text-sm text-muted-foreground">
                         {l.eligible
                           ? t("exchange.returnable", { left: l.returnable_qty, sold: l.qty })
@@ -242,52 +340,56 @@ export function ExchangeDialog({ draft, initialReceipt = null, onConfirm, onClos
                             : t("exchange.notReturnable")}
                       </span>
                     </span>
-                    <span className="tabular-nums">{formatMoney(l.line_total)}</span>
+                    <span className="tabular-nums font-mono font-medium">{formatMoney(l.line_total)}</span>
                     <span className="flex items-center gap-2">
                       <Button
                         type="button"
                         variant="outline"
-                        size="pos"
-                        className="size-12 p-0"
+                        size="icon"
+                        className="size-10 rounded-lg"
                         aria-label={t("exchange.fewer", { name: l.name })}
                         disabled={!l.eligible || picked === 0}
                         onClick={() => change(l.item_id, -1, l.returnable_qty)}
                       >
-                        <Minus aria-hidden />
+                        <Minus aria-hidden className="size-4" />
                       </Button>
-                      <span className="w-8 text-center text-lg tabular-nums" aria-live="polite">
+                      <span className="w-8 text-center text-lg font-bold tabular-nums" aria-live="polite">
                         {picked}
                       </span>
                       <Button
                         type="button"
                         variant="outline"
-                        size="pos"
-                        className="size-12 p-0"
+                        size="icon"
+                        className="size-10 rounded-lg"
                         aria-label={t("exchange.more", { name: l.name })}
                         disabled={!l.eligible || picked >= l.returnable_qty}
                         onClick={() => change(l.item_id, 1, l.returnable_qty)}
                       >
-                        <Plus aria-hidden />
+                        <Plus aria-hidden className="size-4" />
                       </Button>
                     </span>
-                    <span className="w-28 text-right tabular-nums text-muted-foreground">
+                    <span className="w-28 text-right font-mono font-semibold tabular-nums text-foreground">
                       {picked > 0 ? formatMoney(lineCredit(l, picked)) : ""}
                     </span>
                   </li>
                 );
               })}
             </ul>
-            <p className="flex items-baseline justify-between text-lg font-semibold">
-              <span>{t("exchange.credit", { units })}</span>
-              <span className="tabular-nums" data-testid="exchange-credit">
+
+            <div className="flex items-baseline justify-between rounded-xl border bg-muted/30 p-3.5">
+              <span className="text-base font-semibold">{t("exchange.credit", { units })}</span>
+              <span
+                className="text-xl font-bold font-mono text-primary tabular-nums"
+                data-testid="exchange-credit"
+              >
                 {formatMoney(credit)}
               </span>
-            </p>
-            <p className="text-sm text-muted-foreground">{t("exchange.rule")}</p>
+            </div>
+            <p className="text-xs text-muted-foreground">{t("exchange.rule")}</p>
           </div>
         )}
 
-        <DialogFooter className="gap-2 sm:justify-end">
+        <DialogFooter className="gap-2 sm:justify-end pt-2 border-t">
           <Button type="button" variant="outline" size="pos" onClick={onClose}>
             {i18n.t("common:actions.cancel", { defaultValue: "Cancel" })}
           </Button>

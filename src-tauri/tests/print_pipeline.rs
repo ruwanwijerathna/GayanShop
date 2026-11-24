@@ -130,6 +130,7 @@ fn profile() -> ReceiptPrinterProfile {
         qr: false,
         drawer_pin: DrawerPin::Pin2,
         open_drawer: true,
+        preview_before_print: false,
     }
 }
 

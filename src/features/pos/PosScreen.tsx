@@ -34,6 +34,7 @@ import type {
   PaymentLine_Deserialize as PaymentLine,
   Perm,
   ProductSummary_Serialize as ProductSummary,
+  ReceiptData_Serialize as ReceiptData,
 } from "@/db/bindings";
 import { CommandError } from "@/db/client";
 import { commands } from "@/db/bindings";
@@ -45,9 +46,11 @@ import {
   useCurrentCart,
   useCurrentCashSession,
   useHoldCart,
+  usePrinterProfile,
   useProductSearch,
   useRecallCart,
 } from "@/db/hooks";
+import { ReceiptDialog } from "@/components/receipt/ReceiptDialog";
 import { usePrintReceiptStore } from "@/components/receipt/PrintableReceiptPortal";
 import { notFoundToast, routeScan } from "@/hardware/scanner/feedback";
 import { useScanHandler, useScanner } from "@/hardware/scanner/ScannerProvider";
@@ -141,6 +144,8 @@ function Till() {
     exchange: boolean;
     orderId?: string;
   } | null>(null);
+  const [previewReceipt, setPreviewReceipt] = useState<ReceiptData | null>(null);
+  const printerProfile = usePrinterProfile();
 
   const search = useProductSearch(query);
   const results = useMemo(() => (query.trim() === "" ? [] : (search.data ?? [])), [query, search.data]);
@@ -378,7 +383,14 @@ function Till() {
           try {
             const res = await commands.orderReceipt(r.order_id);
             if (res.status === "ok") {
-              usePrintReceiptStore.getState().print(res.data);
+              const shouldPreview =
+                printerProfile.data?.preview_before_print ??
+                localStorage.getItem("pos_preview_receipt") === "true";
+              if (shouldPreview) {
+                setPreviewReceipt(res.data);
+              } else {
+                usePrintReceiptStore.getState().print(res.data);
+              }
             }
           } catch {
             // Ignore auto-print error
@@ -679,7 +691,14 @@ function Till() {
                 if (orderId) {
                   const res = await commands.orderReceipt(orderId);
                   if (res.status === "ok") {
-                    usePrintReceiptStore.getState().print(res.data);
+                    const shouldPreview =
+                      printerProfile.data?.preview_before_print ??
+                      localStorage.getItem("pos_preview_receipt") === "true";
+                    if (shouldPreview) {
+                      setPreviewReceipt(res.data);
+                    } else {
+                      usePrintReceiptStore.getState().print(res.data);
+                    }
                   }
                 }
               }}
@@ -996,6 +1015,16 @@ function Till() {
             setShared(null);
             focusScan();
           }}
+        />
+      )}
+      {previewReceipt && (
+        <ReceiptDialog
+          receipt={previewReceipt}
+          onClose={() => {
+            setPreviewReceipt(null);
+            focusScan();
+          }}
+          isReprint={false}
         />
       )}
     </div>

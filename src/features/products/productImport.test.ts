@@ -39,4 +39,31 @@ describe("buildImport", () => {
     expect(rows[0]?.issue).toBeNull();
     expect(rows[0]?.input?.default_cost).toBeNull();
   });
+
+  it("parses the system exported CSV columns (default_cost, on_hand, category, etc.)", () => {
+    const csv =
+      "sku,barcode,name,name_si,category,price,default_cost,track_stock,on_hand,active\n" +
+      "DSI,21000027,dsi,,DSI,3099.00,2603.00,yes,35,yes\n" +
+      "PEO525-S12,21000034,DSI,,DSI,3099.00,2603.00,yes,40,yes\n";
+    const rows = buildImport(csv, true);
+    if (rows === "noHeader") throw new Error("header expected");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.name).toBe("dsi");
+    expect(rows[0]?.categoryName).toBe("DSI");
+    expect(rows[0]?.quantity).toBe(35);
+    expect(rows[0]?.input?.price).toBe(309_900);
+    expect(rows[0]?.input?.default_cost).toBe(260_300);
+    expect(rows[0]?.input?.sku).toEqual({ mode: "manual", value: "DSI" });
+    expect(rows[0]?.input?.barcode).toEqual({ mode: "manual", value: "21000027" });
+    expect(rows[0]?.input?.track_stock).toBe(true);
+    expect(rows[0]?.input?.is_active).toBe(true);
+
+    expect(rows[1]?.name).toBe("DSI");
+    expect(rows[1]?.categoryName).toBe("DSI");
+    expect(rows[1]?.quantity).toBe(40);
+    expect(rows[1]?.input?.price).toBe(309_900);
+    expect(rows[1]?.input?.default_cost).toBe(260_300);
+    expect(rows[1]?.input?.sku).toEqual({ mode: "manual", value: "PEO525-S12" });
+    expect(rows[1]?.input?.barcode).toEqual({ mode: "manual", value: "21000034" });
+  });
 });

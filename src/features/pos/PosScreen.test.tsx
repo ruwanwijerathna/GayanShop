@@ -40,6 +40,8 @@ vi.mock("@/db/bindings", () => ({
     requestApproval: vi.fn(),
     quickSaleHint: vi.fn(),
     devicePreferences: vi.fn(),
+    orderReceipt: vi.fn(),
+    printerProfile: vi.fn(),
   },
 }));
 
@@ -189,6 +191,29 @@ beforeEach(() => {
   vi.mocked(commands.requestApproval).mockImplementation(() =>
     ok({ approval_id: "appr-1", expires_at: "2026-11-08T09:01:00.000Z" }),
   );
+  vi.mocked(commands.orderReceipt).mockImplementation(() =>
+    ok({
+      order_id: "o1",
+      receipt_no: "T01-20261108-0001",
+      store_name: "Gayan Sales Center",
+      cashier: "Nimal",
+      customer_masked: null,
+      status: "completed",
+      business_date: "2026-11-08",
+      completed_at: "2026-11-08T10:00:00Z",
+      item_count: 1,
+      gross_sales: 45_000,
+      discount_total: 0,
+      grand_total: 45_000,
+      change_due: 0,
+      footer: "",
+      lines: [],
+      returns: [],
+      exchange_credit: 0,
+      payments: [],
+    }),
+  );
+  vi.mocked(commands.printerProfile).mockImplementation(() => ok(null));
 });
 
 afterEach(() => vi.useRealTimers());
@@ -393,6 +418,76 @@ describe("PosScreen", () => {
     expect(cartStore.getState().token).not.toBe(token);
   });
 
+  it("shows receipt preview dialog on checkout when previewBeforePrint is enabled", async () => {
+    vi.mocked(commands.printerProfile).mockImplementation(() =>
+      ok({
+        transport: { kind: "spooler", printer_name: "XP-80C" },
+        width: "mm80",
+        codepage: "pc437",
+        cut: "partial",
+        feed_lines: 4,
+        qr: false,
+        drawer_pin: "pin2",
+        open_drawer: true,
+        preview_before_print: true,
+      }),
+    );
+    vi.mocked(commands.orderReceipt).mockImplementation(() =>
+      ok({
+        order_id: "o1",
+        receipt_no: "T01-20261108-0001",
+        store_name: "Gayan Sales Center",
+        cashier: "Nimal",
+        customer_masked: null,
+        status: "completed",
+        business_date: "2026-11-08",
+        completed_at: "2026-11-08T10:00:00Z",
+        item_count: 1,
+        gross_sales: 45_000,
+        discount_total: 0,
+        grand_total: 45_000,
+        change_due: 5_000,
+        footer: "",
+        lines: [
+          {
+            name: "Rice 5kg",
+            qty: 1,
+            list_price: 45_000,
+            unit_price: 45_000,
+            line_gross: 45_000,
+            line_discount: 0,
+            line_total: 45_000,
+          },
+        ],
+        returns: [],
+        exchange_credit: 0,
+        payments: [{ method: "cash", amount: 45_000, tendered: 50_000, reference: null }],
+      }),
+    );
+    vi.mocked(commands.checkoutOrder).mockImplementation(() =>
+      ok({
+        order_id: "o1",
+        receipt_no: "T01-20261108-0001",
+        grand_total: 45_000,
+        change_due: 5_000,
+        customer_id: null,
+        exchange_credit: 0,
+        replayed: false,
+        loyalty_accrued: null,
+      }),
+    );
+    await renderTill();
+    act(() => cartStore.getState().addProduct(BUCKET));
+    key("F9");
+    const pay = await screen.findByRole("dialog");
+    fireEvent.change(within(pay).getByLabelText("Cash Received (Rs)"), { target: { value: "500.00" } });
+    fireEvent.click(within(pay).getByRole("button", { name: "Pay Now" }));
+
+    expect(await screen.findByRole("heading", { name: /(Receipt|Print) Preview/i })).toBeInTheDocument();
+    expect(screen.getByText("#T01-20261108-0001")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Print/i })).toBeInTheDocument();
+  });
+
   it("asks a supervisor when Rust requires approval, then retries with it", async () => {
     vi.mocked(commands.checkoutOrder)
       .mockImplementationOnce(() => err({ kind: "APPROVAL_REQUIRED", perm: "ORDER_DISCOUNT" }))
@@ -528,7 +623,9 @@ describe("PosScreen", () => {
       fireEvent.change(within(dialog).getByLabelText("Receipt number of the sale"), {
         target: { value: source.receipt_no },
       });
-      fireEvent.click(within(dialog).getByRole("button", { name: "Find sale" }));
+      fireEvent.keyDown(within(dialog).getByLabelText("Receipt number of the sale"), {
+        key: "Enter",
+      });
       await within(dialog).findByText(/sold 2026-11-05/);
       expect(within(dialog).getByText("Can't be returned (not a stocked item)")).toBeInTheDocument();
       fireEvent.click(within(dialog).getByRole("button", { name: "Return more Blue Bucket" }));
@@ -606,6 +703,31 @@ describe("PosScreen", () => {
       expect(within(dialog).queryByRole("listbox")).not.toBeInTheDocument();
     });
 
+    it("allows selecting a suggested bill with ArrowDown and Enter keys", async () => {
+      vi.mocked(commands.exchangeLookup).mockImplementation(() => ok(SOURCE));
+      vi.mocked(commands.exchangeSuggest).mockImplementation(() =>
+        ok([
+          { receipt_no: "T01-261121154", business_date: "2026-11-21", item_count: 2, grand_total: 90_000 },
+          { receipt_no: "T02-261121154", business_date: "2026-11-21", item_count: 1, grand_total: 45_000 },
+        ]),
+      );
+      await renderTill();
+      key("F12");
+      const dialog = await screen.findByRole("dialog", { name: "Exchange" });
+      const input = within(dialog).getByLabelText("Receipt number of the sale");
+      fireEvent.change(input, { target: { value: "1154" } });
+      await within(dialog).findByRole("listbox", { name: "Matching bills" });
+
+      // Navigate down twice to select 2nd option, then Enter
+      fireEvent.keyDown(input, { key: "ArrowDown" });
+      fireEvent.keyDown(input, { key: "ArrowDown" });
+      fireEvent.keyDown(input, { key: "Enter" });
+
+      await within(dialog).findByText(/sold 2026-11-05/);
+      expect(commands.exchangeLookup).toHaveBeenCalledWith("T02-261121154");
+      expect(input).toHaveValue("T02-261121154");
+    });
+
     it("opens the exchange with the sale already found when a bill barcode is scanned at the till", async () => {
       vi.mocked(commands.exchangeLookup).mockImplementation(() => ok(SOURCE));
       await renderTill();
@@ -651,7 +773,9 @@ describe("PosScreen", () => {
       fireEvent.change(within(dialog).getByLabelText("Receipt number of the sale"), {
         target: { value: "T01-20261105-0007" },
       });
-      fireEvent.click(within(dialog).getByRole("button", { name: "Find sale" }));
+      fireEvent.keyDown(within(dialog).getByLabelText("Receipt number of the sale"), {
+        key: "Enter",
+      });
       expect(await within(dialog).findByText(/More than 7 days ago/)).toBeInTheDocument();
     });
 

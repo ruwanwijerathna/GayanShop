@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { create } from "zustand";
 import type { ReceiptData_Serialize as ReceiptData } from "@/db/bindings";
 import { CommandError } from "@/db/client";
-import { usePrintReceiptImage } from "@/db/hooks";
+import { usePrinterProfile, usePrintReceiptImage } from "@/db/hooks";
 import { translateError } from "@/i18n";
 import { receiptImageFromElement } from "@/lib/receiptImage";
 import {
@@ -57,7 +57,8 @@ export const usePrintReceiptStore = create<PrintStore>((set) => ({
   clear: () => set({ activeReceipt: null, activeItem: null, reprint: false }),
 }));
 
-function renderTemplate(item: PrintableItem) {
+function renderTemplate(item: PrintableItem, defaultQr = false) {
+  const qr = ("qr" in item ? item.qr : undefined) ?? defaultQr;
   switch (item.type) {
     case "sale":
       return (
@@ -66,6 +67,7 @@ function renderTemplate(item: PrintableItem) {
           logo={item.logo}
           logoDataUrl={item.logoDataUrl}
           storeName={item.storeName}
+          qr={qr}
         />
       );
     case "return_exchange":
@@ -75,6 +77,7 @@ function renderTemplate(item: PrintableItem) {
           logo={item.logo}
           logoDataUrl={item.logoDataUrl}
           storeName={item.storeName}
+          qr={qr}
         />
       );
     case "z_report":
@@ -109,6 +112,7 @@ function renderTemplate(item: PrintableItem) {
 
 export function PrintableReceiptPortal() {
   const { t, i18n } = useTranslation("printing");
+  const profile = usePrinterProfile();
   const activeReceipt = usePrintReceiptStore((s) => s.activeReceipt);
   const activeItem = usePrintReceiptStore((s) => s.activeItem);
   const reprint = usePrintReceiptStore((s) => s.reprint);
@@ -156,7 +160,7 @@ export function PrintableReceiptPortal() {
 
   return (
     <div aria-hidden className="pointer-events-none fixed top-0 -left-[10000px]">
-      <div ref={sheet}>{renderTemplate(itemToPrint)}</div>
+      <div ref={sheet}>{renderTemplate(itemToPrint, profile.data?.qr)}</div>
     </div>
   );
 }

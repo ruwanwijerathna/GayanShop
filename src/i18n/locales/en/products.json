@@ -68,7 +68,19 @@
     "noCategoryMatch": "No matching category",
     "categoryPlaceholder": "Search or type a new category",
     "newProduct": "New product",
-    "deleteNeedsZero": "Stock must be 0 to delete ({{count}} on hand). Use Adjust stock in the row menu first."
+    "deleteNeedsZero": "Stock must be 0 to delete ({{count}} on hand). Use Adjust stock in the row menu first.",
+    "clearStock": "Clear stock",
+    "clearStockConfirm": "Clear all {{count}} unit(s) in stock for {{name}}? Stock on hand will be reset to 0.",
+    "clearStockDone": "Cleared stock for {{name}}.",
+    "clearAllStock": "Clear all stock",
+    "clearAllStockConfirm": "Are you sure you want to completely clear stock for all products in the store? All stock counts will be reset to 0.",
+    "clearAllStockDone": "Cleared stock for {{count}} product(s).",
+    "clearSelectedStock": "Clear stock ({{count}})",
+    "deleteWithStockConfirm": "Delete {{name}}? This item currently has {{count}} unit(s) in stock which will be written off.",
+    "deleteDone": "Deleted {{name}}.",
+    "ownerPinTitle": "Owner PIN Required",
+    "ownerPinPrompt": "Enter Owner PIN to authorize this action",
+    "invalidOwnerPin": "Invalid Owner PIN. Please try again."
   },
   "categories": {
     "title": "Categories",
@@ -108,6 +120,18 @@
   "selectedCount_one": "{{count}} selected",
   "selectedCount_other": "{{count}} selected",
   "clearSelection": "Clear selection",
+  "clearStock": "Clear stock",
+  "clearAllStock": "Clear all stock",
+  "clearStockConfirm": "Clear all {{count}} unit(s) in stock for {{name}}? Stock on hand will be reset to 0.",
+  "clearStockDone": "Cleared stock for {{name}}.",
+  "clearAllStockConfirm": "Are you sure you want to completely clear stock for all products in the store? All stock counts will be reset to 0.",
+  "clearAllStockDone": "Cleared stock for {{count}} product(s).",
+  "clearSelectedStock": "Clear stock ({{count}})",
+  "clearSelectedStockConfirm": "Clear stock for {{count}} selected product(s)? Their stock on hand will be reset to 0.",
+  "delete": "Delete product",
+  "deleteSelected": "Delete ({{count}})",
+  "deleteSelectedConfirm": "Delete {{count}} selected product(s)? Any remaining stock will be written off.",
+  "deleteMultipleDone": "Deleted {{count}} product(s).",
   "rowActions": "Actions for {{name}}",
   "printLabel": "Print label",
   "filters": {
@@ -149,7 +173,7 @@
       "quantityInvalid": "quantity must be a whole number"
     },
     "run": "Import {{count}} product(s)",
-    "done": "Imported {{created}} product(s); {{failed}} failed.",
+    "done": "Imported {{created}} product(s), updated {{updated}} product(s); {{failed}} failed.",
     "openingNote": "Opening stock (import)",
     "unknownError": "Could not save this row."
   },

@@ -207,6 +207,12 @@ export function useRequestApproval() {
   });
 }
 
+export function useVerifyOwnerPin() {
+  return useMutation({
+    mutationFn: (pin: string) => unwrap(commands.verifyOwnerPin(pin)),
+  });
+}
+
 export function useSetUiLanguage() {
   return useMutation({ mutationFn: (language: UiLanguage) => unwrap(commands.setUiLanguage(language)) });
 }
@@ -738,8 +744,11 @@ export function useStockValuation(asOf: string | null) {
   });
 }
 
-export function useOversoldLayers() {
-  return useQuery({ queryKey: queryKeys.oversold, queryFn: () => unwrap(commands.oversoldLayers()) });
+export function useOversoldLayers(productId: string | null = null) {
+  return useQuery({
+    queryKey: queryKeys.oversold,
+    queryFn: () => unwrap(commands.oversoldLayers(productId)),
+  });
 }
 
 const MOVEMENTS_PAGE = 100;
@@ -790,6 +799,10 @@ export function useWriteOffBatch() {
   return useStockMutation(({ batchId, note }: { batchId: string; note: string }) =>
     unwrap(commands.writeOffBatch(batchId, note)),
   );
+}
+
+export function useClearProductStock() {
+  return useStockMutation((productIds: string[]) => unwrap(commands.clearProductStock(productIds)));
 }
 
 // ───────── quick-sale review (doc §3.2) ─────────

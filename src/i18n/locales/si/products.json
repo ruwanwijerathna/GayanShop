@@ -68,7 +68,19 @@
     "noCategoryMatch": "ගැලපෙන ප්‍රවර්ගයක් නැත",
     "categoryPlaceholder": "සොයන්න හෝ නව ප්‍රවර්ගයක් ටයිප් කරන්න",
     "newProduct": "නව භාණ්ඩය",
-    "deleteNeedsZero": "මැකීමට තොගය 0 විය යුතුය (අතේ {{count}}ක් ඇත). පළමුව පේළි මෙනුවේ \"තොගය සකසන්න\" භාවිතා කරන්න."
+    "deleteNeedsZero": "මැකීමට තොගය 0 විය යුතුය (අතේ {{count}}ක් ඇත). පළමුව පේළි මෙනුවේ \"තොගය සකසන්න\" භාවිතා කරන්න.",
+    "clearStock": "ස්ටොක් හිස් කරන්න",
+    "clearStockConfirm": "{{name}} සතු තොග {{count}} ම හිස් කරන්නද? අතැති තොග ප්‍රමාණය 0 බවට පත්වේ.",
+    "clearStockDone": "{{name}} හි ස්ටොක් හිස් කරන ලදී.",
+    "clearAllStock": "සියලු ස්ටොක් හිස් කරන්න",
+    "clearAllStockConfirm": "වෙළඳසැලේ ඇති සියලුම භාණ්ඩ වල ස්ටොක් සම්පූර්ණයෙන්ම හිස් කරන්නද? සියලු තොග ප්‍රමාණ 0 බවට පත්වේ.",
+    "clearAllStockDone": "භාණ්ඩ {{count}} ක ස්ටොක් හිස් කරන ලදී.",
+    "clearSelectedStock": "තෝරාගත් භාණ්ඩ වල ස්ටොක් හිස් කරන්න ({{count}})",
+    "deleteWithStockConfirm": "{{name}} මකන්නද? මෙම භාණ්ඩය සතුව තොග {{count}} ක් ඇති අතර ඒවා ස්ටොක් වලින් ඉවත් වනු ඇත.",
+    "deleteDone": "{{name}} මකා දමන ලදී.",
+    "ownerPinTitle": "හිමිකරුගේ PIN අංකය අවශ්‍යයි",
+    "ownerPinPrompt": "මෙම ක්‍රියාව සිදු කිරීමට කරුණාකර හිමිකරුගේ PIN අංකය ඇතුළත් කරන්න",
+    "invalidOwnerPin": "වැරදි PIN අංකයකි. කරුණාකර නැවත උත්සාහ කරන්න."
   },
   "categories": {
     "title": "වර්ග",
@@ -108,6 +120,18 @@
   "selectedCount_one": "{{count}}ක් තෝරා ඇත",
   "selectedCount_other": "{{count}}ක් තෝරා ඇත",
   "clearSelection": "තේරීම ඉවත් කරන්න",
+  "clearStock": "ස්ටොක් හිස් කරන්න",
+  "clearAllStock": "සියලු ස්ටොක් හිස් කරන්න",
+  "clearStockConfirm": "{{name}} සතු තොග {{count}} ම හිස් කරන්නද? අතැති තොග ප්‍රමාණය 0 බවට පත්වේ.",
+  "clearStockDone": "{{name}} හි ස්ටොක් හිස් කරන ලදී.",
+  "clearAllStockConfirm": "වෙළඳසැලේ ඇති සියලුම භාණ්ඩ වල ස්ටොක් සම්පූර්ණයෙන්ම හිස් කරන්නද? සියලු තොග ප්‍රමාණ 0 බවට පත්වේ.",
+  "clearAllStockDone": "භාණ්ඩ {{count}} ක ස්ටොක් හිස් කරන ලදී.",
+  "clearSelectedStock": "තෝරාගත් භාණ්ඩ වල ස්ටොක් හිස් කරන්න ({{count}})",
+  "clearSelectedStockConfirm": "තෝරාගත් භාණ්ඩ {{count}} ක ස්ටොක් හිස් කරන්නද? ඒවායේ තොග ප්‍රමාණ 0 බවට පත්වේ.",
+  "delete": "භාණ්ඩය මකන්න",
+  "deleteSelected": "මකන්න ({{count}})",
+  "deleteSelectedConfirm": "තෝරාගත් භාණ්ඩ {{count}} මකන්නද? ඒවා සතු තොග ඉවත් කරනු ලැබේ.",
+  "deleteMultipleDone": "භාණ්ඩ {{count}} මකා දමන ලදී.",
   "rowActions": "{{name}} සඳහා ක්‍රියා",
   "printLabel": "ලේබලය මුද්‍රණය කරන්න",
   "filters": {
@@ -149,7 +173,7 @@
       "quantityInvalid": "quantity පූර්ණ සංඛ්‍යාවක් විය යුතුය"
     },
     "run": "භාණ්ඩ {{count}} ක් ආනයනය කරන්න",
-    "done": "භාණ්ඩ {{created}} ක් ආනයනය කළා; {{failed}} ක් අසාර්ථකයි.",
+    "done": "භාණ්ඩ {{created}} ක් ආනයනය කළා, {{updated}} ක් යාවත්කාලීන කළා; {{failed}} ක් අසාර්ථකයි.",
     "openingNote": "ආරම්භක තොගය (ආනයනය)",
     "unknownError": "මෙම පේළිය සුරැකීමට නොහැකි විය."
   },

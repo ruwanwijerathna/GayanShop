@@ -39,13 +39,21 @@ export interface EstimatePrintData {
 }
 
 export type PrintableItem =
-  | { type: "sale"; data: ReceiptData; logo?: Logo | null; logoDataUrl?: string | null; storeName?: string }
+  | {
+      type: "sale";
+      data: ReceiptData;
+      logo?: Logo | null;
+      logoDataUrl?: string | null;
+      storeName?: string;
+      qr?: boolean;
+    }
   | {
       type: "return_exchange";
       data: ReceiptData;
       logo?: Logo | null;
       logoDataUrl?: string | null;
       storeName?: string;
+      qr?: boolean;
     }
   | {
       type: "z_report";

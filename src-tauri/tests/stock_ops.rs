@@ -305,21 +305,15 @@ async fn stock_writes_need_their_permission_or_a_supervisor() {
 }
 
 #[tokio::test]
-async fn a_product_with_stock_on_hand_cannot_be_deleted_until_its_stock_is_zero() {
+async fn a_product_with_stock_on_hand_can_be_deleted_writing_off_its_stock() {
     use gayanshop_lib::db::repo::products;
     let t = till().await;
     let bucket = t.stocked("Bucket", 45_000, &[(3, 20_000)]).await;
+    assert_eq!(on_hand(&t, &bucket).await, 3);
 
-    let err = products::delete(&t.t.db, &t.ctx(), &t.owner(), &bucket).await.unwrap_err();
-    assert_eq!(code(err), "PRODUCT_HAS_STOCK");
-    assert_eq!(on_hand(&t, &bucket).await, 3, "the refused delete changed nothing");
-    assert_eq!(
-        t.count(&format!("SELECT COUNT(*) FROM products WHERE id = '{bucket}' AND deleted_at IS NULL")).await,
-        1
-    );
-
-    inventory::adjust(&t.t.db, &t.ctx(), &t.owner(), &adjust(&bucket, -3, "written off before delete")).await.unwrap();
+    // Deleting product with stock writes off remaining units and soft-deletes the product
     products::delete(&t.t.db, &t.ctx(), &t.owner(), &bucket).await.unwrap();
+    assert_eq!(on_hand(&t, &bucket).await, 0, "the stock was written off to zero");
     assert_eq!(
         t.count(&format!("SELECT COUNT(*) FROM products WHERE id = '{bucket}' AND deleted_at IS NOT NULL")).await,
         1

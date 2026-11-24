@@ -9,7 +9,8 @@ use serde_json::{Value, json};
 use specta::Type;
 use sqlx::{FromRow, SqliteConnection, SqlitePool};
 
-use super::WriteCtx;
+use super::{inventory, WriteCtx};
+use super::stock::StockReason;
 use crate::audit::{self, AuditAction, AuditCtx, AuditEntry};
 use crate::auth::guard::Actor;
 use crate::clock::new_id;
@@ -771,13 +772,17 @@ pub async fn update(
 }
 
 /// Soft delete: the row stays for order history and sync; it leaves search, scanning and lists.
-/// A tracked product with units on hand (or oversold) can't be deleted: bring its stock to zero first, so
-/// the units are written off in the stock history instead of vanishing with the product.
+/// If a tracked product has units on hand, its stock is automatically written off before deletion.
 pub async fn delete(db: &Db, ctx: &WriteCtx, actor: &Actor, id: &str) -> AppResult<()> {
     let mut tx = db.write().await?;
     let old = get_conn(tx.conn(), &ctx.store_id, id).await?;
     if old.track_stock && old.on_hand != 0 {
-        return Err(AppError::validation("PRODUCT_HAS_STOCK", format!("{} on hand", old.on_hand)));
+        let w = inventory::Write {
+            reason: StockReason::Adjustment,
+            ref_type: "product_delete",
+            note: Some("Stock written off on product deletion"),
+        };
+        inventory::apply(tx.conn(), ctx, actor, id, -old.on_hand, &w).await?;
     }
     sqlx::query(
         "UPDATE products SET deleted_at = ?1, is_active = 0, updated_at = ?1, updated_by_device = ?2,
@@ -800,7 +805,7 @@ pub async fn delete(db: &Db, ctx: &WriteCtx, actor: &Actor, id: &str) -> AppResu
             approved_by: actor.approved_by.as_deref(),
             entity_type: Some("product"),
             entity_id: Some(id),
-            metadata: json!({ "name": old.name, "sku": old.sku, "barcode": old.barcode }),
+            metadata: json!({ "name": old.name, "sku": old.sku, "barcode": old.barcode, "cleared_stock": old.on_hand }),
         },
     )
     .await?;

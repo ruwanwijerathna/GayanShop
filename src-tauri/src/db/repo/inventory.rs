@@ -137,14 +137,14 @@ async fn on_hand(conn: &mut SqliteConnection, product_id: &str) -> AppResult<i64
         .await?)
 }
 
-struct Write<'a> {
-    reason: StockReason,
-    ref_type: &'a str,
-    note: Option<&'a str>,
+pub(crate) struct Write<'a> {
+    pub reason: StockReason,
+    pub ref_type: &'a str,
+    pub note: Option<&'a str>,
 }
 
 /// Apply a signed quantity change to one product as ledger movements; returns the change with its cost.
-async fn apply(
+pub(crate) async fn apply(
     conn: &mut SqliteConnection,
     ctx: &WriteCtx,
     actor: &Actor,
@@ -326,6 +326,63 @@ pub async fn count(db: &Db, ctx: &WriteCtx, actor: &Actor, input: &CountInput) -
     .await?;
     tx.commit().await?;
     Ok(CountResult { changes, unchanged })
+}
+
+/// Clear stock to 0 for specified products (or all products with stock if empty).
+pub async fn clear_stock(
+    db: &Db,
+    ctx: &WriteCtx,
+    actor: &Actor,
+    product_ids: &[String],
+) -> AppResult<u32> {
+    let mut tx = db.write().await?;
+    let conn = tx.conn();
+
+    let ids: Vec<String> = if product_ids.is_empty() {
+        sqlx::query_scalar(
+            "SELECT p.id FROM products p
+             JOIN stock_levels sl ON sl.product_id = p.id
+             WHERE p.deleted_at IS NULL AND p.track_stock = 1 AND sl.on_hand != 0",
+        )
+        .fetch_all(&mut *conn)
+        .await?
+    } else {
+        product_ids.to_vec()
+    };
+
+    let mut cleared_count: u32 = 0;
+    let w = Write {
+        reason: StockReason::Adjustment,
+        ref_type: "clear_stock",
+        note: Some("Stock cleared by Owner"),
+    };
+
+    for id in &ids {
+        let have = on_hand(conn, id).await?;
+        if have != 0 {
+            apply(conn, ctx, actor, id, -have, &w).await?;
+            cleared_count += 1;
+        }
+    }
+
+    if cleared_count > 0 {
+        audit::record(
+            conn,
+            &audit_ctx(ctx),
+            AuditEntry {
+                action: AuditAction::STOCK_ADJUSTMENT,
+                staff_id: Some(&actor.staff_id),
+                approved_by: actor.approved_by.as_deref(),
+                entity_type: Some("stock"),
+                entity_id: None,
+                metadata: json!({ "cleared_products_count": cleared_count, "product_ids": ids }),
+            },
+        )
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(cleared_count)
 }
 
 /// Write off whatever a received batch still holds (so it can be closed), as `adjustment` movements on its

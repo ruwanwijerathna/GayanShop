@@ -17,6 +17,7 @@ import {
 import {
   Barcode,
   ClipboardCheck,
+  Eraser,
   History,
   MoreHorizontal,
   Package,
@@ -25,12 +26,15 @@ import {
   Plus,
   Search,
   Tag,
+  Trash2,
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import { useSession } from "@/app/session";
 import { Can } from "@/components/auth/Can";
+import { OwnerPinDialog } from "@/components/auth/OwnerPinDialog";
 import { DataTableColumnHeader } from "@/components/data-table/DataTableColumnHeader";
 import { DataTableFacetedFilter, facetFilterFn } from "@/components/data-table/DataTableFacetedFilter";
 import { DataTablePagination } from "@/components/data-table/DataTablePagination";
@@ -54,7 +58,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { Product } from "@/db/bindings";
 import { CommandError } from "@/db/client";
-import { useCategories, useProducts } from "@/db/hooks";
+import { useCategories, useClearProductStock, useDeleteProduct, useProducts } from "@/db/hooks";
 import { useScanHandler } from "@/hardware/scanner/ScannerProvider";
 import { translateError } from "@/i18n";
 import { playCue } from "@/lib/audio";
@@ -121,6 +125,13 @@ export function ProductsScreen() {
   const canStock = hasPerm(session, "SALE_CREATE");
   const products = useProducts();
   const categories = useCategories();
+  const remove = useDeleteProduct();
+  const clearStock = useClearProductStock();
+
+  const [clearStockTarget, setClearStockTarget] = useState<string[] | null>(null);
+  const [clearAllStockPrompt, setClearAllStockPrompt] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+  const [deleteMultipleIds, setDeleteMultipleIds] = useState<string[] | null>(null);
 
   /** The product open in the slider; `null` = it is adding a new one. `formKey` resets the form. */
   const [editing, setEditing] = useState<Product | null>(null);
@@ -331,6 +342,24 @@ export function ProductsScreen() {
                   {t("movementHistory")}
                 </DropdownMenuItem>
               )}
+              {canStock && row.original.track_stock && row.original.on_hand !== 0 && (
+                <DropdownMenuItem
+                  className="min-h-11 text-amber-700 focus:text-amber-700 dark:text-amber-400"
+                  onSelect={() => setClearStockTarget([row.original.id])}
+                >
+                  <Eraser aria-hidden />
+                  {t("clearStock")}
+                </DropdownMenuItem>
+              )}
+              {canManage && (
+                <DropdownMenuItem
+                  className="min-h-11 text-destructive focus:text-destructive"
+                  onSelect={() => setDeleteTarget(row.original)}
+                >
+                  <Trash2 aria-hidden />
+                  {t("delete")}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem className="min-h-11" onSelect={() => setPrintIds([row.original.id])}>
                 <Tag aria-hidden />
                 {t("printLabel")}
@@ -397,18 +426,30 @@ export function ProductsScreen() {
           </div>
         </div>
         <Can perm="PRODUCT_MANAGE">
-          {uncoded.length > 0 && (
+          <div className="flex items-center gap-2">
+            {uncoded.length > 0 && (
+              <Button
+                type="button"
+                size="pos"
+                variant="outline"
+                className="rounded-xl"
+                onClick={() => setShortBarcodesOpen(true)}
+              >
+                <Barcode aria-hidden />
+                {t("shortBarcodes.open", { count: uncoded.length })}
+              </Button>
+            )}
             <Button
               type="button"
               size="pos"
               variant="outline"
-              className="rounded-xl"
-              onClick={() => setShortBarcodesOpen(true)}
+              className="rounded-xl border-amber-500/50 text-amber-700 hover:bg-amber-50 dark:text-amber-400"
+              onClick={() => setClearAllStockPrompt(true)}
             >
-              <Barcode aria-hidden />
-              {t("shortBarcodes.open", { count: uncoded.length })}
+              <Eraser aria-hidden />
+              {t("clearAllStock")}
             </Button>
-          )}
+          </div>
         </Can>
       </header>
 
@@ -486,6 +527,30 @@ export function ProductsScreen() {
               <Tag aria-hidden />
               {t("printLabels", { count: selectedIds.length })}
             </Button>
+            {canStock && (
+              <Button
+                type="button"
+                size="pos"
+                variant="outline"
+                className="rounded-xl bg-background border-amber-500/50 text-amber-700 hover:bg-amber-50 dark:text-amber-400"
+                onClick={() => setClearStockTarget(selectedIds)}
+              >
+                <Eraser aria-hidden />
+                {t("clearSelectedStock", { count: selectedIds.length })}
+              </Button>
+            )}
+            {canManage && (
+              <Button
+                type="button"
+                size="pos"
+                variant="outline"
+                className="rounded-xl bg-background text-destructive hover:bg-destructive/10"
+                onClick={() => setDeleteMultipleIds(selectedIds)}
+              >
+                <Trash2 aria-hidden />
+                {t("deleteSelected", { count: selectedIds.length })}
+              </Button>
+            )}
             <Button
               type="button"
               size="pos"
@@ -647,6 +712,121 @@ export function ProductsScreen() {
             setPrintIds(null);
             setRowSelection({});
           }}
+        />
+      )}
+
+      {deleteTarget && (
+        <OwnerPinDialog
+          open
+          title={t("delete")}
+          description={
+            deleteTarget.track_stock && deleteTarget.on_hand !== 0
+              ? t("form.deleteWithStockConfirm", { name: deleteTarget.name, count: deleteTarget.on_hand })
+              : t("form.deleteConfirm", { name: deleteTarget.name })
+          }
+          onSuccess={() => {
+            const target = deleteTarget;
+            setDeleteTarget(null);
+            remove.mutate(target.id, {
+              onSuccess: () => {
+                toast.success(t("form.deleteDone", { name: target.name }));
+              },
+              onError: (err) => {
+                const msg = err instanceof CommandError ? translateError(i18n.t, err.error) : String(err);
+                toast.error(msg);
+              },
+            });
+          }}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {deleteMultipleIds && (
+        <OwnerPinDialog
+          open
+          title={t("deleteSelected", { count: deleteMultipleIds.length })}
+          description={t("deleteSelectedConfirm", { count: deleteMultipleIds.length })}
+          onSuccess={async () => {
+            const ids = deleteMultipleIds;
+            setDeleteMultipleIds(null);
+            let count = 0;
+            for (const id of ids) {
+              try {
+                await remove.mutateAsync(id);
+                count++;
+              } catch {
+                // Ignore individual errors
+              }
+            }
+            setRowSelection({});
+            toast.success(t("deleteMultipleDone", { count }));
+          }}
+          onCancel={() => setDeleteMultipleIds(null)}
+        />
+      )}
+
+      {clearStockTarget && (
+        <OwnerPinDialog
+          open
+          title={
+            clearStockTarget.length === 1
+              ? t("clearStock")
+              : t("clearSelectedStock", { count: clearStockTarget.length })
+          }
+          description={
+            clearStockTarget.length === 1
+              ? (() => {
+                  const p = data.find((x) => x.id === clearStockTarget[0]);
+                  return t("clearStockConfirm", { name: p?.name ?? "", count: p?.on_hand ?? 0 });
+                })()
+              : t("clearSelectedStockConfirm", { count: clearStockTarget.length })
+          }
+          onSuccess={() => {
+            const ids = clearStockTarget;
+            setClearStockTarget(null);
+            clearStock.mutate(ids, {
+              onSuccess: () => {
+                setRowSelection({});
+                if (ids.length === 1) {
+                  const p = data.find((x) => x.id === ids[0]);
+                  toast.success(t("clearStockDone", { name: p?.name ?? "" }));
+                } else {
+                  toast.success(t("clearAllStockDone", { count: ids.length }));
+                }
+              },
+              onError: (err) => {
+                const msg = err instanceof CommandError ? translateError(i18n.t, err.error) : String(err);
+                toast.error(msg);
+              },
+            });
+          }}
+          onCancel={() => setClearStockTarget(null)}
+        />
+      )}
+
+      {clearAllStockPrompt && (
+        <OwnerPinDialog
+          open
+          title={t("clearAllStock")}
+          description={t("clearAllStockConfirm")}
+          onSuccess={() => {
+            setClearAllStockPrompt(false);
+            const allTrackedIds = data.filter((p) => p.track_stock && p.on_hand !== 0).map((p) => p.id);
+            if (allTrackedIds.length === 0) {
+              toast.info(t("clearAllStockDone", { count: 0 }));
+              return;
+            }
+            clearStock.mutate(allTrackedIds, {
+              onSuccess: (clearedCount) => {
+                toast.success(t("clearAllStockDone", { count: clearedCount }));
+              },
+              onError: (err) => {
+                const msg = err instanceof CommandError ? translateError(i18n.t, err.error) : String(err);
+                toast.error(msg);
+              },
+            });
+          }}
+          onCancel={() => setClearAllStockPrompt(false)}
         />
       )}
     </section>

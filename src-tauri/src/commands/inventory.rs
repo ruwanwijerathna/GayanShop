@@ -99,7 +99,23 @@ pub async fn stock_valuation(state: State<'_, AppState>, as_of: Option<String>) 
 
 #[tauri::command]
 #[specta::specta]
-pub async fn oversold_layers(state: State<'_, AppState>) -> AppResult<Vec<OversoldLayer>> {
+pub async fn oversold_layers(state: State<'_, AppState>, id: Option<String>) -> AppResult<Vec<OversoldLayer>> {
+    let _ = id;
     require(&state.auth, state.clock.as_ref(), Perm::REPORT_FINANCIAL, "reports", None)?;
     inventory::oversold(&state.db.pool, &store_id(&state)?).await
+}
+
+/// Clears stock to 0 for the specified products (or all products if empty).
+#[tauri::command]
+#[specta::specta]
+pub async fn clear_product_stock(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    product_ids: Vec<String>,
+) -> AppResult<u32> {
+    let actor = require(&state.auth, state.clock.as_ref(), Perm::STOCK_ADJUST, STOCK_TARGET, None)?;
+    let cleared = inventory::clear_stock(&state.db, &write_ctx(&state)?, &actor, &product_ids).await?;
+    emit_changed(&app, &STOCK_TABLES);
+    emit_changed(&app, &["products"]);
+    Ok(cleared)
 }

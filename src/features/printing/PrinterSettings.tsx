@@ -23,7 +23,7 @@ import {
 } from "@/db/hooks";
 import { canvasFromLogo, logoFromFileWithSource, renderScaledLogo } from "@/lib/logoBitmap";
 import { usePrintReceiptStore } from "@/components/receipt/PrintableReceiptPortal";
-import { ReceiptPreview } from "./ReceiptPreview";
+import { ReceiptPreview, SAMPLE_RECEIPT } from "./ReceiptPreview";
 import { translateError } from "@/i18n";
 import { SettingsCard, StatusPill } from "@/components/common/SettingsCard";
 import { PrinterSelect } from "@/components/common/PrinterSelect";
@@ -48,6 +48,7 @@ export interface PrinterForm {
   qr: boolean;
   drawerPin: DrawerPin;
   openDrawer: boolean;
+  previewBeforePrint: boolean;
 }
 
 export const DEFAULT_FORM: PrinterForm = {
@@ -64,6 +65,7 @@ export const DEFAULT_FORM: PrinterForm = {
   qr: false,
   drawerPin: "pin2",
   openDrawer: true,
+  previewBeforePrint: false,
 };
 
 export function toForm(p: ReceiptPrinterProfile | null): PrinterForm {
@@ -83,6 +85,7 @@ export function toForm(p: ReceiptPrinterProfile | null): PrinterForm {
     qr: p.qr,
     drawerPin: p.drawer_pin,
     openDrawer: p.open_drawer ?? true,
+    previewBeforePrint: p.preview_before_print ?? localStorage.getItem("pos_preview_receipt") === "true",
   };
 }
 
@@ -107,6 +110,7 @@ export function toProfile(f: PrinterForm): ReceiptPrinterProfile {
     qr: f.qr,
     drawer_pin: f.drawerPin,
     open_drawer: f.openDrawer,
+    preview_before_print: f.previewBeforePrint,
   };
 }
 
@@ -166,6 +170,7 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
+    localStorage.setItem("pos_preview_receipt", String(form.previewBeforePrint));
     save.mutate(toProfile(form), { onSuccess: () => setSaved(true) });
   };
 
@@ -263,54 +268,9 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
             disabled={profile === null}
             onClick={() => {
               usePrintReceiptStore.getState().print({
-                order_id: "SAMPLE-RECEIPT",
-                store_name: header.data?.store_name ?? "Gayan Sales Center",
-                receipt_no: "T01-20261120-0001",
-                status: "completed",
-                business_date: "2026-11-20",
-                completed_at: "2026-11-20T20:30:00",
-                cashier: "Cashier 01",
-                customer_masked: null,
-                lines: [
-                  {
-                    name: "Sample item A",
-                    qty: 2,
-                    list_price: 45000,
-                    unit_price: 45000,
-                    line_gross: 90000,
-                    line_discount: 0,
-                    line_total: 90000,
-                  },
-                  {
-                    name: "Sample item B",
-                    qty: 1,
-                    list_price: 125000,
-                    unit_price: 125000,
-                    line_gross: 125000,
-                    line_discount: 0,
-                    line_total: 125000,
-                  },
-                  {
-                    name: "Sample item C",
-                    qty: 3,
-                    list_price: 9500,
-                    unit_price: 9500,
-                    line_gross: 28500,
-                    line_discount: 0,
-                    line_total: 28500,
-                  },
-                ],
-                item_count: 6,
-                gross_sales: 243500,
-                discount_total: 0,
-                grand_total: 243500,
-                payments: [{ method: "cash", amount: 243500, tendered: 300000, reference: null }],
-                change_due: 56500,
-                returns: [],
-                exchange_credit: 0,
-                footer:
-                  header.data?.footer ??
-                  "All sales are final. No refunds or exchanges. Thank you, come again!",
+                ...SAMPLE_RECEIPT,
+                store_name: header.data?.store_name ?? SAMPLE_RECEIPT.store_name,
+                footer: header.data?.footer ?? SAMPLE_RECEIPT.footer,
               });
             }}
           >
@@ -350,6 +310,31 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
               aria-labelledby="printer-drawer-label"
               aria-describedby="printer-drawer-hint"
               onCheckedChange={(v) => set("openDrawer", v)}
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-6 rounded-lg border p-4">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <span id="printer-preview-label" className="text-base font-medium">
+                  {t("settings.previewBeforePrint")}
+                </span>
+                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-muted text-muted-foreground">
+                  {form.previewBeforePrint ? t("settings.previewEnabled") : t("settings.previewDisabled")}
+                </span>
+              </div>
+              <span id="printer-preview-hint" className="text-sm text-muted-foreground">
+                {t("settings.previewBeforePrintHint")}
+              </span>
+            </div>
+            <Switch
+              checked={form.previewBeforePrint}
+              aria-labelledby="printer-preview-label"
+              aria-describedby="printer-preview-hint"
+              onCheckedChange={(v) => {
+                set("previewBeforePrint", v);
+                localStorage.setItem("pos_preview_receipt", String(v));
+              }}
             />
           </div>
 

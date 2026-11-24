@@ -1,4 +1,5 @@
-import type { Logo, ReceiptData_Serialize as ReceiptData } from "@/db/bindings";
+import { QrCode } from "lucide-react";
+import type { Logo, PaperWidth, ReceiptData_Serialize as ReceiptData } from "@/db/bindings";
 import { formatMoney } from "@/lib/money";
 import { Barcode128 } from "../Barcode128";
 import { RECEIPT_LABELS } from "../labels";
@@ -13,6 +14,8 @@ export interface SaleReceiptTemplateProps {
   logoDataUrl?: string | null;
   storeName?: string;
   showExchangePolicy?: boolean;
+  qr?: boolean;
+  paperWidth?: PaperWidth;
 }
 
 export function SaleReceiptTemplate({
@@ -21,17 +24,21 @@ export function SaleReceiptTemplate({
   logoDataUrl,
   storeName,
   showExchangePolicy = true,
+  qr = false,
+  paperWidth,
 }: SaleReceiptTemplateProps) {
   const { date, time } = formatDateTime(receipt.completed_at || receipt.business_date);
 
-  const tenderedTotal = receipt.payments.reduce((acc, p) => {
+  const payments = receipt.payments ?? [];
+  const lines = receipt.lines ?? [];
+  const tenderedTotal = payments.reduce((acc, p) => {
     return acc + (p.tendered && p.tendered > p.amount ? p.tendered : p.amount);
   }, 0);
 
-  const isSample = receipt.order_id === "SAMPLE-RECEIPT" || receipt.order_id.includes("SAMPLE");
+  const isSample = receipt.order_id === "SAMPLE-RECEIPT" || (receipt.order_id?.includes("SAMPLE") ?? false);
 
   // Distinct items count: counts how many distinct lines were bought (e.g. 5 of 'ABC' counts as 1 item)
-  const distinctItemCount = receipt.lines.length;
+  const distinctItemCount = lines.length;
 
   // Exchange policy visibility
   const isPolicyVisible = showExchangePolicy && receipt.exchange_policy !== false;
@@ -41,7 +48,12 @@ export function SaleReceiptTemplate({
       : RECEIPT_LABELS.EXCHANGE_POLICY;
 
   return (
-    <ReceiptContainer logo={logo} logoDataUrl={logoDataUrl} storeName={storeName || receipt.store_name}>
+    <ReceiptContainer
+      logo={logo}
+      logoDataUrl={logoDataUrl}
+      storeName={storeName || receipt.store_name}
+      paperWidth={paperWidth}
+    >
       {isSample && (
         <p className="text-center text-[10px] font-bold font-mono tracking-wide">
           {RECEIPT_LABELS.SAMPLE_RECEIPT}
@@ -144,14 +156,19 @@ export function SaleReceiptTemplate({
         <p className="font-bold text-[10px]">{RECEIPT_LABELS.THANK_YOU}</p>
       </div>
 
-      {/* Barcode128 */}
+      {/* Barcode128 or QR Code */}
       <div className="flex justify-center pt-1">
-        <Barcode128 data={receipt.receipt_no} height={22} />
+        {qr ? (
+          <QrCode aria-hidden className="mx-auto size-12" strokeWidth={1.5} />
+        ) : (
+          <Barcode128 data={receipt.receipt_no} height={24} />
+        )}
       </div>
 
       {/* Footer Branding */}
       <div className="flex flex-col items-center gap-0.5 pt-1 text-center text-[8px] text-neutral-700 font-sans">
         <p className="font-medium">{RECEIPT_LABELS.POWERED_BY}</p>
+        {receipt.footer && <p className="text-[7.5px] text-neutral-500 font-sans">{receipt.footer}</p>}
       </div>
     </ReceiptContainer>
   );

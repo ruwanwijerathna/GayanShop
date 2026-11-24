@@ -1,4 +1,4 @@
-import type { Logo, ReceiptData_Serialize as ReceiptData } from "@/db/bindings";
+import type { Logo, PaperWidth, ReceiptData_Serialize as ReceiptData } from "@/db/bindings";
 import { ReturnExchangeTemplate, SaleReceiptTemplate } from "./templates";
 
 export interface SinhalaReceiptTemplateProps {
@@ -9,6 +9,8 @@ export interface SinhalaReceiptTemplateProps {
   logoDataUrl?: string | null;
   storeName?: string;
   showExchangePolicy?: boolean;
+  qr?: boolean;
+  paperWidth?: PaperWidth;
 }
 
 /**
@@ -22,6 +24,8 @@ export function SinhalaReceiptTemplate({
   logoDataUrl,
   storeName,
   showExchangePolicy = true,
+  qr = false,
+  paperWidth,
 }: SinhalaReceiptTemplateProps) {
   const isReturnExchange = (receipt.returns && receipt.returns.length > 0) || receipt.exchange_credit > 0;
 
@@ -33,6 +37,8 @@ export function SinhalaReceiptTemplate({
         logoDataUrl={logoDataUrl}
         storeName={storeName}
         showExchangePolicy={showExchangePolicy}
+        qr={qr}
+        paperWidth={paperWidth}
       />
     );
   }
@@ -44,6 +50,8 @@ export function SinhalaReceiptTemplate({
       logoDataUrl={logoDataUrl}
       storeName={storeName}
       showExchangePolicy={showExchangePolicy}
+      qr={qr}
+      paperWidth={paperWidth}
     />
   );
 }

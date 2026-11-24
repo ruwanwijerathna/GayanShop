@@ -15,6 +15,7 @@ export type ImportRow = {
   input: ProductInput | null;
   quantity: number;
   name: string;
+  categoryName?: string;
   issue: ImportIssue | null;
 };
 
@@ -57,43 +58,65 @@ export function buildImport(text: string, canViewCost: boolean): ImportRow[] | "
   const index = new Map<string, number>();
   head.forEach((h, i) => index.set(h.trim().toLowerCase(), i));
   if (!index.has("name") || !index.has("price")) return "noHeader";
-  const cell = (r: string[], c: ImportColumn) => (r[index.get(c) ?? -1] ?? "").trim();
+
+  const getCell = (r: string[], ...aliases: string[]): string => {
+    for (const alias of aliases) {
+      const idx = index.get(alias.toLowerCase());
+      if (idx !== undefined && r[idx] !== undefined) {
+        const val = r[idx].trim();
+        if (val !== "") return val;
+      }
+    }
+    return "";
+  };
 
   return body.map((r, n): ImportRow => {
     const line = n + 2;
-    const name = cell(r, "name");
+    const name = getCell(r, "name");
     const fail = (issue: ImportIssue): ImportRow => ({ line, input: null, quantity: 0, name, issue });
     if (name === "") return fail("nameMissing");
-    const price = parseMajor(cell(r, "price"));
+    const price = parseMajor(getCell(r, "price"));
     if (price === null) return fail("priceInvalid");
     let cost: number | null = null;
-    if (canViewCost && cell(r, "cost") !== "") {
-      cost = parseMajor(cell(r, "cost"));
+    const costText = getCell(r, "default_cost", "cost");
+    if (canViewCost && costText !== "") {
+      cost = parseMajor(costText);
       if (cost === null) return fail("costInvalid");
     }
-    const qtyText = cell(r, "quantity");
-    if (qtyText !== "" && !/^\d{1,7}$/.test(qtyText)) return fail("quantityInvalid");
-    const sku = cell(r, "sku");
-    const barcode = cell(r, "barcode");
+    const qtyText = getCell(r, "on_hand", "quantity", "stock", "qty");
+    if (qtyText !== "" && !/^-?\d{1,7}$/.test(qtyText)) return fail("quantityInvalid");
+    const sku = getCell(r, "sku");
+    const barcode = getCell(r, "barcode");
+    const categoryName = getCell(r, "category", "category_name");
+    const nameSi = getCell(r, "name_si", "sinhala_name");
+    const trackStockVal = getCell(r, "track_stock");
+    const trackStock =
+      trackStockVal === "" ? true : !["no", "false", "0"].includes(trackStockVal.toLowerCase());
+    const activeVal = getCell(r, "active", "is_active");
+    const isActive = activeVal === "" ? true : !["no", "false", "0"].includes(activeVal.toLowerCase());
+
+    const quantity = qtyText === "" ? 0 : Math.max(0, Number.parseInt(qtyText, 10));
+
     return {
       line,
       name,
-      quantity: qtyText === "" ? 0 : Number.parseInt(qtyText, 10),
+      categoryName: categoryName || undefined,
+      quantity,
       issue: null,
       input: {
         kind: "standard",
         name,
-        name_si: null,
+        name_si: nameSi || null,
         sku: sku === "" ? { mode: "none" } : { mode: "manual", value: sku },
         barcode: barcode === "" ? { mode: "none" } : { mode: "manual", value: barcode },
         category_id: null,
         default_cost: cost,
         price,
         min_price: null,
-        track_stock: true,
+        track_stock: trackStock,
         allow_negative_stock: true,
         attributes: {},
-        is_active: true,
+        is_active: isActive,
       },
     };
   });
