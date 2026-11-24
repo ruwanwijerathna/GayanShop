@@ -206,4 +206,53 @@ describe("ProductImportPanel", () => {
       ),
     );
   });
+
+  it("imports multiple products with the same name if they have different SKUs or barcodes", async () => {
+    let idCounter = 1;
+    vi.mocked(commands.createProduct).mockImplementation((input) =>
+      ok({
+        id: `prod-${idCounter++}`,
+        kind: "standard",
+        name: input.name,
+        name_si: input.name_si ?? null,
+        sku: input.sku.mode === "manual" ? input.sku.value : null,
+        barcode: input.barcode.mode === "manual" ? input.barcode.value : null,
+        category_id: input.category_id ?? null,
+        default_cost: input.default_cost ?? null,
+        price: input.price,
+        min_price: null,
+        track_stock: input.track_stock,
+        allow_negative_stock: true,
+        attributes: {},
+        is_active: input.is_active,
+        barcode_conflict: false,
+        created_at: "",
+        updated_at: "",
+        version: 1,
+        on_hand: 0,
+      }),
+    );
+
+    renderWithProviders(
+      <As perms={["PRODUCT_MANAGE", "VIEW_COST"]}>
+        <ProductImportPanel />
+      </As>,
+    );
+
+    const csvContent =
+      "sku,barcode,name,price\n" +
+      "PEO525-S12,21000034,DSI,3099.00\n" +
+      "PEO525-S1,21000041,DSI,3099.00\n";
+
+    const file = new File([csvContent], "products.csv", { type: "text/csv" });
+    const fileInput = screen.getByLabelText(/CSV file/i);
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    expect(await screen.findByRole("status")).toHaveTextContent("2 row(s) ready");
+    fireEvent.click(screen.getByRole("button", { name: /Import 2 product/i }));
+
+    await waitFor(() => expect(commands.createProduct).toHaveBeenCalledTimes(2));
+    expect(commands.updateProduct).not.toHaveBeenCalled();
+    expect(await screen.findByText(/Imported 2 product\(s\), updated 0 product\(s\)/)).toBeInTheDocument();
+  });
 });

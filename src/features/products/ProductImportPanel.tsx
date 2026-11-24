@@ -62,7 +62,7 @@ export function ProductImportPanel() {
       categoryCache.set(c.name.trim().toLowerCase(), c.id);
     }
 
-    // Build index of existing products by barcode, SKU, and exact name
+    // Build index of existing products by barcode, SKU, and exact name (for products without barcode/SKU)
     const existingByBarcode = new Map<string, Product>();
     const existingBySku = new Map<string, Product>();
     const existingByName = new Map<string, Product>();
@@ -70,7 +70,9 @@ export function ProductImportPanel() {
     for (const p of products.data ?? []) {
       if (p.barcode) existingByBarcode.set(p.barcode.trim(), p);
       if (p.sku) existingBySku.set(p.sku.trim().toLowerCase(), p);
-      existingByName.set(p.name.trim().toLowerCase(), p);
+      if (!p.barcode && !p.sku) {
+        existingByName.set(p.name.trim().toLowerCase(), p);
+      }
     }
 
     for (const r of valid) {
@@ -102,15 +104,21 @@ export function ProductImportPanel() {
           category_id: categoryId,
         };
 
-        // Match existing product by barcode, SKU, or name
+        // Match existing product by barcode, SKU, or (only when neither is specified) by name
         const rawBarcode = input.barcode.mode === "manual" ? input.barcode.value.trim() : null;
         const rawSku = input.sku.mode === "manual" ? input.sku.value.trim().toLowerCase() : null;
         const nameKey = input.name.trim().toLowerCase();
 
-        const existing =
-          (rawBarcode ? existingByBarcode.get(rawBarcode) : null) ??
-          (rawSku ? existingBySku.get(rawSku) : null) ??
-          existingByName.get(nameKey);
+        let existing: Product | null = null;
+        if (rawBarcode) {
+          existing = existingByBarcode.get(rawBarcode) ?? null;
+        }
+        if (!existing && rawSku) {
+          existing = existingBySku.get(rawSku) ?? null;
+        }
+        if (!existing && !rawBarcode && !rawSku) {
+          existing = existingByName.get(nameKey) ?? null;
+        }
 
         if (existing) {
           // Update existing product
@@ -136,7 +144,9 @@ export function ProductImportPanel() {
 
           if (saved.barcode) existingByBarcode.set(saved.barcode.trim(), saved);
           if (saved.sku) existingBySku.set(saved.sku.trim().toLowerCase(), saved);
-          existingByName.set(saved.name.trim().toLowerCase(), saved);
+          if (!saved.barcode && !saved.sku) {
+            existingByName.set(saved.name.trim().toLowerCase(), saved);
+          }
 
           if (r.quantity > 0) {
             await adjust
