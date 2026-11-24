@@ -208,6 +208,8 @@
     "receiptHint": "Scan the bill barcode, or type it: T01-261121004. A short form like T01-4 finds today's bill 4.",
     "suggestions": "Matching bills",
     "suggestion": "{{date}} · {{count}} item(s) · {{total}}",
+    "itemCount": "{{count}} item",
+    "itemCount_plural": "{{count}} items",
     "find": "Find sale",
     "sale": "{{receipt}} · sold {{date}} ({{days}} days ago)",
     "late": "More than {{days}} days ago. A supervisor or owner PIN is needed to finish this exchange.",

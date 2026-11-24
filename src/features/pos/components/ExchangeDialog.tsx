@@ -232,7 +232,7 @@ export function ExchangeDialog({ draft, initialReceipt = null, onConfirm, onClos
             {suggesting && offered.length > 0 && (
               <div
                 id="exchange-suggestions-container"
-                className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-64 overflow-y-auto rounded-xl border bg-popover p-1.5 shadow-xl ring-1 ring-black/5"
+                className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-64 overflow-y-auto overflow-x-hidden rounded-xl border bg-popover p-1.5 shadow-xl ring-1 ring-black/5"
               >
                 <ul
                   id="exchange-suggestions"
@@ -253,31 +253,43 @@ export function ExchangeDialog({ draft, initialReceipt = null, onConfirm, onClos
                         onMouseEnter={() => setActive(i)}
                         onClick={() => pick(b.receipt_no)}
                         className={cn(
-                          "flex min-h-12 w-full items-center justify-between gap-4 rounded-lg px-3 py-2 text-left transition-colors",
+                          "grid grid-cols-[auto_auto_auto_1fr] items-center gap-2 sm:gap-4 w-full min-h-11 rounded-lg px-3 py-2 text-left transition-colors whitespace-nowrap",
                           i === active ? "bg-primary text-primary-foreground" : "hover:bg-accent",
                         )}
                       >
-                        <div className="flex items-center gap-2">
-                          <Receipt className="size-4 opacity-70" />
-                          <span className="font-mono text-base font-bold tracking-tight">{b.receipt_no}</span>
+                        <div className="flex items-center gap-2 min-w-[135px] whitespace-nowrap shrink-0">
+                          <Receipt className="size-4 shrink-0 opacity-70" />
+                          <span className="font-mono text-sm sm:text-base font-bold tracking-tight whitespace-nowrap">
+                            {b.receipt_no}
+                          </span>
                         </div>
-                        <div
+                        <span
                           className={cn(
-                            "flex items-center gap-3 text-sm",
+                            "text-xs sm:text-sm tabular-nums whitespace-nowrap shrink-0",
                             i === active ? "text-primary-foreground/90" : "text-muted-foreground",
                           )}
                         >
-                          <span>{b.business_date}</span>
-                          <span>•</span>
-                          <span>
-                            {t("exchange.itemCount", {
-                              count: b.item_count,
-                              defaultValue: `${b.item_count} items`,
-                            })}
-                          </span>
-                          <span>•</span>
-                          <span className="font-mono font-semibold">{formatMoney(b.grand_total)}</span>
-                        </div>
+                          {b.business_date}
+                        </span>
+                        <span
+                          className={cn(
+                            "text-xs sm:text-sm tabular-nums whitespace-nowrap shrink-0 text-center",
+                            i === active ? "text-primary-foreground/90" : "text-muted-foreground",
+                          )}
+                        >
+                          {t("exchange.itemCount", {
+                            count: b.item_count,
+                            defaultValue: `${b.item_count} ${b.item_count === 1 ? "item" : "items"}`,
+                          })}
+                        </span>
+                        <span
+                          className={cn(
+                            "font-mono font-bold text-sm sm:text-base whitespace-nowrap tabular-nums text-right shrink-0",
+                            i === active ? "text-primary-foreground" : "text-foreground",
+                          )}
+                        >
+                          {formatMoney(b.grand_total)}
+                        </span>
                       </button>
                     </li>
                   ))}
