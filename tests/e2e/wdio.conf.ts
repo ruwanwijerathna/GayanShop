@@ -64,7 +64,7 @@ export const config: WebdriverIO.Config = {
   onPrepare() {
     const reuse = process.env.E2E_SKIP_BUILD === "1";
     let seeded = false;
-    if (!(reuse && fs.existsSync(path.join(scaleDir, "pos.db")))) {
+    if (!(reuse && fs.existsSync(path.join(scaleDir, "gayanshop_pos.db")))) {
       fs.rmSync(scaleDir, { recursive: true, force: true });
       const seed = spawnSync(
         tool("cargo"),

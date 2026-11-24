@@ -19,6 +19,9 @@ use crate::error::{AppError, AppResult};
 
 static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 
+/// The primary database file name for the till.
+pub const DB_FILE_NAME: &str = "gayanshop_pos.db";
+
 /// Cheap to clone: the pool and the writer lock are shared (the print worker holds its own handle).
 #[derive(Clone)]
 pub struct Db {

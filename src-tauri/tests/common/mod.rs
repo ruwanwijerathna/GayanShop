@@ -24,7 +24,9 @@ impl TestDb {
 
 pub async fn open() -> TestDb {
     let dir = tempfile::tempdir().expect("tempdir");
-    let db = Db::open(&dir.path().join("pos.db"), &dir.path().join("backups")).await.expect("open db");
+    let db = Db::open(&dir.path().join(gayanshop_lib::db::DB_FILE_NAME), &dir.path().join("backups"))
+        .await
+        .expect("open db");
     TestDb { dir, db }
 }
 

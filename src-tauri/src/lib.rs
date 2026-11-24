@@ -285,8 +285,23 @@ pub fn run() -> Result<(), tauri::Error> {
                 _ => app.path().app_data_dir()?,
             };
             std::fs::create_dir_all(&data_dir)?;
-            // A staged restore replaces pos.db before it opens; the recovery screen finishes it (Block 4.1).
-            let db_path = data_dir.join("pos.db");
+
+            // Migrate legacy pos.db if it exists and gayanshop_pos.db does not yet exist.
+            let db_path = data_dir.join(db::DB_FILE_NAME);
+            let legacy_db = data_dir.join("pos.db");
+            if legacy_db.exists() && !db_path.exists() {
+                let _ = std::fs::rename(&legacy_db, &db_path);
+                let legacy_wal = data_dir.join("pos.db-wal");
+                let legacy_shm = data_dir.join("pos.db-shm");
+                if legacy_wal.exists() {
+                    let _ = std::fs::rename(&legacy_wal, data_dir.join(format!("{}-wal", db::DB_FILE_NAME)));
+                }
+                if legacy_shm.exists() {
+                    let _ = std::fs::rename(&legacy_shm, data_dir.join(format!("{}-shm", db::DB_FILE_NAME)));
+                }
+            }
+
+            // A staged restore replaces the database before it opens; the recovery screen finishes it (Block 4.1).
             restore::apply_staged(&data_dir, &db_path)?;
             let db = tauri::async_runtime::block_on(Db::open(&db_path, &data_dir.join("backups")))?;
             tauri::async_runtime::block_on(restore::finish_swap(&db, &data_dir))?;

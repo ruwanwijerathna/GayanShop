@@ -49,8 +49,8 @@ async fn stage(t: &Term, source: &Path) -> Result<restore::Inspected, AppError> 
 async fn restart(t: &mut Term) {
     t.db.pool.close().await;
     let dir = t._dir.path().to_path_buf();
-    assert!(restore::apply_staged(&dir, &dir.join("pos.db")).unwrap());
-    t.db = Db::open(&dir.join("pos.db"), &dir.join("backups")).await.unwrap();
+    assert!(restore::apply_staged(&dir, &dir.join(gayanshop_lib::db::DB_FILE_NAME)).unwrap());
+    t.db = Db::open(&dir.join(gayanshop_lib::db::DB_FILE_NAME), &dir.join("backups")).await.unwrap();
     restore::finish_swap(&t.db, &dir).await.unwrap();
 }
 
@@ -207,7 +207,7 @@ async fn a_crash_in_the_middle_of_the_swap_resumes_and_writes_are_frozen_until_r
         "the current DB is kept first"
     );
     // The power fails halfway through writing the restored copy: a torn .restoring file is left behind.
-    std::fs::write(a._dir.path().join("pos.db.restoring"), b"torn").unwrap();
+    std::fs::write(a._dir.path().join("gayanshop_pos.db.restoring"), b"torn").unwrap();
     restart(&mut a).await;
     assert_eq!(a.count("SELECT COUNT(*) FROM orders").await, 1, "the backup's data, not the torn copy or the old file");
     assert!(!a._dir.path().join(restore::MARKER).exists());

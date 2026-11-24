@@ -19,7 +19,7 @@ use gayanshop_lib::setup::{SetupInput, first_run};
 async fn write_the_phase2_scale_dataset() {
     let dir = PathBuf::from(std::env::var("GAYANSHOP_E2E_SCALE_DIR").expect("GAYANSHOP_E2E_SCALE_DIR is not set"));
     std::fs::create_dir_all(&dir).unwrap();
-    let db_path = dir.join("pos.db");
+    let db_path = dir.join(gayanshop_lib::db::DB_FILE_NAME);
     assert!(!db_path.exists(), "refusing to overwrite {}", db_path.display());
     let db = Db::open(&db_path, &dir.join("backups")).await.unwrap();
     // Set up before the year of history starts, so every seeded sale is after the store existed.

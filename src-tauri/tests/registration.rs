@@ -27,7 +27,8 @@ fn clock() -> ManualClock {
 
 async fn open() -> (tempfile::TempDir, Db) {
     let dir = tempfile::tempdir().unwrap();
-    let db = Db::open(&dir.path().join("pos.db"), &dir.path().join("backups")).await.unwrap();
+    let db =
+        Db::open(&dir.path().join(gayanshop_lib::db::DB_FILE_NAME), &dir.path().join("backups")).await.unwrap();
     (dir, db)
 }
 
@@ -139,7 +140,7 @@ async fn a_set_up_counter_registers_adopting_its_own_ids() {
     // No secret of any kind is in the database: not the owner's password, not a token.
     let text = all_text(&db).await;
     for secret in [OWNER_PASSWORD, "owner-access", "owner-refresh", "device-refresh-1", "device-access-1"] {
-        assert!(!text.contains(secret), "{secret} leaked into pos.db");
+        assert!(!text.contains(secret), "{secret} leaked into gayanshop_pos.db");
     }
 }
 

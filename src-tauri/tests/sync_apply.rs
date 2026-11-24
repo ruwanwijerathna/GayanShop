@@ -130,7 +130,8 @@ async fn a_page_applies_whatever_its_row_order() {
     rows.reverse();
     let page = PullPage { rows, cursor: all.cursor, has_more: false, watermark: all.watermark };
     let dir = tempfile::tempdir().unwrap();
-    let db = Db::open(&dir.path().join("pos.db"), &dir.path().join("backups")).await.unwrap();
+    let db =
+        Db::open(&dir.path().join(gayanshop_lib::db::DB_FILE_NAME), &dir.path().join("backups")).await.unwrap();
     let applied = apply::apply_page(&db, "t09", "2026-11-08T05:00:00.000Z", &page).await.unwrap();
     assert_eq!(applied.received, all.rows.len());
     assert_eq!(derived(&db).await, derived(&a.db).await);

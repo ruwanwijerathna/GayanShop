@@ -25,7 +25,7 @@ async fn pragmas_and_schema_version() {
 #[tokio::test]
 async fn existing_data_is_snapshotted_before_a_pending_migration() {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("pos.db");
+    let path = dir.path().join(gayanshop_lib::db::DB_FILE_NAME);
     {
         let opts = sqlx::sqlite::SqliteConnectOptions::new().filename(&path).create_if_missing(true);
         let pool = sqlx::SqlitePool::connect_with(opts).await.unwrap();
