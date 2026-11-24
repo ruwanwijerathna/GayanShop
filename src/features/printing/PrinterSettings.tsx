@@ -269,8 +269,9 @@ function PrinterCard({ profile }: { profile: ReceiptPrinterProfile | null }) {
             onClick={() => {
               usePrintReceiptStore.getState().print({
                 ...SAMPLE_RECEIPT,
+                receipt_no: "T01-261120001",
                 store_name: header.data?.store_name ?? SAMPLE_RECEIPT.store_name,
-                footer: header.data?.footer ?? SAMPLE_RECEIPT.footer,
+                footer: "",
               });
             }}
           >

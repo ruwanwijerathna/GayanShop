@@ -10,8 +10,11 @@ export const RECEIPT_IMAGE_MAX_HEIGHT = 6000;
 
 /** Draw `node` as wide as the paper and pack it into the printer's bitmap. */
 export async function receiptImageFromElement(node: HTMLElement): Promise<ReceiptImage> {
-  const shownWidth = node.offsetWidth;
-  if (shownWidth <= 0) throw new Error("receipt element has no width");
+  const shownWidth =
+    node.offsetWidth ||
+    (node.firstElementChild as HTMLElement | null)?.offsetWidth ||
+    node.getBoundingClientRect().width ||
+    272;
   const drawn = await toCanvas(node, {
     pixelRatio: LOGO_MAX_WIDTH / shownWidth,
     backgroundColor: "#ffffff",

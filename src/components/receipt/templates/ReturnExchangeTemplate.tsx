@@ -182,7 +182,6 @@ export function ReturnExchangeTemplate({
       {/* Footer Branding */}
       <div className="flex flex-col items-center gap-0.5 pt-1 text-center text-[11px] text-neutral-700 font-sans">
         <p className="font-medium">{RECEIPT_LABELS.POWERED_BY}</p>
-        {receipt.footer && <p className="text-[7.5px] text-neutral-500 font-sans">{receipt.footer}</p>}
       </div>
     </ReceiptContainer>
   );

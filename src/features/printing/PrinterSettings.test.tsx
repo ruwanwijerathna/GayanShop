@@ -141,17 +141,16 @@ describe("PrinterSettings", () => {
     expect(spy).toHaveBeenCalledWith(
       expect.objectContaining({
         order_id: "SAMPLE-RECEIPT",
-        receipt_no: "T01-20261120-0001",
+        receipt_no: "T01-261120001",
       }),
     );
   });
 
-  it("previews the sample receipt beside the form with the shop name and footer", async () => {
+  it("previews the sample receipt beside the form with the shop name", async () => {
     renderAs();
     const preview = await screen.findByRole("img", { name: "Receipt preview" });
     expect(await within(preview).findByText("Sale Center")).toBeInTheDocument();
     expect(within(preview).getByText("*** SAMPLE RECEIPT - NOT A SALE ***")).toBeInTheDocument();
-    expect(within(preview).getByText(HEADER.footer)).toBeInTheDocument();
   });
 
   it("offers to choose a header image while none is saved", async () => {

@@ -8,7 +8,7 @@ import { SinhalaReceiptTemplate } from "@/components/receipt/SinhalaReceiptTempl
 export const SAMPLE_RECEIPT: ReceiptData = {
   order_id: "SAMPLE-RECEIPT",
   store_name: "Sales Center",
-  receipt_no: "T01-20261120-0001",
+  receipt_no: "T01-261120001",
   status: "completed",
   business_date: "2026-11-20",
   completed_at: "2026-11-20T20:30:00",
@@ -51,7 +51,7 @@ export const SAMPLE_RECEIPT: ReceiptData = {
   change_due: 56500,
   returns: [],
   exchange_credit: 0,
-  footer: "Exchange within 7 days. Item for item only; no cash refunds. Thank you, come again!",
+  footer: "",
 };
 
 export function ReceiptPreview({
@@ -68,7 +68,7 @@ export function ReceiptPreview({
   const sample: ReceiptData = {
     ...SAMPLE_RECEIPT,
     store_name: header?.store_name || SAMPLE_RECEIPT.store_name,
-    footer: header?.footer !== undefined ? header.footer : SAMPLE_RECEIPT.footer,
+    footer: "",
   };
 
   return (
