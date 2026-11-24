@@ -8,19 +8,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Category, Product } from "@/db/bindings";
 import { CommandError } from "@/db/client";
-import { toast } from "sonner";
-import { OwnerPinDialog } from "@/components/auth/OwnerPinDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   useAdjustStock,
   useAppStatus,
-  useClearProductStock,
   useDeleteProduct,
   useProducts,
   useSaveCategory,
   useSaveProduct,
 } from "@/db/hooks";
 import { translateError } from "@/i18n";
-import { Plus, Sparkles } from "lucide-react";
+import { Plus, Sparkles, Trash2 } from "lucide-react";
 import { playCue } from "@/lib/audio";
 import { hasPerm } from "@/lib/permissions";
 import { categoryPath } from "./categories";
@@ -60,7 +65,6 @@ export function ProductFormPanel({ product, categories, onDone, onSaved }: Produ
   const qc = useQueryClient();
   const save = useSaveProduct();
   const remove = useDeleteProduct();
-  const clearStock = useClearProductStock();
   const adjust = useAdjustStock();
   const autoPrint = useAutoPrintLabels();
   const saveCategory = useSaveCategory();
@@ -78,7 +82,7 @@ export function ProductFormPanel({ product, categories, onDone, onSaved }: Produ
   }, [product]);
   const [moneyError, setMoneyError] = useState<MoneyField | null>(null);
   const [quantityError, setQuantityError] = useState(false);
-  const [pinAction, setPinAction] = useState<"delete" | "clear_stock" | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const clearAll = () => {
     setForm({ ...emptyForm(), isActive: true });
@@ -343,25 +347,13 @@ export function ProductFormPanel({ product, categories, onDone, onSaved }: Produ
         </div>
         {product && (
           <div className="flex flex-col gap-2 pt-2 border-t">
-            {stocked && (
-              <Button
-                type="button"
-                size="pos"
-                variant="outline"
-                className="border-amber-500/50 text-amber-700 hover:bg-amber-50 dark:text-amber-400"
-                disabled={busy}
-                onClick={() => setPinAction("clear_stock")}
-              >
-                {t("form.clearStock")}
-              </Button>
-            )}
             <Button
               type="button"
               size="pos"
               variant="outline"
               className="text-destructive hover:bg-destructive/10"
               disabled={busy}
-              onClick={() => setPinAction("delete")}
+              onClick={() => setConfirmDelete(true)}
             >
               {t("form.delete")}
             </Button>
@@ -369,32 +361,43 @@ export function ProductFormPanel({ product, categories, onDone, onSaved }: Produ
         )}
       </form>
 
-      {pinAction && product && (
-        <OwnerPinDialog
-          open
-          title={pinAction === "delete" ? t("form.delete") : t("form.clearStock")}
-          description={
-            pinAction === "delete"
-              ? stocked
-                ? t("form.deleteWithStockConfirm", { name: product.name, count: product.on_hand })
-                : t("form.deleteConfirm", { name: product.name })
-              : t("form.clearStockConfirm", { name: product.name, count: product.on_hand })
-          }
-          onSuccess={() => {
-            if (pinAction === "delete") {
-              setPinAction(null);
-              doDelete();
-            } else {
-              setPinAction(null);
-              clearStock.mutate([product.id], {
-                onSuccess: () => {
-                  toast.success(t("form.clearStockDone", { name: product.name }));
-                },
-              });
-            }
-          }}
-          onCancel={() => setPinAction(null)}
-        />
+      {confirmDelete && product && (
+        <Dialog open onOpenChange={(open) => !open && !remove.isPending && setConfirmDelete(false)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{t("form.delete")}</DialogTitle>
+              <DialogDescription>
+                {stocked
+                  ? t("form.deleteWithStockConfirm", { name: product.name, count: product.on_hand })
+                  : t("form.deleteConfirm", { name: product.name })}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="pos"
+                disabled={remove.isPending}
+                onClick={() => setConfirmDelete(false)}
+              >
+                {t("common:actions.cancel")}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="pos"
+                disabled={remove.isPending}
+                onClick={() => {
+                  setConfirmDelete(false);
+                  doDelete();
+                }}
+              >
+                <Trash2 aria-hidden />
+                {t("form.delete")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

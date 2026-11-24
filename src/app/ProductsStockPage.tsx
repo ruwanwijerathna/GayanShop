@@ -1,7 +1,9 @@
-import { ArrowLeftRight, FolderTree, MoreVertical, Scale } from "lucide-react";
+import { ArrowLeftRight, Eraser, FolderTree, MoreVertical, Scale } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import { Can } from "@/components/auth/Can";
+import { OwnerPinDialog } from "@/components/auth/OwnerPinDialog";
 import { ExportButton } from "@/components/export/ExportButton";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,11 +13,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { useCategories } from "@/db/hooks";
+import { CommandError } from "@/db/client";
+import { useCategories, useClearProductStock, useProducts } from "@/db/hooks";
 import { CategoriesDialog } from "@/features/products/CategoriesDialog";
 import { StockPanel } from "@/features/inventory/StockPanel";
 import { ProductImportPanel } from "@/features/products/ProductImportPanel";
 import { ProductsScreen } from "@/features/products/ProductsScreen";
+import { translateError } from "@/i18n";
 import { hasPerm } from "@/lib/permissions";
 import { useSession } from "./session";
 
@@ -28,11 +32,14 @@ type Drawer = "valuation" | "data";
  * `src/app` because features never import each other.
  */
 export function ProductsStockPage() {
-  const { t } = useTranslation(["products", "app"]);
+  const { t, i18n } = useTranslation(["products", "app"]);
   const { session } = useSession();
   const [drawer, setDrawer] = useState<Drawer | null>(null);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [clearAllStockOpen, setClearAllStockOpen] = useState(false);
   const categories = useCategories();
+  const products = useProducts();
+  const clearStock = useClearProductStock();
   const canManage = hasPerm(session, "PRODUCT_MANAGE");
   const canValue = hasPerm(session, "REPORT_FINANCIAL");
   const canData = hasPerm(session, "DATA_EXPORT") || hasPerm(session, "PRODUCT_MANAGE");
@@ -74,6 +81,15 @@ export function ProductsStockPage() {
                 <DropdownMenuItem className="min-h-11" onSelect={() => setDrawer("data")}>
                   <ArrowLeftRight aria-hidden />
                   {t("tools.data")}
+                </DropdownMenuItem>
+              )}
+              {canManage && (
+                <DropdownMenuItem
+                  className="min-h-11 text-amber-700 focus:text-amber-700 dark:text-amber-400"
+                  onSelect={() => setClearAllStockOpen(true)}
+                >
+                  <Eraser aria-hidden />
+                  {t("clearAllStock")}
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
@@ -120,6 +136,33 @@ export function ProductsStockPage() {
         onOpenChange={setCategoriesOpen}
         categories={categories.data ?? []}
       />
+      {clearAllStockOpen && (
+        <OwnerPinDialog
+          open
+          title={t("clearAllStock")}
+          description={t("clearAllStockConfirm")}
+          onSuccess={() => {
+            setClearAllStockOpen(false);
+            const allTrackedIds = (products.data ?? [])
+              .filter((p) => p.track_stock && p.on_hand !== 0)
+              .map((p) => p.id);
+            if (allTrackedIds.length === 0) {
+              toast.info(t("clearAllStockDone", { count: 0 }));
+              return;
+            }
+            clearStock.mutate(allTrackedIds, {
+              onSuccess: (clearedCount) => {
+                toast.success(t("clearAllStockDone", { count: clearedCount }));
+              },
+              onError: (err) => {
+                const msg = err instanceof CommandError ? translateError(i18n.t, err.error) : String(err);
+                toast.error(msg);
+              },
+            });
+          }}
+          onCancel={() => setClearAllStockOpen(false)}
+        />
+      )}
     </section>
   );
 }

@@ -321,7 +321,7 @@ describe("ProductsScreen", () => {
     ).toHaveValue("");
   });
 
-  it("deletes a product even when it has stock on hand, requesting owner PIN confirmation", async () => {
+  it("deletes a product even when it has stock on hand, requesting confirmation without owner PIN", async () => {
     vi.mocked(commands.deleteProduct).mockImplementation(() => ok(null));
     vi.mocked(commands.verifyOwnerPin).mockImplementation(() => ok(null));
     vi.mocked(commands.listProducts).mockImplementation(() =>
@@ -343,17 +343,34 @@ describe("ProductsScreen", () => {
     expect(del).toBeEnabled();
     fireEvent.click(del);
 
-    // Owner PIN dialog appears
-    const pinDialog = await screen.findByRole("dialog");
-    expect(within(pinDialog).getByText(/45/)).toBeInTheDocument();
+    // Confirmation dialog appears without PIN pad
+    const confirmDialog = await screen.findByRole("dialog");
+    expect(within(confirmDialog).getByText(/45/)).toBeInTheDocument();
+    expect(within(confirmDialog).queryByLabelText("PIN")).not.toBeInTheDocument();
 
-    // Type 4-digit PIN on the PinPad input
-    const pinInput = within(pinDialog).getByLabelText("PIN");
-    fireEvent.change(pinInput, { target: { value: "1234" } });
-    fireEvent.click(within(pinDialog).getByRole("button", { name: "Confirm" }));
+    fireEvent.click(within(confirmDialog).getByRole("button", { name: "Delete" }));
 
-    await waitFor(() => expect(commands.verifyOwnerPin).toHaveBeenCalledWith("1234"));
+    expect(commands.verifyOwnerPin).not.toHaveBeenCalled();
     await waitFor(() => expect(commands.deleteProduct).toHaveBeenCalledWith("p-bucket"));
+  });
+
+  it("deletes selected products from selection bar without asking for owner PIN", async () => {
+    vi.mocked(commands.deleteProduct).mockImplementation(() => ok(null));
+    vi.mocked(commands.verifyOwnerPin).mockImplementation(() => ok(null));
+    renderAs(MANAGER);
+    const checkbox = await screen.findByRole("checkbox", { name: "Select Blue Bucket 10L" });
+    fireEvent.click(checkbox);
+
+    expect(screen.queryByRole("button", { name: /Clear stock/ })).not.toBeInTheDocument();
+    const delBtn = await screen.findByRole("button", { name: "Delete (1)" });
+    fireEvent.click(delBtn);
+
+    const confirmDialog = await screen.findByRole("dialog");
+    expect(within(confirmDialog).queryByLabelText("PIN")).not.toBeInTheDocument();
+    fireEvent.click(within(confirmDialog).getByRole("button", { name: "Delete" }));
+
+    expect(commands.verifyOwnerPin).not.toHaveBeenCalled();
+    await waitFor(() => expect(commands.deleteProduct).toHaveBeenCalledWith("p1"));
   });
 
   it("suggests existing categories while typing and creates a new one on the fly", async () => {

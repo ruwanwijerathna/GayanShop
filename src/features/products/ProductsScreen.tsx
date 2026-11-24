@@ -17,7 +17,6 @@ import {
 import {
   Barcode,
   ClipboardCheck,
-  Eraser,
   History,
   MoreHorizontal,
   Package,
@@ -34,7 +33,14 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useSession } from "@/app/session";
 import { Can } from "@/components/auth/Can";
-import { OwnerPinDialog } from "@/components/auth/OwnerPinDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { DataTableColumnHeader } from "@/components/data-table/DataTableColumnHeader";
 import { DataTableFacetedFilter, facetFilterFn } from "@/components/data-table/DataTableFacetedFilter";
 import { DataTablePagination } from "@/components/data-table/DataTablePagination";
@@ -58,7 +64,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { Product } from "@/db/bindings";
 import { CommandError } from "@/db/client";
-import { useCategories, useClearProductStock, useDeleteProduct, useProducts } from "@/db/hooks";
+import { useCategories, useDeleteProduct, useProducts } from "@/db/hooks";
 import { useScanHandler } from "@/hardware/scanner/ScannerProvider";
 import { translateError } from "@/i18n";
 import { playCue } from "@/lib/audio";
@@ -126,10 +132,7 @@ export function ProductsScreen() {
   const products = useProducts();
   const categories = useCategories();
   const remove = useDeleteProduct();
-  const clearStock = useClearProductStock();
 
-  const [clearStockTarget, setClearStockTarget] = useState<string[] | null>(null);
-  const [clearAllStockPrompt, setClearAllStockPrompt] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [deleteMultipleIds, setDeleteMultipleIds] = useState<string[] | null>(null);
 
@@ -342,15 +345,6 @@ export function ProductsScreen() {
                   {t("movementHistory")}
                 </DropdownMenuItem>
               )}
-              {canStock && row.original.track_stock && row.original.on_hand !== 0 && (
-                <DropdownMenuItem
-                  className="min-h-11 text-amber-700 focus:text-amber-700 dark:text-amber-400"
-                  onSelect={() => setClearStockTarget([row.original.id])}
-                >
-                  <Eraser aria-hidden />
-                  {t("clearStock")}
-                </DropdownMenuItem>
-              )}
               {canManage && (
                 <DropdownMenuItem
                   className="min-h-11 text-destructive focus:text-destructive"
@@ -426,30 +420,18 @@ export function ProductsScreen() {
           </div>
         </div>
         <Can perm="PRODUCT_MANAGE">
-          <div className="flex items-center gap-2">
-            {uncoded.length > 0 && (
-              <Button
-                type="button"
-                size="pos"
-                variant="outline"
-                className="rounded-xl"
-                onClick={() => setShortBarcodesOpen(true)}
-              >
-                <Barcode aria-hidden />
-                {t("shortBarcodes.open", { count: uncoded.length })}
-              </Button>
-            )}
+          {uncoded.length > 0 && (
             <Button
               type="button"
               size="pos"
               variant="outline"
-              className="rounded-xl border-amber-500/50 text-amber-700 hover:bg-amber-50 dark:text-amber-400"
-              onClick={() => setClearAllStockPrompt(true)}
+              className="rounded-xl"
+              onClick={() => setShortBarcodesOpen(true)}
             >
-              <Eraser aria-hidden />
-              {t("clearAllStock")}
+              <Barcode aria-hidden />
+              {t("shortBarcodes.open", { count: uncoded.length })}
             </Button>
-          </div>
+          )}
         </Can>
       </header>
 
@@ -527,18 +509,6 @@ export function ProductsScreen() {
               <Tag aria-hidden />
               {t("printLabels", { count: selectedIds.length })}
             </Button>
-            {canStock && (
-              <Button
-                type="button"
-                size="pos"
-                variant="outline"
-                className="rounded-xl bg-background border-amber-500/50 text-amber-700 hover:bg-amber-50 dark:text-amber-400"
-                onClick={() => setClearStockTarget(selectedIds)}
-              >
-                <Eraser aria-hidden />
-                {t("clearSelectedStock", { count: selectedIds.length })}
-              </Button>
-            )}
             {canManage && (
               <Button
                 type="button"
@@ -716,118 +686,97 @@ export function ProductsScreen() {
       )}
 
       {deleteTarget && (
-        <OwnerPinDialog
-          open
-          title={t("delete")}
-          description={
-            deleteTarget.track_stock && deleteTarget.on_hand !== 0
-              ? t("form.deleteWithStockConfirm", { name: deleteTarget.name, count: deleteTarget.on_hand })
-              : t("form.deleteConfirm", { name: deleteTarget.name })
-          }
-          onSuccess={() => {
-            const target = deleteTarget;
-            setDeleteTarget(null);
-            remove.mutate(target.id, {
-              onSuccess: () => {
-                toast.success(t("form.deleteDone", { name: target.name }));
-              },
-              onError: (err) => {
-                const msg = err instanceof CommandError ? translateError(i18n.t, err.error) : String(err);
-                toast.error(msg);
-              },
-            });
-          }}
-          onCancel={() => setDeleteTarget(null)}
-        />
+        <Dialog open onOpenChange={(open) => !open && !remove.isPending && setDeleteTarget(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{t("delete")}</DialogTitle>
+              <DialogDescription>
+                {deleteTarget.track_stock && deleteTarget.on_hand !== 0
+                  ? t("form.deleteWithStockConfirm", { name: deleteTarget.name, count: deleteTarget.on_hand })
+                  : t("form.deleteConfirm", { name: deleteTarget.name })}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="pos"
+                disabled={remove.isPending}
+                onClick={() => setDeleteTarget(null)}
+              >
+                {t("common:actions.cancel")}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="pos"
+                disabled={remove.isPending}
+                onClick={() => {
+                  const target = deleteTarget;
+                  remove.mutate(target.id, {
+                    onSuccess: () => {
+                      setDeleteTarget(null);
+                      toast.success(t("form.deleteDone", { name: target.name }));
+                    },
+                    onError: (err) => {
+                      const msg = err instanceof CommandError ? translateError(i18n.t, err.error) : String(err);
+                      toast.error(msg);
+                    },
+                  });
+                }}
+              >
+                <Trash2 aria-hidden />
+                {t("form.delete")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
 
       {deleteMultipleIds && (
-        <OwnerPinDialog
-          open
-          title={t("deleteSelected", { count: deleteMultipleIds.length })}
-          description={t("deleteSelectedConfirm", { count: deleteMultipleIds.length })}
-          onSuccess={async () => {
-            const ids = deleteMultipleIds;
-            setDeleteMultipleIds(null);
-            let count = 0;
-            for (const id of ids) {
-              try {
-                await remove.mutateAsync(id);
-                count++;
-              } catch {
-                // Ignore individual errors
-              }
-            }
-            setRowSelection({});
-            toast.success(t("deleteMultipleDone", { count }));
-          }}
-          onCancel={() => setDeleteMultipleIds(null)}
-        />
-      )}
-
-      {clearStockTarget && (
-        <OwnerPinDialog
-          open
-          title={
-            clearStockTarget.length === 1
-              ? t("clearStock")
-              : t("clearSelectedStock", { count: clearStockTarget.length })
-          }
-          description={
-            clearStockTarget.length === 1
-              ? (() => {
-                  const p = data.find((x) => x.id === clearStockTarget[0]);
-                  return t("clearStockConfirm", { name: p?.name ?? "", count: p?.on_hand ?? 0 });
-                })()
-              : t("clearSelectedStockConfirm", { count: clearStockTarget.length })
-          }
-          onSuccess={() => {
-            const ids = clearStockTarget;
-            setClearStockTarget(null);
-            clearStock.mutate(ids, {
-              onSuccess: () => {
-                setRowSelection({});
-                if (ids.length === 1) {
-                  const p = data.find((x) => x.id === ids[0]);
-                  toast.success(t("clearStockDone", { name: p?.name ?? "" }));
-                } else {
-                  toast.success(t("clearAllStockDone", { count: ids.length }));
-                }
-              },
-              onError: (err) => {
-                const msg = err instanceof CommandError ? translateError(i18n.t, err.error) : String(err);
-                toast.error(msg);
-              },
-            });
-          }}
-          onCancel={() => setClearStockTarget(null)}
-        />
-      )}
-
-      {clearAllStockPrompt && (
-        <OwnerPinDialog
-          open
-          title={t("clearAllStock")}
-          description={t("clearAllStockConfirm")}
-          onSuccess={() => {
-            setClearAllStockPrompt(false);
-            const allTrackedIds = data.filter((p) => p.track_stock && p.on_hand !== 0).map((p) => p.id);
-            if (allTrackedIds.length === 0) {
-              toast.info(t("clearAllStockDone", { count: 0 }));
-              return;
-            }
-            clearStock.mutate(allTrackedIds, {
-              onSuccess: (clearedCount) => {
-                toast.success(t("clearAllStockDone", { count: clearedCount }));
-              },
-              onError: (err) => {
-                const msg = err instanceof CommandError ? translateError(i18n.t, err.error) : String(err);
-                toast.error(msg);
-              },
-            });
-          }}
-          onCancel={() => setClearAllStockPrompt(false)}
-        />
+        <Dialog open onOpenChange={(open) => !open && setDeleteMultipleIds(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{t("deleteSelected", { count: deleteMultipleIds.length })}</DialogTitle>
+              <DialogDescription>
+                {t("deleteSelectedConfirm", { count: deleteMultipleIds.length })}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="pos"
+                onClick={() => setDeleteMultipleIds(null)}
+              >
+                {t("common:actions.cancel")}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="pos"
+                onClick={async () => {
+                  const ids = deleteMultipleIds;
+                  setDeleteMultipleIds(null);
+                  let count = 0;
+                  for (const id of ids) {
+                    try {
+                      await remove.mutateAsync(id);
+                      count++;
+                    } catch {
+                      // Ignore individual errors
+                    }
+                  }
+                  setRowSelection({});
+                  toast.success(t("deleteMultipleDone", { count }));
+                }}
+              >
+                <Trash2 aria-hidden />
+                {t("form.delete")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </section>
   );
