@@ -322,14 +322,17 @@ export function ExchangeDialog({ draft, initialReceipt = null, onConfirm, onClos
 
         {source && (
           <div className="flex flex-col gap-3 pt-1">
-            <div className="flex items-center justify-between border-b pb-2">
-              <p className="text-base font-semibold">
-                {t("exchange.sale", {
-                  receipt: source.receipt_no,
-                  date: source.business_date,
-                  days: source.days_since,
-                })}
-              </p>
+            <div className="flex items-center justify-between border-b pb-2.5">
+              <div className="flex items-center gap-2">
+                <Receipt className="size-4 text-muted-foreground shrink-0" />
+                <p className="text-sm sm:text-base font-semibold">
+                  {t("exchange.sale", {
+                    receipt: source.receipt_no,
+                    date: source.business_date,
+                    days: source.days_since,
+                  })}
+                </p>
+              </div>
               {source.late && (
                 <Badge variant="outline" className="border-amber-500 text-amber-700 bg-amber-50 font-medium">
                   {t("exchange.late", { days: source.window_days })}
@@ -340,76 +343,122 @@ export function ExchangeDialog({ draft, initialReceipt = null, onConfirm, onClos
             {!anyEligible && <p className="text-base text-muted-foreground">{t("exchange.nothing")}</p>}
 
             <ul
-              className="flex max-h-72 flex-col gap-2 overflow-y-auto pr-1"
+              className="flex max-h-72 flex-col gap-2.5 overflow-y-auto pr-1"
               aria-label={t("exchange.lines")}
             >
               {source.lines.map((l) => {
                 const picked = picks[l.item_id] ?? 0;
+                const unitPrice = Math.round(l.line_total / l.qty);
                 return (
                   <li
                     key={l.item_id}
                     className={cn(
-                      "flex min-h-14 items-center gap-3 rounded-lg border px-4 py-2.5 text-base transition-colors",
-                      picked > 0 ? "border-primary/50 bg-primary/5" : "bg-card",
-                      !l.eligible && "opacity-60",
+                      "flex flex-col gap-2.5 rounded-xl border p-3.5 transition-all shadow-xs",
+                      picked > 0
+                        ? "border-primary/50 bg-primary/[0.04] ring-1 ring-primary/20"
+                        : "border-border/70 bg-card hover:border-border",
+                      !l.eligible && "opacity-60 bg-muted/20",
                     )}
                   >
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">{l.name}</span>
-                      <span className="block text-sm text-muted-foreground">
-                        {l.eligible
-                          ? t("exchange.returnable", { left: l.returnable_qty, sold: l.qty })
-                          : l.returned_qty >= l.qty
-                            ? t("exchange.alreadyReturned")
-                            : t("exchange.notReturnable")}
+                    {/* Top row: Item Name and Line Price */}
+                    <div className="flex items-start justify-between gap-3 min-w-0">
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-base font-semibold leading-snug tracking-tight text-foreground truncate">
+                          {l.name}
+                        </h4>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {l.eligible
+                            ? t("exchange.returnable", { left: l.returnable_qty, sold: l.qty })
+                            : l.returned_qty >= l.qty
+                              ? t("exchange.alreadyReturned")
+                              : t("exchange.notReturnable")}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="font-mono text-base font-bold tabular-nums text-foreground block">
+                          {formatMoney(l.line_total)}
+                        </span>
+                        {l.qty > 1 && (
+                          <span className="text-xs text-muted-foreground font-mono tabular-nums">
+                            {l.qty} × {formatMoney(unitPrice)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Bottom row: Return Stepper and Credit Amount */}
+                    <div className="flex items-center justify-between border-t border-dashed border-border/60 pt-2.5 mt-0.5">
+                      <span className="text-xs font-medium">
+                        {picked > 0 ? (
+                          <span className="text-primary font-semibold">
+                            {t("exchange.returned", { units: picked })}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground font-mono">
+                            {formatMoney(unitPrice)} / unit
+                          </span>
+                        )}
                       </span>
-                    </span>
-                    <span className="tabular-nums font-mono font-medium">{formatMoney(l.line_total)}</span>
-                    <span className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="size-10 rounded-lg"
-                        aria-label={t("exchange.fewer", { name: l.name })}
-                        disabled={!l.eligible || picked === 0}
-                        onClick={() => change(l.item_id, -1, l.returnable_qty)}
-                      >
-                        <Minus aria-hidden className="size-4" />
-                      </Button>
-                      <span className="w-8 text-center text-lg font-bold tabular-nums" aria-live="polite">
-                        {picked}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="size-10 rounded-lg"
-                        aria-label={t("exchange.more", { name: l.name })}
-                        disabled={!l.eligible || picked >= l.returnable_qty}
-                        onClick={() => change(l.item_id, 1, l.returnable_qty)}
-                      >
-                        <Plus aria-hidden className="size-4" />
-                      </Button>
-                    </span>
-                    <span className="w-28 text-right font-mono font-semibold tabular-nums text-foreground">
-                      {picked > 0 ? formatMoney(lineCredit(l, picked)) : ""}
-                    </span>
+
+                      <div className="flex items-center gap-3">
+                        {picked > 0 && (
+                          <span className="font-mono font-bold text-sm text-primary tabular-nums">
+                            + {formatMoney(lineCredit(l, picked))}
+                          </span>
+                        )}
+                        <div className="flex items-center gap-1.5 rounded-lg border bg-background p-0.5 shadow-xs">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"
+                            aria-label={t("exchange.fewer", { name: l.name })}
+                            disabled={!l.eligible || picked === 0}
+                            onClick={() => change(l.item_id, -1, l.returnable_qty)}
+                          >
+                            <Minus aria-hidden className="size-3.5" />
+                          </Button>
+                          <span
+                            className="w-7 text-center font-mono text-sm font-bold tabular-nums"
+                            aria-live="polite"
+                          >
+                            {picked}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"
+                            aria-label={t("exchange.more", { name: l.name })}
+                            disabled={!l.eligible || picked >= l.returnable_qty}
+                            onClick={() => change(l.item_id, 1, l.returnable_qty)}
+                          >
+                            <Plus aria-hidden className="size-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
                   </li>
                 );
               })}
             </ul>
 
-            <div className="flex items-baseline justify-between rounded-xl border bg-muted/30 p-3.5">
-              <span className="text-base font-semibold">{t("exchange.credit", { units })}</span>
+            <div className="flex items-center justify-between rounded-xl border bg-primary/5 border-primary/20 px-4 py-3 shadow-xs">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm font-semibold text-foreground">
+                  {t("exchange.credit", { units })}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {t("exchange.rule")}
+                </span>
+              </div>
               <span
-                className="text-xl font-bold font-mono text-primary tabular-nums"
+                className="text-2xl font-bold font-mono text-primary tabular-nums shrink-0 ml-3"
                 data-testid="exchange-credit"
               >
                 {formatMoney(credit)}
               </span>
             </div>
-            <p className="text-xs text-muted-foreground">{t("exchange.rule")}</p>
           </div>
         )}
 
