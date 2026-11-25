@@ -72,7 +72,7 @@ describe("StockPanel", () => {
     expect(screen.getByRole("button", { name: "Now" })).toBeDisabled();
   });
 
-  it("shows the potential margin and totals, by category or by batch", async () => {
+  it("shows the potential margin and totals by category", async () => {
     renderAs();
     // Retail 2,200.00 − cost 1,250.00 = 950.00, which is 43.1% of retail.
     expect(await screen.findByTestId("potential-margin")).toHaveTextContent("Rs 950.00");
@@ -82,10 +82,6 @@ describe("StockPanel", () => {
     expect(total).toHaveTextContent("14");
     expect(total).toHaveTextContent("Rs 1,250.00");
     expect(total).toHaveTextContent("Rs 2,200.00");
-
-    openTab(screen.getByRole("tab", { name: "By batch" }));
-    const byBatch = await screen.findByRole("table", { name: "By batch" });
-    expect(within(byBatch).getByText("B-2026-1001 · Pots")).toBeInTheDocument();
   });
 
   it("lists oversold layers", async () => {

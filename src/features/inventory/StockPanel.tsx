@@ -12,13 +12,12 @@ import type { Perm, ValuationGroup } from "@/db/bindings";
 import { useOversoldLayers, useStockValuation } from "@/db/hooks";
 import { formatMoney } from "@/lib/money";
 import { hasPerm } from "@/lib/permissions";
-import { PosTabsList, PosTabsTrigger } from "@/components/common/PosTabs";
-import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const FIELD = "h-12 text-base";
 const NUM = "text-right font-mono tabular-nums whitespace-nowrap";
+const TRIGGER = "h-full min-w-32 rounded-lg px-4 text-sm";
 export type StockSection = "valuation" | "oversold";
-type Breakdown = "category" | "batch";
 
 /** `2_550` bp → `25.5%` (negative margins keep their sign). */
 function formatBp(bp: number): string {
@@ -122,7 +121,6 @@ function GroupTable({
 function ValuationTab() {
   const { t } = useTranslation("inventory");
   const [date, setDate] = useState("");
-  const [breakdown, setBreakdown] = useState<Breakdown>("category");
   const asOf = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
   const v = useStockValuation(asOf);
   const d = v.data;
@@ -167,27 +165,12 @@ function ValuationTab() {
               {t("valuation.negative", { count: d.negative_layers })}
             </p>
           )}
-          <Tabs
-            value={breakdown}
-            onValueChange={(x) => setBreakdown(x === "batch" ? "batch" : "category")}
-            className="gap-3"
-          >
-            <PosTabsList aria-label={t("valuation.breakdown")}>
-              <PosTabsTrigger value="category">{t("valuation.byCategory")}</PosTabsTrigger>
-              <PosTabsTrigger value="batch">{t("valuation.byBatch")}</PosTabsTrigger>
-            </PosTabsList>
-            <TabsContent value="category">
-              <GroupTable
-                title={t("valuation.byCategory")}
-                rows={d.by_category}
-                total={totals}
-                fallback={t("valuation.uncategorised")}
-              />
-            </TabsContent>
-            <TabsContent value="batch">
-              <GroupTable title={t("valuation.byBatch")} rows={d.by_batch} total={totals} fallback="" />
-            </TabsContent>
-          </Tabs>
+          <GroupTable
+            title={t("valuation.byCategory")}
+            rows={d.by_category}
+            total={totals}
+            fallback={t("valuation.uncategorised")}
+          />
         </>
       )}
     </div>
@@ -266,14 +249,17 @@ export function StockPanel({ sections, label }: { sections: readonly StockSectio
       onValueChange={(v) => setPicked(visible.find((x) => x.id === v)?.id ?? first.id)}
       className="gap-4"
     >
-      <PosTabsList aria-label={label}>
+      <TabsList
+        aria-label={label}
+        className="h-12 max-w-full self-start overflow-x-auto rounded-xl p-1 group-data-[orientation=horizontal]/tabs:h-12"
+      >
         {visible.map((x) => (
-          <PosTabsTrigger key={x.id} value={x.id}>
+          <TabsTrigger key={x.id} value={x.id} className={TRIGGER}>
             {x.icon}
             {t(`tabs.${x.id}`)}
-          </PosTabsTrigger>
+          </TabsTrigger>
         ))}
-      </PosTabsList>
+      </TabsList>
       {visible.map((x) => (
         <TabsContent key={x.id} value={x.id}>
           {body(x.id)}
