@@ -66,6 +66,26 @@ describe("StockPanel", () => {
     expect(screen.getByText(/1 oversold layer/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("As of (business date)"), { target: { value: "2026-11-08" } });
     await waitFor(() => expect(commands.stockValuation).toHaveBeenLastCalledWith("2026-11-08"));
+    fireEvent.click(screen.getByRole("button", { name: "Now" }));
+    // Back to now (served from the cache of the first read), and Now itself turns off.
+    expect(screen.getByLabelText("As of (business date)")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Now" })).toBeDisabled();
+  });
+
+  it("shows the potential margin and totals, by category or by batch", async () => {
+    renderAs();
+    // Retail 2,200.00 − cost 1,250.00 = 950.00, which is 43.1% of retail.
+    expect(await screen.findByTestId("potential-margin")).toHaveTextContent("Rs 950.00");
+    expect(screen.getByText("43.1% of today's prices, if all of it sells")).toBeInTheDocument();
+    const byCategory = screen.getByRole("table", { name: "By category" });
+    const total = within(byCategory).getByRole("rowheader", { name: "Total" }).closest("tr");
+    expect(total).toHaveTextContent("14");
+    expect(total).toHaveTextContent("Rs 1,250.00");
+    expect(total).toHaveTextContent("Rs 2,200.00");
+
+    openTab(screen.getByRole("tab", { name: "By batch" }));
+    const byBatch = await screen.findByRole("table", { name: "By batch" });
+    expect(within(byBatch).getByText("B-2026-1001 · Pots")).toBeInTheDocument();
   });
 
   it("lists oversold layers", async () => {

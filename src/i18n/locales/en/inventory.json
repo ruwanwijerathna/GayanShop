@@ -17,7 +17,12 @@
     "byBatch": "By batch",
     "byCategory": "By category",
     "uncategorised": "No category",
-    "negative": "{{count}} oversold layer(s) are not counted: see Oversold."
+    "negative": "{{count}} oversold layer(s) are not counted: see Oversold.",
+    "total": "Total",
+    "empty": "No stock to value.",
+    "margin": "Potential margin",
+    "marginHint": "{{pct}} of today's prices, if all of it sells",
+    "breakdown": "Breakdown"
   },
   "oversold": {
     "none": "No oversold layers.",

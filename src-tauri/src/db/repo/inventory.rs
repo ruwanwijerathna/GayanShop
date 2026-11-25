@@ -329,12 +329,7 @@ pub async fn count(db: &Db, ctx: &WriteCtx, actor: &Actor, input: &CountInput) -
 }
 
 /// Clear stock to 0 for specified products (or all products with stock if empty).
-pub async fn clear_stock(
-    db: &Db,
-    ctx: &WriteCtx,
-    actor: &Actor,
-    product_ids: &[String],
-) -> AppResult<u32> {
+pub async fn clear_stock(db: &Db, ctx: &WriteCtx, actor: &Actor, product_ids: &[String]) -> AppResult<u32> {
     let mut tx = db.write().await?;
     let conn = tx.conn();
 
@@ -351,11 +346,7 @@ pub async fn clear_stock(
     };
 
     let mut cleared_count: u32 = 0;
-    let w = Write {
-        reason: StockReason::Adjustment,
-        ref_type: "clear_stock",
-        note: Some("Stock cleared by Owner"),
-    };
+    let w = Write { reason: StockReason::Adjustment, ref_type: "clear_stock", note: Some("Stock cleared by Owner") };
 
     for id in &ids {
         let have = on_hand(conn, id).await?;
@@ -584,6 +575,9 @@ struct GroupValue {
 
 /// Valuation now (from the derived `batch_item_stock`) or as of the end of a business date (summing the
 /// ledger up to it: slower but exact, doc §5.3).
+/// Products the "now" views count: not deleted, stock tracked (as in the Products & Stock list).
+const LIVE_TRACKED: &str = " AND p.deleted_at IS NULL AND p.track_stock = 1";
+
 pub async fn valuation(pool: &SqlitePool, store_id: &str, as_of: Option<&str>) -> AppResult<StockValuation> {
     if let Some(d) = as_of
         && crate::domain::business_date::parse_date(d).is_none()
@@ -592,11 +586,19 @@ pub async fn valuation(pool: &SqlitePool, store_id: &str, as_of: Option<&str>) -
     }
     // One row per (batch, category) with the sums already taken in SQL: the store's layers never cross IPC
     // or the Rust heap one by one (50,000 layers aggregate in tens of milliseconds).
-    let stock_source = if as_of.is_some() {
-        "(SELECT batch_item_id, SUM(qty_delta) AS on_hand FROM stock_movements
-          WHERE store_id = ?1 AND business_date <= ?2 GROUP BY batch_item_id)"
+    // "Now" values what the Products & Stock list shows: live, tracked products only. A deleted product's
+    // stock was written off on deletion, but FIFO takes the write-off from its positive layers, so an
+    // oversold layer and a matching positive one (+3 / −3) could linger and be valued; an untracked
+    // product's old layers aren't stock the shop counts. "As of" reads history as it stood: a product
+    // deleted or untracked since was still stock on that date.
+    let (stock_source, live) = if as_of.is_some() {
+        (
+            "(SELECT batch_item_id, SUM(qty_delta) AS on_hand FROM stock_movements
+              WHERE store_id = ?1 AND business_date <= ?2 GROUP BY batch_item_id)",
+            "",
+        )
     } else {
-        "batch_item_stock"
+        ("batch_item_stock", LIVE_TRACKED)
     };
     let sql = format!(
         "SELECT b.id AS batch_id, MAX(b.code) AS batch_code, MAX(b.name) AS batch_name, p.category_id,
@@ -608,7 +610,7 @@ pub async fn valuation(pool: &SqlitePool, store_id: &str, as_of: Option<&str>) -
          JOIN batches b ON b.id = bi.batch_id
          JOIN products p ON p.id = bi.product_id
          LEFT JOIN categories c ON c.id = p.category_id
-         WHERE b.store_id = ?1 AND s.on_hand <> 0
+         WHERE b.store_id = ?1 AND s.on_hand <> 0{live}
          GROUP BY b.id, p.category_id"
     );
     let query = sqlx::query_as::<_, GroupValue>(&sql).bind(store_id);
@@ -679,16 +681,17 @@ pub struct OversoldLayer {
 }
 
 pub async fn oversold(pool: &SqlitePool, store_id: &str) -> AppResult<Vec<OversoldLayer>> {
-    Ok(sqlx::query_as(
+    // Deleted and untracked products leave the list: nothing can count them back to zero any more.
+    Ok(sqlx::query_as(&format!(
         "SELECT bis.batch_item_id, bis.product_id, p.name AS product_name, b.id AS batch_id, b.code AS batch_code,
                 bis.on_hand, bi.unit_cost
          FROM batch_item_stock bis
          JOIN batch_items bi ON bi.id = bis.batch_item_id
          JOIN batches b ON b.id = bis.batch_id
          JOIN products p ON p.id = bis.product_id
-         WHERE bis.on_hand < 0 AND b.store_id = ?1
-         ORDER BY bis.on_hand, p.name COLLATE NOCASE",
-    )
+         WHERE bis.on_hand < 0 AND b.store_id = ?1{LIVE_TRACKED}
+         ORDER BY bis.on_hand, p.name COLLATE NOCASE"
+    ))
     .bind(store_id)
     .fetch_all(pool)
     .await?)

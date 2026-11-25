@@ -2,11 +2,18 @@ import type { ComponentProps } from "react";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
-/** shadcn TabsList as a segmented control: a muted pill that scrolls sideways when the window is narrow. */
+/**
+ * shadcn TabsList as a segmented control: a muted pill that scrolls sideways when the window is narrow.
+ * The base list pins its height (`group-data-[orientation=horizontal]/tabs:h-9`, which outranks a plain
+ * `h-auto`); around 48 px triggers that overflowed, and `overflow-x-auto` then grew a vertical scrollbar.
+ */
 export function PosTabsList({ className, ...props }: ComponentProps<typeof TabsList>) {
   return (
     <TabsList
-      className={cn("h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-xl p-1", className)}
+      className={cn(
+        "h-auto max-w-full justify-start gap-1 overflow-x-auto overflow-y-hidden rounded-xl p-1 group-data-[orientation=horizontal]/tabs:h-auto",
+        className,
+      )}
       {...props}
     />
   );

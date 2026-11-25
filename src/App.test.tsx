@@ -303,6 +303,7 @@ describe("Products & Stock", () => {
       "Categories",
       "Stock Valuation",
       "Export & Import",
+      "Clear all stock",
     ]);
   });
 

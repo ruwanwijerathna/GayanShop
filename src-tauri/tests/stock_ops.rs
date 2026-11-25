@@ -319,3 +319,131 @@ async fn a_product_with_stock_on_hand_can_be_deleted_writing_off_its_stock() {
         1
     );
 }
+
+/// The valuation recomputed straight from the ledger (not the derived caches): each live, tracked product's
+/// layers, Σ max(layer on hand, 0) × the layer's cost and × today's price, plus the negative layers.
+async fn ledger_valuation(t: &Till) -> (i64, i64, i64, i64) {
+    sqlx::query_as(
+        "SELECT COALESCE(SUM(MAX(l.on_hand, 0)), 0), COALESCE(SUM(MAX(l.on_hand, 0) * bi.unit_cost), 0),
+                COALESCE(SUM(MAX(l.on_hand, 0) * p.price), 0), COALESCE(SUM(l.on_hand < 0), 0)
+         FROM (SELECT batch_item_id, SUM(qty_delta) AS on_hand FROM stock_movements GROUP BY batch_item_id) l
+         JOIN batch_items bi ON bi.id = l.batch_item_id
+         JOIN products p ON p.id = bi.product_id
+         WHERE p.deleted_at IS NULL AND p.track_stock = 1",
+    )
+    .fetch_one(t.pool())
+    .await
+    .unwrap()
+}
+
+async fn valued(t: &Till) -> (i64, i64, i64, i64) {
+    let v = inventory::valuation(t.pool(), &t.s.store_id, None).await.unwrap();
+    let sum = |f: fn(&inventory::ValuationGroup) -> i64, g: &[inventory::ValuationGroup]| g.iter().map(f).sum::<i64>();
+    for groups in [&v.by_batch, &v.by_category] {
+        assert_eq!(
+            (sum(|g| g.units, groups), sum(|g| g.value_at_cost, groups), sum(|g| g.value_at_retail, groups)),
+            (v.total_units, v.value_at_cost, v.value_at_retail),
+            "each breakdown adds up to the totals"
+        );
+    }
+    (v.total_units, v.value_at_cost, v.value_at_retail, v.negative_layers)
+}
+
+/// Σ `stock_levels` over the products the Products & Stock list shows with a stock figure.
+async fn listed_units(t: &Till) -> i64 {
+    t.count(
+        "SELECT COALESCE(SUM(sl.on_hand), 0) FROM products p JOIN stock_levels sl ON sl.product_id = p.id
+         WHERE p.deleted_at IS NULL AND p.track_stock = 1",
+    )
+    .await
+}
+
+#[tokio::test]
+async fn valuation_matches_the_ledger_and_the_product_list_through_sales_returns_adjustments_and_imports() {
+    use gayanshop_lib::db::repo::exchange::{ExchangeInput, ExchangeReturn};
+    let t = till().await;
+    let bucket = t.stocked("Bucket", 45_000, &[(2, 20_000), (5, 22_000)]).await;
+    let mug = t.stocked("Mug", 25_000, &[(10, 9_000)]).await;
+    assert_eq!(valued(&t).await, (17, 240_000, 565_000, 0));
+
+    // A sale takes the oldest layer first: 2 @ 200 + 1 @ 220 leave 4 @ 220.
+    let sale = cart("v-sale", vec![line(&bucket, 45_000, 3)], vec![cash(135_000, None)]);
+    let sold = checkout::checkout(&t.t.db, &t.ctx(), &t.seller(CASHIER).await, &sale, None, &NoFaults).await.unwrap();
+    assert_eq!(valued(&t).await, (14, 178_000, 430_000, 0));
+
+    // An exchange: one bucket comes back into the layer it was sold from, two mugs go out.
+    let item: String = sqlx::query_scalar("SELECT id FROM order_items WHERE order_id = ?1")
+        .bind(&sold.order_id)
+        .fetch_one(t.pool())
+        .await
+        .unwrap();
+    let mut ex = cart("v-ex", vec![line(&mug, 25_000, 2)], vec![cash(5_000, None)]);
+    ex.exchange = Some(ExchangeInput { returns: vec![ExchangeReturn { item_id: item, qty: 1 }] });
+    checkout::checkout(&t.t.db, &t.ctx(), &t.seller(CASHIER).await, &ex, None, &NoFaults).await.unwrap();
+
+    // Found stock goes into the newest layer; a write-down comes out FIFO.
+    inventory::adjust(&t.t.db, &t.ctx(), &t.owner(), &adjust(&bucket, 2, "found")).await.unwrap();
+    inventory::adjust(&t.t.db, &t.ctx(), &t.owner(), &adjust(&mug, -1, "miscount")).await.unwrap();
+
+    // A CSV import: a new product at its cost, then its quantity as an adjustment (the ADJUSTMENTS layer at
+    // that cost).
+    let towel = t.product("Towel", 12_000, true, 7_000, None).await;
+    inventory::adjust(&t.t.db, &t.ctx(), &t.owner(), &adjust(&towel, 6, "opening stock (import)")).await.unwrap();
+
+    let (units, cost, retail, negative) = valued(&t).await;
+    assert_eq!((units, cost, retail, negative), ledger_valuation(&t).await, "the derived caches agree with the ledger");
+    assert_eq!(units, listed_units(&t).await, "with no oversold layer, units = the Products & Stock list");
+    assert_eq!(units, (7 - 3 + 1 + 2) + (10 - 2 - 1) + 6);
+    let towel_cost: i64 = t
+        .count(&format!(
+            "SELECT bi.unit_cost FROM batch_items bi JOIN batch_item_stock s ON s.batch_item_id = bi.id
+             WHERE bi.product_id = '{towel}'"
+        ))
+        .await;
+    assert_eq!(towel_cost, 7_000, "imported stock is valued at the imported cost");
+    // Every movement was written at its layer's cost, so the layer cost is the cost of what's on the shelf.
+    let off_cost = t
+        .count(
+            "SELECT COUNT(*) FROM stock_movements m JOIN batch_items bi ON bi.id = m.batch_item_id
+             WHERE m.unit_cost <> bi.unit_cost",
+        )
+        .await;
+    assert_eq!(off_cost, 0);
+}
+
+#[tokio::test]
+async fn a_deleted_product_leaves_valuation_and_the_oversold_list_even_after_an_oversell() {
+    let t = till().await;
+    // Sold before any stock arrived: an ADJUSTMENTS layer at −3. Then 10 arrive in a new layer.
+    let cup = t.product("Cup", 10_000, true, 0, None).await;
+    sell(&t, "d1", &cup, 10_000, 3).await;
+    let buy =
+        batches::AdHocPurchase { product_id: cup.clone(), qty: 10, unit_cost: 3_000, supplier_name: None, note: None };
+    batches::ad_hoc_purchase(&t.t.db, &t.ctx(), &t.owner(), &buy).await.unwrap();
+    // The documented rule (doc §5): positive layers at cost, the oversold one flagged and left out.
+    assert_eq!(valued(&t).await, (10, 30_000, 100_000, 1));
+    assert_eq!(on_hand(&t, &cup).await, 7);
+
+    // Deleting writes off the 7 FIFO from the positive layer, leaving +3 / −3 behind in the ledger.
+    gayanshop_lib::db::repo::products::delete(&t.t.db, &t.ctx(), &t.owner(), &cup).await.unwrap();
+    assert_eq!(on_hand(&t, &cup).await, 0);
+    assert_eq!(t.count(&format!("SELECT MAX(on_hand) FROM batch_item_stock WHERE product_id = '{cup}'")).await, 3);
+    assert_eq!(valued(&t).await, (0, 0, 0, 0), "nothing of a deleted product is valued or flagged");
+    assert!(inventory::oversold(t.pool(), &t.s.store_id).await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn inactive_stock_is_still_valued_but_an_untracked_product_is_not() {
+    let t = till().await;
+    let pen = t.stocked("Pen", 2_000, &[(10, 500)]).await;
+    let pot = t.stocked("Pot", 50_000, &[(2, 30_000)]).await;
+    // Hidden from the till, still on the shelf.
+    common::exec(t.pool(), &format!("UPDATE products SET is_active = 0 WHERE id = '{pen}'")).await;
+    assert_eq!(valued(&t).await, (12, 65_000, 120_000, 0));
+    // No longer tracked: the list shows a dash, so valuation leaves its old layers out too.
+    common::exec(t.pool(), &format!("UPDATE products SET track_stock = 0 WHERE id = '{pot}'")).await;
+    assert_eq!(valued(&t).await, (10, 5_000, 20_000, 0));
+    // "As of" reads history as it stood: the pot was tracked stock on that date.
+    let as_of = inventory::valuation(t.pool(), &t.s.store_id, Some("2026-11-08")).await.unwrap();
+    assert_eq!(as_of.total_units, 12);
+}
