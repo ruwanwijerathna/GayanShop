@@ -240,9 +240,7 @@ describe("ProductImportPanel", () => {
     );
 
     const csvContent =
-      "sku,barcode,name,price\n" +
-      "PEO525-S12,21000034,DSI,3099.00\n" +
-      "PEO525-S1,21000041,DSI,3099.00\n";
+      "sku,barcode,name,price\n" + "PEO525-S12,21000034,DSI,3099.00\n" + "PEO525-S1,21000041,DSI,3099.00\n";
 
     const file = new File([csvContent], "products.csv", { type: "text/csv" });
     const fileInput = screen.getByLabelText(/CSV file/i);

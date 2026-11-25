@@ -120,7 +120,9 @@ pub async fn verify_owner_pin(state: State<'_, AppState>, pin: String) -> AppRes
             .fetch_optional(&state.db.pool)
             .await?
             .flatten();
-        if let Some(until) = locked && until > iso_now {
+        if let Some(until) = locked
+            && until > iso_now
+        {
             return Err(AppError::AccountLocked { until });
         }
 

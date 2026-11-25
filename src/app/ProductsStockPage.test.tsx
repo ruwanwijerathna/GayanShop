@@ -1,7 +1,12 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { useEffect, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { commands, type Category_Serialize as Category, type Perm, type Product_Serialize as Product } from "@/db/bindings";
+import {
+  commands,
+  type Category_Serialize as Category,
+  type Perm,
+  type Product_Serialize as Product,
+} from "@/db/bindings";
 import { ok, renderWithProviders, session } from "@/test/render";
 import { ProductsStockPage } from "./ProductsStockPage";
 import { useSession } from "./session";

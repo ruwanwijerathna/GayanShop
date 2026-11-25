@@ -719,7 +719,8 @@ export function ProductsScreen() {
                       toast.success(t("form.deleteDone", { name: target.name }));
                     },
                     onError: (err) => {
-                      const msg = err instanceof CommandError ? translateError(i18n.t, err.error) : String(err);
+                      const msg =
+                        err instanceof CommandError ? translateError(i18n.t, err.error) : String(err);
                       toast.error(msg);
                     },
                   });
@@ -743,12 +744,7 @@ export function ProductsScreen() {
               </DialogDescription>
             </DialogHeader>
             <DialogFooter className="gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="pos"
-                onClick={() => setDeleteMultipleIds(null)}
-              >
+              <Button type="button" variant="outline" size="pos" onClick={() => setDeleteMultipleIds(null)}>
                 {t("common:actions.cancel")}
               </Button>
               <Button

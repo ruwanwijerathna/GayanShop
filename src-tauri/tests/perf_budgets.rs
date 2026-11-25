@@ -29,8 +29,7 @@ const SQL_PHONE: &str = "SELECT id, display_name FROM customers
 
 async fn open_seeded(products: usize, customers: usize) -> (TempDir, Db) {
     let dir = tempfile::tempdir().unwrap();
-    let db =
-        Db::open(&dir.path().join(gayanshop_lib::db::DB_FILE_NAME), &dir.path().join("backups")).await.unwrap();
+    let db = Db::open(&dir.path().join(gayanshop_lib::db::DB_FILE_NAME), &dir.path().join("backups")).await.unwrap();
     seed::products(&db.pool, products).await;
     seed::customers(&db.pool, customers).await;
     (dir, db)

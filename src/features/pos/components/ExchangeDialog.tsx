@@ -448,9 +448,7 @@ export function ExchangeDialog({ draft, initialReceipt = null, onConfirm, onClos
                 <span className="text-sm font-semibold text-foreground">
                   {t("exchange.credit", { units })}
                 </span>
-                <span className="text-xs text-muted-foreground">
-                  {t("exchange.rule")}
-                </span>
+                <span className="text-xs text-muted-foreground">{t("exchange.rule")}</span>
               </div>
               <span
                 className="text-2xl font-bold font-mono text-primary tabular-nums shrink-0 ml-3"

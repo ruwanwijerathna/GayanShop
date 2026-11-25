@@ -202,8 +202,7 @@ impl Term {
 
 pub async fn t01() -> Term {
     let dir = tempfile::tempdir().unwrap();
-    let db =
-        Db::open(&dir.path().join(gayanshop_lib::db::DB_FILE_NAME), &dir.path().join("backups")).await.unwrap();
+    let db = Db::open(&dir.path().join(gayanshop_lib::db::DB_FILE_NAME), &dir.path().join("backups")).await.unwrap();
     let clock = ManualClock::new(at(SETUP_AT));
     let input = SetupInput {
         store_name: "GayanShop".into(),

@@ -27,8 +27,7 @@ fn clock() -> ManualClock {
 
 async fn open() -> (tempfile::TempDir, Db) {
     let dir = tempfile::tempdir().unwrap();
-    let db =
-        Db::open(&dir.path().join(gayanshop_lib::db::DB_FILE_NAME), &dir.path().join("backups")).await.unwrap();
+    let db = Db::open(&dir.path().join(gayanshop_lib::db::DB_FILE_NAME), &dir.path().join("backups")).await.unwrap();
     (dir, db)
 }
 

@@ -9,8 +9,8 @@ use serde_json::{Value, json};
 use specta::Type;
 use sqlx::{FromRow, SqliteConnection, SqlitePool};
 
-use super::{inventory, WriteCtx};
 use super::stock::StockReason;
+use super::{WriteCtx, inventory};
 use crate::audit::{self, AuditAction, AuditCtx, AuditEntry};
 use crate::auth::guard::Actor;
 use crate::clock::new_id;
