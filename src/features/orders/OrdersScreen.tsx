@@ -174,6 +174,19 @@ function FiltersDialog({
               ]}
             />
           </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="bills-status">{t("filters.status")}</Label>
+            <SelectField
+              id="bills-status"
+              className="w-full rounded-xl"
+              value={extras.voidedOnly ? "voided" : ""}
+              onValueChange={(v) => onChange({ ...extras, voidedOnly: v === "voided" })}
+              options={[
+                { value: "", label: t("filters.anyStatus") },
+                { value: "voided", label: t("filters.voidedOnly") },
+              ]}
+            />
+          </div>
         </div>
         <DialogFooter className="flex-row justify-between gap-2 sm:justify-between">
           <Button
@@ -181,7 +194,7 @@ function FiltersDialog({
             size="pos"
             variant="outline"
             className="rounded-xl"
-            onClick={() => onChange({ ...extras, deviceId: "", kind: "" })}
+            onClick={() => onChange({ ...extras, deviceId: "", kind: "", voidedOnly: false })}
           >
             {t("filters.clear")}
           </Button>
@@ -240,7 +253,7 @@ function Bills({ today, scanned }: { today: string; scanned: ScannedBill | null 
   const activeFilters = [extras.deviceId, extras.payment, extras.kind, extras.voidedOnly ? "v" : ""].filter(
     Boolean,
   ).length;
-  const dialogFilters = [extras.deviceId, extras.kind].filter(Boolean).length;
+  const dialogFilters = [extras.deviceId, extras.kind, extras.voidedOnly ? "v" : ""].filter(Boolean).length;
   const resetPage = () => setPagination((p) => (p.pageIndex === 0 ? p : { ...p, pageIndex: 0 }));
   const settled =
     wanted !== null && terms.receipt?.toUpperCase() === wanted && !!pages.data && !pages.isFetching;
@@ -496,19 +509,38 @@ function Bills({ today, scanned }: { today: string; scanned: ScannedBill | null 
                 ...METHODS.map((m) => ({ value: m, label: t(`method.${m}`) })),
               ]}
             />
-            <SelectField
-              aria-label={t("filters.status")}
-              className={FILTER_FIELD}
-              value={extras.voidedOnly ? "voided" : ""}
-              onValueChange={(v) => {
-                setExtras({ ...extras, voidedOnly: v === "voided" });
-                resetPage();
-              }}
-              options={[
-                { value: "", label: t("filters.anyStatus") },
-                { value: "voided", label: t("filters.voidedOnly") },
-              ]}
-            />
+            {!searching && (
+              <>
+                <SelectField
+                  aria-label={t("period.label")}
+                  className={FILTER_FIELD}
+                  value={quick}
+                  onValueChange={(v) => {
+                    const next = QUICK.find((q) => q === v);
+                    if (next) {
+                      setQuick(next);
+                      resetPage();
+                    }
+                  }}
+                  options={QUICK.map((q) => ({ value: q, label: t(`period.${q}`) }))}
+                />
+                {quick === "date" && (
+                  <Input
+                    type="date"
+                    aria-label={t("period.date")}
+                    className="h-12 w-auto rounded-xl bg-background text-base"
+                    value={picked}
+                    max={today}
+                    onChange={(e) => {
+                      if (DATE.test(e.target.value)) {
+                        setPicked(e.target.value);
+                        resetPage();
+                      }
+                    }}
+                  />
+                )}
+              </>
+            )}
             <Button
               type="button"
               variant="outline"
@@ -519,7 +551,7 @@ function Bills({ today, scanned }: { today: string; scanned: ScannedBill | null 
               <SlidersHorizontal aria-hidden />
               {dialogFilters > 0 ? t("filters.buttonCount", { count: dialogFilters }) : t("filters.button")}
             </Button>
-            {activeFilters > 0 && (
+            {(activeFilters > 0 || quick !== "all") && (
               <Button
                 type="button"
                 variant="ghost"
@@ -527,6 +559,7 @@ function Bills({ today, scanned }: { today: string; scanned: ScannedBill | null 
                 className="rounded-xl"
                 onClick={() => {
                   setExtras(NO_EXTRAS);
+                  setQuick("all");
                   resetPage();
                 }}
               >
@@ -540,43 +573,7 @@ function Bills({ today, scanned }: { today: string; scanned: ScannedBill | null 
           </div>
 
           {terms.tooShort && <p className="text-sm text-muted-foreground">{t("search.tooShort")}</p>}
-          {searching ? (
-            <p className="text-sm text-muted-foreground">{t("search.allDates")}</p>
-          ) : (
-            <div role="group" aria-label={t("period.label")} className="flex flex-wrap items-center gap-2">
-              {QUICK.map((q) => (
-                <Button
-                  key={q}
-                  type="button"
-                  size="pos"
-                  className="rounded-xl"
-                  variant={quick === q ? "default" : "outline"}
-                  aria-pressed={quick === q}
-                  onClick={() => {
-                    setQuick(q);
-                    resetPage();
-                  }}
-                >
-                  {t(`period.${q}`)}
-                </Button>
-              ))}
-              {quick === "date" && (
-                <Input
-                  type="date"
-                  aria-label={t("period.date")}
-                  className="h-12 w-auto rounded-xl bg-background text-base"
-                  value={picked}
-                  max={today}
-                  onChange={(e) => {
-                    if (DATE.test(e.target.value)) {
-                      setPicked(e.target.value);
-                      resetPage();
-                    }
-                  }}
-                />
-              )}
-            </div>
-          )}
+          {searching && <p className="text-sm text-muted-foreground">{t("search.allDates")}</p>}
         </div>
 
         <Table role="grid" aria-label={t("title")} className="min-w-[860px]">

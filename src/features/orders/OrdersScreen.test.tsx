@@ -125,7 +125,7 @@ describe("Bills", () => {
     const grid = await screen.findByRole("grid", { name: "Bills" });
     expect(await within(grid).findByText("T01-20261108-0003")).toBeInTheDocument();
     expect(commands.orderHistory).toHaveBeenCalledWith(FILTER, null, 200);
-    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("Period")).toHaveTextContent("All");
     const voided = within(grid).getByText("T01-20261108-0003").closest("tr");
     if (!voided) throw new Error("no row");
     expect(within(voided).getByText("Card")).toBeInTheDocument();
@@ -191,10 +191,10 @@ describe("Bills", () => {
     await waitFor(() => expect(commands.orderReceipt).toHaveBeenCalledWith("o3"));
   });
 
-  it("jumps between periods with one tap", async () => {
+  it("jumps between periods from the toolbar dropdown", async () => {
     renderAs(MANAGER);
     await screen.findByRole("grid", { name: "Bills" });
-    fireEvent.click(screen.getByRole("button", { name: "Today" }));
+    chooseOption(screen.getByLabelText("Period"), "Today");
     await waitFor(() =>
       expect(commands.orderHistory).toHaveBeenLastCalledWith(
         { ...FILTER, period: { kind: "day", date: "2026-11-08" } },
@@ -202,7 +202,7 @@ describe("Bills", () => {
         200,
       ),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Yesterday" }));
+    chooseOption(screen.getByLabelText("Period"), "Yesterday");
     await waitFor(() =>
       expect(commands.orderHistory).toHaveBeenLastCalledWith(
         { ...FILTER, period: { kind: "day", date: "2026-11-07" } },
@@ -210,7 +210,7 @@ describe("Bills", () => {
         200,
       ),
     );
-    fireEvent.click(screen.getByRole("button", { name: "This week" }));
+    chooseOption(screen.getByLabelText("Period"), "This week");
     await waitFor(() =>
       expect(commands.orderHistory).toHaveBeenLastCalledWith(
         { ...FILTER, period: { kind: "week", any_date: "2026-11-08" } },
@@ -218,7 +218,7 @@ describe("Bills", () => {
         200,
       ),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Pick a date" }));
+    chooseOption(screen.getByLabelText("Period"), "Pick a date");
     fireEvent.change(screen.getByLabelText("Pick a date", { selector: "input" }), {
       target: { value: "2026-10-30" },
     });
@@ -245,7 +245,7 @@ describe("Bills", () => {
       ),
     );
     expect(screen.getByText("Searching all dates")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Yesterday" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Period")).not.toBeInTheDocument();
 
     fireEvent.change(box, { target: { value: "077 123 4567" } });
     await waitFor(() =>
@@ -257,7 +257,7 @@ describe("Bills", () => {
     );
 
     fireEvent.change(box, { target: { value: "" } });
-    expect(await screen.findByRole("button", { name: "Yesterday" })).toBeInTheDocument();
+    expect(await screen.findByLabelText("Period")).toBeInTheDocument();
   });
 
   it("waits for four digits before searching a phone", async () => {
@@ -273,17 +273,17 @@ describe("Bills", () => {
     );
   });
 
-  it("narrows by payment and status in the toolbar, and counter and type in the Filters dialog", async () => {
+  it("narrows by payment and period in the toolbar, and counter, type and status in the Filters dialog", async () => {
     renderAs(MANAGER);
     await screen.findByRole("grid", { name: "Bills" });
     expect(screen.queryByRole("button", { name: /Reset/ })).not.toBeInTheDocument();
     chooseOption(screen.getByLabelText("Paid with"), "Card");
-    chooseOption(screen.getByLabelText("Status"), "Voided only");
 
     fireEvent.click(screen.getByRole("button", { name: "Filters" }));
     const dialog = await screen.findByRole("dialog", { name: "More filters" });
     chooseOption(within(dialog).getByLabelText("Type"), "Exchange bills");
     chooseOption(within(dialog).getByLabelText("Counter"), "T01");
+    chooseOption(within(dialog).getByLabelText("Status"), "Voided only");
     fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
 
     await waitFor(() =>
@@ -293,7 +293,7 @@ describe("Bills", () => {
         200,
       ),
     );
-    expect(screen.getByRole("button", { name: "Filters (2)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Filters (3)" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Reset/ }));
     // Back to the first query: its page is still cached, so the screen simply shows it again.
