@@ -39,7 +39,7 @@ function renderAs(perms: Perm[], scanned: { receipt: string; at: number } | null
 }
 
 const FILTER = {
-  period: { kind: "day", date: "2026-11-08" },
+  period: { kind: "all_time" },
   device_id: null,
   status: null,
   receipt: null,
@@ -120,14 +120,21 @@ beforeEach(() => {
 });
 
 describe("Bills", () => {
-  it("lists today's bills newest first, with how each was paid and what kind it is, and opens a receipt", async () => {
+  it("lists every bill by default, newest first, with how each was paid and what kind it is, and opens a receipt", async () => {
     renderAs(MANAGER);
     const grid = await screen.findByRole("grid", { name: "Bills" });
     expect(await within(grid).findByText("T01-20261108-0003")).toBeInTheDocument();
-    expect(within(grid).getByText("Card + Cash")).toBeInTheDocument();
-    expect(within(grid).getByText("Voided")).toBeInTheDocument();
-    expect(within(grid).getByText("Exchange")).toBeInTheDocument();
     expect(commands.orderHistory).toHaveBeenCalledWith(FILTER, null, 200);
+    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
+    const voided = within(grid).getByText("T01-20261108-0003").closest("tr");
+    if (!voided) throw new Error("no row");
+    expect(within(voided).getByText("Card")).toBeInTheDocument();
+    expect(within(voided).getByText("Cash")).toBeInTheDocument();
+    expect(within(voided).getByText("Voided")).toBeInTheDocument();
+    expect(within(voided).getByText("Scanned twice")).toBeInTheDocument();
+    expect(within(grid).getByText("Exchange")).toBeInTheDocument();
+
+    // Pagination footer matches Products & Stock, and more bills load when reaching the last loaded page.
     await waitFor(() =>
       expect(commands.orderHistory).toHaveBeenCalledWith(
         expect.anything(),
@@ -137,15 +144,64 @@ describe("Bills", () => {
     );
     expect(await within(grid).findByText("T01-20261108-0001")).toBeInTheDocument();
     expect(within(grid).getByText("Has returns")).toBeInTheDocument();
+    expect(screen.getByText("0 of 3 selected")).toBeInTheDocument();
+    expect(screen.getByText("Page 1 of 1")).toBeInTheDocument();
     fireEvent.click(within(grid).getByText("T01-20261108-0002"));
     const dialog = await screen.findByRole("dialog");
     expect(await within(dialog).findByText(/07X XXX X567/)).toBeInTheDocument();
     expect(commands.orderReceipt).toHaveBeenCalledWith("o2");
   });
 
-  it("jumps between days with one tap", async () => {
+  it("shows each bill's time, cashier, items, payment, status and total, and hides columns from View", async () => {
+    renderAs(MANAGER);
+    const grid = await screen.findByRole("grid", { name: "Bills" });
+    const row = (await within(grid).findByText("T01-20261108-0002")).closest("tr");
+    if (!row) throw new Error("no row");
+    for (const header of ["Receipt no.", "Date & time", "Cashier", "Items", "Payment", "Status", "Total"]) {
+      expect(within(grid).getByRole("columnheader", { name: header })).toBeInTheDocument();
+    }
+    expect(within(row).getByText("Nimal")).toBeInTheDocument();
+    expect(within(row).getByText("2")).toBeInTheDocument();
+    expect(within(row).getByText("Completed")).toBeInTheDocument();
+    expect(within(row).getByText("Exchange credit Rs 450.00")).toBeInTheDocument();
+    expect(within(row).getByText("Rs 450.02")).toBeInTheDocument();
+    const voidedTotal = within(grid).getByText("Rs 450.03");
+    expect(voidedTotal).toHaveClass("line-through");
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "View" }), { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByRole("menuitemcheckbox", { name: "Cashier" }));
+    await waitFor(() =>
+      expect(within(grid).queryByRole("columnheader", { name: "Cashier" })).not.toBeInTheDocument(),
+    );
+    expect(within(grid).queryByText("Nimal")).not.toBeInTheDocument();
+  });
+
+  it("opens a bill from the keyboard or its row button", async () => {
+    renderAs(MANAGER);
+    const grid = await screen.findByRole("grid", { name: "Bills" });
+    const row = (await within(grid).findByText("T01-20261108-0002")).closest("tr");
+    if (!row) throw new Error("no row");
+    fireEvent.keyDown(row, { key: "Enter" });
+    await waitFor(() => expect(commands.orderReceipt).toHaveBeenCalledWith("o2"));
+    const [close] = within(await screen.findByRole("dialog")).getAllByRole("button", { name: /Close/ });
+    if (!close) throw new Error("no close button");
+    fireEvent.click(close);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    fireEvent.click(within(grid).getByRole("button", { name: "View or print bill T01-20261108-0003" }));
+    await waitFor(() => expect(commands.orderReceipt).toHaveBeenCalledWith("o3"));
+  });
+
+  it("jumps between periods with one tap", async () => {
     renderAs(MANAGER);
     await screen.findByRole("grid", { name: "Bills" });
+    fireEvent.click(screen.getByRole("button", { name: "Today" }));
+    await waitFor(() =>
+      expect(commands.orderHistory).toHaveBeenLastCalledWith(
+        { ...FILTER, period: { kind: "day", date: "2026-11-08" } },
+        null,
+        200,
+      ),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Yesterday" }));
     await waitFor(() =>
       expect(commands.orderHistory).toHaveBeenLastCalledWith(
@@ -217,15 +273,19 @@ describe("Bills", () => {
     );
   });
 
-  it("narrows by payment, type and status from one Filters dialog", async () => {
+  it("narrows by payment and status in the toolbar, and counter and type in the Filters dialog", async () => {
     renderAs(MANAGER);
     await screen.findByRole("grid", { name: "Bills" });
+    expect(screen.queryByRole("button", { name: /Reset/ })).not.toBeInTheDocument();
+    chooseOption(screen.getByLabelText("Paid with"), "Card");
+    chooseOption(screen.getByLabelText("Status"), "Voided only");
+
     fireEvent.click(screen.getByRole("button", { name: "Filters" }));
-    const dialog = await screen.findByRole("dialog");
-    chooseOption(within(dialog).getByLabelText("Paid with"), "Card");
+    const dialog = await screen.findByRole("dialog", { name: "More filters" });
     chooseOption(within(dialog).getByLabelText("Type"), "Exchange bills");
-    chooseOption(within(dialog).getByLabelText("Status"), "Voided only");
     chooseOption(within(dialog).getByLabelText("Counter"), "T01");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
+
     await waitFor(() =>
       expect(commands.orderHistory).toHaveBeenLastCalledWith(
         { ...FILTER, device_id: "d1", status: "voided", payment: "card", kind: "exchange" },
@@ -233,21 +293,20 @@ describe("Bills", () => {
         200,
       ),
     );
-    fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
-    expect(await screen.findByRole("button", { name: "Filters · 4" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Filters (2)" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    fireEvent.click(screen.getByRole("button", { name: /Reset/ }));
     // Back to the first query: its page is still cached, so the screen simply shows it again.
-    expect(await screen.findByRole("button", { name: "Filters" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Clear filters" })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Reset/ })).not.toBeInTheDocument());
+    expect(screen.getByLabelText("Paid with")).toHaveTextContent("Any payment");
   });
 
   it("shows a cashier this counter's bills without a counter choice", async () => {
     renderAs(CASHIER);
     await screen.findByRole("grid", { name: "Bills" });
+    expect(screen.getByLabelText("Paid with")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Filters" }));
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByLabelText("Paid with")).toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog", { name: "More filters" });
     expect(within(dialog).queryByLabelText("Counter")).not.toBeInTheDocument();
     expect(commands.reportDevices).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Export" })).not.toBeInTheDocument();
@@ -264,7 +323,7 @@ describe("Bills", () => {
     );
   });
 
-  it("exports the day's bills to a picked folder", async () => {
+  it("exports the bills of the chosen period to a picked folder", async () => {
     vi.mocked(commands.exportPickFolder).mockImplementation(() => ok("E:\\exports"));
     vi.mocked(commands.exportCsv).mockImplementation(() =>
       ok({ path: "E:\\exports\\gayanshop-orders-2026-11-08-T01.csv", rows: 3 }),
@@ -273,11 +332,7 @@ describe("Bills", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Export" }));
     fireEvent.click(await screen.findByRole("button", { name: "Export orders" }));
     await waitFor(() =>
-      expect(commands.exportCsv).toHaveBeenCalledWith(
-        "orders",
-        { kind: "day", date: "2026-11-08" },
-        "E:\\exports",
-      ),
+      expect(commands.exportCsv).toHaveBeenCalledWith("orders", { kind: "all_time" }, "E:\\exports"),
     );
     expect(await screen.findByText(/Exported 3 rows to E:\\exports/)).toBeInTheDocument();
   });

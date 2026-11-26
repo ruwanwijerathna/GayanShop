@@ -1,17 +1,18 @@
 {
   "title": "Bills",
   "export": "Export",
-  "empty": "No bills for this day.",
+  "empty": "No bills for this period.",
   "emptyFiltered": "No bills found. Try a different search or clear the filters.",
   "search": {
     "label": "Search bills",
-    "placeholder": "Receipt number or customer phone",
+    "placeholder": "Search receipt number or customer phone…",
     "allDates": "Searching all dates",
     "tooShort": "Type at least 4 digits of the phone number.",
     "scannedNotFound": "Bill {{receipt}} was not found."
   },
   "period": {
-    "label": "Day",
+    "label": "Period",
+    "all": "All",
     "today": "Today",
     "yesterday": "Yesterday",
     "week": "This week",
@@ -19,9 +20,14 @@
     "date": "Pick a date"
   },
   "columns": {
-    "bill": "Bill",
-    "paid": "Paid with",
-    "total": "Total"
+    "receipt": "Receipt no.",
+    "date": "Date & time",
+    "cashier": "Cashier",
+    "items": "Items",
+    "payment": "Payment",
+    "status": "Status",
+    "total": "Total",
+    "actions": "Actions"
   },
   "method": {
     "cash": "Cash",
@@ -33,13 +39,15 @@
   "badge": {
     "voided": "Voided",
     "exchange": "Exchange",
-    "returns": "Has returns"
+    "returns": "Has returns",
+    "completed": "Completed"
   },
   "filters": {
     "button": "Filters",
-    "buttonCount_one": "Filters · {{count}}",
-    "buttonCount_other": "Filters · {{count}}",
-    "title": "Filter bills",
+    "buttonCount": "Filters ({{count}})",
+    "title": "More filters",
+    "clear": "Clear",
+    "done": "Done",
     "counter": "Counter",
     "allCounters": "All counters",
     "payment": "Paid with",
@@ -51,7 +59,16 @@
     "status": "Status",
     "anyStatus": "All",
     "voidedOnly": "Voided only",
-    "clear": "Clear filters",
-    "done": "Done"
+    "reset": "Reset"
+  },
+  "emptyAll": "No bills yet.",
+  "shown_one": "{{count}} bill",
+  "shown_other": "{{count}} bills",
+  "shownMore_one": "Showing the latest {{count}} bill",
+  "shownMore_other": "Showing the latest {{count}} bills",
+  "loadMore": "Load more",
+  "exchangeCredit": "Exchange credit {{amount}}",
+  "actions": {
+    "view": "View or print bill {{receipt}}"
   }
 }

@@ -1,17 +1,18 @@
 {
   "title": "බිල්පත්",
   "export": "අපනයනය",
-  "empty": "මෙම දිනයට බිල්පත් නැත.",
+  "empty": "මෙම කාලය සඳහා බිල්පත් නැත.",
   "emptyFiltered": "බිල්පත් හමු නොවීය. වෙනත් සෙවීමක් උත්සාහ කරන්න, නැතහොත් පෙරහන් ඉවත් කරන්න.",
   "search": {
     "label": "බිල්පත් සොයන්න",
-    "placeholder": "රිසිට්පත් අංකය හෝ පාරිභෝගික දුරකථනය",
+    "placeholder": "රිසිට්පත් අංකය හෝ පාරිභෝගික දුරකථන අංකය සොයන්න…",
     "allDates": "සියලු දිනවල සොයමින්",
     "tooShort": "දුරකථන අංකයේ ඉලක්කම් 4ක්වත් ටයිප් කරන්න.",
     "scannedNotFound": "බිල්පත {{receipt}} හමු නොවීය."
   },
   "period": {
-    "label": "දිනය",
+    "label": "කාලය",
+    "all": "සියල්ල",
     "today": "අද",
     "yesterday": "ඊයේ",
     "week": "මෙම සතිය",
@@ -19,9 +20,14 @@
     "date": "දිනයක් තෝරන්න"
   },
   "columns": {
-    "bill": "බිල්පත",
-    "paid": "ගෙවූ ආකාරය",
-    "total": "එකතුව"
+    "receipt": "රිසිට්පත් අංකය",
+    "date": "දිනය සහ වේලාව",
+    "cashier": "මුදල් අයකැමි",
+    "items": "අයිතම",
+    "payment": "ගෙවීම",
+    "status": "තත්ත්වය",
+    "total": "එකතුව",
+    "actions": "ක්‍රියා"
   },
   "method": {
     "cash": "මුදල්",
@@ -33,13 +39,15 @@
   "badge": {
     "voided": "අවලංගු කළ",
     "exchange": "හුවමාරුව",
-    "returns": "ආපසු ලැබී ඇත"
+    "returns": "ආපසු ලැබී ඇත",
+    "completed": "සම්පූර්ණයි"
   },
   "filters": {
     "button": "පෙරහන්",
-    "buttonCount_one": "පෙරහන් · {{count}}",
-    "buttonCount_other": "පෙරහන් · {{count}}",
-    "title": "බිල්පත් පෙරන්න",
+    "buttonCount": "පෙරහන් ({{count}})",
+    "title": "තවත් පෙරහන්",
+    "clear": "හිස් කරන්න",
+    "done": "අවසන්",
     "counter": "කවුන්ටරය",
     "allCounters": "සියලු කවුන්ටර",
     "payment": "ගෙවූ ආකාරය",
@@ -51,7 +59,16 @@
     "status": "තත්ත්වය",
     "anyStatus": "සියල්ල",
     "voidedOnly": "අවලංගු කළ පමණි",
-    "clear": "පෙරහන් ඉවත් කරන්න",
-    "done": "අවසන්"
+    "reset": "යළි සකසන්න"
+  },
+  "emptyAll": "තවම බිල්පත් නැත.",
+  "shown_one": "බිල්පත් {{count}}",
+  "shown_other": "බිල්පත් {{count}}",
+  "shownMore_one": "නවතම බිල්පත් {{count}} පෙන්වයි",
+  "shownMore_other": "නවතම බිල්පත් {{count}} පෙන්වයි",
+  "loadMore": "තවත් පෙන්වන්න",
+  "exchangeCredit": "හුවමාරු ණය {{amount}}",
+  "actions": {
+    "view": "බිල්පත {{receipt}} බලන්න හෝ මුද්‍රණය කරන්න"
   }
 }
