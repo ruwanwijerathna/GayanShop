@@ -176,6 +176,19 @@ describe("Bills", () => {
     expect(within(grid).queryByText("Nimal")).not.toBeInTheDocument();
   });
 
+  it("sorts from the column menu", async () => {
+    renderAs(MANAGER);
+    const grid = await screen.findByRole("grid", { name: "Bills" });
+    await within(grid).findByText("T01-20261108-0001");
+    fireEvent.pointerDown(within(grid).getByRole("button", { name: /Receipt no\./ }), { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Asc" }));
+    const receipts = within(grid)
+      .getAllByRole("row")
+      .slice(1)
+      .map((r) => within(r).getByText(/^T01-/).textContent);
+    expect(receipts).toEqual(["T01-20261108-0001", "T01-20261108-0002", "T01-20261108-0003"]);
+  });
+
   it("opens a bill from the keyboard or its row button", async () => {
     renderAs(MANAGER);
     const grid = await screen.findByRole("grid", { name: "Bills" });

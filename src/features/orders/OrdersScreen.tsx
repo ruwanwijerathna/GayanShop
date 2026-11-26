@@ -7,9 +7,11 @@ import {
   flexRender,
   getCoreRowModel,
   getPaginationRowModel,
+  getSortedRowModel,
   useReactTable,
   type ColumnDef,
   type PaginationState,
+  type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table";
 import { MoreVertical, ReceiptText, Search, SlidersHorizontal, X } from "lucide-react";
@@ -225,6 +227,7 @@ function Bills({ today, scanned }: { today: string; scanned: ScannedBill | null 
   const [picked, setPicked] = useState(today);
   const [extras, setExtras] = useState<Extras>(NO_EXTRAS);
   const [filtering, setFiltering] = useState(false);
+  const [sorting, setSorting] = useState<SortingState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 25 });
   const [open, setOpen] = useState<string | null>(null);
@@ -401,6 +404,7 @@ function Bills({ today, scanned }: { today: string; scanned: ScannedBill | null 
       },
       {
         id: "actions",
+        enableSorting: false,
         enableHiding: false,
         header: () => <span className="sr-only">{t("columns.actions")}</span>,
         cell: ({ row }) => (
@@ -428,13 +432,14 @@ function Bills({ today, scanned }: { today: string; scanned: ScannedBill | null 
     data: rows,
     columns,
     getRowId: (r) => r.id,
-    state: { columnVisibility, pagination },
+    state: { sorting, columnVisibility, pagination },
+    onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
     onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     autoResetPageIndex: false,
-    enableSorting: false,
   });
   const visibleColumns = table.getVisibleLeafColumns().length;
   const loading = pages.isLoading;
@@ -596,6 +601,13 @@ function Bills({ today, scanned }: { today: string; scanned: ScannedBill | null 
                   <TableHead
                     key={header.id}
                     scope="col"
+                    aria-sort={
+                      header.column.getIsSorted() === "asc"
+                        ? "ascending"
+                        : header.column.getIsSorted() === "desc"
+                          ? "descending"
+                          : undefined
+                    }
                     className={cn(
                       "h-12",
                       header.column.id === "receipt" && "pl-4",
