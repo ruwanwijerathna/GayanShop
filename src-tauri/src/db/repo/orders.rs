@@ -94,9 +94,10 @@ pub const SQL_HISTORY: &str =
          WHERE +o.store_id = ?1 AND o.status IN ('completed', 'voided')
            AND (?2 IS NULL OR o.business_date >= ?2) AND (?3 IS NULL OR o.business_date <= ?3)
            AND (?4 IS NULL OR o.device_id = ?4) AND (?5 IS NULL OR o.status = ?5)
-           AND (?6 IS NULL OR o.receipt_no LIKE ?6 ESCAPE '\\')
+           AND ((?6 IS NULL AND ?10 IS NULL)
+                OR (?6 IS NOT NULL AND o.receipt_no LIKE ?6 ESCAPE '\\')
+                OR (?10 IS NOT NULL AND o.customer_id IN (SELECT id FROM customers WHERE phone_e164 LIKE ?10)))
            AND (?7 IS NULL OR (o.completed_at, o.id) < (?7, ?8))
-           AND (?10 IS NULL OR o.customer_id IN (SELECT id FROM customers WHERE phone_e164 LIKE ?10))
            AND (?11 IS NULL OR EXISTS (SELECT 1 FROM order_payments p WHERE p.order_id = o.id AND p.method = ?11))
            AND (?12 IS NULL
                 OR (?12 = 'exchange' AND o.exchange_credit > 0)
@@ -123,7 +124,7 @@ pub async fn history(
         .as_deref()
         .map(str::trim)
         .filter(|r| !r.is_empty())
-        .map(|r| format!("{}%", r.to_uppercase().replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")));
+        .map(|r| format!("%{}%", r.to_uppercase().replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")));
     let phone = phone_pattern(filter.phone.as_deref())?;
     let kind = filter.kind.map(|k| match k {
         BillKind::Exchange => "exchange",

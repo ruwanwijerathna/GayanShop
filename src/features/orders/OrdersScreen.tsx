@@ -68,7 +68,10 @@ function isMethod(v: string): v is Method {
   return METHODS.some((m) => m === v);
 }
 
-/** Receipt numbers start with a letter (`T01-…`); anything else typed is part of a phone number. */
+/**
+ * Anything typed without spaces can match any part of a receipt number (`T01-261126001`, `2611`, `001`);
+ * 4+ digits (without letters or dashes) also match a customer's phone number.
+ */
 export function searchTerms(text: string): {
   receipt: string | null;
   phone: string | null;
@@ -76,11 +79,12 @@ export function searchTerms(text: string): {
 } {
   const q = text.trim();
   if (q === "") return { receipt: null, phone: null, tooShort: false };
-  if (/^[a-z]/i.test(q)) return { receipt: q, phone: null, tooShort: false };
+  if (/[a-z-]/i.test(q)) return { receipt: q, phone: null, tooShort: false };
   const digits = q.replace(/\D/g, "");
+  const receipt = /\s/.test(q) ? null : q;
   return digits.length >= 4
-    ? { receipt: null, phone: q, tooShort: false }
-    : { receipt: null, phone: null, tooShort: true };
+    ? { receipt, phone: q, tooShort: false }
+    : { receipt, phone: null, tooShort: true };
 }
 
 function periodOf(quick: Quick, today: string, picked: string): Period {

@@ -247,6 +247,15 @@ describe("Bills", () => {
     expect(screen.getByText("Searching all dates")).toBeInTheDocument();
     expect(screen.queryByLabelText("Period")).not.toBeInTheDocument();
 
+    fireEvent.change(box, { target: { value: "261126001" } });
+    await waitFor(() =>
+      expect(commands.orderHistory).toHaveBeenLastCalledWith(
+        { ...FILTER, period: { kind: "all_time" }, receipt: "261126001", phone: "261126001" },
+        null,
+        200,
+      ),
+    );
+
     fireEvent.change(box, { target: { value: "077 123 4567" } });
     await waitFor(() =>
       expect(commands.orderHistory).toHaveBeenLastCalledWith(
