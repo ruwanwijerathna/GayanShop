@@ -21,15 +21,15 @@ import { SelectField } from "@/components/common/SelectField";
 import { DataTableColumnHeader } from "@/components/data-table/DataTableColumnHeader";
 import { DataTablePagination } from "@/components/data-table/DataTablePagination";
 import { DataTableViewOptions } from "@/components/data-table/DataTableViewOptions";
-import { ExportButton } from "@/components/export/ExportButton";
+import { ExportMenuItem } from "@/components/export/ExportButton";
 import { ReceiptDialog } from "@/components/receipt/ReceiptDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type {
@@ -457,8 +457,8 @@ function Bills({ today, scanned }: { today: string; scanned: ScannedBill | null 
           <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
         </div>
         <Can perm="DATA_EXPORT">
-          <Popover>
-            <PopoverTrigger asChild>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button
                 type="button"
                 size="icon-pos"
@@ -468,12 +468,12 @@ function Bills({ today, scanned }: { today: string; scanned: ScannedBill | null 
               >
                 <MoreVertical aria-hidden />
               </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="flex w-auto flex-col gap-2">
-              <ExportButton kind="orders" period={chosenPeriod} />
-              <ExportButton kind="order_lines" period={chosenPeriod} />
-            </PopoverContent>
-          </Popover>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <ExportMenuItem kind="orders" period={chosenPeriod} />
+              <ExportMenuItem kind="order_lines" period={chosenPeriod} />
+            </DropdownMenuContent>
+          </DropdownMenu>
         </Can>
       </header>
 

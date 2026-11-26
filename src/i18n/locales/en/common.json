@@ -82,8 +82,8 @@
   },
   "export": {
     "kinds": {
-      "orders": "Export orders",
-      "order_lines": "Export order lines",
+      "orders": "Export bills",
+      "order_lines": "Export bill items",
       "products": "Export products",
       "customers": "Export customers",
       "expenses": "Export expenses",

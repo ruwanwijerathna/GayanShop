@@ -329,8 +329,8 @@ describe("Bills", () => {
       ok({ path: "E:\\exports\\gayanshop-orders-2026-11-08-T01.csv", rows: 3 }),
     );
     renderAs(MANAGER);
-    fireEvent.click(await screen.findByRole("button", { name: "Export" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Export orders" }));
+    fireEvent.keyDown(await screen.findByRole("button", { name: "Export" }), { key: "Enter" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Export bills" }));
     await waitFor(() =>
       expect(commands.exportCsv).toHaveBeenCalledWith("orders", { kind: "all_time" }, "E:\\exports"),
     );
@@ -341,8 +341,8 @@ describe("Bills", () => {
     vi.mocked(commands.exportPickFolder).mockImplementation(() => ok(null));
     vi.mocked(commands.exportCsv).mockReset();
     renderAs(MANAGER);
-    fireEvent.click(await screen.findByRole("button", { name: "Export" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Export order lines" }));
+    fireEvent.keyDown(await screen.findByRole("button", { name: "Export" }), { key: "Enter" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Export bill items" }));
     await waitFor(() => expect(commands.exportPickFolder).toHaveBeenCalled());
     expect(commands.exportCsv).not.toHaveBeenCalled();
   });
