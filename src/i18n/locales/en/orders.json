@@ -1,5 +1,6 @@
 {
   "title": "Bills",
+  "subtitle": "Every completed and voided bill, payment details and receipts in one place.",
   "export": "Export",
   "empty": "No bills for this period.",
   "emptyFiltered": "No bills found. Try a different search or clear the filters.",

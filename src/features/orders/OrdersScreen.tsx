@@ -450,13 +450,16 @@ function Bills({ today, scanned }: { today: string; scanned: ScannedBill | null 
 
   const error = pages.error instanceof CommandError ? translateError(i18n.t, pages.error.error) : null;
   return (
-    <section className="flex flex-col gap-4">
-      <header className="flex flex-wrap items-center gap-3">
-        <h1 className="flex-1 text-2xl font-semibold">{t("title")}</h1>
+    <section className="flex flex-col gap-5">
+      <header className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t("title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
+        </div>
         <Can perm="DATA_EXPORT">
           <Popover>
             <PopoverTrigger asChild>
-              <Button type="button" size="pos" variant="outline" className="rounded-xl">
+              <Button type="button" size="pos" variant="outline" className="shrink-0 rounded-xl">
                 <FileDown aria-hidden />
                 {t("export")}
               </Button>
