@@ -12,7 +12,7 @@ import {
   type PaginationState,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { FileDown, ReceiptText, Search, SlidersHorizontal, X } from "lucide-react";
+import { MoreVertical, ReceiptText, Search, SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -459,9 +459,14 @@ function Bills({ today, scanned }: { today: string; scanned: ScannedBill | null 
         <Can perm="DATA_EXPORT">
           <Popover>
             <PopoverTrigger asChild>
-              <Button type="button" size="pos" variant="outline" className="shrink-0 rounded-xl">
-                <FileDown aria-hidden />
-                {t("export")}
+              <Button
+                type="button"
+                size="icon-pos"
+                variant="ghost"
+                className="shrink-0 rounded-xl data-[state=open]:bg-accent"
+                aria-label={t("export")}
+              >
+                <MoreVertical aria-hidden />
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="flex w-auto flex-col gap-2">
